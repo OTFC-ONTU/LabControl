@@ -38,23 +38,40 @@ tools/docs-build.sh
 
 ## Status
 
-**M0 — skeleton and toolchain: done (2026-09-04).** The solution builds and tests green on
-macOS, the protobuf contract compiles, the console opens a window, the fake lab simulates
-up to 30 machines, and self-contained binaries publish for `osx-arm64`, `win-x64`,
-`win-arm64` and `linux-x64`. No product behaviour yet — every component except
-`LabControl.Shared` is a skeleton.
+**M0 — skeleton and toolchain: done (2026-09-04).**
 
-Next: [`docs/ROADMAP.md`](docs/ROADMAP.md) → **M1 — lab identity, link and presence**.
+**M1 — lab identity, link and presence: built, awaiting the live demonstration.** The
+trust model, the beacon, mutual TLS, enrolment, the link with jobs and renewal, take-over
+between two teacher machines, the sealed backup, the console UI and a `FakeAgent` that
+plays a room of PCs are all in place and green under `dotnet test` (137 tests, including
+real UDP and TLS on the loopback and headless renders of every window). The remaining step
+is the owner running the M1 acceptance list by hand — see
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
 
-## Quick start (once M0 exists)
+## Quick start
 ```bash
 dotnet build
 dotnet test
-dotnet run --project src/LabControl.Console
-dotnet run --project src/LabControl.FakeAgent -- --count 14
+dotnet run --project src/LabControl.Console            # first run: the wizard creates a lab
+#   Settings → Write USB payload… → choose a folder, e.g. ~/usb
+dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb
+#   in the console: Enrol PCs… → passphrase → the PCs enrol and appear
 tools/publish-all.sh
 tools/docs-build.sh
 ```
+
+Two console profiles on one machine (the alternation and take-over tests):
+
+```bash
+dotnet run --project src/LabControl.Console -- --data ~/labA --port 47800
+dotnet run --project src/LabControl.Console -- --data ~/labB --port 47810   # import the backup from A
+```
+
+`FakeAgent --fail 7:never --fail 8:late=20 --fail 9:die-mid-job --fail 10:job-error
+--fail 11:burned-code --fail 12:forged-revocation --fail 13:outdated` injects failures;
+`--reinstall 7` plays a reinstalled PC; `--console 127.0.0.1` pins the console on a
+machine with no network. Screenshots of the UI from the headless tests:
+`LABCONTROL_UI_SHOTS=/tmp/shots dotnet test --project tests/LabControl.Console.Tests`.
 
 Requires the .NET 10 SDK and nothing else. The `net10.0-windows` projects compile on
 macOS and Linux too (they just cannot run there), so a broken Windows build is caught

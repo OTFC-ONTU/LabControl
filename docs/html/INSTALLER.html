@@ -140,7 +140,8 @@ footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
 running it again on an already-configured PC repairs the installation instead of
 breaking it.</p>
 <h2 id="building-the-usb-payload-on-the-console">Building the USB payload (on the console)<a class="anchor" href="#building-the-usb-payload-on-the-console" aria-label="Link to this section">#</a></h2>
-<p>Console → Settings → <em>Build USB installer</em> (or <code>tools/build-usb.sh &lt;mount&gt;</code>), writes:</p>
+<p>Console → Settings → <em>Write USB payload</em> writes <code>ca.crt</code> and <code>setup.json</code> (all that
+<code>FakeAgent --payload</code> needs); <code>tools/build-usb.sh &lt;mount&gt;</code> (M4) adds the binaries:</p>
 <pre><code>&lt;USB&gt;\LabControl\
    Setup.exe          self-contained win-x64, manifest requireAdministrator
    payload\app\&lt;version&gt;\agent.exe, session.exe   — one version directory, copied to the
@@ -149,7 +150,8 @@ breaking it.</p>
    setup.json         { schema_version, lab_id, console_host? (optional pin),
                         student: {name:&quot;student&quot;, password:&quot;1&quot;}, naming: &quot;PC-{n:00}&quot;,
                         power: {...}, next_number: 1,
-                        enrollment_codes: [&quot;...&quot;, ...] }   // single-use, one per PC
+                        enrollment_codes: [&quot;...&quot;, ...],    // single-use, one per PC + spares
+                        written_by, written_at }           // which console, when
    INSTALL.txt        3-line human instructions (in Ukrainian)
 </code></pre>
 <p><strong>The stick carries no secret.</strong> <code>ca.crt</code> is public by nature and the enrollment codes
@@ -281,7 +283,7 @@ reverted between runs.</li>
 </ul>
 
 </article>
-<footer>Generated 2026-09-04 19:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 22:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#building-the-usb-payload-on-the-console">Building the USB payload (on the console)</a></li><li class="lvl2"><a href="#what-setup.exe-does-in-order">What Setup.exe does, in order</a></li><li class="lvl2"><a href="#uninstall-repair">Uninstall / repair</a></li><li class="lvl2"><a href="#things-the-installer-cannot-do">Things the installer cannot do</a></li><li class="lvl2"><a href="#testing-the-installer-without-a-room-full-of-real-pcs">Testing the installer without a room full of real PCs</a></li></ul></nav>
 </div>

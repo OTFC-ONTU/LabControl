@@ -7,7 +7,8 @@ breaking it.
 
 ## Building the USB payload (on the console)
 
-Console → Settings → *Build USB installer* (or `tools/build-usb.sh <mount>`), writes:
+Console → Settings → *Write USB payload* writes `ca.crt` and `setup.json` (all that
+`FakeAgent --payload` needs); `tools/build-usb.sh <mount>` (M4) adds the binaries:
 
 ```
 <USB>\LabControl\
@@ -18,7 +19,8 @@ Console → Settings → *Build USB installer* (or `tools/build-usb.sh <mount>`)
    setup.json         { schema_version, lab_id, console_host? (optional pin),
                         student: {name:"student", password:"1"}, naming: "PC-{n:00}",
                         power: {...}, next_number: 1,
-                        enrollment_codes: ["...", ...] }   // single-use, one per PC
+                        enrollment_codes: ["...", ...],    // single-use, one per PC + spares
+                        written_by, written_at }           // which console, when
    INSTALL.txt        3-line human instructions (in Ukrainian)
 ```
 

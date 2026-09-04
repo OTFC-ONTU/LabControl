@@ -150,7 +150,7 @@ Solution file: `LabControl.sln` at the root (create in M0).
 dotnet build                                   # everything, Windows projects included
 dotnet test                                    # unit tests (Microsoft.Testing.Platform)
 dotnet run --project src/LabControl.Console    # console on the Mac
-dotnet run --project src/LabControl.FakeAgent -- --count 14   # 14 fake PCs
+dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb   # 14 fake PCs from the console's USB payload
 tools/publish-all.sh                           # self-contained binaries for all RIDs
 tools/build-usb.sh /Volumes/USB               # USB installer payload (needs lab.json from the console)
 tools/docs-build.sh                            # regenerate docs/html/ after ANY .md change
@@ -161,12 +161,15 @@ tools/docs-build.sh                            # regenerate docs/html/ after ANY
 See `docs/ROADMAP.md` — it holds the milestone table, the per-milestone acceptance
 criteria, the on-site verification checklist and the open questions for the owner.
 
-**M0 is done (2026-09-04).** The solution builds and tests green on macOS, all six
-projects exist, the protobuf contract compiles, the console opens a window, `FakeAgent`
-simulates up to 30 machines, and `tools/publish-all.sh` produces self-contained binaries
-for `osx-arm64`, `win-x64`, `win-arm64` and `linux-x64`. Everything under `src/` other
-than `Shared` is still a skeleton.
+**M0 is done (2026-09-04).** **M1 is built and tested (2026-09-04)**: the trust model,
+beacon discovery, mutual TLS, enrolment, the `Link` stream with jobs and renewal,
+take-over between teacher machines, the sealed backup, `FakeAgent` and the console UI —
+see the M1 *Progress* paragraph in `docs/ROADMAP.md` and `D-24`…`D-27`. M1 is marked done
+only after the owner has run its acceptance list live. `Agent`, `Agent.Session` and `Setup`
+are still skeletons; they are M2 and M4.
 
-Next is **M1 — lab identity, link and presence**, which implements the trust model. It is
-the one part that is expensive to get wrong, because a mistake there is only fixable by
-visiting every PC.
+The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
+`ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and
+the real agent is `src/LabControl.Shared/Link/AgentLink.cs`. Tests:
+`tests/LabControl.Shared.Tests` (pure logic) and `tests/LabControl.Console.Tests`
+(in-process console + agents over real TLS/UDP, plus headless UI renders).

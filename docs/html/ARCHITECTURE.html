@@ -266,7 +266,9 @@ stick — the USB carries no secret at all (§3.4).</p>
 unlocked — first run, minting a console instance, migrating, revoking, <strong>enrolling PCs</strong>
 and <strong>renewing their certificates</strong> (§3.8, <code>D-24</code>, <code>D-25</code>). The last two are the ones
 that happen on a schedule rather than in a crisis: the console says when it needs the key
-and refuses politely until it has it, and the agents simply try again. The console
+and refuses politely until it has it, and the agents simply try again. Once unlocked, the
+key stays in memory for 15 minutes after it was last used, or until the teacher presses
+<em>Lock</em>; closing the console always forgets it (<code>D-26</code>). The console
 instance's own private key is protected at rest by the operating system (macOS Keychain,
 Windows DPAPI, Linux libsecret with an encrypted-file fallback).</p>
 <h3 id="what-a-student-pc-knows">3.3 What a student PC knows<a class="anchor" href="#what-a-student-pc-knows" aria-label="Link to this section">#</a></h3>
@@ -295,7 +297,9 @@ keeps its current state and asks again with the same backoff it uses for reconne
 So a freshly installed PC waits, enrolled by nobody, until the teacher opens <em>Enrol PCs</em>
 and types the passphrase once — and 14 PCs then enrol within a few seconds of each
 other.</li>
-<li><strong>Fallback</strong> for networks that drop broadcasts: <code>console_host</code> pinned in <code>agent.json</code>.</li>
+<li><strong>Fallback</strong> for networks that drop broadcasts: <code>console_host</code> pinned in <code>agent.json</code>.
+The console also sends a loopback copy of every beacon, for a <code>FakeAgent</code> on its own
+computer (<code>D-27</code>).</li>
 <li><strong>One long-lived bidirectional stream per agent</strong> (<code>AgentLink</code>) carries commands and
 events; separate streaming RPCs carry video and files so a large transfer never
 delays a &quot;shutdown&quot;. See PROTOCOL.md.</li>
@@ -517,8 +521,11 @@ itself rather than silently dropping the fields it does not understand (<code>D-
 what keeps §3.6 working a year from now, when the backup being restored was written by an
 older build than the console restoring it.</p>
 <p>Created on first launch by the setup wizard. <strong>Backup</strong> = <code>lab-key.lck</code> + <code>lab.json</code> +
-the catalog, exported as one encrypted archive; it is what makes §3.6 a ten-minute
-operation instead of a walk around the room. The console nags until a backup exists and
+the catalog, exported as one file (<code>&lt;lab&gt; &lt;date&gt;.lcbak</code>): the key document as it is —
+already encrypted under its holders and the recovery code — and the rest sealed with
+AES-256-GCM under the same master key, so whoever can open the lab key can open the backup
+and nobody else can read even the machine list (<code>D-26</code>). It is what makes §3.6 a
+ten-minute operation instead of a walk around the room. The console nags until a backup exists and
 warns when <code>lab-key.lck</code> no longer matches the fingerprint taken at the last export or
 when the machine list has grown since (§3.7.3).</p>
 <h2 id="data-on-a-student-pc">5. Data on a student PC<a class="anchor" href="#data-on-a-student-pc" aria-label="Link to this section">#</a></h2>
@@ -873,7 +880,7 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-09-04 19:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 22:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#three-separate-identities">3.1 Three separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>

@@ -113,8 +113,10 @@ agent id, number — is read from the certificate the agent presented for **this
 connection, never from the request, so the call can only re-issue what the peer already
 is. The console needs the lab key to sign; while it is locked, `refusal` says so and
 `agent_certificate` is empty, and the agent keeps its current certificate. On success the
-agent swaps to the new certificate for its next connection, and the console records the
-new serial for that machine. Console instances are not renewed this way: they are
+agent installs the new certificate and re-opens the link with it straight away, and the
+console records the new serial for that machine. A renewed certificate always gets the full
+lifetime (`D-27`). While the console's key is locked the agent asks again on its reconnect
+backoff, up to every 30 s. Console instances are not renewed this way: they are
 re-minted from the lab key on their own machine (`docs/ARCHITECTURE.md` §3.8).
 
 ### `AgentService` (console is the server, agent is the client, mutual TLS)
@@ -147,6 +149,16 @@ lab X, not this one" rather than an opaque TLS error.
 
 Certificate serials are compared in one normalised spelling everywhere: uppercase
 hexadecimal, no separators, leading zeros trimmed.
+
+On the link the console also checks that `Hello` names the agent id and number its
+certificate proved; a mismatch is refused with `PermissionDenied` and an event. The console
+answers `Hello` with `Welcome`, then re-sends the jobs the PC had in hand when its previous
+link dropped (idempotent by id) and delivers whatever was queued while it was away. After
+`Hello` the agent sends `RevocationState` with every signed entry it holds; the console
+merges what verifies, reports what does not as an event, and replies with a `Revocation`
+carrying the entries the agent was missing. Heartbeats go every 5 s; the console marks a
+PC offline after 20 s without one, and HTTP/2 keepalive pings on both sides notice a
+pulled cable in the same time.
 
 `AgentMessage` (oneof): `Hello`, `Heartbeat`, `Inventory`, `SessionState`
 (logon/logoff/lock/ unlock, active user), `JobProgress`, `JobResult`, `Event` (error,

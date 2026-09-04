@@ -383,6 +383,69 @@ longer claims it re-wraps the master key (equivalent in strength, see `ARCHITECT
 §3.2); an `Enroll` with a non-UUID `agent_id` is refused before a code is spent, because the
 id ends up in the certificate's name and the lab's own trust rules would reject it forever.
 
+## D-26 — The backup archive and the lab-key unlock window (M1)
+
+Context: building the transport and the console UI (M1) needed two things the documents
+had left open: what exactly the "encrypted backup archive" of `ARCHITECTURE.md` §4 is, and
+how long an unlocked lab key stays in memory, since `D-24` said "while enrolment is open"
+but renewal (`D-25`) needs the key too and agents ask for it on a backoff. The owner chose;
+this entry records it.
+
+1. **The backup is sealed under the lab's master key.** One JSON file
+   (`<lab name> <date>.lcbak`, `schema_version` first): the `lab-key.lck` document verbatim —
+   it is already encrypted under every holder's passphrase and the recovery code — plus
+   `lab.json` and the package catalog serialized and sealed with AES-256-GCM under the same
+   master key. Whoever can open the lab key can open the backup; nobody else can read even
+   the machine list. Nothing new to remember. Rejected: a separate archive passphrase (one
+   more secret to lose, and the lab key inside would still be the real one); a plain zip with
+   `lab-key.lck` inside (the MAC addresses and the PC list would be readable by whoever finds
+   the stick).
+2. **The unlocked key lives for 15 minutes after its last use, or until locked.** The console
+   shows *Lab key unlocked — locks itself at HH:MM* with a *Lock* button, every CA operation
+   (enrol, renew, revoke, add or remove a holder, reprint the recovery code, export a backup)
+   extends the window, and closing the console always ends it
+   (`Defaults.LabKeyUnlockWindow`). Long enough to enrol a room and let its PCs renew in one
+   sitting, short enough that a console left open is not a certificate authority for the
+   afternoon. This refines `D-24` item 4, which tied the key to the enrolment panel; that
+   wording was written before renewal existed. Rejected: unlocking for the whole console
+   session (every open teacher machine becomes a CA, the exposure `D-13` avoids); unlocking
+   per operation (fourteen PCs enrolling one after another would ask fourteen times).
+
+## D-27 — Development affordances that ship in the product (M1)
+
+Context: the M1 acceptance tests run two console profiles and thirty fake PCs on one Mac.
+A few switches and one test-project choice make that possible; they are listed here so
+that nobody mistakes them for configuration a teacher should touch.
+
+1. **Console command line: `--data <dir>`, `--port <n>`, `--bind <address>`.** Defaults are
+   `~/.labcontrol` (or `%APPDATA%\LabControl`), 47800 and every interface; a lab machine
+   runs with no arguments. Two profiles on one computer need different data directories and
+   ports, and the beacon carries the port, so agents follow either. `--bind` is also how the
+   "change the console's bound address" acceptance criterion is exercised. Settings shows
+   the values but does not edit them: the beacon makes the address self-describing, so
+   there is nothing for a teacher to configure.
+2. **`--dev-agent-cert-days <n>`** issues *enrolment* certificates with a short lifetime, so
+   the renewal path can be watched against `FakeAgent` without waiting five years. Renewed
+   certificates always get the full lifetime, even with the switch — otherwise a 30-day
+   certificate would renew into another 30-day certificate for ever.
+3. **`FakeAgent --payload <dir>`, `--data <dir>`, `--console host[:port]`, `--fail N:…`,
+   `--reinstall N`.** The simulator installs PCs from the same `setup.json` + `ca.crt` the
+   real installer reads, keeps each PC's state under `~/.labcontrol-fake/PC-NN/`, and plays
+   failures on demand (never connects, connects late, dies mid-job, job errors, burned code,
+   forged revocation, outdated protocol). `--console` exists because of the next item.
+4. **One beacon socket per process.** macOS delivers a unicast datagram to exactly one of
+   several sockets sharing a port with `SO_REUSEPORT`, and the console sends a loopback
+   copy of every beacon precisely for agents on its own machine. `BeaconListener` therefore
+   shares one socket per port inside a process and fans out to every subscriber; across
+   processes on one machine the network broadcast reaches everyone as long as the machine
+   has a network interface, and a machine with none pins the address with `--console`.
+5. **`tests/LabControl.Console.Tests` references the console executable.** The non-UI core
+   (`LabSession`, the gRPC server, the bootstrap) lives in the console project so the product
+   stays at six projects, and the tests reference that assembly directly rather than
+   introducing a seventh. The UI tests use `Avalonia.Headless` with Skia, so the real windows
+   are built and drawn off screen; with `LABCONTROL_UI_SHOTS=<dir>` they also save PNGs, which
+   is how the UI is checked from a terminal.
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the
@@ -512,5 +575,6 @@ project cannot notice on its own).
 | YamlDotNet | Console | package catalog |
 | Serilog.Extensions.Logging, Serilog.Sinks.Console, Serilog.Sinks.File | all | logging |
 | xunit.v3 | tests | testing; it hosts its own Microsoft.Testing.Platform runner, so no VSTest packages are needed (D-18) |
+| Avalonia.Headless, Avalonia.Skia | tests | the console's windows built and rendered off screen for the UI tests (D-27) |
 | NSubstitute | tests | *planned* — added when the first interface actually needs faking |
 | Markdig | tools/DocsBuild | Markdown → HTML mirror of the documentation (D-12) |

@@ -85,7 +85,9 @@ Daily use does not ask for the passphrase: it is needed only when the lab key it
 unlocked — first run, minting a console instance, migrating, revoking, **enrolling PCs**
 and **renewing their certificates** (§3.8, `D-24`, `D-25`). The last two are the ones
 that happen on a schedule rather than in a crisis: the console says when it needs the key
-and refuses politely until it has it, and the agents simply try again. The console
+and refuses politely until it has it, and the agents simply try again. Once unlocked, the
+key stays in memory for 15 minutes after it was last used, or until the teacher presses
+*Lock*; closing the console always forgets it (`D-26`). The console
 instance's own private key is protected at rest by the operating system (macOS Keychain,
 Windows DPAPI, Linux libsecret with an encrypted-file fallback).
 
@@ -118,6 +120,8 @@ impersonate *that one PC* and nothing else, and the console can revoke it.
   and types the passphrase once — and 14 PCs then enrol within a few seconds of each
   other.
 - **Fallback** for networks that drop broadcasts: `console_host` pinned in `agent.json`.
+  The console also sends a loopback copy of every beacon, for a `FakeAgent` on its own
+  computer (`D-27`).
 - **One long-lived bidirectional stream per agent** (`AgentLink`) carries commands and
   events; separate streaming RPCs carry video and files so a large transfer never
   delays a "shutdown". See PROTOCOL.md.
@@ -284,8 +288,11 @@ what keeps §3.6 working a year from now, when the backup being restored was wri
 older build than the console restoring it.
 
 Created on first launch by the setup wizard. **Backup** = `lab-key.lck` + `lab.json` +
-the catalog, exported as one encrypted archive; it is what makes §3.6 a ten-minute
-operation instead of a walk around the room. The console nags until a backup exists and
+the catalog, exported as one file (`<lab> <date>.lcbak`): the key document as it is —
+already encrypted under its holders and the recovery code — and the rest sealed with
+AES-256-GCM under the same master key, so whoever can open the lab key can open the backup
+and nobody else can read even the machine list (`D-26`). It is what makes §3.6 a
+ten-minute operation instead of a walk around the room. The console nags until a backup exists and
 warns when `lab-key.lck` no longer matches the fingerprint taken at the last export or
 when the machine list has grown since (§3.7.3).
 

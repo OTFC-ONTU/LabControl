@@ -276,7 +276,7 @@ USB payload.</li>
 <pre><code class="language-bash">dotnet build                                   # everything, Windows projects included
 dotnet test                                    # unit tests (Microsoft.Testing.Platform)
 dotnet run --project src/LabControl.Console    # console on the Mac
-dotnet run --project src/LabControl.FakeAgent -- --count 14   # 14 fake PCs
+dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb   # 14 fake PCs from the console's USB payload
 tools/publish-all.sh                           # self-contained binaries for all RIDs
 tools/build-usb.sh /Volumes/USB               # USB installer payload (needs lab.json from the console)
 tools/docs-build.sh                            # regenerate docs/html/ after ANY .md change
@@ -284,17 +284,20 @@ tools/docs-build.sh                            # regenerate docs/html/ after ANY
 <h2 id="current-status">Current status<a class="anchor" href="#current-status" aria-label="Link to this section">#</a></h2>
 <p>See <code>docs/ROADMAP.md</code> — it holds the milestone table, the per-milestone acceptance
 criteria, the on-site verification checklist and the open questions for the owner.</p>
-<p><strong>M0 is done (2026-09-04).</strong> The solution builds and tests green on macOS, all six
-projects exist, the protobuf contract compiles, the console opens a window, <code>FakeAgent</code>
-simulates up to 30 machines, and <code>tools/publish-all.sh</code> produces self-contained binaries
-for <code>osx-arm64</code>, <code>win-x64</code>, <code>win-arm64</code> and <code>linux-x64</code>. Everything under <code>src/</code> other
-than <code>Shared</code> is still a skeleton.</p>
-<p>Next is <strong>M1 — lab identity, link and presence</strong>, which implements the trust model. It is
-the one part that is expensive to get wrong, because a mistake there is only fixable by
-visiting every PC.</p>
+<p><strong>M0 is done (2026-09-04).</strong> <strong>M1 is built and tested (2026-09-04)</strong>: the trust model,
+beacon discovery, mutual TLS, enrolment, the <code>Link</code> stream with jobs and renewal,
+take-over between teacher machines, the sealed backup, <code>FakeAgent</code> and the console UI —
+see the M1 <em>Progress</em> paragraph in <code>docs/ROADMAP.md</code> and <code>D-24</code>…<code>D-27</code>. M1 is marked done
+only after the owner has run its acceptance list live. <code>Agent</code>, <code>Agent.Session</code> and <code>Setup</code>
+are still skeletons; they are M2 and M4.</p>
+<p>The console's non-UI core lives in <code>src/LabControl.Console/Services</code> (<code>LabSession</code>,
+<code>ConsoleBootstrap</code>, <code>LabKeyVault</code>) and <code>Server/</code>; the agent side shared by <code>FakeAgent</code> and
+the real agent is <code>src/LabControl.Shared/Link/AgentLink.cs</code>. Tests:
+<code>tests/LabControl.Shared.Tests</code> (pure logic) and <code>tests/LabControl.Console.Tests</code>
+(in-process console + agents over real TLS/UDP, plus headless UI renders).</p>
 
 </article>
-<footer>Generated 2026-09-04 19:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 22:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

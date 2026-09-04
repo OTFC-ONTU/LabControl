@@ -186,28 +186,40 @@ generated. After editing any <code>.md</code>:</p>
 <pre><code class="language-bash">tools/docs-build.sh
 </code></pre>
 <h2 id="status">Status<a class="anchor" href="#status" aria-label="Link to this section">#</a></h2>
-<p><strong>M0 — skeleton and toolchain: done (2026-09-04).</strong> The solution builds and tests green on
-macOS, the protobuf contract compiles, the console opens a window, the fake lab simulates
-up to 30 machines, and self-contained binaries publish for <code>osx-arm64</code>, <code>win-x64</code>,
-<code>win-arm64</code> and <code>linux-x64</code>. No product behaviour yet — every component except
-<code>LabControl.Shared</code> is a skeleton.</p>
-<p>Next: <a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a> → <strong>M1 — lab identity, link and presence</strong>.</p>
-<h2 id="quick-start-once-m0-exists">Quick start (once M0 exists)<a class="anchor" href="#quick-start-once-m0-exists" aria-label="Link to this section">#</a></h2>
+<p><strong>M0 — skeleton and toolchain: done (2026-09-04).</strong></p>
+<p><strong>M1 — lab identity, link and presence: built, awaiting the live demonstration.</strong> The
+trust model, the beacon, mutual TLS, enrolment, the link with jobs and renewal, take-over
+between two teacher machines, the sealed backup, the console UI and a <code>FakeAgent</code> that
+plays a room of PCs are all in place and green under <code>dotnet test</code> (137 tests, including
+real UDP and TLS on the loopback and headless renders of every window). The remaining step
+is the owner running the M1 acceptance list by hand — see
+<a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>.</p>
+<h2 id="quick-start">Quick start<a class="anchor" href="#quick-start" aria-label="Link to this section">#</a></h2>
 <pre><code class="language-bash">dotnet build
 dotnet test
-dotnet run --project src/LabControl.Console
-dotnet run --project src/LabControl.FakeAgent -- --count 14
+dotnet run --project src/LabControl.Console            # first run: the wizard creates a lab
+#   Settings → Write USB payload… → choose a folder, e.g. ~/usb
+dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb
+#   in the console: Enrol PCs… → passphrase → the PCs enrol and appear
 tools/publish-all.sh
 tools/docs-build.sh
 </code></pre>
+<p>Two console profiles on one machine (the alternation and take-over tests):</p>
+<pre><code class="language-bash">dotnet run --project src/LabControl.Console -- --data ~/labA --port 47800
+dotnet run --project src/LabControl.Console -- --data ~/labB --port 47810   # import the backup from A
+</code></pre>
+<p><code>FakeAgent --fail 7:never --fail 8:late=20 --fail 9:die-mid-job --fail 10:job-error --fail 11:burned-code --fail 12:forged-revocation --fail 13:outdated</code> injects failures;
+<code>--reinstall 7</code> plays a reinstalled PC; <code>--console 127.0.0.1</code> pins the console on a
+machine with no network. Screenshots of the UI from the headless tests:
+<code>LABCONTROL_UI_SHOTS=/tmp/shots dotnet test --project tests/LabControl.Console.Tests</code>.</p>
 <p>Requires the .NET 10 SDK and nothing else. The <code>net10.0-windows</code> projects compile on
 macOS and Linux too (they just cannot run there), so a broken Windows build is caught
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-04 19:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 22:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start-once-m0-exists">Quick start (once M0 exists)</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li></ul></nav>
 </div>
 </body>
 </html>

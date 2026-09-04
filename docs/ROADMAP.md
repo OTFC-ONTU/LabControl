@@ -164,16 +164,34 @@ mistake that would later require a walk to every PC to fix.
   *outdated*, and greys out what that agent cannot do. A test asserts the frozen messages
   round-trip between a v1 and a current serializer.
 
-**Progress.** The trust model itself is built and covered by tests: the lab key and its
-holder/recovery wrappings, certificate issuance, chain validation and renewal, the v2
-beacon (signing, verification, take-over and the agent-side gate), signed revocation
-entries merged as a set, single-use enrollment codes, the self-healing machine list with
-number-as-identity, the job queue and the agent's job ledger, the schema-versioned document
-store, and the OS-keystore protector with its fallback. The decisions the first review
-forced are in `D-25`. What is not built yet: the gRPC transport (console server,
-`EnrollmentService`, `Renew`, `Link`), the beacon broadcaster/listener sockets, the
-`FakeAgent` link, the console UI (first-run wizard, lab view, jobs panel, settings, the
-renewal banner), backup export/import, and the frozen-subset round-trip test.
+**Progress.** Everything in the deliverables list is built and covered by tests, on the
+Mac, against `FakeAgent`:
+
+- the trust core (`D-24`, `D-25`): lab key and wrappings, issuance, chain validation,
+  renewal, the v2 beacon, signed revocation entries, single-use codes, the self-healing
+  machine list, the job queue and ledger, the schema-versioned store, the OS keystore;
+- the transport: beacon broadcaster and listener over real UDP, the `AgentLink` library
+  shared by `FakeAgent` and the real agent, Kestrel with mutual TLS validated per call
+  through `LabTrust`, `Enroll`/`Link`/`Renew`;
+- `FakeAgent` with persistent per-PC state, installation from the console's USB payload
+  and failure injection (`D-27`);
+- the console: first-run wizard and import, lab view with draggable tiles, jobs, events,
+  settings, the banners, the 15-minute unlock window and the sealed backup (`D-26`);
+- the frozen-subset round trip and the backup tests.
+
+The in-process test rig (`tests/LabControl.Console.Tests`) exercises the acceptance list
+below with real TLS and real beacons: 30 agents enrolling, locked-key refusal, burned
+codes, queued and online-only jobs, the cached result after a reconnect, reinstall by
+number, renewal, revocation carried between consoles, a forged entry, an outdated agent,
+console restart, discovery by beacon, take-over between two consoles, and a forged beacon.
+The headless UI tests render the wizard and the main window and save PNGs.
+
+**What is still owed before M1 is marked done:** the live demonstration on the owner's Mac
+(definition of done, item 3) — the same list run by hand with two console profiles
+(`--data`/`--port`, `D-27`) and `FakeAgent`, including the migration through the recovery
+code and the two-live-consoles banner — and a look at the UI on a real screen, since the
+PNGs are rendered off screen. Nothing in the list is expected to fail; it has simply not
+been watched.
 
 **Acceptance criteria**
 

@@ -40,9 +40,30 @@ public class ProtocolTests
         // D-16: the four restrictions must be expressible one at a time.
         var timerOnly = new ExamMode { SessionId = "e1", Active = true, EndsAtUnix = 1_800 };
 
-        Assert.False(timerOnly.BlockInternet);
+        Assert.Null(timerOnly.Internet);
         Assert.Empty(timerOnly.AllowedPrograms);
         Assert.Null(timerOnly.Collect);
+    }
+
+    [Fact]
+    public void Internet_policy_is_the_same_message_standalone_and_inside_an_exam()
+    {
+        // D-22: one mechanism, two lifetimes. A whitelist preset built for a lesson must be
+        // embeddable in an exam unchanged.
+        var policy = new InternetPolicy
+        {
+            SessionId = "i1",
+            Mode = InternetPolicy.Types.Mode.Whitelist,
+            AllowedHosts = { "*.jetbrains.com", "docs.oracle.com" },
+            HardLimitUnix = 28_800,
+            PresetName = "Java docs",
+        };
+
+        var standalone = new ConsoleMessage { InternetPolicy = policy };
+        var exam = new ConsoleMessage { ExamMode = new ExamMode { SessionId = "e1", Active = true, Internet = policy } };
+
+        Assert.Equal(policy, ConsoleMessage.Parser.ParseFrom(standalone.ToByteArray()).InternetPolicy);
+        Assert.Equal(policy, ConsoleMessage.Parser.ParseFrom(exam.ToByteArray()).ExamMode.Internet);
     }
 
     [Fact]

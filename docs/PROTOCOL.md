@@ -89,7 +89,7 @@ the CA it pinned at install. No token, no password, no shared secret is exchange
 
 `AgentMessage` (oneof): `Hello`, `Heartbeat`, `Inventory`, `SessionState`
 (logon/logoff/lock/ unlock, active user), `JobProgress`, `JobResult`, `Event` (error,
-warning, info), `Pong`, `ExamState`, `RevocationState` (every signed revocation entry the
+warning, info), `Pong`, `ExamState`, `InternetState` (see *Internet policy*), `RevocationState` (every signed revocation entry the
 agent holds — sent right after `Hello`, so a console that was not running when another
 teacher machine revoked something learns of it from the first agent that connects).
 
@@ -97,7 +97,7 @@ teacher machine revoked something learns of it from the first agent that connect
 console holds revoked), `Ping`, `Job` (see below), `VideoControl` (start/stop, mode
 `thumbnail|full`, fps, quality), `Input` (mouse move/button/wheel, key down/up, unicode
 text), `Overlay` (lock / unlock / broadcast start / broadcast stop, message text),
-`ExamMode` (see below), `Revocation` (signed revocation entries — the console sends the
+`ExamMode` (see below), `InternetPolicy` (see below), `Revocation` (signed revocation entries — the console sends the
 ones the agent's `RevocationState` was missing, the agent keeps the union), `UpdateAgent`.
 
 ### Revocation entries
@@ -130,6 +130,49 @@ queued in the console (`pending`) and delivered on the next `Link`, unless
 Wake-on-LAN is not a job — it is a console-side UDP send; the "result" is the agent
 showing up on `Link` within the WoL timeout (default 90 s).
 
+### Files: `install_package` and `send_file`
+
+Both pull the file with `PullFile` (hash-verified, resumable) and differ only in where it
+lands and what happens next (`D-23`):
+
+| | `install_package` | `send_file` |
+|---|---|---|
+| args | `package`, `version`, `ref`, `sha256` | `ref`, `sha256`, `name`, `open` (`true`/`false`, default `false`) |
+| lands in | agent staging directory under `ProgramData`, deleted afterwards | `Materials` on the `student` desktop, overwriting a same-named file |
+| then | run silently as SYSTEM with the catalog's arguments, verify `detect` | if `open`, the helper opens it in the student session with the default application |
+| ever executed | yes — that is the job | never, whatever the extension |
+
+`install_package` is the older and more important of the two and its behaviour is fixed;
+`send_file` is one job per file so that a batch reports per file, per PC.
+
+## Internet policy
+
+```
+InternetPolicy {
+  string   session_id;            // one per policy application, like an exam session
+  Mode     mode;                  // OPEN | WHITELIST | BLOCKED
+  repeated string allowed_hosts;  // WHITELIST only: hostnames, optional leading "*."
+  int64    until_unix;            // 0 = until lifted; otherwise the agent restores itself here
+  int64    hard_limit_unix;       // always set; never more than 8 h out
+  string   preset_name;           // shown on the tile badge and in the student banner
+}
+```
+
+Sent as its own `ConsoleMessage` for a standalone policy (`docs/ARCHITECTURE.md` §6.2) and
+embedded in `ExamMode.internet` for an exam. The agent keeps at most one of each, persisted;
+the exam's wins while the exam is active and the standalone one is re-applied when the
+exam ends if it is still within its limits. `OPEN` with `until_unix = 0` lifts a standalone
+policy. The agent answers every change, and every service start, with:
+
+```
+InternetState { mode, session_id, until_unix, resolver_active,
+                repeated string refused_recently }   // names the whitelist resolver refused
+```
+
+`refused_recently` is what lets the teacher see which CDN hostname a site needs.
+Enforcement (firewall rule group, loopback resolver, DNS restore) is described in
+`docs/ARCHITECTURE.md` §6.2; the fail-safe rules are those of exam mode below.
+
 ## Exam mode
 
 ```
@@ -139,7 +182,7 @@ ExamMode {
   int64    ends_at_unix;          // 0 = no timer; absolute, skew-corrected at Hello
   int64    hard_limit_unix;       // always set; the agent restores itself past this
   string   message;               // shown in the countdown banner
-  bool     block_internet;
+  InternetPolicy internet;        // optional; OPEN or absent = internet untouched
   repeated string allowed_programs;   // executable names; empty = no whitelist enforced
   CollectSpec collect;            // optional; the folder chosen when the exam was set up
 }

@@ -277,7 +277,7 @@ exclusion scoped to one directory).</p>
 feature, because written work varies — sometimes only a timer is wanted, sometimes a
 locked-down machine.
 Decision: one <em>exam session</em> composed of four independent switches — timer with a visible
-countdown, allowed-programs whitelist, internet block, collect-work-at-the-end — saved
+countdown, allowed-programs whitelist, internet control (<code>D-22</code>), collect-work-at-the-end — saved
 as named presets. The enforced state lives on the agent and is persisted, so an exam
 survives a console restart, a network drop or a reboot. Every session carries an absolute
 hard limit; past it the agent restores the machine on its own, and on service start the
@@ -339,6 +339,58 @@ machines (would need a console-to-console channel; a visible &quot;catalog last 
 …&quot; label plus backup import is enough for a catalog that changes a few times a year).
 See <code>docs/ARCHITECTURE.md</code> §3.7 and <code>docs/PROTOCOL.md</code> (beacon <code>take</code>, <code>Revocation</code>,
 <code>RevocationState</code>).</p>
+<h2 id="d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked<a class="anchor" href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked" aria-label="Link to this section">#</a></h2>
+<p>Context: the owner wants to control the internet during ordinary lessons, not only inside
+an exam — sometimes nothing at all, sometimes &quot;only the documentation sites&quot;. <code>D-16</code> had
+the internet switch only as a part of an exam session, as a plain on/off.</p>
+<p>Decision: a standalone <strong>internet policy</strong> with three modes — <em>open</em>, <em>whitelist</em> (a list
+of hostnames with optional leading wildcard), <em>blocked</em> — applied per PC or lab-wide,
+saved as named presets, and reused as the exam mode's internet switch. Enforcement is
+Windows Firewall in every mode (outbound blocked in a LabControl rule group, the lab's
+own subnet exempt). The whitelist resolves names through a resolver the agent runs on
+the loopback interface while the policy is active: allowed names are forwarded upstream
+and their answers added as time-limited allow rules; everything else is refused. Because
+the firewall, not the resolver, is the gate, a browser that resolves elsewhere
+(DNS-over-HTTPS) gains nothing. A standalone policy has a duration and the same fail-safe
+shape as an exam: persisted on the agent, an absolute hard limit (8 h), restore-first on
+service start. An active exam's policy overrides a standalone one and the standalone one
+comes back when the exam ends.
+Accepted limits: hostnames only, never URL paths (invisible under HTTPS); CDN hostnames
+may need listing (the console shows recently refused names to make that easy); a phone
+hotspot is out of reach, as it always was.
+Rejected: a filtering HTTP proxy on the agent or on the console (would have to terminate
+TLS to see paths — a private CA on every PC intercepting student traffic is exactly the
+kind of thing this project should not do, and it breaks certificate pinning in tools like
+IDE update checks); hosts-file editing (no wildcards, does not stop DoH, easy to miss on
+restore); blocking by IP lists maintained by hand (sites move); a whitelist only inside
+exam mode (the owner's everyday case is a lesson, not a test).
+See <code>docs/ARCHITECTURE.md</code> §6.2 and <code>docs/PROTOCOL.md</code> (<code>InternetPolicy</code>, <code>InternetState</code>).</p>
+<h2 id="d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts<a class="anchor" href="#d-23-one-file-channel-two-landings-installers-and-handouts" aria-label="Link to this section">#</a></h2>
+<p>Context: the file channel (<code>PullFile</code>) exists <strong>for installing software</strong> — pushing an
+IDE or a JDK to every PC without walking a USB stick around the room is the first thing
+the project was started for. The owner also wants to hand out materials (a <code>.docx</code>
+methodical guide, a task sheet) to every student PC. The two must not get in each other's
+way.</p>
+<p>Decision: the same hash-verified, resumable channel, with two jobs that never share a
+landing:</p>
+<ul>
+<li><code>install_package</code> (unchanged): the installer is pulled into the agent's private staging
+directory under <code>ProgramData</code>, run silently as SYSTEM, <code>detect</code> is verified, the file
+is deleted. Students never see it; it never touches the <code>student</code> profile.</li>
+<li><code>send_file</code> (new landing): the file is pulled into <code>Materials</code> on the <code>student</code> desktop
+(path in <code>Defaults.cs</code>), overwriting an older copy of the same name, and is optionally
+opened at once in the student session through the helper. It is never executed, whatever
+its extension. One job per file, so every file on every PC has its own result row.</li>
+</ul>
+<p>The console offers <em>Send files…</em> on the toolbar; the batch is one entry in the jobs panel
+that expands to per-file, per-PC rows. Profile reset (full or light) wipes <code>Materials</code> with
+the rest of the desktop, which is the intended way to clear last week's handouts.
+Rejected: a generic &quot;copy file to path&quot; action (invites installers onto the desktop and
+handouts into <code>Program Files</code>; a teacher under time pressure should not be choosing
+paths); a shared network folder instead of the channel (needs SMB open on every PC and a
+password somewhere; the channel is already there and authenticated); executing handouts
+&quot;if they are scripts&quot; (that is what <code>run_script</code> and the scripts panel are for).
+See <code>docs/ARCHITECTURE.md</code> §6 and <code>docs/PROTOCOL.md</code> (<code>send_file</code>).</p>
 <h2 id="d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated<a class="anchor" href="#d-12-documentation-markdown-is-the-source-html-is-generated" aria-label="Link to this section">#</a></h2>
 <p>Context: the owner wants every document available as a readable <code>.html</code> next to the
 <code>.md</code>. Maintaining two hand-written copies guarantees they drift apart, and a drifted
@@ -525,9 +577,9 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-04 14:42 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 14:50 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>
 </body>
 </html>

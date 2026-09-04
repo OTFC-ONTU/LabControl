@@ -161,7 +161,7 @@ Context: the owner asked for a "test mode", and then for it to be switchable per
 feature, because written work varies — sometimes only a timer is wanted, sometimes a
 locked-down machine.
 Decision: one *exam session* composed of four independent switches — timer with a visible
-countdown, allowed-programs whitelist, internet block, collect-work-at-the-end — saved
+countdown, allowed-programs whitelist, internet control (`D-22`), collect-work-at-the-end — saved
 as named presets. The enforced state lives on the agent and is persisted, so an exam
 survives a console restart, a network drop or a reboot. Every session carries an absolute
 hard limit; past it the agent restores the machine on its own, and on service start the
@@ -228,6 +228,64 @@ machines (would need a console-to-console channel; a visible "catalog last chang
 …" label plus backup import is enough for a catalog that changes a few times a year).
 See `docs/ARCHITECTURE.md` §3.7 and `docs/PROTOCOL.md` (beacon `take`, `Revocation`,
 `RevocationState`).
+
+## D-22 — Internet control is its own action: open, whitelist, blocked
+
+Context: the owner wants to control the internet during ordinary lessons, not only inside
+an exam — sometimes nothing at all, sometimes "only the documentation sites". `D-16` had
+the internet switch only as a part of an exam session, as a plain on/off.
+
+Decision: a standalone **internet policy** with three modes — *open*, *whitelist* (a list
+of hostnames with optional leading wildcard), *blocked* — applied per PC or lab-wide,
+saved as named presets, and reused as the exam mode's internet switch. Enforcement is
+Windows Firewall in every mode (outbound blocked in a LabControl rule group, the lab's
+own subnet exempt). The whitelist resolves names through a resolver the agent runs on
+the loopback interface while the policy is active: allowed names are forwarded upstream
+and their answers added as time-limited allow rules; everything else is refused. Because
+the firewall, not the resolver, is the gate, a browser that resolves elsewhere
+(DNS-over-HTTPS) gains nothing. A standalone policy has a duration and the same fail-safe
+shape as an exam: persisted on the agent, an absolute hard limit (8 h), restore-first on
+service start. An active exam's policy overrides a standalone one and the standalone one
+comes back when the exam ends.
+Accepted limits: hostnames only, never URL paths (invisible under HTTPS); CDN hostnames
+may need listing (the console shows recently refused names to make that easy); a phone
+hotspot is out of reach, as it always was.
+Rejected: a filtering HTTP proxy on the agent or on the console (would have to terminate
+TLS to see paths — a private CA on every PC intercepting student traffic is exactly the
+kind of thing this project should not do, and it breaks certificate pinning in tools like
+IDE update checks); hosts-file editing (no wildcards, does not stop DoH, easy to miss on
+restore); blocking by IP lists maintained by hand (sites move); a whitelist only inside
+exam mode (the owner's everyday case is a lesson, not a test).
+See `docs/ARCHITECTURE.md` §6.2 and `docs/PROTOCOL.md` (`InternetPolicy`, `InternetState`).
+
+## D-23 — One file channel, two landings: installers and handouts
+
+Context: the file channel (`PullFile`) exists **for installing software** — pushing an
+IDE or a JDK to every PC without walking a USB stick around the room is the first thing
+the project was started for. The owner also wants to hand out materials (a `.docx`
+methodical guide, a task sheet) to every student PC. The two must not get in each other's
+way.
+
+Decision: the same hash-verified, resumable channel, with two jobs that never share a
+landing:
+
+- `install_package` (unchanged): the installer is pulled into the agent's private staging
+  directory under `ProgramData`, run silently as SYSTEM, `detect` is verified, the file
+  is deleted. Students never see it; it never touches the `student` profile.
+- `send_file` (new landing): the file is pulled into `Materials` on the `student` desktop
+  (path in `Defaults.cs`), overwriting an older copy of the same name, and is optionally
+  opened at once in the student session through the helper. It is never executed, whatever
+  its extension. One job per file, so every file on every PC has its own result row.
+
+The console offers *Send files…* on the toolbar; the batch is one entry in the jobs panel
+that expands to per-file, per-PC rows. Profile reset (full or light) wipes `Materials` with
+the rest of the desktop, which is the intended way to clear last week's handouts.
+Rejected: a generic "copy file to path" action (invites installers onto the desktop and
+handouts into `Program Files`; a teacher under time pressure should not be choosing
+paths); a shared network folder instead of the channel (needs SMB open on every PC and a
+password somewhere; the channel is already there and authenticated); executing handouts
+"if they are scripts" (that is what `run_script` and the scripts panel are for).
+See `docs/ARCHITECTURE.md` §6 and `docs/PROTOCOL.md` (`send_file`).
 
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 

@@ -483,7 +483,10 @@ green summary, reboot prompt, Defender exclusion, third-party-antivirus detectio
 <strong>secret-free</strong> payload of <code>docs/INSTALLER.md</code>: public CA certificate + a batch of
 single-use enrollment codes.</li>
 <li>File transfer both directions: <code>PullFile</code> and <code>PushFile</code>, hash-verified, resuming after
-a reconnect.</li>
+a reconnect. Its first consumer is <code>install_package</code> — the reason the channel exists.</li>
+<li><strong>Send files to students</strong> (<code>D-23</code>): <code>send_file</code> lands in <code>Materials</code> on the <code>student</code>
+desktop, optional <em>open after delivery</em> through the helper, one job per file, a batch
+entry in the jobs panel expanding to per-file, per-PC rows; <em>Send files…</em> on the toolbar.</li>
 <li><code>self_update</code>, the full version (<code>D-19</code>, <code>docs/ARCHITECTURE.md</code> §7.2): a bundle whose
 manifest (version, per-file SHA-256, minimum installed version) is <strong>signed with the lab
 key</strong> and verified by the agent against its pinned <code>ca.crt</code>; unpack into a new version
@@ -514,6 +517,11 @@ PCs reconnect <strong>without anyone entering the classroom</strong>.</li>
 unexpected in the console, and remove it in one click.</li>
 <li>Pushing a 500 MB file to all 14 PCs in parallel completes, is hash-verified, and
 survives one PC losing its link mid-transfer.</li>
+<li><em>Send files…</em> with a 20 MB <code>.docx</code> and a <code>.pdf</code> to all 14 PCs: both appear in
+<code>Materials</code> on every <code>student</code> desktop within a minute, the <code>.docx</code> opens on every
+screen when <em>open after delivery</em> is ticked, a second send of the same file replaces the
+first without a duplicate, and a <code>.exe</code> sent this way lands as a file and is not run.
+Immediately afterwards an <code>install_package</code> job on the same PCs still works unchanged.</li>
 <li><code>self_update</code> upgrades every agent, and they reconnect on the new version.</li>
 <li><strong>The deliberately broken release.</strong> Push a bundle whose agent exits on start to all 14
 PCs. Every one of them is back on the previous version and online <strong>without anyone
@@ -546,12 +554,17 @@ end-early from the console.</li>
 <li><em>Allowed programs</em> — whitelist enforced by the helper via process-start events,
 matched by <strong>executable name only</strong> (no process-tree following), with a hard-coded
 never-touch set (session, shell and OS processes, LabControl itself).</li>
-<li><em>Internet block</em> — outbound firewall rules in a LabControl rule group, exempting the
-console, removed automatically.</li>
+<li><em>Internet</em> — the internet policy of <code>D-22</code> (<em>blocked</em> or a <em>whitelist</em> preset) for the
+exam's lifetime, overriding any standalone policy and handing back to it at the end.</li>
 <li><em>Collect work</em> — one folder, chosen while setting up the exam, zipped and uploaded
 from every PC at the end, filed under <code>&lt;exam&gt;/PC-07/</code>.</li>
 </ul>
 </li>
+<li><strong>Internet control as a standalone action</strong> (<code>D-22</code>, <code>docs/ARCHITECTURE.md</code> §6.2):
+<em>open</em> / <em>whitelist</em> / <em>blocked</em> per PC or lab-wide, with a duration (<em>this lesson</em>, <em>N
+minutes</em>, <em>until I lift it</em>) and an 8 h hard limit; hostname presets with wildcards; the
+loopback resolver that turns allowed names into time-limited firewall allow rules; the
+<em>recently refused names</em> list in the console; a tile badge and <code>InternetState</code> reporting.</li>
 <li>Fail-safe machinery for all of the above: state persisted on the agent, an absolute
 hard limit, and &quot;restore first, then re-apply&quot; on service start.</li>
 <li><strong>Profile reset</strong>: full (log off <code>student</code>, delete the profile via <code>Win32_UserProfile</code>,
@@ -565,6 +578,15 @@ students cannot escape the overlay with Alt+Tab, Win, or by clicking.</li>
 rebooted while locked.</li>
 <li>Each exam switch works <strong>alone</strong>: a timer-only session leaves the internet and the
 programs untouched; an internet-block-only session shows no countdown.</li>
+<li><strong>Internet control drill.</strong> <em>Blocked</em> on all 14 PCs: no site loads, the console keeps
+every PC online, <code>install_package</code> and <em>Send files</em> still work. <em>Whitelist</em> with
+<code>*.jetbrains.com</code> and <code>docs.oracle.com</code>: those load in a browser (including a browser with
+DNS-over-HTTPS switched on), everything else shows a blocked page within 2 s, and the
+refused names appear in the console. <em>Open</em> restores the original DNS servers exactly.
+Kill the agent service under a whitelist: on restart the PC has its internet back before
+anything is re-applied; pull the PC's power under a whitelist: same result after boot.</li>
+<li>A standalone <em>blocked</em> policy set for the lesson survives an exam that starts and ends
+inside it, and is still in force after the exam.</li>
 <li><strong>Fail-safe drill, mandatory.</strong> Start an exam with the internet blocked and the
 whitelist on, then close the console's laptop and leave it closed. Every PC restores
 itself at the hard limit. Repeat by killing the agent service mid-exam: on restart the
@@ -577,7 +599,8 @@ is reported as missing rather than silently skipped.</li>
 <li>Profile reset returns a deliberately messed-up <code>student</code> desktop to a clean state in
 one command, and the PC comes back online by itself.</li>
 </ul>
-<p><strong>Rough size.</strong> Large. The whitelist and the firewall switch are the risky parts.</p>
+<p><strong>Rough size.</strong> Large. The program whitelist, the firewall switch and the loopback
+resolver are the risky parts.</p>
 <hr />
 <h2 id="m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish<a class="anchor" href="#m6-software-catalog-localization-polish" aria-label="Link to this section">#</a></h2>
 <p><strong>Goal.</strong> Everything that makes the system pleasant to own for one person with no IT
@@ -725,6 +748,16 @@ configure?</li>
 <td><code>D-16</code>, M5</td>
 </tr>
 <tr>
+<td>Internet control outside exams?</td>
+<td>Yes: <em>open</em> / <em>whitelist</em> (hostnames, wildcards) / <em>blocked</em>, standalone with a duration and a hard limit, and the same thing as the exam's internet switch</td>
+<td><code>D-22</code>, ARCHITECTURE §6.2, M5</td>
+</tr>
+<tr>
+<td>Sending files to students?</td>
+<td>Yes — but the file channel exists first for installing software without a USB walk, and that flow stays untouched; handouts land in <code>Materials</code> on the student desktop</td>
+<td><code>D-23</code>, ARCHITECTURE §6, M4</td>
+</tr>
+<tr>
 <td>How does LabControl update itself?</td>
 <td>Side-by-side version directories, a bundle signed by the lab key, 10-minute probation and a rollback driven from outside the agent; the console is updated by replacing its binary</td>
 <td><code>D-19</code>, ARCHITECTURE §7, M2 + M4</td>
@@ -745,7 +778,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-04 14:42 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 14:50 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

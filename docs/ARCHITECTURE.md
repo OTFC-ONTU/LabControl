@@ -296,13 +296,14 @@ covered without a second visit.
 | Wake-on-LAN | Console sends magic packet (UDP broadcast `:9`, plus directed to `last_ip`). MAC comes from enrollment. Installer enables WoL on the NIC and disables Fast Startup/hibernation (they break WoL on Windows). |
 | Shutdown / reboot / logoff | Agent: `ExitWindowsEx` / `InitiateSystemShutdownEx` with `SE_SHUTDOWN_NAME`. |
 | Run script | Agent runs `powershell.exe -NoProfile -ExecutionPolicy Bypass -File …` or `cmd /c` as SYSTEM (default) or in the student session via the helper (`as: user`). stdout/stderr/exit code streamed back. |
-| Install package | Catalog entry = `{name, version, installer file, silent args, detect: {path|registry|command}}`. Console pushes the installer over the file stream (LAN, no internet needed), agent runs it silently, verifies `detect`, reports result. `winget`/`choco` are *not* used (winget does not work under SYSTEM). |
+| Install package | Catalog entry = `{name, version, installer file, silent args, detect: {path|registry|command}}`. Console pushes the installer over the file stream (LAN, no internet needed), agent runs it silently, verifies `detect`, reports result. `winget`/`choco` are *not* used (winget does not work under SYSTEM). **This is the reason the file channel exists** — installing an IDE on every PC without walking a USB stick around the room — and nothing built on the channel later may change how it behaves (`D-23`). |
+| Send files to students | The same `PullFile` channel with a different landing: the file goes to `Materials` on the `student` desktop (path in `Defaults.cs`), hash-verified, optionally opened at once in the student session by the helper. One job per file, so a batch of three handouts to 14 PCs is 42 rows in the jobs panel with a result each. Installers never land here and handouts are never executed (`D-23`). |
 | Broadcast teacher screen | Console captures its own screen (macOS: CoreGraphics `CGDisplayCreateImage`/ScreenCaptureKit via P/Invoke — needs Screen Recording permission; Windows: DXGI) → JPEG stream → helper shows a topmost full-screen window, input blocked. |
 | Lock screen | Helper shows a full-screen topmost window with a message; low-level keyboard hook swallows Alt+Tab/Win; `BlockInput`. Ctrl+Alt+Del cannot be blocked by design — accepted. |
 | Exam mode | A composable set of independent switches, not a single mode (see §6.1). |
 | — timer | Countdown rendered by the helper; the deadline is absolute (console clock, skew-corrected at `Hello`) so it keeps running if the link drops, and the mode ends by itself. |
 | — app whitelist | Helper subscribes to process-start events (WMI `Win32_ProcessStartTrace`, polling fallback) and terminates anything outside the allowed list. Matching is by **executable path/name only** — a process started by an allowed program is judged on its own name, not on its parent (owner's choice: the simpler rule). Hard-coded never-touch set: session, shell and OS processes, and LabControl itself. |
-| — internet block | Agent adds outbound-blocking firewall rules with a distinctive rule group, exempting the console subnet. Fail-safe: rules carry an expiry, are removed on exam end, on service start, and on any agent restart — a crashed agent can never leave a PC offline. |
+| Internet control | Three modes per PC — *open*, *whitelist* (named sites only), *blocked* — as a standalone action on one PC or the whole lab, and as the exam mode's internet switch. Enforcement is always Windows Firewall: outbound blocked in a LabControl rule group, exempting the lab's own subnet (so the console, the file channel and the printer keep working) and, in whitelist mode, the addresses of allowed sites. Names become addresses through a small resolver the agent runs on the loopback interface while a whitelist is active: it forwards allowed names upstream, records the answers as allow rules, and refuses everything else; encrypted-DNS bypasses fail on the firewall anyway. Fail-safe exactly like exam mode: the policy carries an expiry and a hard limit, is removed on service start before anything is re-applied, and a crashed agent can never leave a PC offline (§6.2, `D-22`). |
 | — collect work | At the end (or on demand) the agent zips **one folder chosen when the exam is set up** and uploads it through `PushFile`; the console files it under `<exam>/PC-07/`. The folder is a dedicated work directory, not the whole `student` desktop, so what is collected is predictable and small. |
 | Package management | The console's *Add package* wizard takes any local `.exe`/`.msi`, suggests silent arguments for known installer families, computes the hash, writes the YAML, and offers a test install on one PC before the fleet. The catalog ships **empty** — it is filled by the teacher. |
 | Profile reset | Agent logs `student` off, deletes the profile (`Win32_UserProfile.Delete`), reboots; auto-logon recreates a pristine profile. Optional "light reset" = wipe Desktop/Documents/Downloads only. |
@@ -319,12 +320,55 @@ combination as a named preset (*Written test*, *Practical with the IDE*, *Open-b
 |---|---|---|
 | Timer | mode ends when the teacher ends it | absolute deadline, countdown on the student screen, auto-end |
 | Allowed programs | anything runs | only the listed executables; others are closed as they start (matched by name, not by which program launched them) |
-| Internet | untouched | blocked except the console; automatically restored |
+| Internet | untouched | *blocked* or *whitelist* (§6.2) for the length of the exam; automatically restored |
 | Collect work at the end | nothing collected | one folder, picked while setting up the exam, is uploaded from every PC |
 
 Every switch is independently reversible, and the whole mode has a hard maximum
 duration after which the agent restores the machine on its own — a lesson must never
 end with a PC left restricted because the teacher's laptop was closed.
+
+### 6.2 Internet control: open, whitelist, blocked
+
+The owner wants the internet controllable during ordinary lessons, not only in exams:
+"no internet for this lab", or "only the JetBrains site and the Oracle docs". So the
+internet switch is its own action (`D-22`), applied to a selection of PCs or the whole
+lab from the toolbar and shown as a badge on the tile, and the exam mode's internet
+switch is the same mechanism with the exam's lifetime.
+
+| Mode | What the student PC can reach |
+|---|---|
+| Open | everything (the machine as it was) |
+| Whitelist | the lab's own subnet, plus the listed sites: hostnames with optional wildcard (`*.jetbrains.com`, `docs.oracle.com`). Hostnames only — with HTTPS a URL path is invisible to the machine, so a rule cannot say "this page but not that one" |
+| Blocked | the lab's own subnet only |
+
+Lists are saved as named presets (*Java docs*, *Nothing but the college site*) and
+reused in exam presets. A standalone policy always has a duration — *this lesson*
+(default 90 min), *N minutes*, or *until I lift it* — and, like an exam, an absolute hard
+limit (`Defaults.InternetPolicyHardLimit`, 8 h) past which the agent restores the
+machine on its own. If an exam starts while a standalone policy is in force, the exam's
+policy wins; when the exam ends, the standalone one is re-applied if it is still within
+its limits, so a "no internet today" is not silently cancelled by a test.
+
+How the whitelist is enforced, because this is the part that can go wrong:
+
+1. The agent installs the outbound block rules and the subnet exemption (same as
+   *Blocked*), plus a rule allowing UDP/TCP 53 to the loopback interface only.
+2. It starts a resolver on `127.0.0.1:53` and points the NIC's DNS at it, remembering the
+   previous DNS servers in the persisted policy state so they can be put back.
+3. For an allowed name the resolver forwards to the previous upstream, returns the real
+   answer, and adds every address in it (following CNAMEs) to the allow rule set with an
+   expiry a little longer than the record's TTL. For any other name it answers `REFUSED`.
+4. A browser that ignores the system resolver (DNS-over-HTTPS) still resolves only through
+   addresses the firewall lets it reach — which, for an unlisted site, it cannot. The
+   result is a blocked page, not a bypass.
+5. Restore = remove the rule group, stop the resolver, put the NIC's DNS back. This runs on
+   policy end, at the hard limit, and **first thing on every service start**.
+
+Known limits, accepted: a site behind a large CDN may need its CDN hostnames listed too
+(the console shows the resolver's refused names for the last minutes, so the missing one
+is a click away); a phone hotspot bypasses everything, exactly as it did before
+LabControl existed; captive-portal or proxy networks (`D-10` on-site checklist) may need
+the proxy address exempted.
 
 ## 7. Updating LabControl itself
 
@@ -393,8 +437,8 @@ than engineered around.
   scales from 1 to 30 PCs; beyond what fits, tiles shrink and the mosaic scrolls.
 - **Selection model**: click = select, ⌘/Ctrl-click = multi, ⌘A = all. Toolbar
   actions apply to the selection: Wake, Shutdown, Reboot, Log off, Lock, Unlock,
-  Broadcast, Exam mode…, Run script…, Install package…, Reset profile, Send file,
-  Collect files.
+  Broadcast, Exam mode…, Internet… (open / whitelist / blocked, §6.2), Run script…,
+  Install package…, Reset profile, Send files… (§6, `D-23`), Collect files.
 - **Single-PC view**: double-click a tile → full-size stream with input control toggle.
 - **Jobs panel**: every action becomes a job with per-PC rows (pending / running /
   ok / failed + log). Jobs persist in `logs/`.
@@ -429,7 +473,9 @@ Teacher-side risks, new since the console became replaceable:
 | Binaries are unsigned | antivirus / SmartScreen may quarantine the agent | accepted (see D-15); the installer registers an exclusion and the console reports agents that stop reporting |
 
 Out of scope: a student with a live USB or BIOS access (physical security is the
-college's job), and network attackers on the lab LAN beyond the students themselves.
+college's job), a student on a phone hotspot (the internet controls of §6.2 cover the
+lab's wire, not the student's pocket), and network attackers on the lab LAN beyond the
+students themselves.
 
 ## 10. Non-goals
 

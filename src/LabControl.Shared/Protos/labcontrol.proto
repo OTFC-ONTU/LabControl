@@ -66,6 +66,7 @@ message AgentMessage {
     Pong         pong          = 8;
     ExamState    exam_state    = 9;
     RevocationState revocation_state = 10;  // sent right after Hello (D-21)
+    InternetState   internet_state   = 11;  // on every policy change and service start (D-22)
   }
 }
 
@@ -81,6 +82,7 @@ message ConsoleMessage {
     Revocation   revocation    = 8;
     UpdateAgent  update_agent  = 9;
     VideoFrame   broadcast     = 10;  // teacher screen, console -> agent
+    InternetPolicy internet_policy = 11;  // standalone internet control (D-22)
   }
 }
 
@@ -296,18 +298,48 @@ message ExamMode {
   int64  ends_at_unix               = 3;  // 0 = no timer
   int64  hard_limit_unix            = 4;  // always set; the agent restores itself past this
   string message                    = 5;
-  bool   block_internet             = 6;
+  reserved 6;                             // was block_internet; now an InternetPolicy (D-22)
   repeated string allowed_programs  = 7;  // executable names; empty = whitelist off
   CollectSpec collect               = 8;
+  InternetPolicy internet           = 9;  // absent or OPEN = internet untouched
 }
 
 message ExamState {
   string session_id                = 1;
   bool   active                    = 2;
   int64  ends_at_unix              = 3;
-  bool   internet_blocked          = 4;
+  reserved 4;                             // was internet_blocked; see InternetState
   bool   whitelist_enforced        = 5;
   repeated string terminated_recently = 6;  // what the whitelist actually killed
+}
+
+// ---------------------------------------------------------------------------
+// Internet control (D-22, ARCHITECTURE 6.2): open / whitelist / blocked, standalone or as
+// the exam's internet switch. Enforced by Windows Firewall; names are turned into allow
+// rules by a resolver on the loopback interface. Fail-safe like exam mode.
+// ---------------------------------------------------------------------------
+
+message InternetPolicy {
+  enum Mode {
+    MODE_UNSPECIFIED = 0;
+    OPEN             = 1;
+    WHITELIST        = 2;
+    BLOCKED          = 3;
+  }
+  string session_id             = 1;  // one per application, like an exam session
+  Mode   mode                   = 2;
+  repeated string allowed_hosts = 3;  // WHITELIST only; hostnames, optional leading "*."
+  int64  until_unix             = 4;  // 0 = until lifted
+  int64  hard_limit_unix        = 5;  // always set; never more than InternetPolicyHardLimit out
+  string preset_name            = 6;  // for the tile badge and the student banner
+}
+
+message InternetState {
+  InternetPolicy.Mode mode         = 1;
+  string session_id                = 2;
+  int64  until_unix                = 3;
+  bool   resolver_active           = 4;
+  repeated string refused_recently = 5;  // names the whitelist resolver refused lately
 }
 
 // ---------------------------------------------------------------------------

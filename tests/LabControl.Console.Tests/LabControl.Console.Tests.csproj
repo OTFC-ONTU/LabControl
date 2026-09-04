@@ -18,6 +18,7 @@
          the executable assembly and never touch Avalonia. -->
     <ProjectReference Include="..\..\src\LabControl.Console\LabControl.Console.csproj" />
     <ProjectReference Include="..\..\src\LabControl.Shared\LabControl.Shared.csproj" />
+    <ProjectReference Include="..\..\src\LabControl.FakeAgent\LabControl.FakeAgent.csproj" />
   </ItemGroup>
 
 </Project>

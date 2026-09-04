@@ -341,6 +341,38 @@ public sealed class LabSession : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Writes the USB payload's trust part (INSTALLER.md): <c>ca.crt</c> and <c>setup.json</c>
+    /// with fresh single-use codes — one per PC plus spares. The agent binaries are added by
+    /// <c>tools/build-usb.sh</c> in M4; <c>FakeAgent</c> needs only this.
+    /// </summary>
+    public string WritePayload(string directory, int pcCount)
+    {
+        var now = _clock();
+        var target = Path.Combine(directory, Defaults.PayloadDirectoryName);
+        Directory.CreateDirectory(target);
+
+        var codes = Enrollment.Generate(pcCount + Defaults.SpareEnrollmentCodes, $"{Instance.InstanceName} {now:yyyy-MM-dd HH:mm}", now);
+        SaveEnrollment();
+
+        File.WriteAllBytes(Path.Combine(target, Defaults.CaCertificateFileName), Authority.Export(X509ContentType.Cert));
+
+        var setup = new SetupPayloadDocument
+        {
+            LabId = LabId,
+            LabName = LabName,
+            ConsolePort = Port,
+            NextNumber = 1,
+            EnrollmentCodes = codes.ToList(),
+            WrittenBy = Instance.InstanceName,
+            WrittenAtUnix = now.ToUnixTimeSeconds(),
+        };
+        JsonStore.Save(Path.Combine(target, Defaults.SetupFileName), setup, SetupPayloadDocument.Migrations);
+
+        Events.Info("enroll.payload_written", $"USB payload with {codes.Count} enrollment codes written to {target}.");
+        return target;
+    }
+
     // ------------------------------------------------------------------ renewal (gRPC entry point)
 
     public RenewResponse Renew(X509Certificate2? peer, RenewRequest request)

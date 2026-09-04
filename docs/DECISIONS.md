@@ -287,6 +287,102 @@ password somewhere; the channel is already there and authenticated); executing h
 "if they are scripts" (that is what `run_script` and the scripts panel are for).
 See `docs/ARCHITECTURE.md` §6 and `docs/PROTOCOL.md` (`send_file`).
 
+## D-24 — How the trust model is actually built (M1)
+
+Context: `D-13`, `D-14` and `D-21` decide *what* the trust model is. Building it in M1
+forced a handful of smaller choices that would look arbitrary later, and that both sides of
+the wire have to agree on exactly.
+
+Decisions:
+
+1. **Identity lives in a subject alternative name URI, not in a hostname.**
+   `labcontrol://<lab_id>/console/<instance_id>` and
+   `labcontrol://<lab_id>/agent/<agent_id>/<number>`. Agents reach the console by whatever
+   IP DHCP handed out today, so hostname validation is meaningless here; both sides switch
+   off the built-in name check and validate the chain against the pinned CA plus this URI
+   instead. It also means a certificate says which *role* it is, so an agent certificate
+   offered where a console belongs is refused as a role error rather than accepted.
+2. **Everything the lab key signs outside a certificate is a pipe-joined UTF-8 string.**
+   The beacon endorsement is `lab|inst|base64(pub)`; a beacon signature covers
+   `v|lab|inst|name|host|port|ts|take|base64(pub)|base64(end)` with `take` written as `0`
+   when absent; a revocation entry covers `serial|revoked_at_unix|reason`. Canonical JSON
+   would have been the alternative and is a well-known source of "my serializer orders keys
+   differently" bugs; a fixed field order in a flat string cannot drift, and it is
+   reimplementable in ten lines by whatever writes the next agent.
+3. **The beacon carries a compressed P-256 point (33 bytes).** The .NET BCL imports affine
+   coordinates only, so LabControl decompresses the point itself. That is ~40 lines of
+   modular arithmetic in exchange for 44 bytes of a 512-byte budget that also has to hold
+   two 64-byte signatures — with the uncompressed form a slightly longer instance name
+   would silently push the beacon over one datagram.
+4. **Enrolment needs the lab key unlocked.** Issuing an agent certificate is a CA
+   operation, so the console holds the unlocked lab key in memory only while the teacher has
+   enrolment open, and refuses `Enroll` with a clear message otherwise. Rejected: minting an
+   intermediate CA for each console instance so it could issue on its own — that turns every
+   teacher machine into something that can enrol PCs unattended, which is exactly what
+   `D-13`'s "a stolen laptop is revocable, not catastrophic" depends on not being true.
+5. **PBKDF2 iterations are stored per wrapping, not compiled in.** The count only ever goes
+   up, and a file written years ago must still open. Tests use a deliberately low count for
+   speed, which is possible precisely because the number travels with the wrapping.
+6. **Certificate serials are normalised to uppercase hex with leading zeros trimmed**, in
+   one place, because revocation matches on the string and the two sides must not spell it
+   differently.
+7. **The console instance key is protected by the OS keystore, with an honest fallback.**
+   macOS Keychain through `SecItem` (never `/usr/bin/security`, which would put a private key
+   on a command line), Windows DPAPI, Linux libsecret through `secret-tool` with the secret on
+   standard input. Where none is available the key is sealed with AES-256-GCM under a key
+   derived from the machine identity and the user account: weaker — anything running as that
+   user can re-derive it — but a console that will not start because a keyring daemon is
+   missing is worse for this lab, and the instance key is reissuable from the lab key anyway.
+   A document is always reopened with the protector that *wrote* it, so installing a keyring
+   later never orphans a key.
+8. **The last key holder cannot be removed.** A lab openable only by a sheet of paper in a
+   drawer is a lab with no teacher.
+
+## D-25 — Four questions the M1 review left open, answered
+
+Context: reviewing the M1 trust code against `docs/ARCHITECTURE.md` turned up four places
+where the documents and the code could each be read two ways. The owner decided; this
+entry records the decisions so the next reader does not re-open them.
+
+1. **Enrolment needs the lab key, and the documents now say so.** `D-24` item 4 stands;
+   `ARCHITECTURE.md` §3.2 previously listed the passphrase as needed only for first run,
+   minting, migrating and revoking, which was wrong by omission. A console with the key
+   locked refuses `Enroll` with a plain message and the agent retries on its reconnect
+   schedule. Rejected: keeping the lab key unlocked in memory for the whole console
+   session — it would make every teacher machine a CA for as long as it is open, which is
+   the exposure `D-13` is built to avoid; and an intermediate CA per instance, for the same
+   reason (`D-24`).
+2. **Certificates are renewed over the link, never by visiting a PC.** Leaf lifetimes had
+   been chosen (console 1 year, agent 5 years, authority 20) with no story for what happens
+   at the end — which for agents would have been a walk to every PC in 2031, the exact thing
+   `D-13` forbids. `AgentService.Renew` re-issues an agent certificate from a fresh CSR for
+   the identity the agent *proved* on the current connection; it starts 60 days out
+   (`Defaults.CertificateRenewalLeadTime`), needs the lab key like enrolment does, and is
+   refused politely until the key is unlocked. Console instances re-mint themselves from the
+   lab key on their own machine. Rejected: leaf lifetimes equal to the authority's — simpler,
+   but then a compromised key is closed only by revocation, and a 20-year agent key on a PC
+   in a student lab is not a comfortable thing.
+3. **The PC number is the identity of a machine.** Setup generates a fresh `agent_id` on a
+   full reinstall (`--rekey` keeps it), so the console would otherwise accumulate one dead
+   record per reinstall, each with the same sticker number. A `Hello` or `Enroll` whose
+   number another record holds replaces that record and raises an event naming both.
+   Rejected: keeping both until the teacher deletes one (the "unexpected machine" path is
+   for bogus enrolments, not for the PC the teacher just reinstalled); refusing enrolment
+   while the old record exists (a second trip to the console for nothing).
+4. **`online_only` means never queued.** The first cut delivered a pending `shutdown` if the
+   PC reconnected within the job's timeout, which is a grace period `PROTOCOL.md` never
+   promised. Now: created for an offline PC it is `not_delivered` at once; still pending
+   when the PC's link drops, it is closed the same way. A `shutdown` clicked at 15:00 can
+   never fire at 08:00 the next day, and nothing depends on a timer.
+
+Smaller corrections made in the same pass: job timeouts count inactivity, not time since
+delivery, so a long install that keeps reporting is never cut off; the backup check compares
+a fingerprint of `lab-key.lck` rather than a date, since the file changes on whichever
+teacher machine added a holder; `RemoveHolder` drops the wrapping and the document no
+longer claims it re-wraps the master key (equivalent in strength, see `ARCHITECTURE.md`
+§3.2); an `Enroll` with a non-UUID `agent_id` is refused before a code is spent, because the
+id ends up in the certificate's name and the lab's own trust rules would reject it forever.
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the
@@ -407,6 +503,7 @@ project cannot notice on its own).
 | CommunityToolkit.Mvvm | Console | MVVM source generators |
 | Grpc.AspNetCore | Console | gRPC server |
 | Grpc.Net.Client, Grpc.Tools, Google.Protobuf | Shared/Agent | gRPC client + codegen |
+| System.Security.Cryptography.ProtectedData | Shared | Windows DPAPI for the console instance key; the BCL dropped it from the shared framework (D-24) |
 | SkiaSharp | Console, Agent.Session | JPEG encode/decode, scaling |
 | Microsoft.Windows.CsWin32 | Agent, Agent.Session, Setup | Win32 P/Invoke source generator |
 | Vortice.Direct3D11, Vortice.DXGI | Agent.Session | Desktop Duplication |

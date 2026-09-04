@@ -163,7 +163,7 @@ implement.</p>
 <tr>
 <td><strong>M1</strong></td>
 <td>Lab identity, link and presence</td>
-<td>not started</td>
+<td><strong>in progress</strong></td>
 <td>M0</td>
 </tr>
 <tr>
@@ -303,7 +303,13 @@ both sides, plus revocation checking.</li>
 signature), verifiable offline; rate-limited dialling and beacon-ignoring-while-
 connected on the agent side.</li>
 <li><code>EnrollmentService</code>: single-use codes, CSR in, certificate out, code burned, machine
-recorded, duplicate/burned-code attempts reported as events.</li>
+recorded, duplicate/burned-code attempts reported as events; refused with a retry-later
+message while the lab key is locked (<code>D-24</code>).</li>
+<li><strong>Certificate renewal over the link</strong> (<code>D-25</code>, ARCHITECTURE §3.8): <code>AgentService.Renew</code>,
+the agent asking from 60 days out, the console's <em>certificates need renewing</em> banner,
+console instance re-mint at startup when its own leaf is close to expiry.</li>
+<li><strong>The PC number is the identity</strong> (<code>D-25</code>): a reinstalled PC replaces its old record and
+raises an event; <code>--rekey</code> keeps the <code>agent_id</code>.</li>
 <li>Agent-side link library shared by <code>FakeAgent</code> and the real agent: enrolment, reconnect
 with exponential backoff, offline job queue.</li>
 <li><code>Job</code> plumbing end to end: console creates a job → delivered on <code>Link</code> → agent reports
@@ -324,6 +330,16 @@ whose <code>protocol_version</code> is below its minimum instead of refusing it,
 <em>outdated</em>, and greys out what that agent cannot do. A test asserts the frozen messages
 round-trip between a v1 and a current serializer.</li>
 </ul>
+<p><strong>Progress.</strong> The trust model itself is built and covered by tests: the lab key and its
+holder/recovery wrappings, certificate issuance, chain validation and renewal, the v2
+beacon (signing, verification, take-over and the agent-side gate), signed revocation
+entries merged as a set, single-use enrollment codes, the self-healing machine list with
+number-as-identity, the job queue and the agent's job ledger, the schema-versioned document
+store, and the OS-keystore protector with its fallback. The decisions the first review
+forced are in <code>D-25</code>. What is not built yet: the gRPC transport (console server,
+<code>EnrollmentService</code>, <code>Renew</code>, <code>Link</code>), the beacon broadcaster/listener sockets, the
+<code>FakeAgent</code> link, the console UI (first-run wizard, lab view, jobs panel, settings, the
+renewal banner), backup export/import, and the frozen-subset round-trip test.</p>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
 <li>30 fake agents enrol from a fresh lab and appear online within 5 s of the console
@@ -337,6 +353,14 @@ reconnect <strong>with no change on the agent side at all</strong>. Then repeat 
 remove the first holder and confirm their passphrase no longer opens anything.</li>
 <li>Revoke the old instance; an agent presented with the old leaf certificate refuses it
 and says why.</li>
+<li><strong>Renewal test.</strong> A fake agent whose certificate has 30 days left asks to renew; with
+the lab key locked it is refused and keeps working; after the key is unlocked it gets a
+new certificate for the same agent id and number, reconnects with it, and the console
+shows the new serial. A console instance minted with 30 days left is re-minted at
+startup after the passphrase.</li>
+<li><strong>Reinstall test.</strong> A fake agent enrols as PC-07, then enrols again with a new agent id
+as PC-07: the lab view still shows one PC-07, the old agent id is gone, and the event
+log names both.</li>
 <li><strong>Alternation test.</strong> Two console profiles (A and B) for the same lab, both with the lab
 key imported. Run A with 30 fake agents; add a PC on A; close A; start B. All 30 agents
 are online on B within 15 s, the PC added on A is present on B, and nobody was asked for
@@ -354,8 +378,11 @@ revocation with it and A refuses the revoked agent thereafter. A forged revocati
 <li>A forged beacon (valid JSON, wrong CA endorsement) is rejected without a connection
 attempt; a beacon flood does not cause more than one dial attempt every 2 s.</li>
 <li>A burned enrollment code is refused and surfaces in the console as an event.</li>
-<li>A job sent to an offline agent is queued and runs on reconnect; a <code>shutdown</code> job is not
-queued (<code>deliver: online_only</code>).</li>
+<li>A job sent to an offline agent is queued and runs on reconnect; a <code>shutdown</code> job for an
+offline agent is <code>not_delivered</code> immediately and is not delivered even if the agent
+connects a minute later (<code>deliver: online_only</code>, <code>D-25</code>).</li>
+<li>A fake agent that enrols while the lab key is locked is refused, keeps retrying, and
+enrols on its own once the teacher unlocks the key.</li>
 <li>A <code>lab.json</code> with a <code>schema_version</code> one higher than the build understands is refused
 with a message naming the version needed, and the console starts anyway rather than
 crashing; a backup exported by this build re-imports into it unchanged.</li>
@@ -363,9 +390,10 @@ crashing; a backup exported by this build re-imports into it unchanged.</li>
 still connects, still appears in the lab view marked <em>outdated</em>, and can still be sent a
 <code>self_update</code> job.</li>
 <li>Unit tests cover: key wrapping/unwrapping by both passphrase and recovery code,
-certificate issuance and chain validation, beacon signing and verification, enrollment
-code lifecycle, job idempotency, reconnect backoff, schema migration and refusal, and
-the frozen-subset round-trip.</li>
+certificate issuance and chain validation, certificate renewal for the proved identity
+only, beacon signing and verification, enrollment code lifecycle, machine replacement by
+number, job idempotency, <code>online_only</code> never queued, inactivity timeouts, reconnect
+backoff, schema migration and refusal, and the frozen-subset round-trip.</li>
 </ul>
 <p><strong>Not in scope.</strong> Real Windows anything, video, files, packages.</p>
 <p><strong>Rough size.</strong> Large — the backbone every later milestone plugs into.</p>
@@ -778,7 +806,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-04 14:50 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 19:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

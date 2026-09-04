@@ -1,0 +1,90 @@
+namespace LabControl.Shared.Persistence;
+
+/// <summary>
+/// One student PC as this console knows it. The list is a <b>cache of the lab</b>, not its
+/// truth (ARCHITECTURE §3.7): a PC that connects with a valid lab-issued certificate and is
+/// not here is added from its <c>Hello</c>, which is what lets a second teacher machine
+/// catch up without being told anything.
+/// </summary>
+public sealed class MachineRecord
+{
+    public string AgentId { get; set; } = string.Empty;
+
+    /// <summary>The sticker on the PC. Also the tile order and the default layout.</summary>
+    public int Number { get; set; }
+
+    public string Hostname { get; set; } = string.Empty;
+
+    /// <summary>Identifies the PC together with the agent id; Wake-on-LAN needs it.</summary>
+    public string Mac { get; set; } = string.Empty;
+
+    public string CertificateSerial { get; set; } = string.Empty;
+
+    public long EnrolledAtUnix { get; set; }
+
+    public long LastSeenUnix { get; set; }
+
+    public string? AgentVersion { get; set; }
+
+    public int ProtocolVersion { get; set; }
+
+    public string? LoggedOnUser { get; set; }
+
+    /// <summary>Which console instance this PC was last linked to; drives the "held by" banner.</summary>
+    public string? LastInstanceId { get; set; }
+}
+
+/// <summary>
+/// A console installation this lab has seen — this machine, or another teacher machine
+/// (ARCHITECTURE §3.7.1). Settings lists them; the banner names them.
+/// </summary>
+public sealed class InstanceRecord
+{
+    public string InstanceId { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
+
+    public string CertificateSerial { get; set; } = string.Empty;
+
+    public long FirstSeenUnix { get; set; }
+
+    public long LastSeenUnix { get; set; }
+
+    /// <summary>True for the console that owns this copy of <c>lab.json</c>.</summary>
+    public bool IsThisMachine { get; set; }
+}
+
+/// <summary>Where a PC's tile sits in the room view. Absent tiles fall back to number order.</summary>
+public sealed class LayoutTile
+{
+    public int Number { get; set; }
+
+    public int Column { get; set; }
+
+    public int Row { get; set; }
+}
+
+/// <summary>
+/// <c>lab.json</c> — everything this console knows about the lab that is not a secret.
+/// Machines, the consoles it has seen, the revocations it holds and the room layout.
+/// </summary>
+public sealed class LabDocument : ISchemaVersioned
+{
+    public static readonly SchemaMigrations Migrations = new(Defaults.LabSchemaVersion);
+
+    public int SchemaVersion { get; set; } = Defaults.LabSchemaVersion;
+
+    public string LabId { get; set; } = string.Empty;
+
+    public string LabName { get; set; } = string.Empty;
+
+    public List<MachineRecord> Machines { get; set; } = [];
+
+    public List<InstanceRecord> Instances { get; set; } = [];
+
+    /// <summary>The union of every signed revocation this console has seen (D-21).</summary>
+    public List<RevocationRecord> Revocations { get; set; } = [];
+
+    /// <summary>Hand-arranged tile positions. Travels only in a backup, by design (§3.7).</summary>
+    public List<LayoutTile> Layout { get; set; } = [];
+}

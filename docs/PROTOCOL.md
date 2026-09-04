@@ -38,6 +38,24 @@ The beacon is verifiable **offline, with no shared secret**. An agent accepts it
 verifies against `pub`, and `ts` is within ±60 s. Then it dials `host:port` and completes
 mutual TLS, which is the real gate — the beacon only says *where* to look.
 
+**What exactly is signed** (`D-24`). Both signatures are ECDSA P-256 over SHA-256, in the
+IEEE P1363 fixed-width form, so each is exactly 64 bytes. The signed bytes are UTF-8 of a
+pipe-joined string with a fixed field order — never re-serialized JSON, whose key order is a
+serializer's choice:
+
+| Signature | Made by | Signed bytes |
+|---|---|---|
+| `end` (endorsement) | the **lab key**, once, when the console instance is minted | `lab \| inst \| base64(pub)` |
+| `sig` | the **instance key**, on every beacon | `v \| lab \| inst \| name \| host \| port \| ts \| take \| base64(pub) \| base64(end)` |
+
+`take` is written as `0` when the console is not taking over, so the field is always
+present in the signed form even when it is omitted from the JSON. `pub` is the compressed
+point (`0x02`/`0x03` followed by the 32-byte X coordinate); a beacon whose `pub` is not a
+point on P-256 is dropped as malformed.
+
+The endorsement is kept separate from the instance's certificate because a certificate is
+some 400 bytes and would not leave room for the rest inside one 512-byte datagram.
+
 Consequences:
 
 - Nothing on a student PC can be used to forge a beacon; the earlier symmetric
@@ -74,6 +92,31 @@ burns the code, and records the machine.
 uses mutual TLS with that certificate. A repeated `Enroll` with a burned code is refused
 and reported in the console as an event.
 
+Issuing needs the lab key (`D-24`), so a console whose key is locked answers with the
+gRPC status `Unavailable` and a message telling the teacher to open *Enrol PCs*. That is
+not an error on the PC: the agent logs it once, keeps its keypair and code, and retries on
+the same schedule as a reconnect. `agent_id` must be a UUID, `number` must be within
+`1..30` and the CSR must be self-signed by the key it certifies; anything else is refused
+without spending the code.
+
+### `Renew` — certificate renewal over the link (`D-25`)
+
+```
+rpc Renew(RenewRequest) returns (RenewResponse);      // on AgentService, mutual TLS
+RenewRequest  { csr }
+RenewResponse { agent_certificate, server_time_unix, refusal }
+```
+
+Once its certificate has fewer than 60 days left, the agent generates a fresh keypair and
+calls `Renew` after every `Hello` until it succeeds. The identity being renewed — lab,
+agent id, number — is read from the certificate the agent presented for **this**
+connection, never from the request, so the call can only re-issue what the peer already
+is. The console needs the lab key to sign; while it is locked, `refusal` says so and
+`agent_certificate` is empty, and the agent keeps its current certificate. On success the
+agent swaps to the new certificate for its next connection, and the console records the
+new serial for that machine. Console instances are not renewed this way: they are
+re-minted from the lab key on their own machine (`docs/ARCHITECTURE.md` §3.8).
+
 ### `AgentService` (console is the server, agent is the client, mutual TLS)
 
 ```
@@ -86,6 +129,24 @@ rpc PushFile(stream FileChunk) returns (FileAck);                 // agent uploa
 The console validates the agent certificate against the lab CA **and** against the
 revocation list before accepting the stream; the agent validates the console leaf against
 the CA it pinned at install. No token, no password, no shared secret is exchanged.
+
+Because agents reach the console at whatever address DHCP handed out today, **neither side
+checks a hostname**. Identity is carried in a subject alternative name URI that both sides
+parse (`D-24`):
+
+| Certificate | Subject alternative name |
+|---|---|
+| lab authority | `labcontrol://<lab_id>/authority` |
+| console instance | `labcontrol://<lab_id>/console/<instance_id>` |
+| agent | `labcontrol://<lab_id>/agent/<agent_id>/<number>` |
+
+A peer is accepted when the certificate chains to the pinned CA, its URI names **this**
+lab, its role is the one expected on that side of the connection, and its serial is not in
+the revocation set. Anything else is refused with a reason in plain language — "belongs to
+lab X, not this one" rather than an opaque TLS error.
+
+Certificate serials are compared in one normalised spelling everywhere: uppercase
+hexadecimal, no separators, leading zeros trimmed.
 
 `AgentMessage` (oneof): `Hello`, `Heartbeat`, `Inventory`, `SessionState`
 (logon/logoff/lock/ unlock, active user), `JobProgress`, `JobResult`, `Event` (error,
@@ -106,7 +167,9 @@ ones the agent's `RevocationState` was missing, the agent keeps the union), `Upd
 RevocationEntry { serial, revoked_at_unix, reason, signature }
 ```
 
-`signature` is the **lab key's** signature over `serial|revoked_at_unix|reason`. Revoking
+`signature` is the **lab key's** signature over the UTF-8 bytes of
+`serial|revoked_at_unix|reason`, with `serial` in the normalised spelling below and the
+same P-256/SHA-256/P1363 form as the beacon (`D-24`). Revoking
 already requires unlocking the lab key (`docs/ARCHITECTURE.md` §3.2), so signing costs
 nothing extra, and it means that neither an agent nor a console ever accepts a revocation
 on the say-so of a TLS peer alone: an entry that does not verify against the pinned CA is
@@ -125,7 +188,13 @@ Agent replies with `JobProgress` (0–100 + line of output) and finally `JobResu
 `{id, ok, exit_code, message, artifact_ref?}`. Jobs are idempotent by `id`; a
 re-sent job with a known `id` returns the cached result. Jobs for offline agents are
 queued in the console (`pending`) and delivered on the next `Link`, unless
-`deliver: online_only` (default for `shutdown`).
+`deliver: online_only` (default for `shutdown`), which is **never** queued: created for a
+PC that is not linked it is `not_delivered` on the spot, and one the PC had not collected
+when its link dropped is closed the same way rather than kept for its return (`D-25`).
+
+`timeout_s` is a timeout of *inactivity*, measured from delivery or the latest
+`JobProgress`, whichever is later: a long installation that keeps reporting progress is
+never cut off, one that goes silent is closed as `timed_out`.
 
 Wake-on-LAN is not a job — it is a console-side UDP send; the "result" is the agent
 showing up on `Link` within the WoL timeout (default 90 s).
@@ -246,7 +315,14 @@ whose serial the console has never seen is **added to the machine list from `Hel
 not refused — the console's list is a cache of the lab, and another teacher machine may
 have enrolled the PC (§3.7). `Hello.previous_instance_id` names the console the agent
 was linked to before this one (empty on first link since boot); it is what lets a console
-say which PCs the *other* teacher machine currently holds.
+say which PCs the *other* teacher machine currently holds. `Hello` carries no hostname;
+that arrives with `Inventory`, so a PC a console first met through `Hello` shows its
+number until then.
+
+**The PC number is the identity** (`D-25`). A `Hello` or an `Enroll` whose number another
+record already holds — a different `agent_id`, the same sticker — is the same PC after a
+reinstall. The old record is replaced, not kept beside the new one, and the console
+records an event naming both agent ids and the old certificate serial.
 
 ### The frozen subset
 

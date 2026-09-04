@@ -206,6 +206,37 @@ without any other exchange.</p>
 <code>lab</code> matches its own, <code>end</code> verifies against the <strong>pinned CA public key</strong>, <code>sig</code>
 verifies against <code>pub</code>, and <code>ts</code> is within ±60 s. Then it dials <code>host:port</code> and completes
 mutual TLS, which is the real gate — the beacon only says <em>where</em> to look.</p>
+<p><strong>What exactly is signed</strong> (<code>D-24</code>). Both signatures are ECDSA P-256 over SHA-256, in the
+IEEE P1363 fixed-width form, so each is exactly 64 bytes. The signed bytes are UTF-8 of a
+pipe-joined string with a fixed field order — never re-serialized JSON, whose key order is a
+serializer's choice:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Signature</th>
+<th>Made by</th>
+<th>Signed bytes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>end</code> (endorsement)</td>
+<td>the <strong>lab key</strong>, once, when the console instance is minted</td>
+<td><code>lab \| inst \| base64(pub)</code></td>
+</tr>
+<tr>
+<td><code>sig</code></td>
+<td>the <strong>instance key</strong>, on every beacon</td>
+<td><code>v \| lab \| inst \| name \| host \| port \| ts \| take \| base64(pub) \| base64(end)</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><code>take</code> is written as <code>0</code> when the console is not taking over, so the field is always
+present in the signed form even when it is omitted from the JSON. <code>pub</code> is the compressed
+point (<code>0x02</code>/<code>0x03</code> followed by the 32-byte X coordinate); a beacon whose <code>pub</code> is not a
+point on P-256 is dropped as malformed.</p>
+<p>The endorsement is kept separate from the instance's certificate because a certificate is
+some 400 bytes and would not leave room for the rest inside one 512-byte datagram.</p>
 <p>Consequences:</p>
 <ul>
 <li>Nothing on a student PC can be used to forge a beacon; the earlier symmetric
@@ -236,6 +267,26 @@ burns the code, and records the machine.</p>
 <p><code>EnrollResponse { agent_cert, ca_cert, lab_id, server_time }</code>. Everything afterwards
 uses mutual TLS with that certificate. A repeated <code>Enroll</code> with a burned code is refused
 and reported in the console as an event.</p>
+<p>Issuing needs the lab key (<code>D-24</code>), so a console whose key is locked answers with the
+gRPC status <code>Unavailable</code> and a message telling the teacher to open <em>Enrol PCs</em>. That is
+not an error on the PC: the agent logs it once, keeps its keypair and code, and retries on
+the same schedule as a reconnect. <code>agent_id</code> must be a UUID, <code>number</code> must be within
+<code>1..30</code> and the CSR must be self-signed by the key it certifies; anything else is refused
+without spending the code.</p>
+<h3 id="renew-certificate-renewal-over-the-link-d-25"><code>Renew</code> — certificate renewal over the link (<code>D-25</code>)<a class="anchor" href="#renew-certificate-renewal-over-the-link-d-25" aria-label="Link to this section">#</a></h3>
+<pre><code>rpc Renew(RenewRequest) returns (RenewResponse);      // on AgentService, mutual TLS
+RenewRequest  { csr }
+RenewResponse { agent_certificate, server_time_unix, refusal }
+</code></pre>
+<p>Once its certificate has fewer than 60 days left, the agent generates a fresh keypair and
+calls <code>Renew</code> after every <code>Hello</code> until it succeeds. The identity being renewed — lab,
+agent id, number — is read from the certificate the agent presented for <strong>this</strong>
+connection, never from the request, so the call can only re-issue what the peer already
+is. The console needs the lab key to sign; while it is locked, <code>refusal</code> says so and
+<code>agent_certificate</code> is empty, and the agent keeps its current certificate. On success the
+agent swaps to the new certificate for its next connection, and the console records the
+new serial for that machine. Console instances are not renewed this way: they are
+re-minted from the lab key on their own machine (<code>docs/ARCHITECTURE.md</code> §3.8).</p>
 <h3 id="agentservice-console-is-the-server-agent-is-the-client-mutual-tls"><code>AgentService</code> (console is the server, agent is the client, mutual TLS)<a class="anchor" href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls" aria-label="Link to this section">#</a></h3>
 <pre><code>rpc Link(stream AgentMessage) returns (stream ConsoleMessage);   // long-lived, 1 per agent
 rpc PushVideo(stream VideoFrame) returns (VideoAck);              // opened on demand
@@ -245,6 +296,37 @@ rpc PushFile(stream FileChunk) returns (FileAck);                 // agent uploa
 <p>The console validates the agent certificate against the lab CA <strong>and</strong> against the
 revocation list before accepting the stream; the agent validates the console leaf against
 the CA it pinned at install. No token, no password, no shared secret is exchanged.</p>
+<p>Because agents reach the console at whatever address DHCP handed out today, <strong>neither side
+checks a hostname</strong>. Identity is carried in a subject alternative name URI that both sides
+parse (<code>D-24</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Certificate</th>
+<th>Subject alternative name</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>lab authority</td>
+<td><code>labcontrol://&lt;lab_id&gt;/authority</code></td>
+</tr>
+<tr>
+<td>console instance</td>
+<td><code>labcontrol://&lt;lab_id&gt;/console/&lt;instance_id&gt;</code></td>
+</tr>
+<tr>
+<td>agent</td>
+<td><code>labcontrol://&lt;lab_id&gt;/agent/&lt;agent_id&gt;/&lt;number&gt;</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>A peer is accepted when the certificate chains to the pinned CA, its URI names <strong>this</strong>
+lab, its role is the one expected on that side of the connection, and its serial is not in
+the revocation set. Anything else is refused with a reason in plain language — &quot;belongs to
+lab X, not this one&quot; rather than an opaque TLS error.</p>
+<p>Certificate serials are compared in one normalised spelling everywhere: uppercase
+hexadecimal, no separators, leading zeros trimmed.</p>
 <p><code>AgentMessage</code> (oneof): <code>Hello</code>, <code>Heartbeat</code>, <code>Inventory</code>, <code>SessionState</code>
 (logon/logoff/lock/ unlock, active user), <code>JobProgress</code>, <code>JobResult</code>, <code>Event</code> (error,
 warning, info), <code>Pong</code>, <code>ExamState</code>, <code>InternetState</code> (see <em>Internet policy</em>), <code>RevocationState</code> (every signed revocation entry the
@@ -259,7 +341,9 @@ ones the agent's <code>RevocationState</code> was missing, the agent keeps the u
 <h3 id="revocation-entries">Revocation entries<a class="anchor" href="#revocation-entries" aria-label="Link to this section">#</a></h3>
 <pre><code>RevocationEntry { serial, revoked_at_unix, reason, signature }
 </code></pre>
-<p><code>signature</code> is the <strong>lab key's</strong> signature over <code>serial|revoked_at_unix|reason</code>. Revoking
+<p><code>signature</code> is the <strong>lab key's</strong> signature over the UTF-8 bytes of
+<code>serial|revoked_at_unix|reason</code>, with <code>serial</code> in the normalised spelling below and the
+same P-256/SHA-256/P1363 form as the beacon (<code>D-24</code>). Revoking
 already requires unlocking the lab key (<code>docs/ARCHITECTURE.md</code> §3.2), so signing costs
 nothing extra, and it means that neither an agent nor a console ever accepts a revocation
 on the say-so of a TLS peer alone: an entry that does not verify against the pinned CA is
@@ -275,7 +359,12 @@ kinds: shutdown | reboot | logoff | run_script | install_package | reset_profile
 <code>{id, ok, exit_code, message, artifact_ref?}</code>. Jobs are idempotent by <code>id</code>; a
 re-sent job with a known <code>id</code> returns the cached result. Jobs for offline agents are
 queued in the console (<code>pending</code>) and delivered on the next <code>Link</code>, unless
-<code>deliver: online_only</code> (default for <code>shutdown</code>).</p>
+<code>deliver: online_only</code> (default for <code>shutdown</code>), which is <strong>never</strong> queued: created for a
+PC that is not linked it is <code>not_delivered</code> on the spot, and one the PC had not collected
+when its link dropped is closed the same way rather than kept for its return (<code>D-25</code>).</p>
+<p><code>timeout_s</code> is a timeout of <em>inactivity</em>, measured from delivery or the latest
+<code>JobProgress</code>, whichever is later: a long installation that keeps reporting progress is
+never cut off, one that goes silent is closed as <code>timed_out</code>.</p>
 <p>Wake-on-LAN is not a job — it is a console-side UDP send; the &quot;result&quot; is the agent
 showing up on <code>Link</code> within the WoL timeout (default 90 s).</p>
 <h3 id="files-install_package-and-send_file">Files: <code>install_package</code> and <code>send_file</code><a class="anchor" href="#files-install_package-and-send_file" aria-label="Link to this section">#</a></h3>
@@ -396,7 +485,13 @@ whose serial the console has never seen is <strong>added to the machine list fro
 not refused — the console's list is a cache of the lab, and another teacher machine may
 have enrolled the PC (§3.7). <code>Hello.previous_instance_id</code> names the console the agent
 was linked to before this one (empty on first link since boot); it is what lets a console
-say which PCs the <em>other</em> teacher machine currently holds.</p>
+say which PCs the <em>other</em> teacher machine currently holds. <code>Hello</code> carries no hostname;
+that arrives with <code>Inventory</code>, so a PC a console first met through <code>Hello</code> shows its
+number until then.</p>
+<p><strong>The PC number is the identity</strong> (<code>D-25</code>). A <code>Hello</code> or an <code>Enroll</code> whose number another
+record already holds — a different <code>agent_id</code>, the same sticker — is the same PC after a
+reinstall. The old record is replaced, not kept beside the new one, and the console
+records an event naming both agent ids and the old certificate serial.</p>
 <h3 id="the-frozen-subset">The frozen subset<a class="anchor" href="#the-frozen-subset" aria-label="Link to this section">#</a></h3>
 <p>Four things are <strong>frozen at wire version 1 and may never change</strong>: the <code>Hello</code> message,
 the <code>Heartbeat</code> message, <code>Job</code> with <code>kind: self_update</code>, and <code>JobResult</code>. Fields may be
@@ -468,9 +563,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-04 14:50 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 19:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#updateagent-and-the-self_update-job">UpdateAgent and the self_update job</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#updateagent-and-the-self_update-job">UpdateAgent and the self_update job</a></li></ul></nav>
 </div>
 </body>
 </html>

@@ -68,8 +68,11 @@ it:
 
 More than one holder is supported deliberately: the owner asked for a colleague to be
 able to open the lab if he is ill on an exam day. Holders are added and removed from the
-console (adding one needs an existing holder's passphrase; removing one re-wraps the
-master key without it, and does not require the removed person's cooperation). Every
+console (adding one needs an existing holder's passphrase; removing one drops that
+holder's wrapping and does not require the removed person's cooperation — note that a
+removed holder who kept an *old copy* of the file can still open that old copy, which is
+why revocation of what the key has signed, not re-wrapping, is the answer to a departed
+colleague). Every
 holder is equal — there is no "owner" wrapping that outranks the others — and the list of
 holder *names* is stored in the clear so you can see who can open the lab without opening
 it yourself.
@@ -79,7 +82,10 @@ teacher does not stop an exam, and the file alone is useless to whoever finds it
 stick — the USB carries no secret at all (§3.4).
 
 Daily use does not ask for the passphrase: it is needed only when the lab key itself is
-unlocked — first run, minting a console instance, migrating, or revoking. The console
+unlocked — first run, minting a console instance, migrating, revoking, **enrolling PCs**
+and **renewing their certificates** (§3.8, `D-24`, `D-25`). The last two are the ones
+that happen on a schedule rather than in a crisis: the console says when it needs the key
+and refuses politely until it has it, and the agents simply try again. The console
 instance's own private key is protected at rest by the operating system (macOS Keychain,
 Windows DPAPI, Linux libsecret with an encrypted-file fallback).
 
@@ -105,6 +111,12 @@ impersonate *that one PC* and nothing else, and the console can revoke it.
   An agent checks endorsement → signature → timestamp, then connects. Agents ignore
   beacons while connected, and rate-limit connection attempts, so a flood of forged
   beacons costs a few TCP handshakes and nothing else.
+- **Enrolment and renewal need the lab key** (`D-24`, `D-25`): a console whose lab key
+  is locked answers `Enroll` and `Renew` with a plain refusal, not an error; the agent
+  keeps its current state and asks again with the same backoff it uses for reconnects.
+  So a freshly installed PC waits, enrolled by nobody, until the teacher opens *Enrol PCs*
+  and types the passphrase once — and 14 PCs then enrol within a few seconds of each
+  other.
 - **Fallback** for networks that drop broadcasts: `console_host` pinned in `agent.json`.
 - **One long-lived bidirectional stream per agent** (`AgentLink`) carries commands and
   events; separate streaming RPCs carry video and files so a large transfer never
@@ -154,7 +166,7 @@ What the machines share and what each keeps to itself:
 |---|---|---|
 | Lab key, key holders, recovery code | `lab-key.lck` on every teacher machine | imported once from the backup (§3.6 steps 1–3); holders added later travel with the next backup |
 | Console instance (name, leaf certificate, key) | that machine only | never — each machine mints its own, and that is the point |
-| Machine list (`machines[]`) | `lab.json` on each machine | **self-healing**: an agent that connects with a valid lab-issued certificate and is not in this console's list is added from its `Hello` (number, MAC, serial); a console never has to be told about a PC twice |
+| Machine list (`machines[]`) | `lab.json` on each machine | **self-healing**: an agent that connects with a valid lab-issued certificate and is not in this console's list is added from its `Hello` (number, MAC, serial); a console never has to be told about a PC twice. **The PC number is the identity** (`D-25`): a PC that arrives with a number another record holds is that PC reinstalled, and the old record is replaced, with an event saying so |
 | Room layout | `lab.json` on each machine | default layout is derived from PC numbers, so an unseen list still looks right; a hand-arranged layout travels only with a backup |
 | Revocation list | `lab.json` on each machine **and** every agent | merged as a set (§3.7.3); a console learns from the first agent that connects what the other console revoked |
 | Package catalog, scripts, cached installers | that machine only | export / import a backup, or copy the `packages/` directory; the console shows *catalog last changed on <instance>* so a stale copy is visible |
@@ -230,7 +242,22 @@ Failure cases, from cheapest to worst:
 
 Because the last row is the only genuinely painful one, the console's first-run wizard
 refuses to finish until the backup has actually been exported somewhere and the
-recovery code has been acknowledged, and it re-checks the backup's age on every launch.
+recovery code has been acknowledged, and on every launch it checks that `lab-key.lck`
+still matches the fingerprint recorded at the last export — a holder added or a recovery
+code reprinted on *either* teacher machine changes the file, and a date alone cannot see
+that (`D-25`).
+
+### 3.8 Certificate lifetimes and renewal
+
+| Certificate | Lifetime | Renewed how |
+|---|---|---|
+| lab authority | 20 years | not renewed; when it ends, the lab is re-keyed (`Setup.exe --rekey`, ~30 s per PC) |
+| console instance | 1 year | re-minted from the lab key on that machine — the console asks for the passphrase at startup once fewer than 60 days remain |
+| agent | 5 years | **over the existing link** (`AgentService.Renew`, `D-25`): once fewer than 60 days remain the agent sends a fresh CSR each time it connects; the console issues a new certificate for exactly the identity the agent proved with its current one, needs the lab key to sign, and until then answers with a refusal the agent shrugs off. Nobody visits the PC |
+
+The console shows one banner — *"N certificates need renewing — unlock the lab key"* — for
+both cases, so the yearly and five-yearly chores are the same gesture as enrolment. A
+leaf never outlives the authority that signed it.
 
 ## 4. Data on the console
 
@@ -240,7 +267,7 @@ recovery code has been acknowledged, and it re-checks the backup's age on every 
 lab-key.lck       the lab certificate authority, encrypted (§3.2). The one file that
                   must survive. Never leaves this directory unencrypted.
 instance.json     this console instance: name, leaf certificate, key reference
-                  (OS keystore), issued/expires
+                  (OS keystore), issued/expires, fingerprint of lab-key.lck at last backup
 lab.json          lab_id, room layout, revocation list (signed entries, §3.7.3),
                   instances[] (every teacher machine this lab has seen, §3.7.1), machines[]:
                   {id, number, name, mac, last_ip, last_seen, agent_version, cert, notes}
@@ -259,7 +286,8 @@ older build than the console restoring it.
 Created on first launch by the setup wizard. **Backup** = `lab-key.lck` + `lab.json` +
 the catalog, exported as one encrypted archive; it is what makes §3.6 a ten-minute
 operation instead of a walk around the room. The console nags until a backup exists and
-warns when the backup on record is older than the machine list.
+warns when `lab-key.lck` no longer matches the fingerprint taken at the last export or
+when the machine list has grown since (§3.7.3).
 
 ## 5. Data on a student PC
 

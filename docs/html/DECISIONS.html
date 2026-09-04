@@ -391,6 +391,98 @@ paths); a shared network folder instead of the channel (needs SMB open on every 
 password somewhere; the channel is already there and authenticated); executing handouts
 &quot;if they are scripts&quot; (that is what <code>run_script</code> and the scripts panel are for).
 See <code>docs/ARCHITECTURE.md</code> §6 and <code>docs/PROTOCOL.md</code> (<code>send_file</code>).</p>
+<h2 id="d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)<a class="anchor" href="#d-24-how-the-trust-model-is-actually-built-m1" aria-label="Link to this section">#</a></h2>
+<p>Context: <code>D-13</code>, <code>D-14</code> and <code>D-21</code> decide <em>what</em> the trust model is. Building it in M1
+forced a handful of smaller choices that would look arbitrary later, and that both sides of
+the wire have to agree on exactly.</p>
+<p>Decisions:</p>
+<ol>
+<li><strong>Identity lives in a subject alternative name URI, not in a hostname.</strong>
+<code>labcontrol://&lt;lab_id&gt;/console/&lt;instance_id&gt;</code> and
+<code>labcontrol://&lt;lab_id&gt;/agent/&lt;agent_id&gt;/&lt;number&gt;</code>. Agents reach the console by whatever
+IP DHCP handed out today, so hostname validation is meaningless here; both sides switch
+off the built-in name check and validate the chain against the pinned CA plus this URI
+instead. It also means a certificate says which <em>role</em> it is, so an agent certificate
+offered where a console belongs is refused as a role error rather than accepted.</li>
+<li><strong>Everything the lab key signs outside a certificate is a pipe-joined UTF-8 string.</strong>
+The beacon endorsement is <code>lab|inst|base64(pub)</code>; a beacon signature covers
+<code>v|lab|inst|name|host|port|ts|take|base64(pub)|base64(end)</code> with <code>take</code> written as <code>0</code>
+when absent; a revocation entry covers <code>serial|revoked_at_unix|reason</code>. Canonical JSON
+would have been the alternative and is a well-known source of &quot;my serializer orders keys
+differently&quot; bugs; a fixed field order in a flat string cannot drift, and it is
+reimplementable in ten lines by whatever writes the next agent.</li>
+<li><strong>The beacon carries a compressed P-256 point (33 bytes).</strong> The .NET BCL imports affine
+coordinates only, so LabControl decompresses the point itself. That is ~40 lines of
+modular arithmetic in exchange for 44 bytes of a 512-byte budget that also has to hold
+two 64-byte signatures — with the uncompressed form a slightly longer instance name
+would silently push the beacon over one datagram.</li>
+<li><strong>Enrolment needs the lab key unlocked.</strong> Issuing an agent certificate is a CA
+operation, so the console holds the unlocked lab key in memory only while the teacher has
+enrolment open, and refuses <code>Enroll</code> with a clear message otherwise. Rejected: minting an
+intermediate CA for each console instance so it could issue on its own — that turns every
+teacher machine into something that can enrol PCs unattended, which is exactly what
+<code>D-13</code>'s &quot;a stolen laptop is revocable, not catastrophic&quot; depends on not being true.</li>
+<li><strong>PBKDF2 iterations are stored per wrapping, not compiled in.</strong> The count only ever goes
+up, and a file written years ago must still open. Tests use a deliberately low count for
+speed, which is possible precisely because the number travels with the wrapping.</li>
+<li><strong>Certificate serials are normalised to uppercase hex with leading zeros trimmed</strong>, in
+one place, because revocation matches on the string and the two sides must not spell it
+differently.</li>
+<li><strong>The console instance key is protected by the OS keystore, with an honest fallback.</strong>
+macOS Keychain through <code>SecItem</code> (never <code>/usr/bin/security</code>, which would put a private key
+on a command line), Windows DPAPI, Linux libsecret through <code>secret-tool</code> with the secret on
+standard input. Where none is available the key is sealed with AES-256-GCM under a key
+derived from the machine identity and the user account: weaker — anything running as that
+user can re-derive it — but a console that will not start because a keyring daemon is
+missing is worse for this lab, and the instance key is reissuable from the lab key anyway.
+A document is always reopened with the protector that <em>wrote</em> it, so installing a keyring
+later never orphans a key.</li>
+<li><strong>The last key holder cannot be removed.</strong> A lab openable only by a sheet of paper in a
+drawer is a lab with no teacher.</li>
+</ol>
+<h2 id="d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered<a class="anchor" href="#d-25-four-questions-the-m1-review-left-open-answered" aria-label="Link to this section">#</a></h2>
+<p>Context: reviewing the M1 trust code against <code>docs/ARCHITECTURE.md</code> turned up four places
+where the documents and the code could each be read two ways. The owner decided; this
+entry records the decisions so the next reader does not re-open them.</p>
+<ol>
+<li><strong>Enrolment needs the lab key, and the documents now say so.</strong> <code>D-24</code> item 4 stands;
+<code>ARCHITECTURE.md</code> §3.2 previously listed the passphrase as needed only for first run,
+minting, migrating and revoking, which was wrong by omission. A console with the key
+locked refuses <code>Enroll</code> with a plain message and the agent retries on its reconnect
+schedule. Rejected: keeping the lab key unlocked in memory for the whole console
+session — it would make every teacher machine a CA for as long as it is open, which is
+the exposure <code>D-13</code> is built to avoid; and an intermediate CA per instance, for the same
+reason (<code>D-24</code>).</li>
+<li><strong>Certificates are renewed over the link, never by visiting a PC.</strong> Leaf lifetimes had
+been chosen (console 1 year, agent 5 years, authority 20) with no story for what happens
+at the end — which for agents would have been a walk to every PC in 2031, the exact thing
+<code>D-13</code> forbids. <code>AgentService.Renew</code> re-issues an agent certificate from a fresh CSR for
+the identity the agent <em>proved</em> on the current connection; it starts 60 days out
+(<code>Defaults.CertificateRenewalLeadTime</code>), needs the lab key like enrolment does, and is
+refused politely until the key is unlocked. Console instances re-mint themselves from the
+lab key on their own machine. Rejected: leaf lifetimes equal to the authority's — simpler,
+but then a compromised key is closed only by revocation, and a 20-year agent key on a PC
+in a student lab is not a comfortable thing.</li>
+<li><strong>The PC number is the identity of a machine.</strong> Setup generates a fresh <code>agent_id</code> on a
+full reinstall (<code>--rekey</code> keeps it), so the console would otherwise accumulate one dead
+record per reinstall, each with the same sticker number. A <code>Hello</code> or <code>Enroll</code> whose
+number another record holds replaces that record and raises an event naming both.
+Rejected: keeping both until the teacher deletes one (the &quot;unexpected machine&quot; path is
+for bogus enrolments, not for the PC the teacher just reinstalled); refusing enrolment
+while the old record exists (a second trip to the console for nothing).</li>
+<li><strong><code>online_only</code> means never queued.</strong> The first cut delivered a pending <code>shutdown</code> if the
+PC reconnected within the job's timeout, which is a grace period <code>PROTOCOL.md</code> never
+promised. Now: created for an offline PC it is <code>not_delivered</code> at once; still pending
+when the PC's link drops, it is closed the same way. A <code>shutdown</code> clicked at 15:00 can
+never fire at 08:00 the next day, and nothing depends on a timer.</li>
+</ol>
+<p>Smaller corrections made in the same pass: job timeouts count inactivity, not time since
+delivery, so a long install that keeps reporting is never cut off; the backup check compares
+a fingerprint of <code>lab-key.lck</code> rather than a date, since the file changes on whichever
+teacher machine added a holder; <code>RemoveHolder</code> drops the wrapping and the document no
+longer claims it re-wraps the master key (equivalent in strength, see <code>ARCHITECTURE.md</code>
+§3.2); an <code>Enroll</code> with a non-UUID <code>agent_id</code> is refused before a code is spent, because the
+id ends up in the certificate's name and the lab's own trust rules would reject it forever.</p>
 <h2 id="d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated<a class="anchor" href="#d-12-documentation-markdown-is-the-source-html-is-generated" aria-label="Link to this section">#</a></h2>
 <p>Context: the owner wants every document available as a readable <code>.html</code> next to the
 <code>.md</code>. Maintaining two hand-written copies guarantees they drift apart, and a drifted
@@ -524,6 +616,11 @@ project cannot notice on its own).</p>
 <td>gRPC client + codegen</td>
 </tr>
 <tr>
+<td>System.Security.Cryptography.ProtectedData</td>
+<td>Shared</td>
+<td>Windows DPAPI for the console instance key; the BCL dropped it from the shared framework (D-24)</td>
+</tr>
+<tr>
 <td>SkiaSharp</td>
 <td>Console, Agent.Session</td>
 <td>JPEG encode/decode, scaling</td>
@@ -577,9 +674,9 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-04 14:50 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 19:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>
 </body>
 </html>

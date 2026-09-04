@@ -58,7 +58,10 @@ makes re-runs safe. `--dry-run` prints the plan only; `--number 7` skips the pro
    certificate itself is obtained from the console at the agent's first connection
    (`EnrollmentService.Enroll`, `docs/PROTOCOL.md`) — Setup does **not** need the console
    to be running or reachable. Until then the agent is installed but unenrolled, and says
-   so in its log.
+   so in its log. Issuing the certificate needs the lab key unlocked on the console
+   (`D-24`), so after the round with the stick the teacher opens *Enrol PCs* in the console
+   and types the passphrase once; a PC that connects before that is told to try again
+   later and does, on its own.
 5. **Service** — `CreateService("LabControl", LocalSystem, auto-start, delayed=false)`
    with the binary path pointing at `app\<version>\agent.exe`; recovery: restart on
    failure (3×, 10 s) and then `agent.exe --rollback` on the fourth, which is the
@@ -126,7 +129,9 @@ your hand. It is the fallback, not the normal route: the normal route is
 
 `Setup.exe --rekey` replaces only the trust material: a new `ca.crt` is pinned, a new
 keypair and enrollment code are used, everything else — the `student` account, the
-installed software, the power settings, the PC number — is left alone. It takes about
+installed software, the power settings, the PC number **and the `agent_id`** — is left
+alone. (A full reinstall, by contrast, gets a new `agent_id`; the console recognises the
+PC by its number and replaces the old record, `D-25`.) It takes about
 30 seconds per PC and exists for exactly one situation: the lab key was lost entirely
 and the lab has to be re-issued (`docs/ARCHITECTURE.md` §3.6, last row).
 

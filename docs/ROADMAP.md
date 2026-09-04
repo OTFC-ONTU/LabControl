@@ -15,7 +15,7 @@ implement.
 | Milestone | Title | State | Blocked by |
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
-| **M1** | Lab identity, link and presence | not started | M0 |
+| **M1** | Lab identity, link and presence | **in progress** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | not started | M1, Windows VM |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
@@ -137,7 +137,13 @@ mistake that would later require a walk to every PC to fix.
   signature), verifiable offline; rate-limited dialling and beacon-ignoring-while-
   connected on the agent side.
 - `EnrollmentService`: single-use codes, CSR in, certificate out, code burned, machine
-  recorded, duplicate/burned-code attempts reported as events.
+  recorded, duplicate/burned-code attempts reported as events; refused with a retry-later
+  message while the lab key is locked (`D-24`).
+- **Certificate renewal over the link** (`D-25`, ARCHITECTURE §3.8): `AgentService.Renew`,
+  the agent asking from 60 days out, the console's *certificates need renewing* banner,
+  console instance re-mint at startup when its own leaf is close to expiry.
+- **The PC number is the identity** (`D-25`): a reinstalled PC replaces its old record and
+  raises an event; `--rekey` keeps the `agent_id`.
 - Agent-side link library shared by `FakeAgent` and the real agent: enrolment, reconnect
   with exponential backoff, offline job queue.
 - `Job` plumbing end to end: console creates a job → delivered on `Link` → agent reports
@@ -158,6 +164,17 @@ mistake that would later require a walk to every PC to fix.
   *outdated*, and greys out what that agent cannot do. A test asserts the frozen messages
   round-trip between a v1 and a current serializer.
 
+**Progress.** The trust model itself is built and covered by tests: the lab key and its
+holder/recovery wrappings, certificate issuance, chain validation and renewal, the v2
+beacon (signing, verification, take-over and the agent-side gate), signed revocation
+entries merged as a set, single-use enrollment codes, the self-healing machine list with
+number-as-identity, the job queue and the agent's job ledger, the schema-versioned document
+store, and the OS-keystore protector with its fallback. The decisions the first review
+forced are in `D-25`. What is not built yet: the gRPC transport (console server,
+`EnrollmentService`, `Renew`, `Link`), the beacon broadcaster/listener sockets, the
+`FakeAgent` link, the console UI (first-run wizard, lab view, jobs panel, settings, the
+renewal banner), backup export/import, and the frozen-subset round-trip test.
+
 **Acceptance criteria**
 
 - 30 fake agents enrol from a fresh lab and appear online within 5 s of the console
@@ -171,6 +188,14 @@ mistake that would later require a walk to every PC to fix.
   remove the first holder and confirm their passphrase no longer opens anything.
 - Revoke the old instance; an agent presented with the old leaf certificate refuses it
   and says why.
+- **Renewal test.** A fake agent whose certificate has 30 days left asks to renew; with
+  the lab key locked it is refused and keeps working; after the key is unlocked it gets a
+  new certificate for the same agent id and number, reconnects with it, and the console
+  shows the new serial. A console instance minted with 30 days left is re-minted at
+  startup after the passphrase.
+- **Reinstall test.** A fake agent enrols as PC-07, then enrols again with a new agent id
+  as PC-07: the lab view still shows one PC-07, the old agent id is gone, and the event
+  log names both.
 - **Alternation test.** Two console profiles (A and B) for the same lab, both with the lab
   key imported. Run A with 30 fake agents; add a PC on A; close A; start B. All 30 agents
   are online on B within 15 s, the PC added on A is present on B, and nobody was asked for
@@ -188,8 +213,11 @@ mistake that would later require a walk to every PC to fix.
 - A forged beacon (valid JSON, wrong CA endorsement) is rejected without a connection
   attempt; a beacon flood does not cause more than one dial attempt every 2 s.
 - A burned enrollment code is refused and surfaces in the console as an event.
-- A job sent to an offline agent is queued and runs on reconnect; a `shutdown` job is not
-  queued (`deliver: online_only`).
+- A job sent to an offline agent is queued and runs on reconnect; a `shutdown` job for an
+  offline agent is `not_delivered` immediately and is not delivered even if the agent
+  connects a minute later (`deliver: online_only`, `D-25`).
+- A fake agent that enrols while the lab key is locked is refused, keeps retrying, and
+  enrols on its own once the teacher unlocks the key.
 - A `lab.json` with a `schema_version` one higher than the build understands is refused
   with a message naming the version needed, and the console starts anyway rather than
   crashing; a backup exported by this build re-imports into it unchanged.
@@ -197,9 +225,10 @@ mistake that would later require a walk to every PC to fix.
   still connects, still appears in the lab view marked *outdated*, and can still be sent a
   `self_update` job.
 - Unit tests cover: key wrapping/unwrapping by both passphrase and recovery code,
-  certificate issuance and chain validation, beacon signing and verification, enrollment
-  code lifecycle, job idempotency, reconnect backoff, schema migration and refusal, and
-  the frozen-subset round-trip.
+  certificate issuance and chain validation, certificate renewal for the proved identity
+  only, beacon signing and verification, enrollment code lifecycle, machine replacement by
+  number, job idempotency, `online_only` never queued, inactivity timeouts, reconnect
+  backoff, schema migration and refusal, and the frozen-subset round-trip.
 
 **Not in scope.** Real Windows anything, video, files, packages.
 

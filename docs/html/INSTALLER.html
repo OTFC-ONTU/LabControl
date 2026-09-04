@@ -185,7 +185,10 @@ pinned trust anchor; take one unused enrollment code from <code>setup.json</code
 certificate itself is obtained from the console at the agent's first connection
 (<code>EnrollmentService.Enroll</code>, <code>docs/PROTOCOL.md</code>) — Setup does <strong>not</strong> need the console
 to be running or reachable. Until then the agent is installed but unenrolled, and says
-so in its log.</li>
+so in its log. Issuing the certificate needs the lab key unlocked on the console
+(<code>D-24</code>), so after the round with the stick the teacher opens <em>Enrol PCs</em> in the console
+and types the passphrase once; a PC that connects before that is told to try again
+later and does, on its own.</li>
 <li><strong>Service</strong> — <code>CreateService(&quot;LabControl&quot;, LocalSystem, auto-start, delayed=false)</code>
 with the binary path pointing at <code>app\&lt;version&gt;\agent.exe</code>; recovery: restart on
 failure (3×, 10 s) and then <code>agent.exe --rollback</code> on the fourth, which is the
@@ -256,7 +259,9 @@ your hand. It is the fallback, not the normal route: the normal route is
 <code>Job{self_update}</code> from the console.</p>
 <p><code>Setup.exe --rekey</code> replaces only the trust material: a new <code>ca.crt</code> is pinned, a new
 keypair and enrollment code are used, everything else — the <code>student</code> account, the
-installed software, the power settings, the PC number — is left alone. It takes about
+installed software, the power settings, the PC number <strong>and the <code>agent_id</code></strong> — is left
+alone. (A full reinstall, by contrast, gets a new <code>agent_id</code>; the console recognises the
+PC by its number and replaces the old record, <code>D-25</code>.) It takes about
 30 seconds per PC and exists for exactly one situation: the lab key was lost entirely
 and the lab has to be re-issued (<code>docs/ARCHITECTURE.md</code> §3.6, last row).</p>
 <h2 id="things-the-installer-cannot-do">Things the installer cannot do<a class="anchor" href="#things-the-installer-cannot-do" aria-label="Link to this section">#</a></h2>
@@ -276,7 +281,7 @@ reverted between runs.</li>
 </ul>
 
 </article>
-<footer>Generated 2026-09-04 14:50 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 19:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#building-the-usb-payload-on-the-console">Building the USB payload (on the console)</a></li><li class="lvl2"><a href="#what-setup.exe-does-in-order">What Setup.exe does, in order</a></li><li class="lvl2"><a href="#uninstall-repair">Uninstall / repair</a></li><li class="lvl2"><a href="#things-the-installer-cannot-do">Things the installer cannot do</a></li><li class="lvl2"><a href="#testing-the-installer-without-a-room-full-of-real-pcs">Testing the installer without a room full of real PCs</a></li></ul></nav>
 </div>

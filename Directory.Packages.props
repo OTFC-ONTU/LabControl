@@ -21,6 +21,10 @@
     <PackageVersion Include="Grpc.Tools" Version="2.83.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Platform">
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Hosting and logging">
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
     <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />

@@ -28,6 +28,21 @@ public static class Defaults
     /// <summary>UDP discovery beacon broadcast by the console.</summary>
     public const int BeaconPort = 47801;
 
+    /// <summary>
+    /// Beacon wire format. Version 2 is the offline-verifiable one: instance public key,
+    /// CA endorsement, instance signature, no shared secret anywhere (D-13).
+    /// </summary>
+    public const int BeaconVersion = 2;
+
+    /// <summary>A beacon must fit one datagram nothing will fragment (PROTOCOL, "Discovery beacon").</summary>
+    public const int BeaconMaxBytes = 512;
+
+    /// <summary>
+    /// How long a console keeps the <c>take</c> field in its beacon after the teacher presses
+    /// <i>Take over the lab</i> (ARCHITECTURE §3.7.2).
+    /// </summary>
+    public static readonly TimeSpan TakeOverWindow = TimeSpan.FromSeconds(30);
+
     /// <summary>Wake-on-LAN magic packets.</summary>
     public const int WolPort = 9;
 
@@ -61,6 +76,13 @@ public static class Defaults
     /// <summary>Hostname and display-name pattern for a student PC: <c>PC-07</c>.</summary>
     public const string MachineNameFormat = "PC-{0:00}";
 
+    /// <summary>
+    /// Tiles per row when nobody has arranged the room by hand. A console that has never
+    /// seen this lab before still looks right, because the default layout comes from the PC
+    /// numbers (ARCHITECTURE §3.7).
+    /// </summary>
+    public const int DefaultTilesPerRow = 6;
+
     // ---------------------------------------------------------------- crypto
 
     /// <summary>PBKDF2 iterations protecting each key holder's wrapping of the lab key (§3.2).</summary>
@@ -73,11 +95,19 @@ public static class Defaults
     public static readonly TimeSpan AgentCertificateLifetime = TimeSpan.FromDays(5 * 365);
     public static readonly TimeSpan LabAuthorityLifetime = TimeSpan.FromDays(20 * 365);
 
+    /// <summary>
+    /// A leaf certificate is renewed over the existing link once it has less than this
+    /// left (D-25). Long enough that the "certificates need renewing" banner is seen and the
+    /// lab key unlocked at a convenient moment, well before anything actually expires.
+    /// </summary>
+    public static readonly TimeSpan CertificateRenewalLeadTime = TimeSpan.FromDays(60);
+
     // ---------------------------------------------------------------- on-disk formats
 
     // Every persisted file carries its own schema_version and migrates forward on load;
     // a file written by a newer build is refused rather than partially read (D-20).
 
+    public const int LabKeySchemaVersion = 1;
     public const int LabSchemaVersion = 1;
     public const int InstanceSchemaVersion = 1;
     public const int EnrollmentSchemaVersion = 1;

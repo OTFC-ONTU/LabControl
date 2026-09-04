@@ -52,6 +52,22 @@ service AgentService {
   rpc PushVideo (stream VideoFrame)   returns (VideoAck);              // opened on demand
   rpc PullFile  (FileRequest)         returns (stream FileChunk);      // agent downloads
   rpc PushFile  (stream FileChunk)    returns (FileAck);               // agent uploads
+  rpc Renew     (RenewRequest)        returns (RenewResponse);         // certificate renewal (D-25)
+}
+
+// Certificate renewal over the existing mutual-TLS link (D-25). The agent's identity --
+// lab, agent id, number -- comes from the certificate it presented for this connection,
+// never from the request, so a renewal can only ever re-issue what the peer already is.
+// The console needs the lab key unlocked to sign; until then it answers `refusal` and
+// the agent keeps using its current certificate and asks again later.
+message RenewRequest {
+  bytes csr = 1;  // PKCS#10 for a fresh keypair, generated on the PC
+}
+
+message RenewResponse {
+  bytes  agent_certificate = 1;  // empty when refused
+  int64  server_time_unix  = 2;
+  string refusal           = 3;  // plain language, empty when issued
 }
 
 message AgentMessage {

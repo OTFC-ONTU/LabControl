@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Installer (LabControl.Setup) · LabControl</title>
+<style>:root{
+  --bg:#f7f7f5; --panel:#ffffff; --ink:#1c1c1a; --muted:#6b6b64; --line:#e2e2dc;
+  --accent:#0b6b53; --accent-soft:#e6f1ed; --code-bg:#f2f2ee; --mark:#fff6d6;
+  --radius:10px; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16171a; --panel:#1d1f23; --ink:#e6e6e2; --muted:#9a9a92; --line:#2e3138;
+    --accent:#5ec2a3; --accent-soft:#1e2a27; --code-bg:#22252a; --mark:#3a3320;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+     font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:248px minmax(0,1fr) 232px;gap:0;
+        max-width:1400px;margin:0 auto;align-items:start}
+
+/* ---- sidebar ---- */
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 20px;
+      border-right:1px solid var(--line)}
+.brand{display:block;text-decoration:none;color:inherit;margin-bottom:26px}
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+            border-radius:9px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;
+            letter-spacing:.5px;margin-bottom:10px}
+.brand-name{display:block;font-weight:650;font-size:17px;letter-spacing:-.01em}
+.brand-sub{display:block;color:var(--muted);font-size:12.5px;letter-spacing:.02em}
+.side ul{list-style:none;margin:0;padding:0}
+.side li{margin:1px 0}
+.side a{display:block;padding:7px 10px;border-radius:7px;text-decoration:none;
+        color:var(--muted);font-size:14.5px}
+.side a:hover{background:var(--code-bg);color:var(--ink)}
+.side a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+
+/* ---- content ---- */
+main{padding:44px 48px 72px;min-width:0}
+.doc{max-width:820px}
+h1{font-size:2.05rem;line-height:1.2;letter-spacing:-.02em;margin:0 0 .5em;font-weight:680}
+h2{font-size:1.4rem;letter-spacing:-.01em;margin:2.4em 0 .6em;padding-bottom:.3em;
+   border-bottom:1px solid var(--line);font-weight:640}
+h3{font-size:1.11rem;margin:1.9em 0 .5em;font-weight:640}
+h4{font-size:1rem;margin:1.5em 0 .4em;color:var(--muted);text-transform:uppercase;
+   letter-spacing:.06em;font-size:.8rem}
+p,ul,ol{margin:0 0 1.05em}
+ul,ol{padding-left:1.35em}
+li{margin:.28em 0}
+li>ul,li>ol{margin:.3em 0}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+strong{font-weight:640}
+hr{border:0;border-top:1px solid var(--line);margin:2.6em 0}
+.lead{font-size:1.1rem;color:var(--muted);max-width:60ch}
+.source{font-size:.83rem;color:var(--muted);background:var(--code-bg);
+        border:1px solid var(--line);border-radius:var(--radius);padding:9px 13px;margin-bottom:2em}
+.anchor{margin-left:.4em;color:var(--muted);opacity:0;font-weight:400;border:0;font-size:.85em}
+h2:hover .anchor,h3:hover .anchor{opacity:.55}
+.anchor:hover{opacity:1 !important}
+
+/* ---- code ---- */
+code{font-family:var(--mono);font-size:.875em;background:var(--code-bg);
+     border:1px solid var(--line);border-radius:5px;padding:.1em .36em}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;overflow-x:auto;margin:0 0 1.3em;line-height:1.5}
+pre code{background:none;border:0;padding:0;font-size:.845rem;white-space:pre}
+blockquote{margin:0 0 1.2em;padding:.1em 0 .1em 1.1em;border-left:3px solid var(--accent);
+           color:var(--muted)}
+
+/* ---- tables ---- */
+.table-wrap{overflow-x:auto;margin:0 0 1.5em;border:1px solid var(--line);
+            border-radius:var(--radius);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:.91rem}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--code-bg);font-weight:640;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+
+/* ---- task lists ---- */
+input[type=checkbox]{margin-right:.5em;accent-color:var(--accent)}
+li.task-list-item{list-style:none;margin-left:-1.2em}
+
+/* ---- on-this-page ---- */
+.toc{position:sticky;top:0;max-height:100vh;overflow-y:auto;padding:48px 22px 40px;
+     border-left:1px solid var(--line);font-size:13.5px}
+.toc-title{margin:0 0 .7em;color:var(--muted);text-transform:uppercase;
+           letter-spacing:.07em;font-size:11px;font-weight:640}
+.toc ul{list-style:none;margin:0;padding:0}
+.toc li{margin:.3em 0}
+.toc a{color:var(--muted);display:block;line-height:1.35}
+.toc a:hover{color:var(--accent)}
+.toc .lvl3{padding-left:12px;font-size:12.8px}
+
+/* ---- index cards ---- */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:2em}
+.card{display:flex;flex-direction:column;gap:5px;padding:16px 17px;background:var(--panel);
+      border:1px solid var(--line);border-radius:var(--radius);text-decoration:none;color:inherit}
+.card:hover{border-color:var(--accent);box-shadow:0 2px 14px rgba(0,0,0,.06)}
+.card-kicker{color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:650}
+.card-title{font-weight:640;font-size:1.02rem}
+.card-summary{color:var(--muted);font-size:.86rem;line-height:1.45}
+.card-source{margin-top:6px;color:var(--muted);font-family:var(--mono);font-size:11.5px}
+
+footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
+       color:var(--muted);font-size:12.5px;max-width:820px}
+
+/* ---- responsive ---- */
+@media (max-width:1180px){
+  .layout{grid-template-columns:230px minmax(0,1fr)}
+  .toc{display:none}
+}
+@media (max-width:820px){
+  .layout{grid-template-columns:1fr}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:20px}
+  .side ul{display:flex;flex-wrap:wrap;gap:4px}
+  main{padding:28px 22px 56px}
+}
+@media print{
+  .side,.toc,.anchor{display:none}
+  .layout{display:block}
+  main{padding:0}
+  a{color:inherit}
+  pre,.table-wrap{break-inside:avoid}
+}</style>
+</head>
+<body>
+<div class="layout">
+<nav class="side" aria-label="Documents"><a class="brand" href="index.html"><span class="brand-mark">LC</span><span class="brand-name">LabControl</span><span class="brand-sub">documentation</span></a><ul><li><a href="README.html">Overview</a></li><li><a href="CLAUDE.html">Project brief</a></li><li><a href="ARCHITECTURE.html">Architecture</a></li><li><a href="PROTOCOL.html">Protocol</a></li><li><a href="INSTALLER.html" class="active">Installer</a></li><li><a href="ROADMAP.html">Roadmap</a></li><li><a href="DECISIONS.html">Decisions</a></li></ul></nav>
+<main>
+<article class="doc">
+  <p class="source">Generated from <code>docs/INSTALLER.md</code> — do not edit this file; edit the Markdown and run <code>tools/docs-build.sh</code>.</p>
+  <h1 id="installer-labcontrol.setup">Installer (<code>LabControl.Setup</code>)</h1>
+<p>Goal: <strong>plug in the USB stick, run one file as the local admin, answer one question
+(PC number), walk to the next PC.</strong> Everything else is automatic and idempotent —
+running it again on an already-configured PC repairs the installation instead of
+breaking it.</p>
+<h2 id="building-the-usb-payload-on-the-console">Building the USB payload (on the console)<a class="anchor" href="#building-the-usb-payload-on-the-console" aria-label="Link to this section">#</a></h2>
+<p>Console → Settings → <em>Build USB installer</em> (or <code>tools/build-usb.sh &lt;mount&gt;</code>), writes:</p>
+<pre><code>&lt;USB&gt;\LabControl\
+   Setup.exe          self-contained win-x64, manifest requireAdministrator
+   payload\app\&lt;version&gt;\agent.exe, session.exe   — one version directory, copied to the
+                      PC as-is; this is the same layout self-update produces (D-19)
+   ca.crt             the lab's PUBLIC certificate authority — this is what the agent pins
+   setup.json         { schema_version, lab_id, console_host? (optional pin),
+                        student: {name:&quot;student&quot;, password:&quot;1&quot;}, naming: &quot;PC-{n:00}&quot;,
+                        power: {...}, next_number: 1,
+                        enrollment_codes: [&quot;...&quot;, ...] }   // single-use, one per PC
+   INSTALL.txt        3-line human instructions (in Ukrainian)
+</code></pre>
+<p><strong>The stick carries no secret.</strong> <code>ca.crt</code> is public by nature and the enrollment codes
+are single-use: whoever finds the stick can, at worst, enrol a bogus machine, which the
+console shows as an unexpected PC and removes with one click. The lab key never leaves
+the teacher machine and its backup (<code>docs/ARCHITECTURE.md</code> §3.2). Generate a few more
+codes than there are PCs, so a failed install can be retried.</p>
+<p><code>Setup.exe</code> deletes nothing from the stick except marking the code it used and updating
+<code>next_number</code>.</p>
+<h2 id="what-setup.exe-does-in-order">What Setup.exe does, in order<a class="anchor" href="#what-setup.exe-does-in-order" aria-label="Link to this section">#</a></h2>
+<p>Each step is a class implementing <code>ISetupStep { Name; Check(); Apply(); }</code>, executed
+sequentially, logged to <code>C:\ProgramData\LabControl\setup.log</code> and echoed to the
+console window. <code>Check()</code> returning &quot;already done&quot; skips <code>Apply()</code> — this is what
+makes re-runs safe. <code>--dry-run</code> prints the plan only; <code>--number 7</code> skips the prompt.</p>
+<ol>
+<li><strong>Preflight</strong> — is admin (else self-elevate via <code>runas</code>), Windows 10 1809+ x64,
+free disk ≥ 2 GB, stop existing <code>LabControl</code> service if present.</li>
+<li><strong>PC number</strong> — read <code>--number</code>, else parse hostname <code>PC-07</code>, else prompt once
+(default = <code>next_number</code> from <code>setup.json</code>). Then set the hostname to
+<code>PC-07</code> (<code>SetComputerNameEx</code>, takes effect after the final reboot).</li>
+<li><strong>Files</strong> — copy <code>payload\app\&lt;version&gt;\</code> to
+<code>C:\Program Files\LabControl\app\&lt;version&gt;\</code> and write that version into
+<code>app\current</code>; leave <code>app\previous</code> absent (there is nothing to roll back to yet).
+Copy <code>Setup.exe</code> alongside for repair. Set ACLs (Users: read/execute). Create
+<code>C:\ProgramData\LabControl\</code> with ACL SYSTEM + Administrators only. Installing into a
+version directory from the very first PC is deliberate: the layout is what makes
+self-update reversible (<code>D-19</code>), and it cannot be introduced later without visiting
+every machine.</li>
+<li><strong>Enrollment</strong> — generate <code>agent_id</code>; generate the PC's <strong>own</strong> ECDSA keypair on the
+PC and protect the private key with DPAPI (machine scope); copy <code>ca.crt</code> in as the
+pinned trust anchor; take one unused enrollment code from <code>setup.json</code>; write
+<code>agent.json</code> with <code>lab_id</code>, <code>number</code>, MAC and the optional <code>console_host</code>. The
+certificate itself is obtained from the console at the agent's first connection
+(<code>EnrollmentService.Enroll</code>, <code>docs/PROTOCOL.md</code>) — Setup does <strong>not</strong> need the console
+to be running or reachable. Until then the agent is installed but unenrolled, and says
+so in its log.</li>
+<li><strong>Service</strong> — <code>CreateService(&quot;LabControl&quot;, LocalSystem, auto-start, delayed=false)</code>
+with the binary path pointing at <code>app\&lt;version&gt;\agent.exe</code>; recovery: restart on
+failure (3×, 10 s) and then <code>agent.exe --rollback</code> on the fourth, which is the
+outside-the-agent half of the update rollback (<code>D-19</code>, <code>docs/ARCHITECTURE.md</code> §7.2);
+description string, then start it.</li>
+<li><strong>Firewall</strong> — outbound is allowed by default; add an inbound allow rule for
+<code>agent.exe</code> anyway (future direct-connect / diagnostics) and an ICMP echo allow
+rule (so the console can ping). Rules are tagged with a LabControl group name so
+exam-mode rules (<code>docs/ARCHITECTURE.md</code> §6.1) can be added and removed as a set
+without touching anything the college configured.
+6a. <strong>Antivirus exclusion</strong> — the binaries are unsigned (<code>D-15</code>), so add the
+<code>C:\Program Files\LabControl\</code> <strong>directory</strong> — not the individual executables — to the
+Microsoft Defender exclusion list, so that version directories created by a later
+self-update are covered without a second visit
+(<code>Add-MpPreference</code> equivalent via WMI <code>MSFT_MpPreference</code>). If a third-party
+antivirus is present, Setup cannot configure it: it detects it, prints exactly which
+product and which path needs excluding, and records the fact so the console can warn
+the teacher rather than leaving a PC that silently stops reporting.</li>
+<li><strong>Power &amp; Wake-on-LAN</strong>
+<ul>
+<li><code>powercfg /hibernate off</code>; registry <code>HiberbootEnabled=0</code> (Fast Startup kills WoL).</li>
+<li>NIC advanced properties via WMI/<code>Set-NetAdapterAdvancedProperty</code> equivalents:
+<em>Wake on Magic Packet = on</em>, <em>Energy-Efficient Ethernet = off</em>,
+<em>Allow this device to wake the computer</em> = on, <em>Only allow a magic packet</em> = on;
+&quot;Allow the computer to turn off this device to save power&quot; = <strong>on</strong> (required for
+WoL from S5 on many Realtek/Intel NICs).</li>
+<li>Power plan: never sleep on AC, display off after 20 min, &quot;never&quot; for disk.</li>
+<li>Disable &quot;Windows Update → automatic restart during active hours&quot; nagging
+(active hours 07–20); do <strong>not</strong> disable updates.</li>
+</ul>
+</li>
+<li><strong>Student account</strong>
+<ul>
+<li><code>NetUserAdd(&quot;student&quot;, &quot;1&quot;)</code>, description &quot;Student&quot;, flags: password never
+expires, user cannot change password, not in Administrators (member of
+<code>Users</code> only).</li>
+<li>Local password policy on a non-domain PC has no complexity requirement by
+default; if <code>NetUserAdd</code> fails with <code>NERR_PasswordTooShort</code>, Setup applies
+<code>secedit</code> template <code>MinimumPasswordLength=1, PasswordComplexity=0</code> and retries.</li>
+<li>Auto-logon: <code>Winlogon\AutoAdminLogon=1</code>, <code>DefaultUserName=student</code>,
+<code>DefaultDomainName=&lt;hostname&gt;</code>, password stored as the LSA secret
+<code>DefaultPassword</code> (<code>LsaStorePrivateData</code>), <strong>not</strong> in plain registry.</li>
+<li>Hide the admin account from the logon screen (<code>SpecialAccounts\UserList</code>)
+so the student sees only &quot;student&quot;; the admin still logs in via &quot;Other user&quot;.</li>
+<li>Disable the lock-screen/timeout for <code>student</code>? No — leave OS defaults; the
+console can log the student off anyway.</li>
+</ul>
+</li>
+<li><strong>Session hygiene</strong> — turn off first-logon OOBE prompts for new profiles
+(privacy/Edge/OneDrive nags), set <code>DefaultUser</code> template if a &quot;golden&quot; profile
+is provided in the payload (<code>payload\profile-template.zip</code>, optional).</li>
+<li><strong>Verify</strong> — service running and its binary path inside <code>app\&lt;version&gt;\</code>,
+<code>app\current</code> matching it, <code>agent.json</code> and the private key readable by SYSTEM only,
+WoL flags read back, <code>student</code> exists and is not admin, Defender exclusion covering
+the parent directory. Print a green summary.</li>
+<li><strong>Reboot</strong> — prompt &quot;Reboot now? [Y/n]&quot; (auto-yes after 30 s). After reboot the
+PC auto-logs on as <code>student</code>, the service starts, connects to the console (if
+it is on) and appears as <code>PC-07</code> in the lab view.</li>
+</ol>
+<h2 id="uninstall-repair">Uninstall / repair<a class="anchor" href="#uninstall-repair" aria-label="Link to this section">#</a></h2>
+<p><code>Setup.exe --uninstall</code> reverses steps 5, 6, 8 (keeps the <code>student</code> account unless
+<code>--remove-student</code>), deletes <code>Program Files\LabControl</code> and <code>ProgramData\LabControl</code>.</p>
+<p><code>Setup.exe</code> with no args on an installed PC = repair (all <code>Check()</code>s pass → only
+mismatches are fixed, service restarted). If the stick carries a newer version than
+<code>app\current</code>, repair also installs it — the same side-by-side path a remote update
+takes, so a PC that missed a rollout can be caught up with the stick that is already in
+your hand. It is the fallback, not the normal route: the normal route is
+<code>Job{self_update}</code> from the console.</p>
+<p><code>Setup.exe --rekey</code> replaces only the trust material: a new <code>ca.crt</code> is pinned, a new
+keypair and enrollment code are used, everything else — the <code>student</code> account, the
+installed software, the power settings, the PC number — is left alone. It takes about
+30 seconds per PC and exists for exactly one situation: the lab key was lost entirely
+and the lab has to be re-issued (<code>docs/ARCHITECTURE.md</code> §3.6, last row).</p>
+<h2 id="things-the-installer-cannot-do">Things the installer cannot do<a class="anchor" href="#things-the-installer-cannot-do" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Enable Wake-on-LAN in BIOS/UEFI — one-time manual step per PC; the console shows
+&quot;WoL failed&quot; if a PC does not wake, so you know which ones to check.</li>
+<li>Install Windows or drivers.</li>
+<li>Configure the router.</li>
+</ul>
+<h2 id="testing-the-installer-without-a-room-full-of-real-pcs">Testing the installer without a room full of real PCs<a class="anchor" href="#testing-the-installer-without-a-room-full-of-real-pcs" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><code>--dry-run</code> on any Windows box.</li>
+<li>Each <code>ISetupStep</code> has a unit test for <code>Check()</code> against a mocked registry/WMI
+surface (<code>tests/LabControl.Setup.Tests</code>).</li>
+<li>Full run on <code>PC-00</code> (the designated test PC) or a Windows VM snapshot that can be
+reverted between runs.</li>
+</ul>
+
+</article>
+<footer>Generated 2026-09-04 16:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+</main>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#building-the-usb-payload-on-the-console">Building the USB payload (on the console)</a></li><li class="lvl2"><a href="#what-setup.exe-does-in-order">What Setup.exe does, in order</a></li><li class="lvl2"><a href="#uninstall-repair">Uninstall / repair</a></li><li class="lvl2"><a href="#things-the-installer-cannot-do">Things the installer cannot do</a></li><li class="lvl2"><a href="#testing-the-installer-without-a-room-full-of-real-pcs">Testing the installer without a room full of real PCs</a></li></ul></nav>
+</div>
+</body>
+</html>

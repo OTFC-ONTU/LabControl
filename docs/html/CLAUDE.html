@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LabControl — classroom fleet control for the ОНТФК computer lab · LabControl</title>
+<style>:root{
+  --bg:#f7f7f5; --panel:#ffffff; --ink:#1c1c1a; --muted:#6b6b64; --line:#e2e2dc;
+  --accent:#0b6b53; --accent-soft:#e6f1ed; --code-bg:#f2f2ee; --mark:#fff6d6;
+  --radius:10px; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16171a; --panel:#1d1f23; --ink:#e6e6e2; --muted:#9a9a92; --line:#2e3138;
+    --accent:#5ec2a3; --accent-soft:#1e2a27; --code-bg:#22252a; --mark:#3a3320;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+     font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:248px minmax(0,1fr) 232px;gap:0;
+        max-width:1400px;margin:0 auto;align-items:start}
+
+/* ---- sidebar ---- */
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 20px;
+      border-right:1px solid var(--line)}
+.brand{display:block;text-decoration:none;color:inherit;margin-bottom:26px}
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+            border-radius:9px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;
+            letter-spacing:.5px;margin-bottom:10px}
+.brand-name{display:block;font-weight:650;font-size:17px;letter-spacing:-.01em}
+.brand-sub{display:block;color:var(--muted);font-size:12.5px;letter-spacing:.02em}
+.side ul{list-style:none;margin:0;padding:0}
+.side li{margin:1px 0}
+.side a{display:block;padding:7px 10px;border-radius:7px;text-decoration:none;
+        color:var(--muted);font-size:14.5px}
+.side a:hover{background:var(--code-bg);color:var(--ink)}
+.side a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+
+/* ---- content ---- */
+main{padding:44px 48px 72px;min-width:0}
+.doc{max-width:820px}
+h1{font-size:2.05rem;line-height:1.2;letter-spacing:-.02em;margin:0 0 .5em;font-weight:680}
+h2{font-size:1.4rem;letter-spacing:-.01em;margin:2.4em 0 .6em;padding-bottom:.3em;
+   border-bottom:1px solid var(--line);font-weight:640}
+h3{font-size:1.11rem;margin:1.9em 0 .5em;font-weight:640}
+h4{font-size:1rem;margin:1.5em 0 .4em;color:var(--muted);text-transform:uppercase;
+   letter-spacing:.06em;font-size:.8rem}
+p,ul,ol{margin:0 0 1.05em}
+ul,ol{padding-left:1.35em}
+li{margin:.28em 0}
+li>ul,li>ol{margin:.3em 0}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+strong{font-weight:640}
+hr{border:0;border-top:1px solid var(--line);margin:2.6em 0}
+.lead{font-size:1.1rem;color:var(--muted);max-width:60ch}
+.source{font-size:.83rem;color:var(--muted);background:var(--code-bg);
+        border:1px solid var(--line);border-radius:var(--radius);padding:9px 13px;margin-bottom:2em}
+.anchor{margin-left:.4em;color:var(--muted);opacity:0;font-weight:400;border:0;font-size:.85em}
+h2:hover .anchor,h3:hover .anchor{opacity:.55}
+.anchor:hover{opacity:1 !important}
+
+/* ---- code ---- */
+code{font-family:var(--mono);font-size:.875em;background:var(--code-bg);
+     border:1px solid var(--line);border-radius:5px;padding:.1em .36em}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;overflow-x:auto;margin:0 0 1.3em;line-height:1.5}
+pre code{background:none;border:0;padding:0;font-size:.845rem;white-space:pre}
+blockquote{margin:0 0 1.2em;padding:.1em 0 .1em 1.1em;border-left:3px solid var(--accent);
+           color:var(--muted)}
+
+/* ---- tables ---- */
+.table-wrap{overflow-x:auto;margin:0 0 1.5em;border:1px solid var(--line);
+            border-radius:var(--radius);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:.91rem}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--code-bg);font-weight:640;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+
+/* ---- task lists ---- */
+input[type=checkbox]{margin-right:.5em;accent-color:var(--accent)}
+li.task-list-item{list-style:none;margin-left:-1.2em}
+
+/* ---- on-this-page ---- */
+.toc{position:sticky;top:0;max-height:100vh;overflow-y:auto;padding:48px 22px 40px;
+     border-left:1px solid var(--line);font-size:13.5px}
+.toc-title{margin:0 0 .7em;color:var(--muted);text-transform:uppercase;
+           letter-spacing:.07em;font-size:11px;font-weight:640}
+.toc ul{list-style:none;margin:0;padding:0}
+.toc li{margin:.3em 0}
+.toc a{color:var(--muted);display:block;line-height:1.35}
+.toc a:hover{color:var(--accent)}
+.toc .lvl3{padding-left:12px;font-size:12.8px}
+
+/* ---- index cards ---- */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:2em}
+.card{display:flex;flex-direction:column;gap:5px;padding:16px 17px;background:var(--panel);
+      border:1px solid var(--line);border-radius:var(--radius);text-decoration:none;color:inherit}
+.card:hover{border-color:var(--accent);box-shadow:0 2px 14px rgba(0,0,0,.06)}
+.card-kicker{color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:650}
+.card-title{font-weight:640;font-size:1.02rem}
+.card-summary{color:var(--muted);font-size:.86rem;line-height:1.45}
+.card-source{margin-top:6px;color:var(--muted);font-family:var(--mono);font-size:11.5px}
+
+footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
+       color:var(--muted);font-size:12.5px;max-width:820px}
+
+/* ---- responsive ---- */
+@media (max-width:1180px){
+  .layout{grid-template-columns:230px minmax(0,1fr)}
+  .toc{display:none}
+}
+@media (max-width:820px){
+  .layout{grid-template-columns:1fr}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:20px}
+  .side ul{display:flex;flex-wrap:wrap;gap:4px}
+  main{padding:28px 22px 56px}
+}
+@media print{
+  .side,.toc,.anchor{display:none}
+  .layout{display:block}
+  main{padding:0}
+  a{color:inherit}
+  pre,.table-wrap{break-inside:avoid}
+}</style>
+</head>
+<body>
+<div class="layout">
+<nav class="side" aria-label="Documents"><a class="brand" href="index.html"><span class="brand-mark">LC</span><span class="brand-name">LabControl</span><span class="brand-sub">documentation</span></a><ul><li><a href="README.html">Overview</a></li><li><a href="CLAUDE.html" class="active">Project brief</a></li><li><a href="ARCHITECTURE.html">Architecture</a></li><li><a href="PROTOCOL.html">Protocol</a></li><li><a href="INSTALLER.html">Installer</a></li><li><a href="ROADMAP.html">Roadmap</a></li><li><a href="DECISIONS.html">Decisions</a></li></ul></nav>
+<main>
+<article class="doc">
+  <p class="source">Generated from <code>CLAUDE.md</code> — do not edit this file; edit the Markdown and run <code>tools/docs-build.sh</code>.</p>
+  <h1 id="labcontrol-classroom-fleet-control-for-the-computer-lab">LabControl — classroom fleet control for the ОНТФК computer lab</h1>
+<h2 id="what-this-is-read-first">What this is (read first)<a class="anchor" href="#what-this-is-read-first" aria-label="Link to this section">#</a></h2>
+<p>LabControl is a self-hosted classroom-management system for one computer lab:
+<strong>14 student PCs (Windows 10/11, x64, wired to a hub)</strong> managed from <strong>one teacher
+machine (currently a MacBook Air M-series on Wi-Fi, same router; may become a Windows
+PC later)</strong>. It replaces walking from desk to desk to install software, power
+machines on/off, and watch what students are doing.</p>
+<p>Owner: Viacheslav (teacher, Odesa Technical Vocational College). Solo project, built
+with Claude Code. The teacher is also the only admin — there is no IT department
+behind this, so <strong>everything must be zero-maintenance and self-explanatory</strong>.</p>
+<h2 id="why-it-exists">Why it exists<a class="anchor" href="#why-it-exists" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Installing an IDE/JDK/Python on 14 machines by hand takes a whole afternoon.</li>
+<li>Turning the lab on before class and off after it means touching every PC.</li>
+<li>During labs the teacher needs to see all screens at once, take control of one to
+help, show his own screen to everyone, or lock screens during a test.</li>
+<li>Existing tools (Veyon, iTALC, commercial suites) either have no macOS master,
+need per-PC manual configuration, or pull in a second product to maintain.
+Decision (see docs/DECISIONS.md D-03): <strong>build everything ourselves, no third-party
+runtime programs on the student PCs.</strong></li>
+</ul>
+<h2 id="hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)<a class="anchor" href="#hard-requirements-do-not-silently-relax-these" aria-label="Link to this section">#</a></h2>
+<ol>
+<li><strong>Teacher console is cross-platform and replaceable</strong>: macOS today, Windows tomorrow,
+Linux nice-to-have. The lab's identity is a private CA, not the console's certificate,
+so the teacher machine can die, be stolen or be swapped for a Windows PC and the lab
+keeps working after importing one encrypted backup file — <strong>without touching a single
+student PC</strong> (docs/ARCHITECTURE.md §3, D-13). Nothing may hard-code which computer
+runs the console, and nothing may hard-code 14 PCs: design for <strong>up to 30</strong> (D-17).</li>
+<li><strong>Student agent is Windows-only</strong> (10/11 x64). Runs as a Windows service, survives
+reboots, cannot be killed or uninstalled by the student.</li>
+<li><strong>Installer is one-shot from a USB stick</strong>: run once as local admin on each PC,
+asks at most one question (PC number), does <em>everything</em> else itself (service,
+firewall, Wake-on-LAN, power settings, <code>student</code> user, auto-logon, enrollment).
+The stick carries <strong>no secret</strong> — only the public CA certificate and single-use
+enrollment codes (D-14).</li>
+<li><strong><code>student</code> account</strong>: standard (non-admin) local user, password <code>1</code>, auto-logon at
+boot, profile can be reset to a clean desktop on command.</li>
+<li><strong>Live screens</strong>: mosaic of all 14 screens on the teacher's monitor, click a tile
+for full-size view with mouse/keyboard control.</li>
+<li><strong>Power</strong>: Wake-on-LAN, shutdown, reboot, log off — for one PC or all.</li>
+<li><strong>Software &amp; commands</strong>: install packages and run scripts on all PCs in parallel,
+with per-PC result/log. Student PCs may have no internet — installers are
+distributed from the console over the LAN.</li>
+<li><strong>Broadcast, lock &amp; exam mode</strong>: show the teacher's screen full-screen on every
+student PC; lock student screens/input with a message; and an exam mode built from
+four <strong>independent switches</strong> — countdown timer, allowed-programs whitelist, internet
+block, collect-work-at-the-end — that always restores the machine by itself if the
+console disappears (D-16).</li>
+<li>Works on an isolated LAN with no server, no cloud, no domain, no internet.</li>
+</ol>
+<h2 id="tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)<a class="anchor" href="#tech-stack-decided-see-docsdecisions.md" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>.NET 10 (LTS, supported until Nov 2028)</strong>, C# 14. Not .NET 8/9 — both reach
+end of support on 10 Nov 2026.</li>
+<li><strong>Avalonia UI 12.x</strong> for the teacher console (macOS/Windows/Linux, Skia rendering).
+Pinned in <code>Directory.Packages.props</code>; see D-02.</li>
+<li><strong>gRPC (Grpc.AspNetCore / Grpc.Net.Client) over TLS</strong> for all console↔agent traffic
+(control, events, video frames, file transfer). Protobuf contracts in <code>src/LabControl.Shared/Protos</code>.</li>
+<li><strong>Win32 via CsWin32 (<code>Microsoft.Windows.CsWin32</code>) source generator</strong> for the agent;
+<strong>Vortice.Windows</strong> for DXGI Desktop Duplication. No SharpDX (unmaintained).</li>
+<li><strong>SkiaSharp</strong> for JPEG encode/decode on both sides (Avalonia already ships it).</li>
+<li>Self-contained single-file publishes (<code>win-x64</code> for agent/installer;
+<code>osx-arm64</code>, <code>win-x64</code>, <code>linux-x64</code> for the console). No runtime install required.</li>
+<li>No PowerShell dependency in the installer: it is a C# exe with a
+<code>requireAdministrator</code> manifest and calls Win32/WMI/registry directly.</li>
+</ul>
+<h2 id="repository-layout">Repository layout<a class="anchor" href="#repository-layout" aria-label="Link to this section">#</a></h2>
+<pre><code>LabControl/
+├── CLAUDE.md                  ← this file
+├── README.md                  ← human overview + quick start
+├── LabControl.sln             ← classic .sln, not .slnx (D-18)
+├── Directory.Build.props      ← settings shared by every project
+├── Directory.Packages.props   ← central package versions; projects reference names only
+├── global.json                ← SDK band + the Microsoft.Testing.Platform opt-in
+├── docs/
+│   ├── ARCHITECTURE.md        ← components, processes, data flow, threat model
+│   ├── PROTOCOL.md            ← gRPC services, message flows, discovery, video encoding
+│   ├── INSTALLER.md           ← exactly what the USB installer does, step by step
+│   ├── DECISIONS.md           ← ADR-style log of decisions and rejected alternatives
+│   ├── ROADMAP.md             ← milestones M0…M6 with acceptance criteria
+│   └── html/                  ← GENERATED mirror of every .md — never edit by hand
+├── src/
+│   ├── LabControl.Shared/     ← .proto files, generated stubs, shared models, constants
+│   ├── LabControl.Console/    ← Avalonia app (teacher). Hosts the gRPC server.
+│   ├── LabControl.Agent/      ← Windows service (SYSTEM). gRPC client. Privileged ops.
+│   ├── LabControl.Agent.Session/ ← helper exe spawned into the interactive session:
+│   │                              screen capture, input injection, lock/broadcast overlay
+│   ├── LabControl.Setup/      ← the USB installer exe (Windows, elevated)
+│   └── LabControl.FakeAgent/  ← cross-platform simulated agent for developing the
+│                                 console on macOS without any Windows machine
+├── tests/                     ← xUnit; protocol, state machines, installer steps (dry-run)
+├── tools/                     ← build/publish scripts (build-usb.sh, publish-all.sh),
+│                                 docs-build.sh + DocsBuild/ (Markdown → docs/html/)
+├── packages/                  ← package catalog (*.yaml) + cached installers (git-ignored binaries)
+└── scripts/                   ← reusable PowerShell/cmd scripts pushed to PCs
+</code></pre>
+<p>Solution file: <code>LabControl.sln</code> at the root (create in M0).</p>
+<h2 id="development-environment-realities">Development environment realities<a class="anchor" href="#development-environment-realities" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Primary dev machine is an <strong>Apple Silicon Mac</strong>. <code>dotnet publish -r win-x64</code> cross-compiles
+the agent fine, but <strong>Win32 code cannot run or be debugged on the Mac</strong>.</li>
+<li>Therefore: the console is developed against <code>LabControl.FakeAgent</code> (N simulated PCs,
+synthetic frames, fake power state). The real agent is tested on a lab PC designated
+as the test box (call it <code>PC-00</code>) or in a Windows VM. A Windows-on-ARM VM on the Mac
+needs a <code>win-arm64</code> publish; the lab PCs need <code>win-x64</code> — publish both.</li>
+<li>Rider is the IDE of choice; keep the solution Rider-friendly (no VS-only project types).</li>
+<li>Keep everything buildable with plain <code>dotnet build</code> / <code>dotnet test</code> from the CLI.</li>
+</ul>
+<h2 id="conventions-for-claude-code">Conventions for Claude Code<a class="anchor" href="#conventions-for-claude-code" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Read <code>docs/ARCHITECTURE.md</code> and <code>docs/PROTOCOL.md</code> before touching <code>src/</code>.
+Any change to a <code>.proto</code> file must be reflected in <code>docs/PROTOCOL.md</code> in the same commit.</li>
+<li><strong>Documentation is part of every change, not a follow-up.</strong> The <code>.md</code> files are the
+single source of truth; <code>docs/html/</code> is a generated mirror. Whenever you change a
+<code>.md</code> file — or change behaviour that a <code>.md</code> file describes — update the Markdown
+<strong>and</strong> run <code>tools/docs-build.sh</code> before finishing the task. Never hand-edit anything
+under <code>docs/html/</code>. A change that leaves the docs stale, or the HTML out of sync with
+the Markdown, is not finished.</li>
+<li>Any non-obvious design choice goes into <code>docs/DECISIONS.md</code> as a new <code>D-NN</code> entry.</li>
+<li>Code, identifiers, commits, comments: English. UI strings of the console: English first,
+Ukrainian localization is a later milestone (resource files from day one, no hard-coded UI text).</li>
+<li>Agent must never crash the student's session: every Win32 call is wrapped, every
+failure is reported to the console as an event, never thrown out of the service loop.</li>
+<li>Never log the <code>student</code> password, the lab key or its passphrase. Never commit
+<code>lab-key.lck</code>, <code>lab.json</code>, certificates, or <code>packages/**/*.exe|msi</code> (see <code>.gitignore</code>).</li>
+<li>Prefer boring, well-supported libraries. Every NuGet dependency must be listed in
+<code>docs/DECISIONS.md</code> with a one-line reason.</li>
+<li>Don't invent features beyond <code>docs/ROADMAP.md</code>; propose them there first.</li>
+<li>Two things must never be constants in code: <strong>the number of student PCs</strong> and <strong>which
+computer runs the console</strong>. Both come from <code>lab.json</code> / the lab key.</li>
+<li>Never write the lab key, its passphrase, or a private key to a log, a temp file, or the
+USB payload.</li>
+<li>Ports, names, paths, and the <code>student</code> account details are constants in
+<code>LabControl.Shared/Defaults.cs</code> — one place, referenced everywhere.</li>
+</ul>
+<h2 id="quick-commands">Quick commands<a class="anchor" href="#quick-commands" aria-label="Link to this section">#</a></h2>
+<pre><code class="language-bash">dotnet build                                   # everything, Windows projects included
+dotnet test                                    # unit tests (Microsoft.Testing.Platform)
+dotnet run --project src/LabControl.Console    # console on the Mac
+dotnet run --project src/LabControl.FakeAgent -- --count 14   # 14 fake PCs
+tools/publish-all.sh                           # self-contained binaries for all RIDs
+tools/build-usb.sh /Volumes/USB               # USB installer payload (needs lab.json from the console)
+tools/docs-build.sh                            # regenerate docs/html/ after ANY .md change
+</code></pre>
+<h2 id="current-status">Current status<a class="anchor" href="#current-status" aria-label="Link to this section">#</a></h2>
+<p>See <code>docs/ROADMAP.md</code> — it holds the milestone table, the per-milestone acceptance
+criteria, the on-site verification checklist and the open questions for the owner.</p>
+<p><strong>M0 is done (2026-09-04).</strong> The solution builds and tests green on macOS, all six
+projects exist, the protobuf contract compiles, the console opens a window, <code>FakeAgent</code>
+simulates up to 30 machines, and <code>tools/publish-all.sh</code> produces self-contained binaries
+for <code>osx-arm64</code>, <code>win-x64</code>, <code>win-arm64</code> and <code>linux-x64</code>. Everything under <code>src/</code> other
+than <code>Shared</code> is still a skeleton.</p>
+<p>Next is <strong>M1 — lab identity, link and presence</strong>, which implements the trust model. It is
+the one part that is expensive to get wrong, because a mistake there is only fixable by
+visiting every PC.</p>
+
+</article>
+<footer>Generated 2026-09-04 16:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+</main>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
+</div>
+</body>
+</html>

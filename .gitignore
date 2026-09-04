@@ -1,0 +1,26 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+*.swp
+.DS_Store
+TestResults/
+artifacts/
+publish/
+
+# LabControl secrets & big binaries — never commit
+lab-key.lck
+lab.json
+instance.json
+enrollment.json
+*.pfx
+*.pem
+*.key
+packages/**/*.exe
+packages/**/*.msi
+packages/**/*.zip
+packages/**/*.7z
+usb/

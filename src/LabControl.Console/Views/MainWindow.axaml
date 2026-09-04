@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:LabControl.Console.Localization"
+        x:Class="LabControl.Console.Views.MainWindow"
+        Title="{loc:Localize MainWindow.Title}"
+        Width="960" Height="640"
+        MinWidth="640" MinHeight="420">
+
+  <DockPanel>
+
+    <Border DockPanel.Dock="Bottom"
+            Background="{DynamicResource SystemControlBackgroundListLowBrush}"
+            Padding="14,8">
+      <TextBlock Text="{loc:Localize MainWindow.Status}"
+                 Opacity="0.7"
+                 FontSize="12" />
+    </Border>
+
+    <StackPanel VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                MaxWidth="560"
+                Spacing="12">
+      <TextBlock Text="{loc:Localize MainWindow.Heading}"
+                 FontSize="24"
+                 FontWeight="SemiBold"
+                 HorizontalAlignment="Center" />
+      <TextBlock Text="{loc:Localize MainWindow.Body}"
+                 TextWrapping="Wrap"
+                 Opacity="0.75"
+                 TextAlignment="Center" />
+    </StackPanel>
+
+  </DockPanel>
+
+</Window>

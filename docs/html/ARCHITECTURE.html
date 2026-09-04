@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture · LabControl</title>
+<style>:root{
+  --bg:#f7f7f5; --panel:#ffffff; --ink:#1c1c1a; --muted:#6b6b64; --line:#e2e2dc;
+  --accent:#0b6b53; --accent-soft:#e6f1ed; --code-bg:#f2f2ee; --mark:#fff6d6;
+  --radius:10px; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16171a; --panel:#1d1f23; --ink:#e6e6e2; --muted:#9a9a92; --line:#2e3138;
+    --accent:#5ec2a3; --accent-soft:#1e2a27; --code-bg:#22252a; --mark:#3a3320;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+     font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:248px minmax(0,1fr) 232px;gap:0;
+        max-width:1400px;margin:0 auto;align-items:start}
+
+/* ---- sidebar ---- */
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 20px;
+      border-right:1px solid var(--line)}
+.brand{display:block;text-decoration:none;color:inherit;margin-bottom:26px}
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+            border-radius:9px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;
+            letter-spacing:.5px;margin-bottom:10px}
+.brand-name{display:block;font-weight:650;font-size:17px;letter-spacing:-.01em}
+.brand-sub{display:block;color:var(--muted);font-size:12.5px;letter-spacing:.02em}
+.side ul{list-style:none;margin:0;padding:0}
+.side li{margin:1px 0}
+.side a{display:block;padding:7px 10px;border-radius:7px;text-decoration:none;
+        color:var(--muted);font-size:14.5px}
+.side a:hover{background:var(--code-bg);color:var(--ink)}
+.side a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+
+/* ---- content ---- */
+main{padding:44px 48px 72px;min-width:0}
+.doc{max-width:820px}
+h1{font-size:2.05rem;line-height:1.2;letter-spacing:-.02em;margin:0 0 .5em;font-weight:680}
+h2{font-size:1.4rem;letter-spacing:-.01em;margin:2.4em 0 .6em;padding-bottom:.3em;
+   border-bottom:1px solid var(--line);font-weight:640}
+h3{font-size:1.11rem;margin:1.9em 0 .5em;font-weight:640}
+h4{font-size:1rem;margin:1.5em 0 .4em;color:var(--muted);text-transform:uppercase;
+   letter-spacing:.06em;font-size:.8rem}
+p,ul,ol{margin:0 0 1.05em}
+ul,ol{padding-left:1.35em}
+li{margin:.28em 0}
+li>ul,li>ol{margin:.3em 0}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+strong{font-weight:640}
+hr{border:0;border-top:1px solid var(--line);margin:2.6em 0}
+.lead{font-size:1.1rem;color:var(--muted);max-width:60ch}
+.source{font-size:.83rem;color:var(--muted);background:var(--code-bg);
+        border:1px solid var(--line);border-radius:var(--radius);padding:9px 13px;margin-bottom:2em}
+.anchor{margin-left:.4em;color:var(--muted);opacity:0;font-weight:400;border:0;font-size:.85em}
+h2:hover .anchor,h3:hover .anchor{opacity:.55}
+.anchor:hover{opacity:1 !important}
+
+/* ---- code ---- */
+code{font-family:var(--mono);font-size:.875em;background:var(--code-bg);
+     border:1px solid var(--line);border-radius:5px;padding:.1em .36em}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;overflow-x:auto;margin:0 0 1.3em;line-height:1.5}
+pre code{background:none;border:0;padding:0;font-size:.845rem;white-space:pre}
+blockquote{margin:0 0 1.2em;padding:.1em 0 .1em 1.1em;border-left:3px solid var(--accent);
+           color:var(--muted)}
+
+/* ---- tables ---- */
+.table-wrap{overflow-x:auto;margin:0 0 1.5em;border:1px solid var(--line);
+            border-radius:var(--radius);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:.91rem}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--code-bg);font-weight:640;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+
+/* ---- task lists ---- */
+input[type=checkbox]{margin-right:.5em;accent-color:var(--accent)}
+li.task-list-item{list-style:none;margin-left:-1.2em}
+
+/* ---- on-this-page ---- */
+.toc{position:sticky;top:0;max-height:100vh;overflow-y:auto;padding:48px 22px 40px;
+     border-left:1px solid var(--line);font-size:13.5px}
+.toc-title{margin:0 0 .7em;color:var(--muted);text-transform:uppercase;
+           letter-spacing:.07em;font-size:11px;font-weight:640}
+.toc ul{list-style:none;margin:0;padding:0}
+.toc li{margin:.3em 0}
+.toc a{color:var(--muted);display:block;line-height:1.35}
+.toc a:hover{color:var(--accent)}
+.toc .lvl3{padding-left:12px;font-size:12.8px}
+
+/* ---- index cards ---- */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:2em}
+.card{display:flex;flex-direction:column;gap:5px;padding:16px 17px;background:var(--panel);
+      border:1px solid var(--line);border-radius:var(--radius);text-decoration:none;color:inherit}
+.card:hover{border-color:var(--accent);box-shadow:0 2px 14px rgba(0,0,0,.06)}
+.card-kicker{color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:650}
+.card-title{font-weight:640;font-size:1.02rem}
+.card-summary{color:var(--muted);font-size:.86rem;line-height:1.45}
+.card-source{margin-top:6px;color:var(--muted);font-family:var(--mono);font-size:11.5px}
+
+footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
+       color:var(--muted);font-size:12.5px;max-width:820px}
+
+/* ---- responsive ---- */
+@media (max-width:1180px){
+  .layout{grid-template-columns:230px minmax(0,1fr)}
+  .toc{display:none}
+}
+@media (max-width:820px){
+  .layout{grid-template-columns:1fr}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:20px}
+  .side ul{display:flex;flex-wrap:wrap;gap:4px}
+  main{padding:28px 22px 56px}
+}
+@media print{
+  .side,.toc,.anchor{display:none}
+  .layout{display:block}
+  main{padding:0}
+  a{color:inherit}
+  pre,.table-wrap{break-inside:avoid}
+}</style>
+</head>
+<body>
+<div class="layout">
+<nav class="side" aria-label="Documents"><a class="brand" href="index.html"><span class="brand-mark">LC</span><span class="brand-name">LabControl</span><span class="brand-sub">documentation</span></a><ul><li><a href="README.html">Overview</a></li><li><a href="CLAUDE.html">Project brief</a></li><li><a href="ARCHITECTURE.html" class="active">Architecture</a></li><li><a href="PROTOCOL.html">Protocol</a></li><li><a href="INSTALLER.html">Installer</a></li><li><a href="ROADMAP.html">Roadmap</a></li><li><a href="DECISIONS.html">Decisions</a></li></ul></nav>
+<main>
+<article class="doc">
+  <p class="source">Generated from <code>docs/ARCHITECTURE.md</code> — do not edit this file; edit the Markdown and run <code>tools/docs-build.sh</code>.</p>
+  <h1 id="architecture">Architecture</h1>
+<h2 id="physical-picture">1. Physical picture<a class="anchor" href="#physical-picture" aria-label="Link to this section">#</a></h2>
+<pre><code>                 Wi-Fi                        wired (hub/switch)
+  MacBook  ─────────────┐  ┌────────┐  ┌──────────────────────────────┐
+  (Console)             ├──┤ Router ├──┤ Hub ── PC-01 … PC-14 (Windows)│
+  or a Windows PC ──────┘  └────────┘  └──────────────────────────────┘
+</code></pre>
+<p>The first lab has <strong>14</strong> PCs, but nothing may assume that number: the software is meant
+to move to other labs, so it is designed and load-tested for <strong>up to 30</strong> student PCs
+and one console. The count comes from <code>lab.json</code>, never from a constant.</p>
+<p>Assumptions to verify on site before M1 (put results in DECISIONS.md D-10):</p>
+<ul>
+<li>Wi-Fi and the wired hub are the <strong>same IP subnet / same L2 broadcast domain</strong>
+(no &quot;AP isolation&quot; / guest network on the router). Required for UDP discovery
+broadcasts and for Wake-on-LAN magic packets sent from the Mac.</li>
+<li>PC BIOS/UEFI has &quot;Wake on LAN&quot; / &quot;Power on by PCI-E&quot; enabled. The installer configures
+the Windows side, but BIOS is a one-time manual check per PC.</li>
+<li>Router hands out DHCP; PCs may change IP → the console identifies PCs by
+<strong>agent ID + MAC</strong>, never by IP.</li>
+</ul>
+<h2 id="components">2. Components<a class="anchor" href="#components" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Runs on</th>
+<th>Runs as</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Console</strong> (<code>LabControl.Console</code>)</td>
+<td>teacher machine (macOS/Windows/Linux)</td>
+<td>the teacher</td>
+<td>Avalonia UI + embedded gRPC server (Kestrel). Holds the lab key, issues certificates, and is the source of truth for <code>lab.json</code>, the package catalog and the scripts. Replaceable — see §3.6.</td>
+</tr>
+<tr>
+<td><strong>Agent</strong> (<code>LabControl.Agent</code>)</td>
+<td>each student PC</td>
+<td>Windows service, <code>LocalSystem</code></td>
+<td>Outbound gRPC client to the console. Privileged operations: power, run scripts, install packages, file transfer, profile reset, self-update. Supervises the Session helper.</td>
+</tr>
+<tr>
+<td><strong>Session helper</strong> (<code>LabControl.Agent.Session</code>)</td>
+<td>each student PC</td>
+<td>spawned by the Agent into the active interactive session (SYSTEM token duplicated into that session via <code>WTSQueryUserToken</code>/<code>CreateProcessAsUser</code>)</td>
+<td>Screen capture (DXGI), input injection (<code>SendInput</code>), full-screen overlay window for lock/broadcast. Talks to the Agent over a local named pipe. Restarted automatically on logon/logoff/crash.</td>
+</tr>
+<tr>
+<td><strong>Setup</strong> (<code>LabControl.Setup</code>)</td>
+<td>each student PC, once</td>
+<td>elevated (admin)</td>
+<td>The USB installer. See INSTALLER.md.</td>
+</tr>
+<tr>
+<td><strong>FakeAgent</strong> (<code>LabControl.FakeAgent</code>)</td>
+<td>dev machine</td>
+<td>user</td>
+<td>Simulates N agents (synthetic screens, power state, fake command results) so the console can be built on macOS.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Why two processes on the PC: a session-0 service cannot see the interactive desktop
+(no screen, no input). The classic pattern is service + per-session helper. Keeping the
+helper as SYSTEM (not as <code>student</code>) lets it capture the UAC secure desktop and the
+lock screen, and prevents the student from killing it from Task Manager.</p>
+<h2 id="trust-model-and-connection">3. Trust model and connection<a class="anchor" href="#trust-model-and-connection" aria-label="Link to this section">#</a></h2>
+<p>The teacher machine is <strong>replaceable</strong>: it may die, be stolen, or be swapped for a
+Windows PC, and the same software must be usable in another college's lab. Therefore
+the identity of <em>the lab</em> is deliberately separated from the identity of <em>the computer
+that happens to be running the console today</em>. Nothing in the design may require
+walking to the student PCs again after a change of teacher machine.</p>
+<h3 id="three-separate-identities">3.1 Three separate identities<a class="anchor" href="#three-separate-identities" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Identity</th>
+<th>Created</th>
+<th>Lives</th>
+<th>Proves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lab key</strong> — a private certificate authority (ECDSA P-256)</td>
+<td>once, on the console's first run</td>
+<td><code>lab-key.lck</code>, encrypted; backed up wherever the teacher wants</td>
+<td>&quot;this is lab <em>X</em>&quot;</td>
+</tr>
+<tr>
+<td><strong>Console instance</strong> — leaf certificate + key signed by the lab key</td>
+<td>when a teacher machine is set up or migrated</td>
+<td>that machine only</td>
+<td>&quot;I am a legitimate console of lab <em>X</em>&quot;</td>
+</tr>
+<tr>
+<td><strong>Agent</strong> — keypair + certificate signed by the lab key</td>
+<td>at enrollment, on the PC itself</td>
+<td>that PC only</td>
+<td>&quot;I am PC-07 of lab <em>X</em>&quot;</td>
+</tr>
+</tbody>
+</table></div>
+<p>The lab key is the only thing that must survive; everything else can be reissued from it.</p>
+<h3 id="how-the-lab-key-is-protected">3.2 How the lab key is protected<a class="anchor" href="#how-the-lab-key-is-protected" aria-label="Link to this section">#</a></h3>
+<p>A random 256-bit master key encrypts the CA private key (AES-256-GCM). The master key
+itself is never stored directly — only as a set of <strong>wrappings</strong>, any one of which opens
+it:</p>
+<ul>
+<li>one per <strong>key holder</strong>: a named person and their passphrase (PBKDF2-HMAC-SHA256,
+≥ 600 000 iterations, per-holder salt);</li>
+<li>one <strong>recovery code</strong> — 128 random bits shown once as printable groups, meant for a
+wallet, a safe, or a home drawer.</li>
+</ul>
+<p>More than one holder is supported deliberately: the owner asked for a colleague to be
+able to open the lab if he is ill on an exam day. Holders are added and removed from the
+console (adding one needs an existing holder's passphrase; removing one re-wraps the
+master key without it, and does not require the removed person's cooperation). Every
+holder is equal — there is no &quot;owner&quot; wrapping that outranks the others — and the list of
+holder <em>names</em> is stored in the clear so you can see who can open the lab without opening
+it yourself.</p>
+<p>So a forgotten passphrase is recoverable, a lost recovery sheet is survivable, an ill
+teacher does not stop an exam, and the file alone is useless to whoever finds it. The lab key is <strong>not</strong> kept on the USB
+stick — the USB carries no secret at all (§3.4).</p>
+<p>Daily use does not ask for the passphrase: it is needed only when the lab key itself is
+unlocked — first run, minting a console instance, migrating, or revoking. The console
+instance's own private key is protected at rest by the operating system (macOS Keychain,
+Windows DPAPI, Linux libsecret with an encrypted-file fallback).</p>
+<h3 id="what-a-student-pc-knows">3.3 What a student PC knows<a class="anchor" href="#what-a-student-pc-knows" aria-label="Link to this section">#</a></h3>
+<p>Only: <code>lab_id</code>, the <strong>public</strong> CA certificate (pinned), its own keypair and certificate,
+its number and MAC. No lab secret, no passphrase, no shared symmetric key, nothing about
+any other PC. A student who fully compromises a PC — including pulling its disk — can
+impersonate <em>that one PC</em> and nothing else, and the console can revoke it.</p>
+<h3 id="connection">3.4 Connection<a class="anchor" href="#connection" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Agents dial out</strong> to the console's gRPC server on <code>47800/tcp</code>. Rationale unchanged:
+the console moves, the PCs do not, and outbound connections need no inbound firewall
+rule.</li>
+<li><strong>Mutual TLS.</strong> The agent validates the console's leaf certificate against the pinned
+CA; the console validates the agent's certificate against the same CA and checks it
+against the revocation list. Neither side trusts a public CA, an IP address or a
+hostname — only the lab key.</li>
+<li><strong>Discovery beacon</strong>, UDP <code>47801</code>, every 2 s. It is verifiable offline without any
+shared secret: it carries the console instance's public key plus the CA's signature
+over that public key (the <em>endorsement</em>), and is itself signed by the instance key.
+An agent checks endorsement → signature → timestamp, then connects. Agents ignore
+beacons while connected, and rate-limit connection attempts, so a flood of forged
+beacons costs a few TCP handshakes and nothing else.</li>
+<li><strong>Fallback</strong> for networks that drop broadcasts: <code>console_host</code> pinned in <code>agent.json</code>.</li>
+<li><strong>One long-lived bidirectional stream per agent</strong> (<code>AgentLink</code>) carries commands and
+events; separate streaming RPCs carry video and files so a large transfer never
+delays a &quot;shutdown&quot;. See PROTOCOL.md.</li>
+</ul>
+<h3 id="enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret<a class="anchor" href="#enrollment-the-usb-stick-carries-no-secret" aria-label="Link to this section">#</a></h3>
+<p>The USB payload contains the <strong>public</strong> CA certificate and a batch of <strong>single-use
+enrollment codes</strong> generated by the console. At install the agent generates its own
+keypair on the PC; at first connection it presents an unused code and a certificate
+signing request; the console issues the agent certificate, burns the code, and records
+the machine in <code>lab.json</code>.</p>
+<p>A USB stick that a student finds therefore allows, at worst, enrolling a bogus PC —
+which appears in the console as an unexpected machine and is removed with one click.
+It does not decrypt traffic, does not impersonate the console, and does not expose the
+lab key. (Contrast with the earlier design, where the stick carried the lab secret and
+was itself a credential.)</p>
+<h3 id="replacing-the-teacher-machine">3.6 Replacing the teacher machine<a class="anchor" href="#replacing-the-teacher-machine" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>On the new machine (macOS, Windows or Linux): <strong>Import lab key</strong> — the backup file
+plus the passphrase, or the recovery code.</li>
+<li>Give the instance a name (<code>MacBook-2026</code>, <code>Lab PC</code>), so logs say which console did
+what.</li>
+<li>The console mints itself a new leaf certificate from the lab key, restores the
+machine list, package catalog and room layout from the same backup, and starts
+beaconing.</li>
+<li>Every agent sees the new beacon, validates it against the CA it has pinned since
+installation, and connects. <strong>No student PC is touched.</strong></li>
+<li>Optionally revoke the old instance. The revocation list is pushed to every agent
+when it connects, so a stolen laptop stops working as soon as the lab has seen the
+new console.</li>
+</ol>
+<p><strong>One console at a time.</strong> A second instance is a <em>replacement</em>, never a parallel
+operator — the owner confirmed two teachers never drive the same lab simultaneously.
+Agents therefore stay with whichever console they are connected to and ignore beacons
+while linked, so two live consoles would split the room arbitrarily rather than share it.
+The console detects another instance beaconing for the same lab and shows a warning
+naming it, with one-click revoke. Supporting genuinely simultaneous consoles would mean
+arbitrating who may lock, broadcast and control each PC; it is out of scope (§10).</p>
+<p>Failure cases, from cheapest to worst:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Teacher machine dies or is replaced; backup intact</td>
+<td>~10 minutes on the new machine</td>
+</tr>
+<tr>
+<td>Teacher machine stolen</td>
+<td>as above, plus revoke the old instance and power-cycle the lab so every agent picks up the revocation</td>
+</tr>
+<tr>
+<td>Passphrase forgotten</td>
+<td>unlock with the recovery code, then set a new passphrase</td>
+</tr>
+<tr>
+<td>Recovery code lost, passphrase known</td>
+<td>reprint a new recovery code from the console</td>
+</tr>
+<tr>
+<td>Lab key file lost entirely</td>
+<td>re-run <code>Setup.exe --rekey</code> on every PC (~30 s each; keeps the <code>student</code> account, the software and the settings)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Because the last row is the only genuinely painful one, the console's first-run wizard
+refuses to finish until the backup has actually been exported somewhere and the
+recovery code has been acknowledged, and it re-checks the backup's age on every launch.</p>
+<h2 id="data-on-the-console">4. Data on the console<a class="anchor" href="#data-on-the-console" aria-label="Link to this section">#</a></h2>
+<p><code>~/.labcontrol/</code> (macOS/Linux) or <code>%APPDATA%\LabControl\</code> (Windows):</p>
+<pre><code>lab-key.lck       the lab certificate authority, encrypted (§3.2). The one file that
+                  must survive. Never leaves this directory unencrypted.
+instance.json     this console instance: name, leaf certificate, key reference
+                  (OS keystore), issued/expires
+lab.json          lab_id, room layout, revocation list, machines[]:
+                  {id, number, name, mac, last_ip, last_seen, agent_version, cert, notes}
+enrollment.json   outstanding single-use enrollment codes and which ones were burned
+packages/         package catalog: &lt;name&gt;.yaml + cached installer binaries
+scripts/          scripts pushed to PCs
+logs/             per-day console log + per-command result bundles
+</code></pre>
+<p>Every one of these files — and the backup archive — carries a <code>schema_version</code> as its
+first field, and the console refuses to open a file written by a <strong>newer</strong> version of
+itself rather than silently dropping the fields it does not understand (<code>D-20</code>). This is
+what keeps §3.6 working a year from now, when the backup being restored was written by an
+older build than the console restoring it.</p>
+<p>Created on first launch by the setup wizard. <strong>Backup</strong> = <code>lab-key.lck</code> + <code>lab.json</code> +
+the catalog, exported as one encrypted archive; it is what makes §3.6 a ten-minute
+operation instead of a walk around the room. The console nags until a backup exists and
+warns when the backup on record is older than the machine list.</p>
+<h2 id="data-on-a-student-pc">5. Data on a student PC<a class="anchor" href="#data-on-a-student-pc" aria-label="Link to this section">#</a></h2>
+<pre><code>C:\Program Files\LabControl\   app\&lt;version&gt;\  agent.exe, session.exe — one directory per
+                                               installed version, kept side by side (D-19)
+                               app\current     names the version the service runs
+                               app\previous    names the version to roll back to
+                               setup.exe       kept for repair
+C:\ProgramData\LabControl\     agent.json  {schema_version, agent_id, number, lab_id,
+                                            ca_cert (public), mac, console_host?}
+                               agent.key   the PC's own private key, DPAPI-protected (machine scope)
+                               agent.crt   the PC's certificate, signed by the lab CA
+                               update\     staging area for an incoming version bundle,
+                                           emptied once the new version proves itself (§7)
+                               logs\       rolling agent log (7 days)
+                               cache\      downloaded package installers (cleaned after install)
+</code></pre>
+<p>ACL: <code>SYSTEM</code> + <code>Administrators</code> full control, <code>Users</code> read/execute on Program Files,
+<strong>no access</strong> for <code>Users</code> to <code>ProgramData\LabControl</code>.</p>
+<p>Versions live in numbered subdirectories rather than in <code>LabControl\</code> itself because a
+running service cannot overwrite its own <code>.exe</code>, and because a bad update must be
+reversible without anyone entering the room (<code>D-19</code>). The Defender exclusion is set on the
+<code>C:\Program Files\LabControl\</code> <strong>parent</strong>, so a version directory created later is
+covered without a second visit.</p>
+<h2 id="feature-mechanism-map">6. Feature → mechanism map<a class="anchor" href="#feature-mechanism-map" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Screen mosaic</td>
+<td>Session helper captures via DXGI Desktop Duplication (GDI <code>BitBlt</code> fallback), downscales to tile size (e.g. 320×180), JPEG q≈50, 2 fps per PC → one small stream per PC.</td>
+</tr>
+<tr>
+<td>Full view + control</td>
+<td>Console requests <code>quality=full</code> for one agent: full-resolution dirty-rectangle JPEG tiles up to 15–20 fps; mouse/keyboard events → <code>SendInput</code> in the helper. Optional H.264 via Media Foundation later (ROADMAP M6).</td>
+</tr>
+<tr>
+<td>Wake-on-LAN</td>
+<td>Console sends magic packet (UDP broadcast <code>:9</code>, plus directed to <code>last_ip</code>). MAC comes from enrollment. Installer enables WoL on the NIC and disables Fast Startup/hibernation (they break WoL on Windows).</td>
+</tr>
+<tr>
+<td>Shutdown / reboot / logoff</td>
+<td>Agent: <code>ExitWindowsEx</code> / <code>InitiateSystemShutdownEx</code> with <code>SE_SHUTDOWN_NAME</code>.</td>
+</tr>
+<tr>
+<td>Run script</td>
+<td>Agent runs <code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File …</code> or <code>cmd /c</code> as SYSTEM (default) or in the student session via the helper (<code>as: user</code>). stdout/stderr/exit code streamed back.</td>
+</tr>
+<tr>
+<td>Install package</td>
+<td>Catalog entry = <code>{name, version, installer file, silent args, detect: {path|registry|command}}</code>. Console pushes the installer over the file stream (LAN, no internet needed), agent runs it silently, verifies <code>detect</code>, reports result. <code>winget</code>/<code>choco</code> are <em>not</em> used (winget does not work under SYSTEM).</td>
+</tr>
+<tr>
+<td>Broadcast teacher screen</td>
+<td>Console captures its own screen (macOS: CoreGraphics <code>CGDisplayCreateImage</code>/ScreenCaptureKit via P/Invoke — needs Screen Recording permission; Windows: DXGI) → JPEG stream → helper shows a topmost full-screen window, input blocked.</td>
+</tr>
+<tr>
+<td>Lock screen</td>
+<td>Helper shows a full-screen topmost window with a message; low-level keyboard hook swallows Alt+Tab/Win; <code>BlockInput</code>. Ctrl+Alt+Del cannot be blocked by design — accepted.</td>
+</tr>
+<tr>
+<td>Exam mode</td>
+<td>A composable set of independent switches, not a single mode (see §6.1).</td>
+</tr>
+<tr>
+<td>— timer</td>
+<td>Countdown rendered by the helper; the deadline is absolute (console clock, skew-corrected at <code>Hello</code>) so it keeps running if the link drops, and the mode ends by itself.</td>
+</tr>
+<tr>
+<td>— app whitelist</td>
+<td>Helper subscribes to process-start events (WMI <code>Win32_ProcessStartTrace</code>, polling fallback) and terminates anything outside the allowed list. Matching is by <strong>executable path/name only</strong> — a process started by an allowed program is judged on its own name, not on its parent (owner's choice: the simpler rule). Hard-coded never-touch set: session, shell and OS processes, and LabControl itself.</td>
+</tr>
+<tr>
+<td>— internet block</td>
+<td>Agent adds outbound-blocking firewall rules with a distinctive rule group, exempting the console subnet. Fail-safe: rules carry an expiry, are removed on exam end, on service start, and on any agent restart — a crashed agent can never leave a PC offline.</td>
+</tr>
+<tr>
+<td>— collect work</td>
+<td>At the end (or on demand) the agent zips <strong>one folder chosen when the exam is set up</strong> and uploads it through <code>PushFile</code>; the console files it under <code>&lt;exam&gt;/PC-07/</code>. The folder is a dedicated work directory, not the whole <code>student</code> desktop, so what is collected is predictable and small.</td>
+</tr>
+<tr>
+<td>Package management</td>
+<td>The console's <em>Add package</em> wizard takes any local <code>.exe</code>/<code>.msi</code>, suggests silent arguments for known installer families, computes the hash, writes the YAML, and offers a test install on one PC before the fleet. The catalog ships <strong>empty</strong> — it is filled by the teacher.</td>
+</tr>
+<tr>
+<td>Profile reset</td>
+<td>Agent logs <code>student</code> off, deletes the profile (<code>Win32_UserProfile.Delete</code>), reboots; auto-logon recreates a pristine profile. Optional &quot;light reset&quot; = wipe Desktop/Documents/Downloads only.</td>
+</tr>
+<tr>
+<td>Self-update</td>
+<td>Console pushes a bundle signed by the lab key; the agent unpacks it into a new version directory, repoints the service and restarts, and rolls itself back if the new version cannot reach the console (§7, <code>D-19</code>).</td>
+</tr>
+<tr>
+<td>Inventory</td>
+<td>Agent reports hostname, Windows build, CPU/RAM/disk, installed catalog packages, uptime, current logged-on user.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches<a class="anchor" href="#exam-mode-is-a-set-of-switches" aria-label="Link to this section">#</a></h3>
+<p>Different kinds of written work need different restrictions, so &quot;exam mode&quot; is not one
+button. The teacher composes it from four independent switches and saves the
+combination as a named preset (<em>Written test</em>, <em>Practical with the IDE</em>, <em>Open-book</em>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Switch</th>
+<th>Off</th>
+<th>On</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Timer</td>
+<td>mode ends when the teacher ends it</td>
+<td>absolute deadline, countdown on the student screen, auto-end</td>
+</tr>
+<tr>
+<td>Allowed programs</td>
+<td>anything runs</td>
+<td>only the listed executables; others are closed as they start (matched by name, not by which program launched them)</td>
+</tr>
+<tr>
+<td>Internet</td>
+<td>untouched</td>
+<td>blocked except the console; automatically restored</td>
+</tr>
+<tr>
+<td>Collect work at the end</td>
+<td>nothing collected</td>
+<td>one folder, picked while setting up the exam, is uploaded from every PC</td>
+</tr>
+</tbody>
+</table></div>
+<p>Every switch is independently reversible, and the whole mode has a hard maximum
+duration after which the agent restores the machine on its own — a lesson must never
+end with a PC left restricted because the teacher's laptop was closed.</p>
+<h2 id="updating-labcontrol-itself">7. Updating LabControl itself<a class="anchor" href="#updating-labcontrol-itself" aria-label="Link to this section">#</a></h2>
+<p>New versions arrive constantly while the software is being built, and keep arriving after
+that. Updating must therefore be an ordinary operation, not an event — and above all it
+must never be able to strand a PC, because the only repair for a stranded PC is a walk to
+its desk. The full reasoning is <code>D-19</code>; this is the shape of it.</p>
+<h3 id="the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe<a class="anchor" href="#the-rule-that-makes-updates-safe" aria-label="Link to this section">#</a></h3>
+<p><strong>A small part of the protocol is frozen forever.</strong> <code>Hello</code>, <code>Heartbeat</code>,
+<code>Job{kind: self_update}</code> and <code>JobResult</code> keep their v1 wire meaning for the life of the
+product; everything else may change freely (<code>docs/PROTOCOL.md</code>, <em>Versioning</em>). An agent of
+any version can therefore always connect to a console of any version, be recognised, and
+be told to update itself — even when it understands nothing else the console says. As long
+as that holds, a bad release is a remote fix, never a walk around the room.</p>
+<p>The console consequently never <em>refuses</em> an agent for being old. It marks the tile
+&quot;outdated&quot;, disables the features that agent cannot do, and offers <em>Update</em>.</p>
+<h3 id="updating-an-agent">7.2 Updating an agent<a class="anchor" href="#updating-an-agent" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>The console builds a <strong>bundle</strong>: <code>agent.exe</code>, <code>session.exe</code> and a manifest
+(<code>version</code>, per-file SHA-256, minimum installed version). The manifest is signed with
+the <strong>lab key</strong> — the CA whose public certificate every agent pinned at install — so
+the bundle is verifiable on its own, independently of the TLS session that carried it.</li>
+<li><code>Job{kind: self_update}</code> → the agent downloads the bundle through <code>PullFile</code> into
+<code>ProgramData\LabControl\update\</code>, verifies the signature and every hash, and refuses
+the job on any mismatch.</li>
+<li>The agent unpacks it into <code>Program Files\LabControl\app\&lt;new version&gt;\</code>, writes the
+outgoing version into <code>app\previous</code>, the new one into <code>app\current</code>, repoints the
+service (<code>ChangeServiceConfig</code> on the binary path) and asks the service manager to
+restart it. Nothing is overwritten, so nothing can be half-written.</li>
+<li><strong>Probation.</strong> The new version is on trial until it has completed a <code>Hello</code> and held
+the link for 10 uninterrupted minutes. Only then is it <em>accepted</em>: the console records
+the new <code>agent_version</code> and the agent clears <code>app\previous</code> and the staging directory.</li>
+<li><strong>Rollback, by something that is not the agent.</strong> The service's Windows recovery action
+runs <code>agent.exe --rollback</code> when the process dies repeatedly, and a scheduled task fires
+at the end of the probation window; either one repoints the service back at
+<code>app\previous</code> if the version was never accepted. A version that crashes on start, that
+cannot open its own certificate, or that cannot reach the console is therefore undone by
+the PC itself, with nobody in the room.</li>
+</ol>
+<p>The session helper is a child process and is never locked, so it is simply replaced and
+respawned along with the service.</p>
+<h3 id="updating-the-console">7.3 Updating the console<a class="anchor" href="#updating-the-console" aria-label="Link to this section">#</a></h3>
+<p>The console is an interactive application on the teacher's own machine, so its binary is
+replaced the ordinary way: quit, replace the self-contained publish, start. There is no
+fleet, no service and no rollback machinery — the previous build is a copy of a directory.
+The console's difficulty is not the binary but the data it leaves behind: <code>lab.json</code>,
+<code>instance.json</code>, <code>enrollment.json</code>, the package catalog and the backup archive are read
+by builds written months apart. That is what <code>schema_version</code> and the load-time migrations
+of <code>D-20</code> exist for, and why they are built in M1 rather than retrofitted.</p>
+<p>Because the binaries are unsigned (<code>D-15</code>), macOS quarantines a freshly downloaded console
+once; this is a one-time <code>xattr -d com.apple.quarantine</code>, documented in the README rather
+than engineered around.</p>
+<h2 id="console-ui-avalonia">8. Console UI (Avalonia)<a class="anchor" href="#console-ui-avalonia" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Lab view</strong>: one tile per PC in a grid mirroring the physical room layout (drag to
+arrange; saved in <code>lab.json</code>). Tile = live thumbnail + number + status (online /
+offline / sleeping / locked / in exam mode / broadcasting) + logged-on user. The grid
+scales from 1 to 30 PCs; beyond what fits, tiles shrink and the mosaic scrolls.</li>
+<li><strong>Selection model</strong>: click = select, ⌘/Ctrl-click = multi, ⌘A = all. Toolbar
+actions apply to the selection: Wake, Shutdown, Reboot, Log off, Lock, Unlock,
+Broadcast, Exam mode…, Run script…, Install package…, Reset profile, Send file,
+Collect files.</li>
+<li><strong>Single-PC view</strong>: double-click a tile → full-size stream with input control toggle.</li>
+<li><strong>Jobs panel</strong>: every action becomes a job with per-PC rows (pending / running /
+ok / failed + log). Jobs persist in <code>logs/</code>.</li>
+<li><strong>Packages</strong> and <strong>Scripts</strong> panels: manage the catalog; &quot;Install on all missing&quot;.</li>
+<li><strong>Settings</strong>: lab key (export backup, reprint the recovery code, change the
+passphrase), console instances (this one, others seen, revoke), enrollment codes,
+build USB installer.</li>
+</ul>
+<h2 id="threat-model-short">9. Threat model (short)<a class="anchor" href="#threat-model-short" aria-label="Link to this section">#</a></h2>
+<p>Primary adversary = a curious student with physical access to a PC but only the
+<code>student</code> account.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attack</th>
+<th>Defence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stop, uninstall or kill the agent</td>
+<td>service and helper run as <code>LocalSystem</code>; <code>student</code> is a standard user with no rights over either</td>
+</tr>
+<tr>
+<td>Read the PC's credentials</td>
+<td><code>C:\ProgramData\LabControl\</code> denies <code>Users</code>; the private key is DPAPI-protected at machine scope</td>
+</tr>
+<tr>
+<td>Use one PC's material to attack the lab</td>
+<td>a PC holds only its own key and the CA's <em>public</em> certificate; it can impersonate itself and nothing more, and can be revoked</td>
+</tr>
+<tr>
+<td>Impersonate the console</td>
+<td>requires a certificate signed by the lab key, which lives encrypted on the teacher machine and in the backup</td>
+</tr>
+<tr>
+<td>Forge discovery beacons</td>
+<td>beacons are signed and CA-endorsed; a forgery costs a rejected TCP handshake</td>
+</tr>
+<tr>
+<td>Steal the USB installer stick</td>
+<td>it carries no secret — only the public CA certificate and single-use enrollment codes; a bogus enrollment is visible in the console and removable</td>
+</tr>
+<tr>
+<td>Watch another student's screen</td>
+<td>video is addressed per agent and never relayed between agents</td>
+</tr>
+</tbody>
+</table></div>
+<p>Teacher-side risks, new since the console became replaceable:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Consequence</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Teacher machine stolen</td>
+<td>holder can control the lab until revoked</td>
+<td>revoke the instance (§3.6); leaf certificates are short-lived; OS keystore protects the leaf key at rest</td>
+</tr>
+<tr>
+<td>Backup file leaked</td>
+<td>holder owns the lab</td>
+<td>the file is useless without the passphrase or the recovery code</td>
+</tr>
+<tr>
+<td>Backup and passphrase both lost</td>
+<td>the lab must be re-keyed PC by PC</td>
+<td>first-run wizard forces a backup and a recovery code before it finishes</td>
+</tr>
+<tr>
+<td>Binaries are unsigned</td>
+<td>antivirus / SmartScreen may quarantine the agent</td>
+<td>accepted (see D-15); the installer registers an exclusion and the console reports agents that stop reporting</td>
+</tr>
+</tbody>
+</table></div>
+<p>Out of scope: a student with a live USB or BIOS access (physical security is the
+college's job), and network attackers on the lab LAN beyond the students themselves.</p>
+<h2 id="non-goals">10. Non-goals<a class="anchor" href="#non-goals" aria-label="Link to this section">#</a></h2>
+<p>Multi-lab, two consoles driving one lab at the same time (§3.6), cloud relay, mobile
+console, Linux/macOS student agents
+(possible later; keep <code>LabControl.Agent</code> behind an <code>IPlatformAgent</code> seam but do not
+build it now), grading/LMS integration.</p>
+
+</article>
+<footer>Generated 2026-09-04 16:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+</main>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#three-separate-identities">3.1 Three separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
+</div>
+</body>
+</html>

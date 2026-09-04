@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap · LabControl</title>
+<style>:root{
+  --bg:#f7f7f5; --panel:#ffffff; --ink:#1c1c1a; --muted:#6b6b64; --line:#e2e2dc;
+  --accent:#0b6b53; --accent-soft:#e6f1ed; --code-bg:#f2f2ee; --mark:#fff6d6;
+  --radius:10px; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16171a; --panel:#1d1f23; --ink:#e6e6e2; --muted:#9a9a92; --line:#2e3138;
+    --accent:#5ec2a3; --accent-soft:#1e2a27; --code-bg:#22252a; --mark:#3a3320;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+     font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:248px minmax(0,1fr) 232px;gap:0;
+        max-width:1400px;margin:0 auto;align-items:start}
+
+/* ---- sidebar ---- */
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 20px;
+      border-right:1px solid var(--line)}
+.brand{display:block;text-decoration:none;color:inherit;margin-bottom:26px}
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+            border-radius:9px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;
+            letter-spacing:.5px;margin-bottom:10px}
+.brand-name{display:block;font-weight:650;font-size:17px;letter-spacing:-.01em}
+.brand-sub{display:block;color:var(--muted);font-size:12.5px;letter-spacing:.02em}
+.side ul{list-style:none;margin:0;padding:0}
+.side li{margin:1px 0}
+.side a{display:block;padding:7px 10px;border-radius:7px;text-decoration:none;
+        color:var(--muted);font-size:14.5px}
+.side a:hover{background:var(--code-bg);color:var(--ink)}
+.side a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+
+/* ---- content ---- */
+main{padding:44px 48px 72px;min-width:0}
+.doc{max-width:820px}
+h1{font-size:2.05rem;line-height:1.2;letter-spacing:-.02em;margin:0 0 .5em;font-weight:680}
+h2{font-size:1.4rem;letter-spacing:-.01em;margin:2.4em 0 .6em;padding-bottom:.3em;
+   border-bottom:1px solid var(--line);font-weight:640}
+h3{font-size:1.11rem;margin:1.9em 0 .5em;font-weight:640}
+h4{font-size:1rem;margin:1.5em 0 .4em;color:var(--muted);text-transform:uppercase;
+   letter-spacing:.06em;font-size:.8rem}
+p,ul,ol{margin:0 0 1.05em}
+ul,ol{padding-left:1.35em}
+li{margin:.28em 0}
+li>ul,li>ol{margin:.3em 0}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+strong{font-weight:640}
+hr{border:0;border-top:1px solid var(--line);margin:2.6em 0}
+.lead{font-size:1.1rem;color:var(--muted);max-width:60ch}
+.source{font-size:.83rem;color:var(--muted);background:var(--code-bg);
+        border:1px solid var(--line);border-radius:var(--radius);padding:9px 13px;margin-bottom:2em}
+.anchor{margin-left:.4em;color:var(--muted);opacity:0;font-weight:400;border:0;font-size:.85em}
+h2:hover .anchor,h3:hover .anchor{opacity:.55}
+.anchor:hover{opacity:1 !important}
+
+/* ---- code ---- */
+code{font-family:var(--mono);font-size:.875em;background:var(--code-bg);
+     border:1px solid var(--line);border-radius:5px;padding:.1em .36em}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;overflow-x:auto;margin:0 0 1.3em;line-height:1.5}
+pre code{background:none;border:0;padding:0;font-size:.845rem;white-space:pre}
+blockquote{margin:0 0 1.2em;padding:.1em 0 .1em 1.1em;border-left:3px solid var(--accent);
+           color:var(--muted)}
+
+/* ---- tables ---- */
+.table-wrap{overflow-x:auto;margin:0 0 1.5em;border:1px solid var(--line);
+            border-radius:var(--radius);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:.91rem}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--code-bg);font-weight:640;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+
+/* ---- task lists ---- */
+input[type=checkbox]{margin-right:.5em;accent-color:var(--accent)}
+li.task-list-item{list-style:none;margin-left:-1.2em}
+
+/* ---- on-this-page ---- */
+.toc{position:sticky;top:0;max-height:100vh;overflow-y:auto;padding:48px 22px 40px;
+     border-left:1px solid var(--line);font-size:13.5px}
+.toc-title{margin:0 0 .7em;color:var(--muted);text-transform:uppercase;
+           letter-spacing:.07em;font-size:11px;font-weight:640}
+.toc ul{list-style:none;margin:0;padding:0}
+.toc li{margin:.3em 0}
+.toc a{color:var(--muted);display:block;line-height:1.35}
+.toc a:hover{color:var(--accent)}
+.toc .lvl3{padding-left:12px;font-size:12.8px}
+
+/* ---- index cards ---- */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:2em}
+.card{display:flex;flex-direction:column;gap:5px;padding:16px 17px;background:var(--panel);
+      border:1px solid var(--line);border-radius:var(--radius);text-decoration:none;color:inherit}
+.card:hover{border-color:var(--accent);box-shadow:0 2px 14px rgba(0,0,0,.06)}
+.card-kicker{color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:650}
+.card-title{font-weight:640;font-size:1.02rem}
+.card-summary{color:var(--muted);font-size:.86rem;line-height:1.45}
+.card-source{margin-top:6px;color:var(--muted);font-family:var(--mono);font-size:11.5px}
+
+footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
+       color:var(--muted);font-size:12.5px;max-width:820px}
+
+/* ---- responsive ---- */
+@media (max-width:1180px){
+  .layout{grid-template-columns:230px minmax(0,1fr)}
+  .toc{display:none}
+}
+@media (max-width:820px){
+  .layout{grid-template-columns:1fr}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:20px}
+  .side ul{display:flex;flex-wrap:wrap;gap:4px}
+  main{padding:28px 22px 56px}
+}
+@media print{
+  .side,.toc,.anchor{display:none}
+  .layout{display:block}
+  main{padding:0}
+  a{color:inherit}
+  pre,.table-wrap{break-inside:avoid}
+}</style>
+</head>
+<body>
+<div class="layout">
+<nav class="side" aria-label="Documents"><a class="brand" href="index.html"><span class="brand-mark">LC</span><span class="brand-name">LabControl</span><span class="brand-sub">documentation</span></a><ul><li><a href="README.html">Overview</a></li><li><a href="CLAUDE.html">Project brief</a></li><li><a href="ARCHITECTURE.html">Architecture</a></li><li><a href="PROTOCOL.html">Protocol</a></li><li><a href="INSTALLER.html">Installer</a></li><li><a href="ROADMAP.html" class="active">Roadmap</a></li><li><a href="DECISIONS.html">Decisions</a></li></ul></nav>
+<main>
+<article class="doc">
+  <p class="source">Generated from <code>docs/ROADMAP.md</code> — do not edit this file; edit the Markdown and run <code>tools/docs-build.sh</code>.</p>
+  <h1 id="roadmap">Roadmap</h1>
+<p>Milestones <strong>M0 … M6</strong>. Each one is independently demonstrable: at the end of a
+milestone there is something the teacher (or the developer on the Mac) can actually run
+and look at, not just code that compiles. Milestones are ordered by <em>risk first, value
+second</em> — the genuinely uncertain parts (the trust model, the Windows service + session
+helper, screen capture) are pulled forward so that a dead end is discovered early, while
+the lab is still being used the old way.</p>
+<p>Do not add features that are not listed here. Propose them in this file first, then
+implement.</p>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Milestone</th>
+<th>Title</th>
+<th>State</th>
+<th>Blocked by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>M0</strong></td>
+<td>Skeleton and toolchain</td>
+<td><strong>done 2026-09-04</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>M1</strong></td>
+<td>Lab identity, link and presence</td>
+<td>not started</td>
+<td>M0</td>
+</tr>
+<tr>
+<td><strong>M2</strong></td>
+<td>Windows agent: service, helper, power, scripts</td>
+<td>not started</td>
+<td>M1, Windows VM</td>
+</tr>
+<tr>
+<td><strong>M3</strong></td>
+<td>Screens: mosaic, full view, remote control</td>
+<td>not started</td>
+<td>M2, <code>PC-00</code></td>
+</tr>
+<tr>
+<td><strong>M4</strong></td>
+<td>Deployment: USB installer, files, self-update</td>
+<td>not started</td>
+<td>M3</td>
+</tr>
+<tr>
+<td><strong>M5</strong></td>
+<td>Classroom control: broadcast, lock, exam mode</td>
+<td>not started</td>
+<td>M4</td>
+</tr>
+<tr>
+<td><strong>M6</strong></td>
+<td>Software catalog, localization, polish</td>
+<td>not started</td>
+<td>M5</td>
+</tr>
+</tbody>
+</table></div>
+<p>Update the <strong>State</strong> column (<code>not started</code> / <code>in progress</code> / <code>done &lt;date&gt;</code>) in the same
+change that finishes the work, and regenerate the HTML mirror (see
+<a href="#documentation-workflow">Documentation workflow</a>).</p>
+<blockquote>
+<p><strong>Why seven milestones and not six.</strong> The original plan had software installation in
+M4. The owner has confirmed the catalog starts <strong>empty</strong> and his lab's PCs are already
+provisioned, so package management moved behind the lesson-time features that are used
+every week. What matters for packages is not a prefilled catalog but a comfortable way
+to <em>add</em> an installer — that is the M6 acceptance criterion.</p>
+</blockquote>
+<h2 id="definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone<a class="anchor" href="#definition-of-done-applies-to-every-milestone" aria-label="Link to this section">#</a></h2>
+<p>A milestone is done only when <strong>all</strong> of these hold:</p>
+<ol>
+<li><code>dotnet build</code> and <code>dotnet test</code> are green from the CLI on macOS, with no warnings
+that were introduced by the milestone.</li>
+<li><code>tools/publish-all.sh</code> produces self-contained binaries for every RID the milestone
+touches (<code>osx-arm64</code>, <code>win-x64</code>, <code>linux-x64</code> for the console; <code>win-x64</code> and
+<code>win-arm64</code> for the agent side).</li>
+<li>The acceptance criteria below are demonstrated <strong>live</strong>, not argued from code.</li>
+<li>Nothing assumes 14 PCs, and nothing assumes which computer the console runs on
+(<code>D-13</code>, <code>D-17</code>).</li>
+<li>Every <code>.proto</code> change is reflected in <code>docs/PROTOCOL.md</code>; every non-obvious choice is
+a new <code>D-NN</code> in <code>docs/DECISIONS.md</code>; every new NuGet package is in the dependency
+table with a one-line reason.</li>
+<li>All <code>docs/*.md</code> touched by the milestone are regenerated into <code>docs/html/</code>.</li>
+<li>Nothing secret is committed: no lab key, no certificates, no <code>student</code> password in
+logs, no package binaries.</li>
+<li>The agent never throws out of its service loop: every new Win32 / process / file call
+added in the milestone is wrapped and reports failure as an event.</li>
+</ol>
+<hr />
+<h2 id="m0-skeleton-and-toolchain">M0 — Skeleton and toolchain<a class="anchor" href="#m0-skeleton-and-toolchain" aria-label="Link to this section">#</a></h2>
+<p><strong>Goal.</strong> A repository that builds, tests, publishes and documents itself. No product
+behaviour yet. This milestone exists so that every later one starts from a known-good
+baseline instead of fighting the toolchain.</p>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li><code>LabControl.sln</code> at the root with the six projects from <code>CLAUDE.md</code> plus a test project
+per testable component.</li>
+<li><code>Directory.Build.props</code>: <code>net10.0</code>, <code>LangVersion 14</code>, nullable enabled, warnings as
+errors, deterministic builds, one version stamp.</li>
+<li>Windows-only projects (<code>Agent</code>, <code>Agent.Session</code>, <code>Setup</code>) target <code>net10.0-windows</code> and
+are compiled by an ordinary <code>dotnet build</code> on the Mac via <code>EnableWindowsTargeting</code>
+(<code>D-18</code>) — they cannot run there, but they can never rot unnoticed either.</li>
+<li><code>src/LabControl.Shared/Defaults.cs</code> — ports, pipe name, paths, account name, timeouts,
+file names, <strong>maximum lab size</strong>. Every later milestone references these constants; no
+literals elsewhere.</li>
+<li><code>src/LabControl.Shared/Protos/labcontrol.proto</code> — service and message skeletons from
+<code>docs/PROTOCOL.md</code>, compiling to C# stubs on both sides.</li>
+<li>Avalonia console that opens an empty main window with the localization seam in place
+(<code>Strings.resx</code>, English only, <strong>no hard-coded UI text</strong>).</li>
+<li><code>LabControl.FakeAgent</code> that starts, parses <code>--count</code>, and logs a heartbeat.</li>
+<li><code>tools/publish-all.sh</code>; <code>tools/docs-build.sh</code> + <code>tools/DocsBuild/</code> (already written).</li>
+<li><code>Directory.Packages.props</code> (central package versions) and <code>global.json</code> (SDK band plus
+the Microsoft.Testing.Platform opt-in that .NET 10 requires) — see <code>D-18</code>.</li>
+<li>Real tests, not placeholders: <code>Defaults</code> invariants and a protobuf round trip that
+proves the generated contract is usable on both sides.</li>
+</ul>
+<p><strong>Acceptance criteria</strong></p>
+<ul>
+<li><code>dotnet build</code> and <code>dotnet test</code> succeed on the Mac with zero warnings.</li>
+<li>The same <code>dotnet build</code> also compiles the three <code>net10.0-windows</code> projects on the Mac.</li>
+<li><code>dotnet run --project src/LabControl.Console</code> opens a window on macOS.</li>
+<li><code>dotnet run --project src/LabControl.FakeAgent -- --count 30</code> starts and logs 30
+simulated machines; <code>--count 31</code> is refused with a message naming <code>D-17</code>.</li>
+<li><code>tools/docs-build.sh</code> regenerates <code>docs/html/</code>, and the result opens by double-click
+with no internet connection.</li>
+<li><code>tools/publish-all.sh</code> writes runnable single-file binaries for <code>osx-arm64</code>,
+<code>win-x64</code>, <code>win-arm64</code>, <code>linux-x64</code>.</li>
+</ul>
+<p><strong>Not in scope.</strong> Any networking, any Win32 call, any UI beyond an empty window.</p>
+<p><strong>Rough size.</strong> Small. One sitting.</p>
+<hr />
+<h2 id="m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence<a class="anchor" href="#m1-lab-identity-link-and-presence" aria-label="Link to this section">#</a></h2>
+<p><strong>Goal.</strong> A lab exists, machines enrol themselves into it, and the console shows them
+live — <strong>and the whole lab can be moved to a different teacher computer without touching
+a single PC</strong>. Proven entirely on the Mac against <code>FakeAgent</code>; no Windows machine needed.</p>
+<p>This is the milestone that implements <code>docs/ARCHITECTURE.md</code> §3 and decisions
+<code>D-13</code>/<code>D-14</code>. It is deliberately front-loaded: getting the trust model wrong is the one
+mistake that would later require a walk to every PC to fix.</p>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li><strong>Lab key</strong>: ECDSA P-256 CA created by a first-run wizard; private key encrypted with
+AES-256-GCM under a master key stored as one wrapping per <strong>named key holder</strong>
+(PBKDF2-SHA256 passphrase, ≥ 600 000 iterations) plus one printable recovery code. Add
+and remove holders from the console. All from the .NET BCL, no new dependency.</li>
+<li><strong>First-run wizard</strong> that will not finish until a backup has been exported and the
+recovery code acknowledged, and that re-checks the backup's age on every launch.</li>
+<li><strong>Console instance</strong>: leaf certificate minted from the lab key, named, with the private
+key protected by the OS keystore (macOS Keychain / Windows DPAPI / libsecret with an
+encrypted-file fallback).</li>
+<li><strong>Migration</strong>: <em>Import lab key</em> (file + passphrase, or recovery code) → mint a new
+instance → restore the machine list and layout → beacon. Plus instance revocation and
+the revocation list pushed to agents on connect.</li>
+<li>Console gRPC server on <code>47800/tcp</code> with <strong>mutual TLS</strong> validated against the lab CA on
+both sides, plus revocation checking.</li>
+<li>UDP beacon on <code>47801</code> in the v2 format (instance public key + CA endorsement +
+signature), verifiable offline; rate-limited dialling and beacon-ignoring-while-
+connected on the agent side.</li>
+<li><code>EnrollmentService</code>: single-use codes, CSR in, certificate out, code burned, machine
+recorded, duplicate/burned-code attempts reported as events.</li>
+<li>Agent-side link library shared by <code>FakeAgent</code> and the real agent: enrolment, reconnect
+with exponential backoff, offline job queue.</li>
+<li><code>Job</code> plumbing end to end: console creates a job → delivered on <code>Link</code> → agent reports
+<code>JobProgress</code> / <code>JobResult</code> → jobs panel shows per-PC rows and persists to <code>logs/</code>.
+Idempotency by job id, including &quot;a re-sent job returns the cached result&quot;.</li>
+<li><code>FakeAgent</code>: N simulated machines with persistent per-machine state and failure
+injection (never connects, connects late, dies mid-job, replies with an error, presents
+a burned code, presents a revoked certificate).</li>
+<li>Console lab view: tiles in a grid, drag to rearrange, layout in <code>lab.json</code>, per-tile
+status (online / offline / last seen / logged-on user / agent version), inventory.</li>
+<li><strong><code>schema_version</code> in every persisted file</strong> (<code>lab.json</code>, <code>instance.json</code>,
+<code>enrollment.json</code>, <code>agent.json</code>, catalog YAML, backup archive) with a forward-only
+migration chain that is empty today, and a refusal — with the version named — to open a
+file written by a newer build (<code>D-20</code>). Cheap now, impossible to retrofit honestly.</li>
+<li><strong>The frozen protocol subset declared and enforced</strong> (<code>D-19</code>): <code>Hello</code>, <code>Heartbeat</code>,
+<code>Job{self_update}</code> and <code>JobResult</code> fixed at wire version 1. The console accepts an agent
+whose <code>protocol_version</code> is below its minimum instead of refusing it, marks the tile
+<em>outdated</em>, and greys out what that agent cannot do. A test asserts the frozen messages
+round-trip between a v1 and a current serializer.</li>
+</ul>
+<p><strong>Acceptance criteria</strong></p>
+<ul>
+<li>30 fake agents enrol from a fresh lab and appear online within 5 s of the console
+starting.</li>
+<li><strong>Migration test — the headline criterion.</strong> Export the backup, delete the console's
+data directory, start the console on a <em>different</em> profile (simulating another
+computer), import the lab key with the passphrase, name the new instance. All 30 agents
+reconnect <strong>with no change on the agent side at all</strong>. Then repeat the import using the
+<strong>recovery code</strong> instead of the passphrase.</li>
+<li>Add a second key holder, then unlock the lab key with <strong>that</strong> holder's passphrase;
+remove the first holder and confirm their passphrase no longer opens anything.</li>
+<li>Revoke the old instance; an agent presented with the old leaf certificate refuses it
+and says why.</li>
+<li>Start a second console instance for the same lab while the first is running: both warn
+that another instance is beaconing, and name it.</li>
+<li>Kill the console and restart it — every agent reconnects within 15 s.</li>
+<li>Change the console's bound address — every agent follows the new beacon within 15 s.</li>
+<li>A forged beacon (valid JSON, wrong CA endorsement) is rejected without a connection
+attempt; a beacon flood does not cause more than one dial attempt every 2 s.</li>
+<li>A burned enrollment code is refused and surfaces in the console as an event.</li>
+<li>A job sent to an offline agent is queued and runs on reconnect; a <code>shutdown</code> job is not
+queued (<code>deliver: online_only</code>).</li>
+<li>A <code>lab.json</code> with a <code>schema_version</code> one higher than the build understands is refused
+with a message naming the version needed, and the console starts anyway rather than
+crashing; a backup exported by this build re-imports into it unchanged.</li>
+<li>A fake agent reporting <code>protocol_version: 1</code> against a console whose minimum is higher
+still connects, still appears in the lab view marked <em>outdated</em>, and can still be sent a
+<code>self_update</code> job.</li>
+<li>Unit tests cover: key wrapping/unwrapping by both passphrase and recovery code,
+certificate issuance and chain validation, beacon signing and verification, enrollment
+code lifecycle, job idempotency, reconnect backoff, schema migration and refusal, and
+the frozen-subset round-trip.</li>
+</ul>
+<p><strong>Not in scope.</strong> Real Windows anything, video, files, packages.</p>
+<p><strong>Rough size.</strong> Large — the backbone every later milestone plugs into.</p>
+<hr />
+<h2 id="m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts<a class="anchor" href="#m2-windows-agent-service-helper-power-scripts" aria-label="Link to this section">#</a></h2>
+<p><strong>Goal.</strong> A real Windows machine appears in the console, can be powered on, shut down,
+rebooted, logged off, and can run a script with output streamed back.</p>
+<p><strong>Where it is tested.</strong> Both, as the owner confirmed: a <strong>Windows VM on the MacBook</strong> for
+the fast edit-run-revert cycle and for anything destructive, and <strong><code>PC-00</code> in the lab</strong>
+for what a VM cannot honestly answer — Wake-on-LAN through a real NIC and BIOS, real
+capture performance, real antivirus behaviour. Note the VM on Apple Silicon is
+<code>win-arm64</code>, so both RIDs must stay publishable at all times.</p>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li><code>LabControl.Agent</code> as a Windows service (<code>Microsoft.Extensions.Hosting.WindowsServices</code>),
+<code>LocalSystem</code>, auto-start, failure recovery, rolling 7-day log.</li>
+<li>Certificate enrolment on the real PC: keypair generated on the machine, private key
+DPAPI-protected at machine scope, ACLs verified.</li>
+<li><code>LabControl.Agent.Session</code>: spawned into the active interactive session with a
+duplicated SYSTEM token (<code>WTSQueryUserToken</code> / <code>CreateProcessAsUser</code>), named-pipe
+protocol with the service, automatic restart on logon / logoff / crash. In M2 it does
+nothing visible — it proves the session plumbing and reports session state.</li>
+<li>Power jobs: <code>shutdown</code>, <code>reboot</code>, <code>logoff</code> via <code>InitiateSystemShutdownEx</code> /
+<code>ExitWindowsEx</code> with <code>SE_SHUTDOWN_NAME</code>.</li>
+<li>Wake-on-LAN from the console: magic packet broadcast plus directed to <code>last_ip</code>;
+&quot;woke / did not wake within 90 s&quot; reported per PC.</li>
+<li><code>run_script</code>: <code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File</code> or <code>cmd /c</code>,
+as SYSTEM or in the student session, stdout/stderr streamed as <code>JobProgress</code>, exit code
+in <code>JobResult</code>, timeout and kill.</li>
+<li>Real inventory: hostname, Windows build, CPU / RAM / disk, uptime, logged-on user.</li>
+<li>The <strong>side-by-side version layout</strong> from the first install: binaries under
+<code>C:\Program Files\LabControl\app\&lt;version&gt;\</code>, <code>app\current</code> naming the running
+version, the service's binary path pointing inside it (<code>D-19</code>). No update machinery yet
+— just the layout, because it is what M4 needs to already be true on every PC.</li>
+<li>A <strong>minimal push-and-restart</strong> for the development loop: the console sends a new agent
+build to one machine, the agent unpacks it into a new version directory, repoints the
+service and restarts. Hash-verified; no signature, no probation, no rollback — those are
+M4. This exists because iterating on the agent from M2 onwards is unworkable if every
+build means walking to <code>PC-00</code> with a USB stick.</li>
+<li>A development-only install script (<code>scripts/dev-install.ps1</code>) so the agent can be
+deployed by hand before the real installer exists in M4.</li>
+</ul>
+<p><strong>Acceptance criteria</strong></p>
+<ul>
+<li>The test machine enrols itself on first boot and appears online within 30 s, with
+correct inventory.</li>
+<li>Shut down <code>PC-00</code> from the console; wake it with Wake-on-LAN from the MacBook over
+Wi-Fi; it comes back by itself. If WoL fails, the cause is identified — BIOS, Fast
+Startup, or a NIC property — and recorded in <code>D-10</code>.</li>
+<li>Reboot and log off work and are reflected in the tile status.</li>
+<li>A script printing 100 lines and exiting with code 3 shows all 100 lines and <code>exit 3</code>;
+a script that hangs is killed at the timeout and reported.</li>
+<li><code>student</code> cannot stop, pause or delete the service, cannot kill <code>session.exe</code>, and
+cannot read <code>C:\ProgramData\LabControl\</code>.</li>
+<li>Killing <code>session.exe</code> as an administrator brings it back within 5 s; logging off and on
+re-spawns it into the new session.</li>
+<li>Pulling the network cable for 2 minutes and plugging it back restores the link with no
+service restart.</li>
+<li>Five consecutive reboots leave the service healthy every time.</li>
+<li>Pushing a rebuilt agent from the console replaces the running version on <code>PC-00</code> in
+under a minute and the machine is back online by itself, with both version directories
+present afterwards.</li>
+<li>Defender does not quarantine the agent after the exclusion is in place; if a
+third-party antivirus is present on <code>PC-00</code>, its behaviour is recorded in <code>D-10</code>.</li>
+</ul>
+<p><strong>Not in scope.</strong> Screen capture, input, overlay, installer, packages.</p>
+<p><strong>Rough size.</strong> Large. Highest technical risk in the project.</p>
+<hr />
+<h2 id="m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control<a class="anchor" href="#m3-screens-mosaic-full-view-remote-control" aria-label="Link to this section">#</a></h2>
+<p><strong>Goal.</strong> The teacher sees all screens at once and can take over one of them. The feature
+the project exists for.</p>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li>Session helper capture: DXGI Desktop Duplication (Vortice) with a GDI <code>BitBlt</code>
+fallback; dirty-rectangle tracking.</li>
+<li>Thumbnail mode: whole screen downscaled to ≤ 320 px wide, JPEG q50 (SkiaSharp), ≤ 2 fps,
+sent only when the screen changed.</li>
+<li>Full mode: native resolution, 64×64 tile grid, only dirty tiles re-encoded at q75,
+keyframe every 5 s or on request, per-agent bandwidth cap (default 8 Mbit/s).</li>
+<li><code>PushVideo</code> as a separate streaming RPC, so a video stall never delays a <code>shutdown</code>.</li>
+<li>Console: per-agent persistent bitmap, tile blitting, scalable mosaic (1–30 PCs, tiles
+shrink and the grid scrolls), double-click → full-size view with an input-control
+toggle.</li>
+<li>Input injection: <code>Input</code> → <code>SendInput</code> in the helper, normalized coordinates,
+<code>ctrl_alt_del</code> via <code>SendSAS</code> from the service.</li>
+<li>Graceful degradation: a PC that cannot capture (no session, locked, duplication
+failure) shows a clear reason on its tile instead of a frozen frame.</li>
+</ul>
+<p><strong>Acceptance criteria</strong></p>
+<ul>
+<li>A mosaic of 30 tiles (29 fake + <code>PC-00</code> real) is smooth, the console stays responsive,
+and the MacBook's fan does not spin up.</li>
+<li>Thumbnail capture costs <strong>≤ 5 %</strong> of one core on the student PC, measured in Task
+Manager while the student is watching a video.</li>
+<li>Full view of <code>PC-00</code> at 1920×1080: <strong>≥ 15 fps</strong> while scrolling a web page, with input
+latency low enough to comfortably drive the mouse and type — verified by opening
+Notepad and typing a sentence from the Mac, including Ukrainian text.</li>
+<li>After one hour of streaming the helper's memory is stable and no GPU handle leak is
+visible.</li>
+<li>Switching a PC between thumbnail and full mode repeatedly leaves both working.</li>
+<li>Total bandwidth for 30 thumbnails stays inside the measured LAN headroom (<code>D-10</code>).</li>
+</ul>
+<p><strong>Not in scope.</strong> Broadcast to students, lock, exam mode, H.264.</p>
+<p><strong>Rough size.</strong> Large.</p>
+<hr />
+<h2 id="m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update<a class="anchor" href="#m4-deployment-usb-installer-file-transfer-self-update" aria-label="Link to this section">#</a></h2>
+<p><strong>Goal.</strong> The lab can actually be rolled out: walk to each PC once with a USB stick, and
+never walk again — including when the teacher machine is replaced.</p>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li><code>LabControl.Setup</code> exactly as specified in <code>docs/INSTALLER.md</code>: <code>ISetupStep</code> pipeline,
+<code>--dry-run</code>, <code>--number</code>, <code>--uninstall</code>, <code>--rekey</code>, idempotent re-runs, <code>setup.log</code>,
+green summary, reboot prompt, Defender exclusion, third-party-antivirus detection.</li>
+<li><code>tools/build-usb.sh</code> and the console's <em>Build USB installer</em> action, writing the
+<strong>secret-free</strong> payload of <code>docs/INSTALLER.md</code>: public CA certificate + a batch of
+single-use enrollment codes.</li>
+<li>File transfer both directions: <code>PullFile</code> and <code>PushFile</code>, hash-verified, resuming after
+a reconnect.</li>
+<li><code>self_update</code>, the full version (<code>D-19</code>, <code>docs/ARCHITECTURE.md</code> §7.2): a bundle whose
+manifest (version, per-file SHA-256, minimum installed version) is <strong>signed with the lab
+key</strong> and verified by the agent against its pinned <code>ca.crt</code>; unpack into a new version
+directory; repoint the service and restart; <strong>probation</strong> of 10 minutes before the
+version is accepted; <strong>rollback driven from outside the agent</strong> — the service recovery
+action <code>agent.exe --rollback</code> plus a scheduled task at the end of the window. Fleet-wide
+rollout with per-PC state (<code>stable</code> / <code>on_probation</code> / <code>rolled_back</code>) in the lab view.</li>
+<li>Updating the console itself, documented rather than engineered: replace the
+self-contained publish, plus the one-time macOS quarantine removal (<code>D-15</code>), in the
+README.</li>
+<li>Job fan-out across the whole lab in parallel, with a per-PC log bundle in <code>logs/</code>.</li>
+</ul>
+<p><strong>Acceptance criteria</strong></p>
+<ul>
+<li>A factory-fresh PC goes from &quot;Windows desktop&quot; to &quot;green tile in the console&quot; with
+<strong>one run of <code>Setup.exe</code> and one answer (the PC number)</strong>, and reboots into auto-logon
+as <code>student</code>.</li>
+<li>Running <code>Setup.exe</code> again on the same PC changes nothing and reports every step as
+&quot;already done&quot;.</li>
+<li><code>Setup.exe --uninstall</code> leaves no service, no firewall rule and no LabControl
+directories; <code>--rekey</code> re-issues trust material in about 30 s while leaving the
+<code>student</code> account, the installed software and the settings untouched.</li>
+<li>All 14 PCs of the first lab are enrolled and visible.</li>
+<li><strong>Migration, for real this time.</strong> Move the console to another computer (or another OS
+user profile standing in for one) using only the backup and the passphrase. All 14 real
+PCs reconnect <strong>without anyone entering the classroom</strong>.</li>
+<li>A stolen-stick drill: enrol a machine that should not exist, confirm it appears as
+unexpected in the console, and remove it in one click.</li>
+<li>Pushing a 500 MB file to all 14 PCs in parallel completes, is hash-verified, and
+survives one PC losing its link mid-transfer.</li>
+<li><code>self_update</code> upgrades every agent, and they reconnect on the new version.</li>
+<li><strong>The deliberately broken release.</strong> Push a bundle whose agent exits on start to all 14
+PCs. Every one of them is back on the previous version and online <strong>without anyone
+entering the classroom</strong>, and the console shows them as <code>rolled_back</code> with the version
+that failed. Repeat with a bundle whose agent starts but never reaches the console —
+same outcome, via the probation deadline instead of the crash counter.</li>
+<li>A bundle with a valid hash but a manifest signed by the wrong key is refused, and the
+refusal appears in the console as an event.</li>
+<li>An agent still running the version from before the protocol changed connects, is shown
+as outdated, and is brought current with one <em>Update</em> click.</li>
+</ul>
+<p><strong>Not in scope.</strong> Broadcast, lock, exam mode, the package catalog.</p>
+<p><strong>Rough size.</strong> Large.</p>
+<hr />
+<h2 id="m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode<a class="anchor" href="#m5-classroom-control-broadcast-lock-exam-mode" aria-label="Link to this section">#</a></h2>
+<p><strong>Goal.</strong> The features used in every lesson.</p>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li><strong>Broadcast</strong>: the console captures its own screen (macOS: ScreenCaptureKit /
+CoreGraphics via P/Invoke, with a first-run explanation of the Screen Recording
+permission; Windows: DXGI) and streams it to the selected agents; the helper renders a
+topmost full-screen overlay with input blocked.</li>
+<li><strong>Lock</strong>: full-screen overlay with a teacher-supplied message, low-level keyboard hook,
+<code>BlockInput</code>. Ctrl+Alt+Del stays unblockable by design — stated in the UI, not hidden.</li>
+<li><strong>Exam mode</strong> as four independent switches (<code>D-16</code>, <code>docs/ARCHITECTURE.md</code> §6.1), saved
+as named presets:
+<ul>
+<li><em>Timer</em> — absolute deadline, countdown on the student screen, auto-end, extend and
+end-early from the console.</li>
+<li><em>Allowed programs</em> — whitelist enforced by the helper via process-start events,
+matched by <strong>executable name only</strong> (no process-tree following), with a hard-coded
+never-touch set (session, shell and OS processes, LabControl itself).</li>
+<li><em>Internet block</em> — outbound firewall rules in a LabControl rule group, exempting the
+console, removed automatically.</li>
+<li><em>Collect work</em> — one folder, chosen while setting up the exam, zipped and uploaded
+from every PC at the end, filed under <code>&lt;exam&gt;/PC-07/</code>.</li>
+</ul>
+</li>
+<li>Fail-safe machinery for all of the above: state persisted on the agent, an absolute
+hard limit, and &quot;restore first, then re-apply&quot; on service start.</li>
+<li><strong>Profile reset</strong>: full (log off <code>student</code>, delete the profile via <code>Win32_UserProfile</code>,
+reboot into a pristine auto-logon) and light (wipe Desktop / Documents / Downloads).</li>
+</ul>
+<p><strong>Acceptance criteria</strong></p>
+<ul>
+<li>Broadcasting the Mac's screen to all 14 PCs is readable from the back of the room, and
+students cannot escape the overlay with Alt+Tab, Win, or by clicking.</li>
+<li>Lock with a message works on every PC and unlocks cleanly, including on a PC that was
+rebooted while locked.</li>
+<li>Each exam switch works <strong>alone</strong>: a timer-only session leaves the internet and the
+programs untouched; an internet-block-only session shows no countdown.</li>
+<li><strong>Fail-safe drill, mandatory.</strong> Start an exam with the internet blocked and the
+whitelist on, then close the console's laptop and leave it closed. Every PC restores
+itself at the hard limit. Repeat by killing the agent service mid-exam: on restart the
+PC comes back unrestricted before anything is re-applied.</li>
+<li>Reboot a PC mid-exam: it comes back still in the exam, with the correct remaining time.</li>
+<li>The whitelist never kills a system process, and a PC in whitelist mode still shuts down
+cleanly on command.</li>
+<li>Collect-work gathers files from all 14 PCs into per-PC folders, and a PC that was off
+is reported as missing rather than silently skipped.</li>
+<li>Profile reset returns a deliberately messed-up <code>student</code> desktop to a clean state in
+one command, and the PC comes back online by itself.</li>
+</ul>
+<p><strong>Rough size.</strong> Large. The whitelist and the firewall switch are the risky parts.</p>
+<hr />
+<h2 id="m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish<a class="anchor" href="#m6-software-catalog-localization-polish" aria-label="Link to this section">#</a></h2>
+<p><strong>Goal.</strong> Everything that makes the system pleasant to own for one person with no IT
+department. The catalog ships <strong>empty</strong> — the deliverable is the ease of filling it.</p>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li><strong>Add package wizard</strong>: point the console at any local <code>.exe</code> / <code>.msi</code>; it suggests
+silent arguments for known installer families (NSIS, Inno, InstallShield, MSI),
+computes the hash, proposes a <code>detect</code> rule, writes the YAML, and offers a <strong>test
+install on one PC</strong> before the fleet.</li>
+<li><code>install_package</code> job: push over the LAN, run silently, verify <code>detect</code>, report per PC,
+&quot;Install on all missing&quot;.</li>
+<li>Ukrainian localization of the console UI from the resource files created in M0.</li>
+<li>Robustness pass: reconnect storms, many simultaneous full-view requests, disk-full,
+clock skew, a PC powered off for a week, a lab key backup older than the machine list.</li>
+<li>Documented and <em>rehearsed</em> recovery: &quot;the teacher machine died and the lab must run
+tomorrow&quot; performed end to end from the backup.</li>
+<li><code>README.md</code> rewritten as a teacher-facing operating manual: what to click before a
+lesson, what to do when a PC does not appear, how to move the console to a new
+computer.</li>
+<li>Optional, and only if M3's measurements demand it: H.264 via Media Foundation behind
+the existing <code>VideoFrame</code> envelope. Decide with numbers, not taste.</li>
+</ul>
+<p><strong>Acceptance criteria</strong></p>
+<ul>
+<li>The owner adds a package of his own choosing <strong>without reading the source code</strong>, using
+only the wizard, and installs it on one PC and then on the rest.</li>
+<li>A deliberately broken package (wrong silent arguments) reports a clear failure on every
+PC without hanging the job or the console.</li>
+<li>Installing one real program on all 14 PCs in parallel, with the PCs having <strong>no
+internet</strong>, succeeds with <code>detect</code> verified; the wall-clock time is measured and written
+into this file next to the manual afternoon it replaces.</li>
+<li>Every UI string comes from the resource files; switching to Ukrainian changes all of
+them.</li>
+<li>The console runs a full 90-minute lesson without a restart, a leak, or a stuck job.</li>
+<li>The recovery procedure is executed once for real, from the backup, and it works.</li>
+</ul>
+<p><strong>Rough size.</strong> Medium.</p>
+<hr />
+<h2 id="cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously<a class="anchor" href="#cross-cutting-work-tracked-continuously" aria-label="Link to this section">#</a></h2>
+<p>Not milestones; done inside whichever milestone touches them.</p>
+<ul>
+<li><strong>Security.</strong> Re-read <code>docs/ARCHITECTURE.md</code> §3 and §9 whenever a new surface is added.
+Never log the <code>student</code> password, the lab passphrase or a private key.</li>
+<li><strong>Portability.</strong> Two constants may never appear in code: the number of PCs, and the
+identity of the machine running the console.</li>
+<li><strong>Failure reporting.</strong> Every failure the teacher could act on becomes a visible event
+with a plain-language cause, not a stack trace in a log file.</li>
+<li><strong>Tests.</strong> Crypto, protocol serialization, state machines (reconnect, job lifecycle,
+session supervision, exam-mode restore) and installer <code>Check()</code> logic are unit-tested.
+Video and Win32 are verified by hand on <code>PC-00</code> — do not fake confidence with mocks
+there.</li>
+<li><strong>Documentation.</strong> See below.</li>
+</ul>
+<h2 id="documentation-workflow">Documentation workflow<a class="anchor" href="#documentation-workflow" aria-label="Link to this section">#</a></h2>
+<p><code>.md</code> files are the source of truth. <code>docs/html/</code> is a <strong>generated mirror</strong> — never edit
+it by hand. After changing any <code>.md</code>:</p>
+<pre><code class="language-bash">tools/docs-build.sh
+</code></pre>
+<p>Committing a <code>.md</code> change without the regenerated HTML is incomplete work (Definition of
+done, item 6).</p>
+<h2 id="on-site-verification-checklist-fills-d-10">On-site verification checklist (fills <code>D-10</code>)<a class="anchor" href="#on-site-verification-checklist-fills-d-10" aria-label="Link to this section">#</a></h2>
+<p>Do this on the first visit to the lab; several milestones depend on the answers.</p>
+<ul class="contains-task-list">
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Router model; is the Wi-Fi on the <strong>same subnet and broadcast domain</strong> as the wired
+hub? Is AP isolation / guest mode off?</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Do UDP broadcasts from the MacBook reach the wired PCs? (Test before M1 ships.)</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Is it a switch or a real hub? Bandwidth headroom for 14 (later 30) video streams.</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> DHCP lease behaviour; do PCs keep their IPs?</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Per PC: BIOS/UEFI &quot;Wake on LAN&quot; / &quot;Power on by PCI-E&quot; enabled.</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> NIC models across the PCs (Realtek/Intel differences change the WoL settings).</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Windows edition and build (Home vs Pro changes some policy options).</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Local administrator account name and password, per PC or common.</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Antivirus in use — Defender only, or a third-party product that Setup cannot
+configure?</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Do the PCs have internet at all, and is it permanent or occasional?</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Screen resolutions (drives the mosaic tile sizing).</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Which folder should be offered as the default when setting up <em>collect work</em>?</li>
+</ul>
+<p>Record the answers as an update to <code>D-10</code> in <code>docs/DECISIONS.md</code>.</p>
+<h2 id="answered-settled-requirements">Answered — settled requirements<a class="anchor" href="#answered-settled-requirements" aria-label="Link to this section">#</a></h2>
+<p>Kept here so the reasoning is not lost.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Question</th>
+<th>Answer</th>
+<th>Where it landed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Is the teacher machine fixed?</td>
+<td>One console at a time, but the software must move to other labs and other master machines; needs a security scheme for replacement</td>
+<td><code>D-13</code>, ARCHITECTURE §3, M1</td>
+</tr>
+<tr>
+<td>Code signing?</td>
+<td>None available; accept warnings and add an antivirus exclusion</td>
+<td><code>D-15</code>, INSTALLER step 6a</td>
+</tr>
+<tr>
+<td>Which packages on day one?</td>
+<td>None. The catalog ships empty; what matters is a comfortable way to add installers later</td>
+<td><code>D-16</code> context, M6</td>
+</tr>
+<tr>
+<td>Do installers need downloading?</td>
+<td>No. The lab's software is already installed; testing will use an arbitrary program later</td>
+<td>M6</td>
+</tr>
+<tr>
+<td>Exam mode?</td>
+<td>Yes, and every restriction is an independent switch</td>
+<td><code>D-16</code>, ARCHITECTURE §6.1, M5</td>
+</tr>
+<tr>
+<td>Lab size?</td>
+<td>Design and load-test for up to 30 PCs</td>
+<td><code>D-17</code></td>
+</tr>
+<tr>
+<td>Where to test the real agent?</td>
+<td>Both a Windows VM (fast, destructive tests) and <code>PC-00</code> in the lab (WoL, capture, performance)</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>Can someone else open the lab key?</td>
+<td>Yes — multiple named key holders, each with their own passphrase</td>
+<td><code>D-13</code>, ARCHITECTURE §3.2, M1</td>
+</tr>
+<tr>
+<td>Two consoles at once?</td>
+<td>No. A second machine replaces the first; simultaneous consoles are out of scope</td>
+<td><code>D-13</code>, ARCHITECTURE §3.6</td>
+</tr>
+<tr>
+<td>What does <em>collect work</em> take?</td>
+<td>One dedicated folder, chosen when the exam is set up — not the whole desktop</td>
+<td><code>D-16</code>, M5</td>
+</tr>
+<tr>
+<td>How precise is the whitelist?</td>
+<td>Executable names only; no following of child processes</td>
+<td><code>D-16</code>, M5</td>
+</tr>
+<tr>
+<td>How does LabControl update itself?</td>
+<td>Side-by-side version directories, a bundle signed by the lab key, 10-minute probation and a rollback driven from outside the agent; the console is updated by replacing its binary</td>
+<td><code>D-19</code>, ARCHITECTURE §7, M2 + M4</td>
+</tr>
+<tr>
+<td>How do old agents and new consoles coexist?</td>
+<td>A frozen protocol subset (<code>Hello</code>, <code>Heartbeat</code>, <code>Job{self_update}</code>, <code>JobResult</code>); an old agent is never refused, only marked outdated</td>
+<td><code>D-19</code>, PROTOCOL <em>Versioning</em>, M1</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="open-questions-for-the-owner">Open questions for the owner<a class="anchor" href="#open-questions-for-the-owner" aria-label="Link to this section">#</a></h2>
+<p>None outstanding. Every question raised so far is answered and recorded above; the
+remaining unknowns are physical facts about the room, in the on-site checklist.</p>
+<h2 id="out-of-scope-for-v1">Out of scope for v1<a class="anchor" href="#out-of-scope-for-v1" aria-label="Link to this section">#</a></h2>
+<p>Multi-lab management from one console, two consoles driving one lab at the same time,
+cloud relay, mobile console, Linux/macOS student agents, grading or LMS integration,
+student-initiated help requests, session recording.</p>
+
+</article>
+<footer>Generated 2026-09-04 16:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+</main>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
+</div>
+</body>
+</html>

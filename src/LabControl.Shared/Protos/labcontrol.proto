@@ -1,0 +1,363 @@
+syntax = "proto3";
+
+package labcontrol.v1;
+
+option csharp_namespace = "LabControl.Shared.Protocol";
+
+// Contracts for all console <-> agent traffic. docs/PROTOCOL.md explains intent and
+// flows and MUST be updated in the same change as this file. Fields are only ever
+// added, never renumbered or reused.
+//
+// FROZEN SUBSET (D-19) — Hello, Heartbeat, Job with kind SELF_UPDATE, and JobResult keep
+// their wire-version-1 meaning forever. Fields may be added to them; nothing in them may
+// ever be renumbered, removed, re-purposed, or made mandatory for the exchange to
+// succeed. This is what guarantees that an agent of any age can still connect to a
+// console of any age and be told to update itself -- i.e. that a bad release is always
+// fixable remotely instead of by visiting every PC. Everything else may evolve freely.
+
+// ---------------------------------------------------------------------------
+// Enrollment: used once per PC, before the agent has a certificate.
+// The connection is server-authenticated TLS only (the agent already pins the lab CA
+// from the USB payload); the client has no certificate yet.
+// ---------------------------------------------------------------------------
+
+service EnrollmentService {
+  rpc Enroll (EnrollRequest) returns (EnrollResponse);
+}
+
+message EnrollRequest {
+  string lab_id           = 1;
+  string agent_id         = 2;
+  int32  number           = 3;   // the sticker on the PC
+  string hostname         = 4;
+  string mac              = 5;
+  string enrollment_code  = 6;   // single use; burned by the console (D-14)
+  bytes  csr              = 7;   // PKCS#10, the keypair never leaves the PC
+  int32  protocol_version = 8;
+}
+
+message EnrollResponse {
+  bytes  agent_certificate = 1;
+  bytes  ca_certificate    = 2;
+  string lab_id            = 3;
+  int64  server_time_unix  = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Main service: mutual TLS, both sides validated against the lab CA.
+// ---------------------------------------------------------------------------
+
+service AgentService {
+  rpc Link      (stream AgentMessage) returns (stream ConsoleMessage); // long-lived, 1 per agent
+  rpc PushVideo (stream VideoFrame)   returns (VideoAck);              // opened on demand
+  rpc PullFile  (FileRequest)         returns (stream FileChunk);      // agent downloads
+  rpc PushFile  (stream FileChunk)    returns (FileAck);               // agent uploads
+}
+
+message AgentMessage {
+  oneof payload {
+    Hello        hello         = 1;
+    Heartbeat    heartbeat     = 2;
+    Inventory    inventory     = 3;
+    SessionState session_state = 4;
+    JobProgress  job_progress  = 5;
+    JobResult    job_result    = 6;
+    Event        event         = 7;
+    Pong         pong          = 8;
+    ExamState    exam_state    = 9;
+  }
+}
+
+message ConsoleMessage {
+  oneof payload {
+    Welcome      welcome       = 1;
+    Ping         ping          = 2;
+    Job          job           = 3;
+    VideoControl video_control = 4;
+    Input        input         = 5;
+    Overlay      overlay       = 6;
+    ExamMode     exam_mode     = 7;
+    Revocation   revocation    = 8;
+    UpdateAgent  update_agent  = 9;
+    VideoFrame   broadcast     = 10;  // teacher screen, console -> agent
+  }
+}
+
+message Hello {
+  string agent_id           = 1;
+  string lab_id             = 2;
+  int32  number             = 3;
+  string agent_version      = 4;
+  int32  protocol_version   = 5;
+  string certificate_serial = 6;  // lets a migrated console match restored machines
+  string mac                = 7;
+  int64  boot_time_unix     = 8;
+  UpdateState update_state  = 9;  // where this PC stands in a rollout (D-19)
+}
+
+// Reported in Hello so a failed rollout is visible in the lab view rather than only in a
+// log on the PC.
+message UpdateState {
+  enum Phase {
+    PHASE_UNSPECIFIED = 0;
+    STABLE            = 1;
+    ON_PROBATION      = 2;  // running a new version that has not been accepted yet
+    ROLLED_BACK       = 3;  // a version was undone; see failed_version / reason
+  }
+  Phase  phase              = 1;
+  int64  probation_ends_unix = 2;  // 0 unless phase is ON_PROBATION
+  string failed_version     = 3;   // set when phase is ROLLED_BACK
+  string reason             = 4;   // plain language, shown to the teacher as-is
+}
+
+message Welcome {
+  int64  server_time_unix    = 1;  // agents correct their clock skew from this
+  string instance_id         = 2;  // which console instance is serving the lab
+  string instance_name       = 3;
+  int32  revocation_version  = 4;
+}
+
+message Heartbeat { int64 sent_at_unix = 1; }
+message Ping      { int64 sent_at_unix = 1; }
+message Pong      { int64 ping_sent_at_unix = 1; int64 sent_at_unix = 2; }
+
+message Inventory {
+  string hostname         = 1;
+  string windows_build    = 2;
+  string cpu              = 3;
+  int64  memory_bytes     = 4;
+  int64  disk_total_bytes = 5;
+  int64  disk_free_bytes  = 6;
+  int64  uptime_seconds   = 7;
+  string logged_on_user   = 8;
+  repeated InstalledPackage packages = 9;
+}
+
+message InstalledPackage {
+  string name    = 1;
+  string version = 2;
+}
+
+message SessionState {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    LOGON            = 1;
+    LOGOFF           = 2;
+    LOCK             = 3;
+    UNLOCK           = 4;
+  }
+  Kind   kind         = 1;
+  string user         = 2;
+  uint32 session_id   = 3;
+  bool   helper_alive = 4;
+}
+
+message Event {
+  enum Severity {
+    SEVERITY_UNSPECIFIED = 0;
+    INFO                 = 1;
+    WARNING              = 2;
+    ERROR                = 3;
+  }
+  Severity severity = 1;
+  string   code     = 2;  // stable identifier, e.g. "capture.duplication_failed"
+  string   message  = 3;  // plain language, shown to the teacher as-is
+  int64    at_unix  = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Jobs: every action is a job, idempotent by id.
+// ---------------------------------------------------------------------------
+
+message Job {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    SHUTDOWN         = 1;
+    REBOOT           = 2;
+    LOGOFF           = 3;
+    RUN_SCRIPT       = 4;
+    INSTALL_PACKAGE  = 5;
+    RESET_PROFILE    = 6;
+    SEND_FILE        = 7;
+    COLLECT_FILES    = 8;
+    SET_CONFIG       = 9;
+    SELF_UPDATE      = 10;
+    REKEY            = 11;
+  }
+  string id                 = 1;
+  Kind   kind               = 2;
+  map<string, string> args  = 3;
+  int32  timeout_seconds    = 4;
+}
+
+message JobProgress {
+  string job_id  = 1;
+  int32  percent = 2;
+  string line    = 3;  // one line of captured output
+}
+
+message JobResult {
+  string job_id       = 1;
+  bool   ok           = 2;
+  int32  exit_code    = 3;
+  string message      = 4;
+  string artifact_ref = 5;  // set when the job produced an upload
+}
+
+// ---------------------------------------------------------------------------
+// Video and input
+// ---------------------------------------------------------------------------
+
+message Rect { int32 x = 1; int32 y = 2; int32 width = 3; int32 height = 4; }
+
+enum VideoMode {
+  VIDEO_MODE_UNSPECIFIED = 0;
+  THUMBNAIL              = 1;
+  FULL                   = 2;
+}
+
+message VideoFrame {
+  string    agent_id   = 1;
+  uint64    seq        = 2;
+  int64     at_unix_ms = 3;
+  int32     width      = 4;
+  int32     height     = 5;
+  VideoMode mode       = 6;
+  repeated Rect dirty  = 7;
+  bytes     jpeg       = 8;
+  bool      keyframe   = 9;
+  string    codec      = 10;  // reserved: "jpeg" today, "h264" is an M6 option
+}
+
+message VideoAck { uint64 last_seq = 1; }
+
+message VideoControl {
+  bool      active               = 1;
+  VideoMode mode                 = 2;
+  double    frames_per_second    = 3;
+  int32     quality              = 4;
+  bool      request_keyframe     = 5;
+  int32     max_bits_per_second  = 6;
+}
+
+message Input {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    MOUSE_MOVE       = 1;
+    MOUSE_BUTTON     = 2;
+    MOUSE_WHEEL      = 3;
+    KEY              = 4;
+    TEXT             = 5;
+    CTRL_ALT_DEL     = 6;
+  }
+  Kind   kind    = 1;
+  double x       = 2;  // normalized 0..1, so resolution differences do not matter
+  double y       = 3;
+  int32  button  = 4;
+  int32  delta   = 5;
+  int32  vk      = 6;
+  int32  scan    = 7;
+  string text    = 8;
+  bool   pressed = 9;
+}
+
+message Overlay {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    LOCK             = 1;
+    UNLOCK           = 2;
+    BROADCAST_START  = 3;
+    BROADCAST_STOP   = 4;
+  }
+  Kind   kind    = 1;
+  string message = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Exam mode: four independent switches, enforced by the agent, fail-safe (D-16).
+// ---------------------------------------------------------------------------
+
+message CollectSpec {
+  string folder         = 1;  // chosen when the exam is set up, not the whole desktop
+  string destination_id = 2;  // console-side bucket: <exam>/PC-07/
+  bool   on_end         = 3;
+}
+
+message ExamMode {
+  string session_id                 = 1;  // stable, so a late or reconnecting PC joins the same exam
+  bool   active                     = 2;
+  int64  ends_at_unix               = 3;  // 0 = no timer
+  int64  hard_limit_unix            = 4;  // always set; the agent restores itself past this
+  string message                    = 5;
+  bool   block_internet             = 6;
+  repeated string allowed_programs  = 7;  // executable names; empty = whitelist off
+  CollectSpec collect               = 8;
+}
+
+message ExamState {
+  string session_id                = 1;
+  bool   active                    = 2;
+  int64  ends_at_unix              = 3;
+  bool   internet_blocked          = 4;
+  bool   whitelist_enforced        = 5;
+  repeated string terminated_recently = 6;  // what the whitelist actually killed
+}
+
+// ---------------------------------------------------------------------------
+// Trust maintenance
+// ---------------------------------------------------------------------------
+
+message Revocation {
+  int32 version                      = 1;
+  repeated string revoked_serials    = 2;  // console instances and agents alike
+}
+
+message UpdateAgent {
+  string version    = 1;
+  string bundle_ref = 2;  // fetched with PullFile
+  string sha256     = 3;  // over the serialized manifest
+
+  // The manifest is signed with the LAB KEY, and the agent verifies it against the CA
+  // certificate it pinned at install -- not against the TLS session that carried it. The
+  // binaries are unsigned (D-15), so this is the only authenticity an update ever has.
+  bytes  manifest           = 4;  // serialized UpdateManifest
+  bytes  manifest_signature = 5;
+}
+
+message UpdateManifest {
+  string version               = 1;
+  string min_installed_version = 2;  // refuse to apply on anything older
+  repeated UpdateFile files    = 3;
+  int32  probation_seconds     = 4;  // 0 = Defaults.UpdateProbation
+}
+
+message UpdateFile {
+  string relative_path = 1;  // inside app/<version>/
+  int64  size          = 2;
+  string sha256        = 3;
+}
+
+// ---------------------------------------------------------------------------
+// File transfer
+// ---------------------------------------------------------------------------
+
+message FileRequest {
+  string reference = 1;
+  int64  offset    = 2;  // resume after a reconnect
+}
+
+message FileChunk {
+  string reference   = 1;
+  int64  offset      = 2;
+  bytes  data        = 3;
+  bool   last        = 4;
+  string sha256      = 5;  // set on the last chunk
+  int64  total_bytes = 6;
+}
+
+message FileAck {
+  string reference    = 1;
+  bool   ok           = 2;
+  int64  bytes_stored = 3;
+  string message      = 4;
+}

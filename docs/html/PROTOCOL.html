@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protocol · LabControl</title>
+<style>:root{
+  --bg:#f7f7f5; --panel:#ffffff; --ink:#1c1c1a; --muted:#6b6b64; --line:#e2e2dc;
+  --accent:#0b6b53; --accent-soft:#e6f1ed; --code-bg:#f2f2ee; --mark:#fff6d6;
+  --radius:10px; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16171a; --panel:#1d1f23; --ink:#e6e6e2; --muted:#9a9a92; --line:#2e3138;
+    --accent:#5ec2a3; --accent-soft:#1e2a27; --code-bg:#22252a; --mark:#3a3320;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+     font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:248px minmax(0,1fr) 232px;gap:0;
+        max-width:1400px;margin:0 auto;align-items:start}
+
+/* ---- sidebar ---- */
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:28px 20px;
+      border-right:1px solid var(--line)}
+.brand{display:block;text-decoration:none;color:inherit;margin-bottom:26px}
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+            border-radius:9px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;
+            letter-spacing:.5px;margin-bottom:10px}
+.brand-name{display:block;font-weight:650;font-size:17px;letter-spacing:-.01em}
+.brand-sub{display:block;color:var(--muted);font-size:12.5px;letter-spacing:.02em}
+.side ul{list-style:none;margin:0;padding:0}
+.side li{margin:1px 0}
+.side a{display:block;padding:7px 10px;border-radius:7px;text-decoration:none;
+        color:var(--muted);font-size:14.5px}
+.side a:hover{background:var(--code-bg);color:var(--ink)}
+.side a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+
+/* ---- content ---- */
+main{padding:44px 48px 72px;min-width:0}
+.doc{max-width:820px}
+h1{font-size:2.05rem;line-height:1.2;letter-spacing:-.02em;margin:0 0 .5em;font-weight:680}
+h2{font-size:1.4rem;letter-spacing:-.01em;margin:2.4em 0 .6em;padding-bottom:.3em;
+   border-bottom:1px solid var(--line);font-weight:640}
+h3{font-size:1.11rem;margin:1.9em 0 .5em;font-weight:640}
+h4{font-size:1rem;margin:1.5em 0 .4em;color:var(--muted);text-transform:uppercase;
+   letter-spacing:.06em;font-size:.8rem}
+p,ul,ol{margin:0 0 1.05em}
+ul,ol{padding-left:1.35em}
+li{margin:.28em 0}
+li>ul,li>ol{margin:.3em 0}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+strong{font-weight:640}
+hr{border:0;border-top:1px solid var(--line);margin:2.6em 0}
+.lead{font-size:1.1rem;color:var(--muted);max-width:60ch}
+.source{font-size:.83rem;color:var(--muted);background:var(--code-bg);
+        border:1px solid var(--line);border-radius:var(--radius);padding:9px 13px;margin-bottom:2em}
+.anchor{margin-left:.4em;color:var(--muted);opacity:0;font-weight:400;border:0;font-size:.85em}
+h2:hover .anchor,h3:hover .anchor{opacity:.55}
+.anchor:hover{opacity:1 !important}
+
+/* ---- code ---- */
+code{font-family:var(--mono);font-size:.875em;background:var(--code-bg);
+     border:1px solid var(--line);border-radius:5px;padding:.1em .36em}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;overflow-x:auto;margin:0 0 1.3em;line-height:1.5}
+pre code{background:none;border:0;padding:0;font-size:.845rem;white-space:pre}
+blockquote{margin:0 0 1.2em;padding:.1em 0 .1em 1.1em;border-left:3px solid var(--accent);
+           color:var(--muted)}
+
+/* ---- tables ---- */
+.table-wrap{overflow-x:auto;margin:0 0 1.5em;border:1px solid var(--line);
+            border-radius:var(--radius);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:.91rem}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--code-bg);font-weight:640;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+
+/* ---- task lists ---- */
+input[type=checkbox]{margin-right:.5em;accent-color:var(--accent)}
+li.task-list-item{list-style:none;margin-left:-1.2em}
+
+/* ---- on-this-page ---- */
+.toc{position:sticky;top:0;max-height:100vh;overflow-y:auto;padding:48px 22px 40px;
+     border-left:1px solid var(--line);font-size:13.5px}
+.toc-title{margin:0 0 .7em;color:var(--muted);text-transform:uppercase;
+           letter-spacing:.07em;font-size:11px;font-weight:640}
+.toc ul{list-style:none;margin:0;padding:0}
+.toc li{margin:.3em 0}
+.toc a{color:var(--muted);display:block;line-height:1.35}
+.toc a:hover{color:var(--accent)}
+.toc .lvl3{padding-left:12px;font-size:12.8px}
+
+/* ---- index cards ---- */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:2em}
+.card{display:flex;flex-direction:column;gap:5px;padding:16px 17px;background:var(--panel);
+      border:1px solid var(--line);border-radius:var(--radius);text-decoration:none;color:inherit}
+.card:hover{border-color:var(--accent);box-shadow:0 2px 14px rgba(0,0,0,.06)}
+.card-kicker{color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:650}
+.card-title{font-weight:640;font-size:1.02rem}
+.card-summary{color:var(--muted);font-size:.86rem;line-height:1.45}
+.card-source{margin-top:6px;color:var(--muted);font-family:var(--mono);font-size:11.5px}
+
+footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
+       color:var(--muted);font-size:12.5px;max-width:820px}
+
+/* ---- responsive ---- */
+@media (max-width:1180px){
+  .layout{grid-template-columns:230px minmax(0,1fr)}
+  .toc{display:none}
+}
+@media (max-width:820px){
+  .layout{grid-template-columns:1fr}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:20px}
+  .side ul{display:flex;flex-wrap:wrap;gap:4px}
+  main{padding:28px 22px 56px}
+}
+@media print{
+  .side,.toc,.anchor{display:none}
+  .layout{display:block}
+  main{padding:0}
+  a{color:inherit}
+  pre,.table-wrap{break-inside:avoid}
+}</style>
+</head>
+<body>
+<div class="layout">
+<nav class="side" aria-label="Documents"><a class="brand" href="index.html"><span class="brand-mark">LC</span><span class="brand-name">LabControl</span><span class="brand-sub">documentation</span></a><ul><li><a href="README.html">Overview</a></li><li><a href="CLAUDE.html">Project brief</a></li><li><a href="ARCHITECTURE.html">Architecture</a></li><li><a href="PROTOCOL.html" class="active">Protocol</a></li><li><a href="INSTALLER.html">Installer</a></li><li><a href="ROADMAP.html">Roadmap</a></li><li><a href="DECISIONS.html">Decisions</a></li></ul></nav>
+<main>
+<article class="doc">
+  <p class="source">Generated from <code>docs/PROTOCOL.md</code> — do not edit this file; edit the Markdown and run <code>tools/docs-build.sh</code>.</p>
+  <h1 id="protocol">Protocol</h1>
+<p>All console↔agent traffic is gRPC over HTTP/2 + TLS. Contracts live in
+<code>src/LabControl.Shared/Protos/*.proto</code> and are the single source of truth; this
+document explains intent and flows. <strong>Update this file whenever a .proto changes.</strong></p>
+<h2 id="ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (<code>LabControl.Shared/Defaults.cs</code>)<a class="anchor" href="#ports-and-identifiers-labcontrol.shareddefaults.cs" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Constant</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ConsolePort</code></td>
+<td>47800/tcp</td>
+<td>gRPC server in the console</td>
+</tr>
+<tr>
+<td><code>BeaconPort</code></td>
+<td>47801/udp</td>
+<td>console → broadcast discovery beacon</td>
+</tr>
+<tr>
+<td><code>WolPort</code></td>
+<td>9/udp</td>
+<td>magic packets</td>
+</tr>
+<tr>
+<td><code>PipeName</code></td>
+<td><code>\\.\pipe\labcontrol-session</code></td>
+<td>agent ↔ session helper</td>
+</tr>
+<tr>
+<td><code>lab_id</code></td>
+<td>UUID</td>
+<td>one per <strong>lab</strong>, not per console — it survives a change of teacher machine</td>
+</tr>
+<tr>
+<td><code>instance_id</code></td>
+<td>UUID</td>
+<td>one per console installation (<code>MacBook-2026</code>, <code>Lab PC</code>)</td>
+</tr>
+<tr>
+<td><code>agent_id</code></td>
+<td>UUID</td>
+<td>generated by Setup at install time</td>
+</tr>
+<tr>
+<td><code>number</code></td>
+<td>1..N</td>
+<td>the sticker on the PC; also <code>PC-07</code> hostname convention. N ≤ 30</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)<a class="anchor" href="#discovery-beacon-udp-plain-json-512-bytes" aria-label="Link to this section">#</a></h2>
+<pre><code class="language-json">{&quot;v&quot;:2,&quot;lab&quot;:&quot;&lt;lab_id&gt;&quot;,&quot;inst&quot;:&quot;&lt;instance_id&gt;&quot;,&quot;host&quot;:&quot;192.168.1.23&quot;,&quot;port&quot;:47800,
+ &quot;ts&quot;:1725450000,
+ &quot;pub&quot;:&quot;&lt;base64: console instance public key, P-256 compressed, 33 B&gt;&quot;,
+ &quot;end&quot;:&quot;&lt;base64: CA signature over lab_id|inst|pub, 64 B&gt;&quot;,
+ &quot;sig&quot;:&quot;&lt;base64: instance-key signature over all preceding fields, 64 B&gt;&quot;}
+</code></pre>
+<p>The beacon is verifiable <strong>offline, with no shared secret</strong>. An agent accepts it only if
+<code>lab</code> matches its own, <code>end</code> verifies against the <strong>pinned CA public key</strong>, <code>sig</code>
+verifies against <code>pub</code>, and <code>ts</code> is within ±60 s. Then it dials <code>host:port</code> and completes
+mutual TLS, which is the real gate — the beacon only says <em>where</em> to look.</p>
+<p>Consequences:</p>
+<ul>
+<li>Nothing on a student PC can be used to forge a beacon; the earlier symmetric
+<code>beacon_key</code> is gone (superseded, see <code>D-13</code>).</li>
+<li>A new teacher machine produces a beacon with a different <code>inst</code> and <code>pub</code>, but the
+same <code>end</code> chain to the same CA, so every agent follows it without being touched.</li>
+<li>Forged beacons cost a rejected TLS handshake. Agents ignore beacons while connected,
+and rate-limit dial attempts (≥ 2 s apart, exponential backoff per endpoint).</li>
+</ul>
+<h2 id="grpc-services-labcontrol.v1">gRPC services (<code>labcontrol.v1</code>)<a class="anchor" href="#grpc-services-labcontrol.v1" aria-label="Link to this section">#</a></h2>
+<h3 id="enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists"><code>EnrollmentService</code> (console is the server; used once per PC, before mTLS exists)<a class="anchor" href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists" aria-label="Link to this section">#</a></h3>
+<pre><code>rpc Enroll(EnrollRequest) returns (EnrollResponse);
+</code></pre>
+<p><code>EnrollRequest { lab_id, agent_id, number, hostname, mac, enrollment_code, csr }</code> —
+the connection is server-authenticated TLS only (the agent already pins the CA from the
+USB payload); the client has no certificate yet. The console checks that
+<code>enrollment_code</code> is known and unused, issues an agent certificate from the lab key,
+burns the code, and records the machine.</p>
+<p><code>EnrollResponse { agent_cert, ca_cert, lab_id, server_time }</code>. Everything afterwards
+uses mutual TLS with that certificate. A repeated <code>Enroll</code> with a burned code is refused
+and reported in the console as an event.</p>
+<h3 id="agentservice-console-is-the-server-agent-is-the-client-mutual-tls"><code>AgentService</code> (console is the server, agent is the client, mutual TLS)<a class="anchor" href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls" aria-label="Link to this section">#</a></h3>
+<pre><code>rpc Link(stream AgentMessage) returns (stream ConsoleMessage);   // long-lived, 1 per agent
+rpc PushVideo(stream VideoFrame) returns (VideoAck);              // opened on demand
+rpc PullFile(FileRequest) returns (stream FileChunk);             // agent downloads from console
+rpc PushFile(stream FileChunk) returns (FileAck);                 // agent uploads results/logs
+</code></pre>
+<p>The console validates the agent certificate against the lab CA <strong>and</strong> against the
+revocation list before accepting the stream; the agent validates the console leaf against
+the CA it pinned at install. No token, no password, no shared secret is exchanged.</p>
+<p><code>AgentMessage</code> (oneof): <code>Hello</code>, <code>Heartbeat</code>, <code>Inventory</code>, <code>SessionState</code>
+(logon/logoff/lock/ unlock, active user), <code>JobProgress</code>, <code>JobResult</code>, <code>Event</code> (error,
+warning, info), <code>Pong</code>.</p>
+<p><code>ConsoleMessage</code> (oneof): <code>Welcome</code> (server time, instance id, revocation list
+version, config), <code>Ping</code>, <code>Job</code> (see below), <code>VideoControl</code> (start/stop, mode
+<code>thumbnail|full</code>, fps, quality), <code>Input</code> (mouse move/button/wheel, key down/up, unicode
+text), <code>Overlay</code> (lock / unlock / broadcast start / broadcast stop, message text),
+<code>ExamMode</code> (see below), <code>Revocation</code> (revoked certificate list + version),
+<code>UpdateAgent</code>.</p>
+<h3 id="job-every-action-is-a-job"><code>Job</code> — every action is a job<a class="anchor" href="#job-every-action-is-a-job" aria-label="Link to this section">#</a></h3>
+<pre><code>Job { id, kind, args map&lt;string,string&gt;, timeout_s }
+kinds: shutdown | reboot | logoff | run_script | install_package | reset_profile |
+       send_file | collect_files | set_config | self_update | rekey
+</code></pre>
+<p>Agent replies with <code>JobProgress</code> (0–100 + line of output) and finally <code>JobResult</code>
+<code>{id, ok, exit_code, message, artifact_ref?}</code>. Jobs are idempotent by <code>id</code>; a
+re-sent job with a known <code>id</code> returns the cached result. Jobs for offline agents are
+queued in the console (<code>pending</code>) and delivered on the next <code>Link</code>, unless
+<code>deliver: online_only</code> (default for <code>shutdown</code>).</p>
+<p>Wake-on-LAN is not a job — it is a console-side UDP send; the &quot;result&quot; is the agent
+showing up on <code>Link</code> within the WoL timeout (default 90 s).</p>
+<h2 id="exam-mode">Exam mode<a class="anchor" href="#exam-mode" aria-label="Link to this section">#</a></h2>
+<pre><code>ExamMode {
+  string   session_id;            // one per exam, so late joiners get the same state
+  bool     active;
+  int64    ends_at_unix;          // 0 = no timer; absolute, skew-corrected at Hello
+  int64    hard_limit_unix;       // always set; the agent restores itself past this
+  string   message;               // shown in the countdown banner
+  bool     block_internet;
+  repeated string allowed_programs;   // executable names; empty = no whitelist enforced
+  CollectSpec collect;            // optional; the folder chosen when the exam was set up
+}
+</code></pre>
+<p>The four restrictions are independent (<code>docs/ARCHITECTURE.md</code> §6.1): a message with a
+timer but no whitelist, no internet block and no collection is valid and common.</p>
+<p>State lives on the <strong>agent</strong>, not in the console's memory, and is persisted to disk, so
+an exam survives the console restarting, the network dropping or the PC rebooting
+mid-test. Two rules make it fail-safe:</p>
+<ul>
+<li><code>hard_limit_unix</code> is always set. Past it the agent ends the mode by itself — restores
+the firewall, stops enforcing the whitelist, removes the overlay — even with no
+console in sight.</li>
+<li>On service start the agent first <strong>restores</strong> everything an exam could have changed,
+then re-applies the mode only if the stored session is still within its limits.</li>
+</ul>
+<p><code>AgentMessage.ExamState</code> reports what the PC is actually enforcing, so the console shows
+the truth rather than what it last asked for.</p>
+<h2 id="video">Video<a class="anchor" href="#video" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><code>VideoFrame { agent_id, seq, ts, width, height, mode, repeated Rect dirty, bytes jpeg }</code></li>
+<li><strong>thumbnail</strong> mode: whole screen scaled to ≤ 320 px wide, JPEG q50, ≤ 2 fps, sent
+only when the screen changed (DXGI reports dirty rects; if none → skip).</li>
+<li><strong>full</strong> mode: native resolution split into a 64×64 tile grid; only tiles
+intersecting dirty rects are re-encoded (q75) and sent; keyframe (all tiles) every
+5 s or on request. Target ≤ 20 fps, cap bandwidth per agent (default 8 Mbit/s).</li>
+<li>Console decodes with SkiaSharp into a persistent per-agent bitmap and blits tiles.</li>
+<li>H.264 (Media Foundation on the agent, software decode in the console) is a
+ROADMAP M6 option behind the same <code>VideoFrame</code> envelope (<code>codec</code> field reserved).</li>
+</ul>
+<h2 id="input-full-view-control">Input (full-view control)<a class="anchor" href="#input-full-view-control" aria-label="Link to this section">#</a></h2>
+<p><code>Input { kind, x, y (normalized 0..1), button, delta, vk, scan, text, flags }</code> →
+helper maps to <code>SendInput</code>. Teacher hotkeys (⌘/Ctrl+Alt+Del, Win) are translated
+explicitly; a <code>ctrl_alt_del</code> request triggers <code>SendSAS</code> from the service (it has the
+privilege; the helper does not).</p>
+<h2 id="broadcast-teacher-students">Broadcast (teacher → students)<a class="anchor" href="#broadcast-teacher-students" aria-label="Link to this section">#</a></h2>
+<p>Console captures its own screen into the same <code>VideoFrame</code> format and sends it in
+<code>ConsoleMessage.Broadcast</code> frames to every selected agent (multicast is <em>not</em> used —
+up to 30 unicast streams at ~1–2 Mbit/s are fine on a switched LAN). Helper renders in the
+full-screen overlay. Frame drop policy on the agent: always show the latest.</p>
+<h2 id="agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)<a class="anchor" href="#agent-session-helper-named-pipe-length-prefixed-protobuf" aria-label="Link to this section">#</a></h2>
+<p>Same message types (<code>VideoControl</code>, <code>Input</code>, <code>Overlay</code>, <code>VideoFrame</code>, <code>SessionState</code>)
+re-used; the service is a dumb relay for video/input and the policy owner for
+everything else. The helper never talks to the network.</p>
+<h2 id="versioning">Versioning<a class="anchor" href="#versioning" aria-label="Link to this section">#</a></h2>
+<p><code>Hello</code> also carries <code>lab_id</code> and the agent's certificate serial, so a console that has
+been migrated to a new machine (<code>docs/ARCHITECTURE.md</code> §3.6) recognises the PCs it
+restored from backup, and an agent belonging to a different lab is refused with a clear
+message rather than a TLS error.</p>
+<h3 id="the-frozen-subset">The frozen subset<a class="anchor" href="#the-frozen-subset" aria-label="Link to this section">#</a></h3>
+<p>Four things are <strong>frozen at wire version 1 and may never change</strong>: the <code>Hello</code> message,
+the <code>Heartbeat</code> message, <code>Job</code> with <code>kind: self_update</code>, and <code>JobResult</code>. Fields may be
+added to them (never renumbered, never removed, never given a new meaning), and nothing
+in this subset may acquire a field the receiving side must understand for the exchange to
+succeed.</p>
+<p>The reason is <code>D-19</code>: as long as this subset holds, an agent of <em>any</em> version can connect
+to a console of <em>any</em> version, be identified, and be told to update itself. A release that
+breaks something else is then a remote fix; a release that breaks this subset is a walk to
+fourteen desks. Everything outside the subset — video, input, overlay, exam mode,
+inventory, every other job kind — evolves freely.</p>
+<p><code>Hello.protocol_version</code> therefore does <strong>not</strong> gate the connection. The console accepts
+every agent whose certificate is valid, compares versions, and:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Agent vs console</th>
+<th>Console behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>same</td>
+<td>normal</td>
+</tr>
+<tr>
+<td>older, still supported</td>
+<td>normal; tile shows an <em>update available</em> badge</td>
+</tr>
+<tr>
+<td>older than the console's minimum</td>
+<td>connected, tile marked <strong>outdated</strong>, unsupported features greyed out with the reason, <em>Update</em> offered</td>
+</tr>
+<tr>
+<td>newer than the console</td>
+<td>connected and usable; the console warns that it should be updated itself, and refuses only the features it does not know</td>
+</tr>
+</tbody>
+</table></div>
+<p>Proto files evolve additively (never renumber fields), and a message the receiver does not
+recognise is logged and ignored rather than closing the stream.</p>
+<h3 id="updateagent-and-the-self_update-job"><code>UpdateAgent</code> and the <code>self_update</code> job<a class="anchor" href="#updateagent-and-the-self_update-job" aria-label="Link to this section">#</a></h3>
+<pre><code>UpdateAgent {
+  string version;             // version being offered
+  string bundle_ref;          // handle for PullFile
+  string sha256;              // over the serialized manifest
+  bytes  manifest;            // serialized UpdateManifest
+  bytes  manifest_signature;  // over `manifest`, by the lab key (D-19)
+}
+
+UpdateManifest {
+  string version;
+  string min_installed_version;   // refuse to apply on anything older
+  repeated UpdateFile files;      // {relative_path, size, sha256}
+  int32  probation_seconds;       // 0 = the default, 600
+}
+</code></pre>
+<p>The agent verifies <code>manifest_signature</code> against the <strong>pinned CA certificate</strong>, not against
+the TLS session, so a bundle is only as trustworthy as the lab key itself. It then pulls
+the files with <code>PullFile</code>, checks every SHA-256, and applies the update as
+<code>docs/ARCHITECTURE.md</code> §7.2 describes. <code>JobResult</code> for a <code>self_update</code> is reported by the
+<strong>new</strong> version after its first successful <code>Hello</code>, never by the outgoing one — the
+outgoing agent's last act is to restart the service, and a result sent before that would
+be a claim it cannot back up.</p>
+<p><code>Hello.update_state</code> tells the console where a PC stands — <code>STABLE</code>, <code>ON_PROBATION</code> (with
+the deadline) or <code>ROLLED_BACK</code> (with the version that failed and the reason in plain
+language) — so a failed rollout is visible in the lab view rather than buried in a log on
+the PC. It is an added field on a frozen message, which is exactly the kind of change the
+freeze permits: an agent that does not send it is still understood.</p>
+
+</article>
+<footer>Generated 2026-09-04 16:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+</main>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#updateagent-and-the-self_update-job">UpdateAgent and the self_update job</a></li></ul></nav>
+</div>
+</body>
+</html>

@@ -1,0 +1,366 @@
+# Architecture
+
+## 1. Physical picture
+
+```
+                 Wi-Fi                        wired (hub/switch)
+  MacBook  ─────────────┐  ┌────────┐  ┌──────────────────────────────┐
+  (Console)             ├──┤ Router ├──┤ Hub ── PC-01 … PC-14 (Windows)│
+  or a Windows PC ──────┘  └────────┘  └──────────────────────────────┘
+```
+
+The first lab has **14** PCs, but nothing may assume that number: the software is meant
+to move to other labs, so it is designed and load-tested for **up to 30** student PCs
+and one console. The count comes from `lab.json`, never from a constant.
+
+Assumptions to verify on site before M1 (put results in DECISIONS.md D-10):
+- Wi-Fi and the wired hub are the **same IP subnet / same L2 broadcast domain**
+  (no "AP isolation" / guest network on the router). Required for UDP discovery
+  broadcasts and for Wake-on-LAN magic packets sent from the Mac.
+- PC BIOS/UEFI has "Wake on LAN" / "Power on by PCI-E" enabled. The installer configures
+  the Windows side, but BIOS is a one-time manual check per PC.
+- Router hands out DHCP; PCs may change IP → the console identifies PCs by
+  **agent ID + MAC**, never by IP.
+
+## 2. Components
+
+| Component | Runs on | Runs as | Purpose |
+|---|---|---|---|
+| **Console** (`LabControl.Console`) | teacher machine (macOS/Windows/Linux) | the teacher | Avalonia UI + embedded gRPC server (Kestrel). Holds the lab key, issues certificates, and is the source of truth for `lab.json`, the package catalog and the scripts. Replaceable — see §3.6. |
+| **Agent** (`LabControl.Agent`) | each student PC | Windows service, `LocalSystem` | Outbound gRPC client to the console. Privileged operations: power, run scripts, install packages, file transfer, profile reset, self-update. Supervises the Session helper. |
+| **Session helper** (`LabControl.Agent.Session`) | each student PC | spawned by the Agent into the active interactive session (SYSTEM token duplicated into that session via `WTSQueryUserToken`/`CreateProcessAsUser`) | Screen capture (DXGI), input injection (`SendInput`), full-screen overlay window for lock/broadcast. Talks to the Agent over a local named pipe. Restarted automatically on logon/logoff/crash. |
+| **Setup** (`LabControl.Setup`) | each student PC, once | elevated (admin) | The USB installer. See INSTALLER.md. |
+| **FakeAgent** (`LabControl.FakeAgent`) | dev machine | user | Simulates N agents (synthetic screens, power state, fake command results) so the console can be built on macOS. |
+
+Why two processes on the PC: a session-0 service cannot see the interactive desktop
+(no screen, no input). The classic pattern is service + per-session helper. Keeping the
+helper as SYSTEM (not as `student`) lets it capture the UAC secure desktop and the
+lock screen, and prevents the student from killing it from Task Manager.
+
+## 3. Trust model and connection
+
+The teacher machine is **replaceable**: it may die, be stolen, or be swapped for a
+Windows PC, and the same software must be usable in another college's lab. Therefore
+the identity of *the lab* is deliberately separated from the identity of *the computer
+that happens to be running the console today*. Nothing in the design may require
+walking to the student PCs again after a change of teacher machine.
+
+### 3.1 Three separate identities
+
+| Identity | Created | Lives | Proves |
+|---|---|---|---|
+| **Lab key** — a private certificate authority (ECDSA P-256) | once, on the console's first run | `lab-key.lck`, encrypted; backed up wherever the teacher wants | "this is lab *X*" |
+| **Console instance** — leaf certificate + key signed by the lab key | when a teacher machine is set up or migrated | that machine only | "I am a legitimate console of lab *X*" |
+| **Agent** — keypair + certificate signed by the lab key | at enrollment, on the PC itself | that PC only | "I am PC-07 of lab *X*" |
+
+The lab key is the only thing that must survive; everything else can be reissued from it.
+
+### 3.2 How the lab key is protected
+
+A random 256-bit master key encrypts the CA private key (AES-256-GCM). The master key
+itself is never stored directly — only as a set of **wrappings**, any one of which opens
+it:
+
+- one per **key holder**: a named person and their passphrase (PBKDF2-HMAC-SHA256,
+  ≥ 600 000 iterations, per-holder salt);
+- one **recovery code** — 128 random bits shown once as printable groups, meant for a
+  wallet, a safe, or a home drawer.
+
+More than one holder is supported deliberately: the owner asked for a colleague to be
+able to open the lab if he is ill on an exam day. Holders are added and removed from the
+console (adding one needs an existing holder's passphrase; removing one re-wraps the
+master key without it, and does not require the removed person's cooperation). Every
+holder is equal — there is no "owner" wrapping that outranks the others — and the list of
+holder *names* is stored in the clear so you can see who can open the lab without opening
+it yourself.
+
+So a forgotten passphrase is recoverable, a lost recovery sheet is survivable, an ill
+teacher does not stop an exam, and the file alone is useless to whoever finds it. The lab key is **not** kept on the USB
+stick — the USB carries no secret at all (§3.4).
+
+Daily use does not ask for the passphrase: it is needed only when the lab key itself is
+unlocked — first run, minting a console instance, migrating, or revoking. The console
+instance's own private key is protected at rest by the operating system (macOS Keychain,
+Windows DPAPI, Linux libsecret with an encrypted-file fallback).
+
+### 3.3 What a student PC knows
+
+Only: `lab_id`, the **public** CA certificate (pinned), its own keypair and certificate,
+its number and MAC. No lab secret, no passphrase, no shared symmetric key, nothing about
+any other PC. A student who fully compromises a PC — including pulling its disk — can
+impersonate *that one PC* and nothing else, and the console can revoke it.
+
+### 3.4 Connection
+
+- **Agents dial out** to the console's gRPC server on `47800/tcp`. Rationale unchanged:
+  the console moves, the PCs do not, and outbound connections need no inbound firewall
+  rule.
+- **Mutual TLS.** The agent validates the console's leaf certificate against the pinned
+  CA; the console validates the agent's certificate against the same CA and checks it
+  against the revocation list. Neither side trusts a public CA, an IP address or a
+  hostname — only the lab key.
+- **Discovery beacon**, UDP `47801`, every 2 s. It is verifiable offline without any
+  shared secret: it carries the console instance's public key plus the CA's signature
+  over that public key (the *endorsement*), and is itself signed by the instance key.
+  An agent checks endorsement → signature → timestamp, then connects. Agents ignore
+  beacons while connected, and rate-limit connection attempts, so a flood of forged
+  beacons costs a few TCP handshakes and nothing else.
+- **Fallback** for networks that drop broadcasts: `console_host` pinned in `agent.json`.
+- **One long-lived bidirectional stream per agent** (`AgentLink`) carries commands and
+  events; separate streaming RPCs carry video and files so a large transfer never
+  delays a "shutdown". See PROTOCOL.md.
+
+### 3.5 Enrollment — the USB stick carries no secret
+
+The USB payload contains the **public** CA certificate and a batch of **single-use
+enrollment codes** generated by the console. At install the agent generates its own
+keypair on the PC; at first connection it presents an unused code and a certificate
+signing request; the console issues the agent certificate, burns the code, and records
+the machine in `lab.json`.
+
+A USB stick that a student finds therefore allows, at worst, enrolling a bogus PC —
+which appears in the console as an unexpected machine and is removed with one click.
+It does not decrypt traffic, does not impersonate the console, and does not expose the
+lab key. (Contrast with the earlier design, where the stick carried the lab secret and
+was itself a credential.)
+
+### 3.6 Replacing the teacher machine
+
+1. On the new machine (macOS, Windows or Linux): **Import lab key** — the backup file
+   plus the passphrase, or the recovery code.
+2. Give the instance a name (`MacBook-2026`, `Lab PC`), so logs say which console did
+   what.
+3. The console mints itself a new leaf certificate from the lab key, restores the
+   machine list, package catalog and room layout from the same backup, and starts
+   beaconing.
+4. Every agent sees the new beacon, validates it against the CA it has pinned since
+   installation, and connects. **No student PC is touched.**
+5. Optionally revoke the old instance. The revocation list is pushed to every agent
+   when it connects, so a stolen laptop stops working as soon as the lab has seen the
+   new console.
+
+**One console at a time.** A second instance is a *replacement*, never a parallel
+operator — the owner confirmed two teachers never drive the same lab simultaneously.
+Agents therefore stay with whichever console they are connected to and ignore beacons
+while linked, so two live consoles would split the room arbitrarily rather than share it.
+The console detects another instance beaconing for the same lab and shows a warning
+naming it, with one-click revoke. Supporting genuinely simultaneous consoles would mean
+arbitrating who may lock, broadcast and control each PC; it is out of scope (§10).
+
+Failure cases, from cheapest to worst:
+
+| Situation | Cost |
+|---|---|
+| Teacher machine dies or is replaced; backup intact | ~10 minutes on the new machine |
+| Teacher machine stolen | as above, plus revoke the old instance and power-cycle the lab so every agent picks up the revocation |
+| Passphrase forgotten | unlock with the recovery code, then set a new passphrase |
+| Recovery code lost, passphrase known | reprint a new recovery code from the console |
+| Lab key file lost entirely | re-run `Setup.exe --rekey` on every PC (~30 s each; keeps the `student` account, the software and the settings) |
+
+Because the last row is the only genuinely painful one, the console's first-run wizard
+refuses to finish until the backup has actually been exported somewhere and the
+recovery code has been acknowledged, and it re-checks the backup's age on every launch.
+
+## 4. Data on the console
+
+`~/.labcontrol/` (macOS/Linux) or `%APPDATA%\LabControl\` (Windows):
+
+```
+lab-key.lck       the lab certificate authority, encrypted (§3.2). The one file that
+                  must survive. Never leaves this directory unencrypted.
+instance.json     this console instance: name, leaf certificate, key reference
+                  (OS keystore), issued/expires
+lab.json          lab_id, room layout, revocation list, machines[]:
+                  {id, number, name, mac, last_ip, last_seen, agent_version, cert, notes}
+enrollment.json   outstanding single-use enrollment codes and which ones were burned
+packages/         package catalog: <name>.yaml + cached installer binaries
+scripts/          scripts pushed to PCs
+logs/             per-day console log + per-command result bundles
+```
+
+Every one of these files — and the backup archive — carries a `schema_version` as its
+first field, and the console refuses to open a file written by a **newer** version of
+itself rather than silently dropping the fields it does not understand (`D-20`). This is
+what keeps §3.6 working a year from now, when the backup being restored was written by an
+older build than the console restoring it.
+
+Created on first launch by the setup wizard. **Backup** = `lab-key.lck` + `lab.json` +
+the catalog, exported as one encrypted archive; it is what makes §3.6 a ten-minute
+operation instead of a walk around the room. The console nags until a backup exists and
+warns when the backup on record is older than the machine list.
+
+## 5. Data on a student PC
+
+```
+C:\Program Files\LabControl\   app\<version>\  agent.exe, session.exe — one directory per
+                                               installed version, kept side by side (D-19)
+                               app\current     names the version the service runs
+                               app\previous    names the version to roll back to
+                               setup.exe       kept for repair
+C:\ProgramData\LabControl\     agent.json  {schema_version, agent_id, number, lab_id,
+                                            ca_cert (public), mac, console_host?}
+                               agent.key   the PC's own private key, DPAPI-protected (machine scope)
+                               agent.crt   the PC's certificate, signed by the lab CA
+                               update\     staging area for an incoming version bundle,
+                                           emptied once the new version proves itself (§7)
+                               logs\       rolling agent log (7 days)
+                               cache\      downloaded package installers (cleaned after install)
+```
+ACL: `SYSTEM` + `Administrators` full control, `Users` read/execute on Program Files,
+**no access** for `Users` to `ProgramData\LabControl`.
+
+Versions live in numbered subdirectories rather than in `LabControl\` itself because a
+running service cannot overwrite its own `.exe`, and because a bad update must be
+reversible without anyone entering the room (`D-19`). The Defender exclusion is set on the
+`C:\Program Files\LabControl\` **parent**, so a version directory created later is
+covered without a second visit.
+
+## 6. Feature → mechanism map
+
+| Feature | Mechanism |
+|---|---|
+| Screen mosaic | Session helper captures via DXGI Desktop Duplication (GDI `BitBlt` fallback), downscales to tile size (e.g. 320×180), JPEG q≈50, 2 fps per PC → one small stream per PC. |
+| Full view + control | Console requests `quality=full` for one agent: full-resolution dirty-rectangle JPEG tiles up to 15–20 fps; mouse/keyboard events → `SendInput` in the helper. Optional H.264 via Media Foundation later (ROADMAP M6). |
+| Wake-on-LAN | Console sends magic packet (UDP broadcast `:9`, plus directed to `last_ip`). MAC comes from enrollment. Installer enables WoL on the NIC and disables Fast Startup/hibernation (they break WoL on Windows). |
+| Shutdown / reboot / logoff | Agent: `ExitWindowsEx` / `InitiateSystemShutdownEx` with `SE_SHUTDOWN_NAME`. |
+| Run script | Agent runs `powershell.exe -NoProfile -ExecutionPolicy Bypass -File …` or `cmd /c` as SYSTEM (default) or in the student session via the helper (`as: user`). stdout/stderr/exit code streamed back. |
+| Install package | Catalog entry = `{name, version, installer file, silent args, detect: {path|registry|command}}`. Console pushes the installer over the file stream (LAN, no internet needed), agent runs it silently, verifies `detect`, reports result. `winget`/`choco` are *not* used (winget does not work under SYSTEM). |
+| Broadcast teacher screen | Console captures its own screen (macOS: CoreGraphics `CGDisplayCreateImage`/ScreenCaptureKit via P/Invoke — needs Screen Recording permission; Windows: DXGI) → JPEG stream → helper shows a topmost full-screen window, input blocked. |
+| Lock screen | Helper shows a full-screen topmost window with a message; low-level keyboard hook swallows Alt+Tab/Win; `BlockInput`. Ctrl+Alt+Del cannot be blocked by design — accepted. |
+| Exam mode | A composable set of independent switches, not a single mode (see §6.1). |
+| — timer | Countdown rendered by the helper; the deadline is absolute (console clock, skew-corrected at `Hello`) so it keeps running if the link drops, and the mode ends by itself. |
+| — app whitelist | Helper subscribes to process-start events (WMI `Win32_ProcessStartTrace`, polling fallback) and terminates anything outside the allowed list. Matching is by **executable path/name only** — a process started by an allowed program is judged on its own name, not on its parent (owner's choice: the simpler rule). Hard-coded never-touch set: session, shell and OS processes, and LabControl itself. |
+| — internet block | Agent adds outbound-blocking firewall rules with a distinctive rule group, exempting the console subnet. Fail-safe: rules carry an expiry, are removed on exam end, on service start, and on any agent restart — a crashed agent can never leave a PC offline. |
+| — collect work | At the end (or on demand) the agent zips **one folder chosen when the exam is set up** and uploads it through `PushFile`; the console files it under `<exam>/PC-07/`. The folder is a dedicated work directory, not the whole `student` desktop, so what is collected is predictable and small. |
+| Package management | The console's *Add package* wizard takes any local `.exe`/`.msi`, suggests silent arguments for known installer families, computes the hash, writes the YAML, and offers a test install on one PC before the fleet. The catalog ships **empty** — it is filled by the teacher. |
+| Profile reset | Agent logs `student` off, deletes the profile (`Win32_UserProfile.Delete`), reboots; auto-logon recreates a pristine profile. Optional "light reset" = wipe Desktop/Documents/Downloads only. |
+| Self-update | Console pushes a bundle signed by the lab key; the agent unpacks it into a new version directory, repoints the service and restarts, and rolls itself back if the new version cannot reach the console (§7, `D-19`). |
+| Inventory | Agent reports hostname, Windows build, CPU/RAM/disk, installed catalog packages, uptime, current logged-on user. |
+
+### 6.1 Exam mode is a set of switches
+
+Different kinds of written work need different restrictions, so "exam mode" is not one
+button. The teacher composes it from four independent switches and saves the
+combination as a named preset (*Written test*, *Practical with the IDE*, *Open-book*):
+
+| Switch | Off | On |
+|---|---|---|
+| Timer | mode ends when the teacher ends it | absolute deadline, countdown on the student screen, auto-end |
+| Allowed programs | anything runs | only the listed executables; others are closed as they start (matched by name, not by which program launched them) |
+| Internet | untouched | blocked except the console; automatically restored |
+| Collect work at the end | nothing collected | one folder, picked while setting up the exam, is uploaded from every PC |
+
+Every switch is independently reversible, and the whole mode has a hard maximum
+duration after which the agent restores the machine on its own — a lesson must never
+end with a PC left restricted because the teacher's laptop was closed.
+
+## 7. Updating LabControl itself
+
+New versions arrive constantly while the software is being built, and keep arriving after
+that. Updating must therefore be an ordinary operation, not an event — and above all it
+must never be able to strand a PC, because the only repair for a stranded PC is a walk to
+its desk. The full reasoning is `D-19`; this is the shape of it.
+
+### 7.1 The rule that makes updates safe
+
+**A small part of the protocol is frozen forever.** `Hello`, `Heartbeat`,
+`Job{kind: self_update}` and `JobResult` keep their v1 wire meaning for the life of the
+product; everything else may change freely (`docs/PROTOCOL.md`, *Versioning*). An agent of
+any version can therefore always connect to a console of any version, be recognised, and
+be told to update itself — even when it understands nothing else the console says. As long
+as that holds, a bad release is a remote fix, never a walk around the room.
+
+The console consequently never *refuses* an agent for being old. It marks the tile
+"outdated", disables the features that agent cannot do, and offers *Update*.
+
+### 7.2 Updating an agent
+
+1. The console builds a **bundle**: `agent.exe`, `session.exe` and a manifest
+   (`version`, per-file SHA-256, minimum installed version). The manifest is signed with
+   the **lab key** — the CA whose public certificate every agent pinned at install — so
+   the bundle is verifiable on its own, independently of the TLS session that carried it.
+2. `Job{kind: self_update}` → the agent downloads the bundle through `PullFile` into
+   `ProgramData\LabControl\update\`, verifies the signature and every hash, and refuses
+   the job on any mismatch.
+3. The agent unpacks it into `Program Files\LabControl\app\<new version>\`, writes the
+   outgoing version into `app\previous`, the new one into `app\current`, repoints the
+   service (`ChangeServiceConfig` on the binary path) and asks the service manager to
+   restart it. Nothing is overwritten, so nothing can be half-written.
+4. **Probation.** The new version is on trial until it has completed a `Hello` and held
+   the link for 10 uninterrupted minutes. Only then is it *accepted*: the console records
+   the new `agent_version` and the agent clears `app\previous` and the staging directory.
+5. **Rollback, by something that is not the agent.** The service's Windows recovery action
+   runs `agent.exe --rollback` when the process dies repeatedly, and a scheduled task fires
+   at the end of the probation window; either one repoints the service back at
+   `app\previous` if the version was never accepted. A version that crashes on start, that
+   cannot open its own certificate, or that cannot reach the console is therefore undone by
+   the PC itself, with nobody in the room.
+
+The session helper is a child process and is never locked, so it is simply replaced and
+respawned along with the service.
+
+### 7.3 Updating the console
+
+The console is an interactive application on the teacher's own machine, so its binary is
+replaced the ordinary way: quit, replace the self-contained publish, start. There is no
+fleet, no service and no rollback machinery — the previous build is a copy of a directory.
+The console's difficulty is not the binary but the data it leaves behind: `lab.json`,
+`instance.json`, `enrollment.json`, the package catalog and the backup archive are read
+by builds written months apart. That is what `schema_version` and the load-time migrations
+of `D-20` exist for, and why they are built in M1 rather than retrofitted.
+
+Because the binaries are unsigned (`D-15`), macOS quarantines a freshly downloaded console
+once; this is a one-time `xattr -d com.apple.quarantine`, documented in the README rather
+than engineered around.
+
+## 8. Console UI (Avalonia)
+
+- **Lab view**: one tile per PC in a grid mirroring the physical room layout (drag to
+  arrange; saved in `lab.json`). Tile = live thumbnail + number + status (online /
+  offline / sleeping / locked / in exam mode / broadcasting) + logged-on user. The grid
+  scales from 1 to 30 PCs; beyond what fits, tiles shrink and the mosaic scrolls.
+- **Selection model**: click = select, ⌘/Ctrl-click = multi, ⌘A = all. Toolbar
+  actions apply to the selection: Wake, Shutdown, Reboot, Log off, Lock, Unlock,
+  Broadcast, Exam mode…, Run script…, Install package…, Reset profile, Send file,
+  Collect files.
+- **Single-PC view**: double-click a tile → full-size stream with input control toggle.
+- **Jobs panel**: every action becomes a job with per-PC rows (pending / running /
+  ok / failed + log). Jobs persist in `logs/`.
+- **Packages** and **Scripts** panels: manage the catalog; "Install on all missing".
+- **Settings**: lab key (export backup, reprint the recovery code, change the
+  passphrase), console instances (this one, others seen, revoke), enrollment codes,
+  build USB installer.
+
+## 9. Threat model (short)
+
+Primary adversary = a curious student with physical access to a PC but only the
+`student` account.
+
+| Attack | Defence |
+|---|---|
+| Stop, uninstall or kill the agent | service and helper run as `LocalSystem`; `student` is a standard user with no rights over either |
+| Read the PC's credentials | `C:\ProgramData\LabControl\` denies `Users`; the private key is DPAPI-protected at machine scope |
+| Use one PC's material to attack the lab | a PC holds only its own key and the CA's *public* certificate; it can impersonate itself and nothing more, and can be revoked |
+| Impersonate the console | requires a certificate signed by the lab key, which lives encrypted on the teacher machine and in the backup |
+| Forge discovery beacons | beacons are signed and CA-endorsed; a forgery costs a rejected TCP handshake |
+| Steal the USB installer stick | it carries no secret — only the public CA certificate and single-use enrollment codes; a bogus enrollment is visible in the console and removable |
+| Watch another student's screen | video is addressed per agent and never relayed between agents |
+
+Teacher-side risks, new since the console became replaceable:
+
+| Situation | Consequence | Mitigation |
+|---|---|---|
+| Teacher machine stolen | holder can control the lab until revoked | revoke the instance (§3.6); leaf certificates are short-lived; OS keystore protects the leaf key at rest |
+| Backup file leaked | holder owns the lab | the file is useless without the passphrase or the recovery code |
+| Backup and passphrase both lost | the lab must be re-keyed PC by PC | first-run wizard forces a backup and a recovery code before it finishes |
+| Binaries are unsigned | antivirus / SmartScreen may quarantine the agent | accepted (see D-15); the installer registers an exclusion and the console reports agents that stop reporting |
+
+Out of scope: a student with a live USB or BIOS access (physical security is the
+college's job), and network attackers on the lab LAN beyond the students themselves.
+
+## 10. Non-goals
+
+Multi-lab, two consoles driving one lab at the same time (§3.6), cloud relay, mobile
+console, Linux/macOS student agents
+(possible later; keep `LabControl.Agent` behind an `IPlatformAgent` seam but do not
+build it now), grading/LMS integration.

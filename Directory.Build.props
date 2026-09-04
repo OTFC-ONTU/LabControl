@@ -1,0 +1,27 @@
+<Project>
+
+  <!-- Settings shared by every project in the repository. See docs/ROADMAP.md M0. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <Deterministic>true</Deterministic>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- Lets the net10.0-windows projects (Agent, Agent.Session, Setup) compile on the
+         Mac. They cannot RUN there, but they must never be allowed to rot: a normal
+         `dotnet build` on macOS builds the whole solution, Windows projects included. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- .NET 10 dropped VSTest for Microsoft.Testing.Platform; xunit.v3 hosts its own runner. -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+
+    <Product>LabControl</Product>
+    <Company>ОНТФК</Company>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <Copyright>Viacheslav Stohul</Copyright>
+  </PropertyGroup>
+
+</Project>

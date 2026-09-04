@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>LabControl.Console.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The console's non-UI core (LabSession, the gRPC server) lives in the console
+         project itself so the product stays at six projects (D-27); the tests reference
+         the executable assembly and never touch Avalonia. -->
+    <ProjectReference Include="..\..\src\LabControl.Console\LabControl.Console.csproj" />
+    <ProjectReference Include="..\..\src\LabControl.Shared\LabControl.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

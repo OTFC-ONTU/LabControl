@@ -54,6 +54,15 @@ public sealed class EnrollmentAuthority
     /// <summary>The document as it stands; the caller persists it after every change.</summary>
     public EnrollmentDocument Document => _document;
 
+    /// <summary>Runs <paramref name="persist"/> with the code list held still (see <c>LabRegistry.Persist</c>).</summary>
+    public void Persist(Action<EnrollmentDocument> persist)
+    {
+        lock (_gate)
+        {
+            persist(_document);
+        }
+    }
+
     public int UnusedCodeCount
     {
         get
@@ -102,7 +111,7 @@ public sealed class EnrollmentAuthority
     /// Redeems a code and issues the agent's certificate. The code is burned in the same
     /// step, so two PCs racing on the same code produce exactly one certificate.
     /// </summary>
-    public EnrollmentResult Redeem(LabKey? lab, EnrollRequest request, DateTimeOffset now)
+    public EnrollmentResult Redeem(LabKey? lab, EnrollRequest request, DateTimeOffset now, TimeSpan? lifetime = null)
     {
         if (lab is null)
         {
@@ -164,7 +173,7 @@ public sealed class EnrollmentAuthority
         try
         {
             var certificate = LabCertificates.IssueAgentFromCsr(
-                lab.Authority, lab.LabId, request.AgentId, request.Number, request.Csr.ToByteArray(), now);
+                lab.Authority, lab.LabId, request.AgentId, request.Number, request.Csr.ToByteArray(), now, lifetime);
 
             return new EnrollmentResult(EnrollmentOutcome.Issued, certificate,
                 $"{Describe(request)} enrolled.");

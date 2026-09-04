@@ -20,6 +20,13 @@ public static class Defaults
     /// </summary>
     public const int FrozenProtocolVersion = 1;
 
+    /// <summary>
+    /// The oldest <c>protocol_version</c> this console still drives fully. An agent below it
+    /// is still accepted and shown, but its tile is marked <i>outdated</i> and only the
+    /// frozen subset is used with it (PROTOCOL "Versioning").
+    /// </summary>
+    public const int MinimumProtocolVersion = 1;
+
     // ---------------------------------------------------------------- networking
 
     /// <summary>gRPC server hosted by the console; agents dial in (ARCHITECTURE §3.4).</summary>
@@ -65,6 +72,18 @@ public static class Defaults
     /// <summary>How long a machine has to appear after a magic packet before WoL is called failed.</summary>
     public static readonly TimeSpan WakeTimeout = TimeSpan.FromSeconds(90);
 
+    /// <summary>
+    /// A linked agent whose certificate is due for renewal asks again on this backoff while
+    /// the console's lab key is locked (D-25); the same ceiling as a reconnect.
+    /// </summary>
+    public static readonly TimeSpan RenewalRetryMax = ReconnectDelayMax;
+
+    /// <summary>
+    /// The console listens for beacons from other teacher machines and marks one gone
+    /// after this long without a beacon (ARCHITECTURE §3.7.2).
+    /// </summary>
+    public static readonly TimeSpan OtherConsoleTimeout = TimeSpan.FromSeconds(10);
+
     // ---------------------------------------------------------------- lab shape
 
     /// <summary>
@@ -102,6 +121,14 @@ public static class Defaults
     /// </summary>
     public static readonly TimeSpan CertificateRenewalLeadTime = TimeSpan.FromDays(60);
 
+    /// <summary>
+    /// How long the console keeps the unlocked lab key in memory after the teacher last used
+    /// it (D-26). Long enough to enrol a room and renew its certificates in one sitting,
+    /// short enough that a console left open is not a CA for the afternoon. An explicit
+    /// <i>Lock</i> ends it sooner; closing the console always ends it.
+    /// </summary>
+    public static readonly TimeSpan LabKeyUnlockWindow = TimeSpan.FromMinutes(15);
+
     // ---------------------------------------------------------------- on-disk formats
 
     // Every persisted file carries its own schema_version and migrates forward on load;
@@ -128,6 +155,24 @@ public static class Defaults
     public const string PackagesDirectoryName = "packages";
     public const string ScriptsDirectoryName = "scripts";
     public const string LogsDirectoryName = "logs";
+
+    /// <summary>The encrypted backup archive (ARCHITECTURE §4, D-26): <c>&lt;lab&gt;-&lt;date&gt;.lcbak</c>.</summary>
+    public const string BackupFileExtension = ".lcbak";
+
+    /// <summary>Events and job results are appended to these, one file per day, under <c>logs/</c>.</summary>
+    public const string EventLogFilePattern = "events-{0:yyyy-MM-dd}.jsonl";
+    public const string JobLogFilePattern = "jobs-{0:yyyy-MM-dd}.jsonl";
+
+    // ---------------------------------------------------------------- USB payload
+
+    /// <summary>The directory the payload is written to on the stick: <c>&lt;USB&gt;\LabControl\</c>.</summary>
+    public const string PayloadDirectoryName = "LabControl";
+
+    /// <summary>The manifest on the stick (INSTALLER.md): lab id, codes, defaults. No secret.</summary>
+    public const string SetupFileName = "setup.json";
+
+    /// <summary>Codes written to a stick beyond the number of PCs, so a failed install can be retried.</summary>
+    public const int SpareEnrollmentCodes = 4;
 
     /// <summary>
     /// Where the console keeps the lab: <c>~/.labcontrol</c> on macOS and Linux,

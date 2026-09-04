@@ -37,7 +37,7 @@ public sealed record RenewalResult(RenewalOutcome Outcome, X509Certificate2? Cer
 /// </summary>
 public static class CertificateRenewal
 {
-    public static RenewalResult Renew(LabKey? lab, LabName peer, byte[] pkcs10, DateTimeOffset now)
+    public static RenewalResult Renew(LabKey? lab, LabName peer, byte[] pkcs10, DateTimeOffset now, TimeSpan? lifetime = null)
     {
         if (peer.Role != LabRole.Agent)
         {
@@ -63,7 +63,7 @@ public static class CertificateRenewal
         try
         {
             var certificate = LabCertificates.IssueAgentFromCsr(
-                lab.Authority, lab.LabId, peer.Id, peer.Number, pkcs10, now);
+                lab.Authority, lab.LabId, peer.Id, peer.Number, pkcs10, now, lifetime);
 
             return new RenewalResult(RenewalOutcome.Issued, certificate, $"{who} renewed its certificate.");
         }

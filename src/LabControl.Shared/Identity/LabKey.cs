@@ -195,6 +195,23 @@ public sealed class LabKey : IDisposable
         return key.SignData(data, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
     }
 
+    /// <summary>
+    /// Seals a blob under the master key, for the backup archive (D-26). Only something that
+    /// can open the lab key can open this, which is exactly the property a backup needs.
+    /// </summary>
+    public SealedSecret Seal(ReadOnlySpan<byte> plaintext, string context)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return SealedSecret.Seal(_masterKey, plaintext, context);
+    }
+
+    /// <summary>Opens a blob sealed with <see cref="Seal"/>.</summary>
+    public byte[] Open(SealedSecret secret, string context)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return secret.Open(_masterKey, context);
+    }
+
     /// <summary>Verifies a lab-key signature against a CA certificate — no private key needed.</summary>
     public static bool Verify(X509Certificate2 authority, ReadOnlySpan<byte> data, ReadOnlySpan<byte> signature)
     {

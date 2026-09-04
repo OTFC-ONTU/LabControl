@@ -76,7 +76,8 @@ public static class LabCertificates
         string agentId,
         int number,
         byte[] pkcs10,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        TimeSpan? lifetime = null)
     {
         // The default load path verifies the request's self-signature, which proves the PC
         // holds the private key for the public key it is asking us to certify.
@@ -91,7 +92,8 @@ public static class LabCertificates
             X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyAgreement,
             OidClientAuthentication);
 
-        return Sign(request, authority, now, Defaults.AgentCertificateLifetime);
+        // A shorter lifetime exists only for exercising renewal against FakeAgent (D-27).
+        return Sign(request, authority, now, lifetime ?? Defaults.AgentCertificateLifetime);
     }
 
     /// <summary>The PKCS#10 an agent sends at enrollment. Its subject is ignored by the console.</summary>

@@ -20,6 +20,15 @@ public sealed class MachineRecord
 
     public string CertificateSerial { get; set; } = string.Empty;
 
+    /// <summary>
+    /// When the PC's certificate runs out, read off the leaf it presented at <c>Hello</c>.
+    /// Drives the <i>certificates need renewing</i> banner (D-25, ARCHITECTURE §3.8).
+    /// </summary>
+    public long CertificateNotAfterUnix { get; set; }
+
+    /// <summary>The address the PC last connected from; Wake-on-LAN sends a directed packet here too.</summary>
+    public string? LastIp { get; set; }
+
     public long EnrolledAtUnix { get; set; }
 
     public long LastSeenUnix { get; set; }

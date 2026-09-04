@@ -37,6 +37,19 @@ public sealed class LabRegistry
 
     public LabDocument Document { get; }
 
+    /// <summary>
+    /// Runs <paramref name="persist"/> with the document held still. Thirty PCs saying
+    /// <c>Hello</c> at once mutate the list from thirty threads; serializing it outside the
+    /// lock would sooner or later throw mid-enumeration.
+    /// </summary>
+    public void Persist(Action<LabDocument> persist)
+    {
+        lock (_gate)
+        {
+            persist(Document);
+        }
+    }
+
     /// <summary>Every signed revocation this console holds; merged as a set (D-21).</summary>
     public RevocationSet Revocations { get; }
 

@@ -191,6 +191,24 @@ public sealed class JobQueue
     }
 
     /// <summary>
+    /// Jobs a PC had in hand when its link dropped, to send again on reconnect. Jobs are
+    /// idempotent by id (PROTOCOL, <c>Job</c>): the agent answers a finished one from its
+    /// ledger and carries on with a running one, so re-sending is always safe. States are
+    /// left as they are; the inactivity timeout keeps counting.
+    /// </summary>
+    public IReadOnlyList<JobRecord> InFlight(string agentId)
+    {
+        lock (_gate)
+        {
+            return _jobs.Values
+                .Where(j => j.State is JobState.Delivered or JobState.Running &&
+                            string.Equals(j.AgentId, agentId, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(j => j.CreatedAtUnix)
+                .ToArray();
+        }
+    }
+
+    /// <summary>
     /// Called when a PC's link ends. An <c>online_only</c> job it had not collected yet is
     /// closed as <see cref="JobState.NotDelivered"/> rather than kept for its return (D-25).
     /// </summary>

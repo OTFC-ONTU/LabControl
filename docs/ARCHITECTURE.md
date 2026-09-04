@@ -135,24 +135,95 @@ was itself a credential.)
    beaconing.
 4. Every agent sees the new beacon, validates it against the CA it has pinned since
    installation, and connects. **No student PC is touched.**
-5. Optionally revoke the old instance. The revocation list is pushed to every agent
-   when it connects, so a stolen laptop stops working as soon as the lab has seen the
-   new console.
+5. Optionally revoke the old instance — only if it is lost or stolen (§3.7.3). If the old
+   machine is simply the other teacher machine, leave it: both keep working, one at a
+   time (§3.7). The revocation list is pushed to every agent when it connects, so a
+   stolen laptop stops working as soon as the lab has seen the new console.
 
-**One console at a time.** A second instance is a *replacement*, never a parallel
-operator — the owner confirmed two teachers never drive the same lab simultaneously.
-Agents therefore stay with whichever console they are connected to and ignore beacons
-while linked, so two live consoles would split the room arbitrarily rather than share it.
-The console detects another instance beaconing for the same lab and shows a warning
-naming it, with one-click revoke. Supporting genuinely simultaneous consoles would mean
-arbitrating who may lock, broadcast and control each PC; it is out of scope (§10).
+### 3.7 Several teacher machines, one at a time
+
+Replacement is the disaster case. The everyday case is **alternation**: the owner drives
+the lab from a MacBook on some days, a colleague drives it from the Windows PC at the
+teacher's desk on others, and both machines keep their console installed permanently.
+This is the baseline the design is built for (`D-21`). Nothing here needs a second
+installation on any student PC.
+
+What the machines share and what each keeps to itself:
+
+| | Where it lives | How it reaches the other machine |
+|---|---|---|
+| Lab key, key holders, recovery code | `lab-key.lck` on every teacher machine | imported once from the backup (§3.6 steps 1–3); holders added later travel with the next backup |
+| Console instance (name, leaf certificate, key) | that machine only | never — each machine mints its own, and that is the point |
+| Machine list (`machines[]`) | `lab.json` on each machine | **self-healing**: an agent that connects with a valid lab-issued certificate and is not in this console's list is added from its `Hello` (number, MAC, serial); a console never has to be told about a PC twice |
+| Room layout | `lab.json` on each machine | default layout is derived from PC numbers, so an unseen list still looks right; a hand-arranged layout travels only with a backup |
+| Revocation list | `lab.json` on each machine **and** every agent | merged as a set (§3.7.3); a console learns from the first agent that connects what the other console revoked |
+| Package catalog, scripts, cached installers | that machine only | export / import a backup, or copy the `packages/` directory; the console shows *catalog last changed on <instance>* so a stale copy is visible |
+| Logs, job results | that machine only | never |
+
+The rule that follows from the table: **the lab's truth is the lab key plus what the agents
+know; a console's `lab.json` is a cache**. That is what makes alternation cheap — the
+second machine catches up by watching the agents connect, not by being told.
+
+#### 3.7.1 Handover
+
+Closing the console on machine A is the whole handover. Agents see the stream end and
+immediately return to listening for beacons; machine B's beacon is endorsed by the same
+CA, so within about 15 s every PC is on B. B shows the machines as they arrive; a PC that
+was added on A last week appears on B by itself (self-healing list, above). Nothing needs
+to be clicked on either side, and nobody needs the passphrase.
+
+The console records every instance it sees beaconing, and every instance an agent reports
+having been connected to, in `lab.json` as `instances[]` (id, name, first/last seen,
+certificate serial). Settings lists them as *This machine* and *Other teacher machines*.
+
+#### 3.7.2 Two consoles on the network at once — tolerated, not supported
+
+Two teachers driving the same lab at the same time is not a use case (owner's decision,
+`D-21`), and the owner expects it to essentially never happen. It is still not allowed to
+break anything, because a MacBook left open in the staff room *is* a second live console.
+The behaviour is defined and dull:
+
+- Agents stay with the console they are connected to and ignore other beacons while
+  linked (§3.4). Two live consoles therefore hold **disjoint** sets of PCs — whichever
+  each PC happened to connect to first. No PC ever takes commands from two consoles.
+- Each console sees the other's beacon and shows a **persistent, informational** banner:
+  *"Lab PC (instance `…`) is also running this lab and holds 6 of 14 PCs."* The count is
+  known because agents report their previous console in `Hello`, and the banner lists the
+  missing PCs by number. This banner has **no revoke button**; revocation is a security
+  action for a stolen machine, not a way to win an argument about who is teaching.
+- The banner offers **Take over the lab**. For the next 30 s the console adds a `take`
+  timestamp to its beacon. An agent linked to *another* instance that receives an endorsed
+  beacon with a `take` newer than its current connection disconnects and dials the taker.
+  The other console watches its PCs leave and shows *"MacBook-2026 took over the lab at
+  10:32."* No arbitration, no locking, no shared state between consoles: the last person
+  to press the button has the room, and every PC always answers to exactly one console.
+  The `take` field only works for endorsed beacons, so it is no more forgeable than the
+  beacon itself.
+- Anything a console does to a PC it does not hold — lock, broadcast, exam mode — simply
+  is not delivered; the tile shows *held by Lab PC* and the job stays pending. It is
+  delivered if the PC later arrives, which is why *Take over* exists.
+
+What is **not** built: a shared view of the room, two consoles both controlling one PC,
+merging job queues, or any console-to-console channel. That is the "genuinely simultaneous
+consoles" mode of §10, and it stays out of scope.
+
+#### 3.7.3 Revocation is for theft only
+
+Revoking an instance requires the passphrase (§3.2) and lives in *Settings → Other teacher
+machines → Revoke…*, behind a confirmation that names the instance and states that it
+will stop working until someone imports the backup on it again. It is the right answer to
+a stolen laptop and to nothing else; the migration steps in §3.6 call it optional for that
+reason. Revocation entries are signed by the lab key and carry a timestamp, so every
+console and every agent keeps the **union** of all entries it has ever seen; a revocation
+made on the Windows PC reaches the MacBook through the first agent that connects to it,
+and a console cannot be tricked into accepting an entry the lab key did not sign.
 
 Failure cases, from cheapest to worst:
 
 | Situation | Cost |
 |---|---|
 | Teacher machine dies or is replaced; backup intact | ~10 minutes on the new machine |
-| Teacher machine stolen | as above, plus revoke the old instance and power-cycle the lab so every agent picks up the revocation |
+| Teacher machine stolen | as above, plus revoke the stolen instance (§3.7.3) and power-cycle the lab so every agent picks up the revocation |
 | Passphrase forgotten | unlock with the recovery code, then set a new passphrase |
 | Recovery code lost, passphrase known | reprint a new recovery code from the console |
 | Lab key file lost entirely | re-run `Setup.exe --rekey` on every PC (~30 s each; keeps the `student` account, the software and the settings) |
@@ -170,7 +241,8 @@ lab-key.lck       the lab certificate authority, encrypted (§3.2). The one file
                   must survive. Never leaves this directory unencrypted.
 instance.json     this console instance: name, leaf certificate, key reference
                   (OS keystore), issued/expires
-lab.json          lab_id, room layout, revocation list, machines[]:
+lab.json          lab_id, room layout, revocation list (signed entries, §3.7.3),
+                  instances[] (every teacher machine this lab has seen, §3.7.1), machines[]:
                   {id, number, name, mac, last_ip, last_seen, agent_version, cert, notes}
 enrollment.json   outstanding single-use enrollment codes and which ones were burned
 packages/         package catalog: <name>.yaml + cached installer binaries
@@ -224,13 +296,14 @@ covered without a second visit.
 | Wake-on-LAN | Console sends magic packet (UDP broadcast `:9`, plus directed to `last_ip`). MAC comes from enrollment. Installer enables WoL on the NIC and disables Fast Startup/hibernation (they break WoL on Windows). |
 | Shutdown / reboot / logoff | Agent: `ExitWindowsEx` / `InitiateSystemShutdownEx` with `SE_SHUTDOWN_NAME`. |
 | Run script | Agent runs `powershell.exe -NoProfile -ExecutionPolicy Bypass -File …` or `cmd /c` as SYSTEM (default) or in the student session via the helper (`as: user`). stdout/stderr/exit code streamed back. |
-| Install package | Catalog entry = `{name, version, installer file, silent args, detect: {path|registry|command}}`. Console pushes the installer over the file stream (LAN, no internet needed), agent runs it silently, verifies `detect`, reports result. `winget`/`choco` are *not* used (winget does not work under SYSTEM). |
+| Install package | Catalog entry = `{name, version, installer file, silent args, detect: {path|registry|command}}`. Console pushes the installer over the file stream (LAN, no internet needed), agent runs it silently, verifies `detect`, reports result. `winget`/`choco` are *not* used (winget does not work under SYSTEM). **This is the reason the file channel exists** — installing an IDE on every PC without walking a USB stick around the room — and nothing built on the channel later may change how it behaves (`D-23`). |
+| Send files to students | The same `PullFile` channel with a different landing: the file goes to `Materials` on the `student` desktop (path in `Defaults.cs`), hash-verified, optionally opened at once in the student session by the helper. One job per file, so a batch of three handouts to 14 PCs is 42 rows in the jobs panel with a result each. Installers never land here and handouts are never executed (`D-23`). |
 | Broadcast teacher screen | Console captures its own screen (macOS: CoreGraphics `CGDisplayCreateImage`/ScreenCaptureKit via P/Invoke — needs Screen Recording permission; Windows: DXGI) → JPEG stream → helper shows a topmost full-screen window, input blocked. |
 | Lock screen | Helper shows a full-screen topmost window with a message; low-level keyboard hook swallows Alt+Tab/Win; `BlockInput`. Ctrl+Alt+Del cannot be blocked by design — accepted. |
 | Exam mode | A composable set of independent switches, not a single mode (see §6.1). |
 | — timer | Countdown rendered by the helper; the deadline is absolute (console clock, skew-corrected at `Hello`) so it keeps running if the link drops, and the mode ends by itself. |
 | — app whitelist | Helper subscribes to process-start events (WMI `Win32_ProcessStartTrace`, polling fallback) and terminates anything outside the allowed list. Matching is by **executable path/name only** — a process started by an allowed program is judged on its own name, not on its parent (owner's choice: the simpler rule). Hard-coded never-touch set: session, shell and OS processes, and LabControl itself. |
-| — internet block | Agent adds outbound-blocking firewall rules with a distinctive rule group, exempting the console subnet. Fail-safe: rules carry an expiry, are removed on exam end, on service start, and on any agent restart — a crashed agent can never leave a PC offline. |
+| Internet control | Three modes per PC — *open*, *whitelist* (named sites only), *blocked* — as a standalone action on one PC or the whole lab, and as the exam mode's internet switch. Enforcement is always Windows Firewall: outbound blocked in a LabControl rule group, exempting the lab's own subnet (so the console, the file channel and the printer keep working) and, in whitelist mode, the addresses of allowed sites. Names become addresses through a small resolver the agent runs on the loopback interface while a whitelist is active: it forwards allowed names upstream, records the answers as allow rules, and refuses everything else; encrypted-DNS bypasses fail on the firewall anyway. Fail-safe exactly like exam mode: the policy carries an expiry and a hard limit, is removed on service start before anything is re-applied, and a crashed agent can never leave a PC offline (§6.2, `D-22`). |
 | — collect work | At the end (or on demand) the agent zips **one folder chosen when the exam is set up** and uploads it through `PushFile`; the console files it under `<exam>/PC-07/`. The folder is a dedicated work directory, not the whole `student` desktop, so what is collected is predictable and small. |
 | Package management | The console's *Add package* wizard takes any local `.exe`/`.msi`, suggests silent arguments for known installer families, computes the hash, writes the YAML, and offers a test install on one PC before the fleet. The catalog ships **empty** — it is filled by the teacher. |
 | Profile reset | Agent logs `student` off, deletes the profile (`Win32_UserProfile.Delete`), reboots; auto-logon recreates a pristine profile. Optional "light reset" = wipe Desktop/Documents/Downloads only. |
@@ -247,12 +320,55 @@ combination as a named preset (*Written test*, *Practical with the IDE*, *Open-b
 |---|---|---|
 | Timer | mode ends when the teacher ends it | absolute deadline, countdown on the student screen, auto-end |
 | Allowed programs | anything runs | only the listed executables; others are closed as they start (matched by name, not by which program launched them) |
-| Internet | untouched | blocked except the console; automatically restored |
+| Internet | untouched | *blocked* or *whitelist* (§6.2) for the length of the exam; automatically restored |
 | Collect work at the end | nothing collected | one folder, picked while setting up the exam, is uploaded from every PC |
 
 Every switch is independently reversible, and the whole mode has a hard maximum
 duration after which the agent restores the machine on its own — a lesson must never
 end with a PC left restricted because the teacher's laptop was closed.
+
+### 6.2 Internet control: open, whitelist, blocked
+
+The owner wants the internet controllable during ordinary lessons, not only in exams:
+"no internet for this lab", or "only the JetBrains site and the Oracle docs". So the
+internet switch is its own action (`D-22`), applied to a selection of PCs or the whole
+lab from the toolbar and shown as a badge on the tile, and the exam mode's internet
+switch is the same mechanism with the exam's lifetime.
+
+| Mode | What the student PC can reach |
+|---|---|
+| Open | everything (the machine as it was) |
+| Whitelist | the lab's own subnet, plus the listed sites: hostnames with optional wildcard (`*.jetbrains.com`, `docs.oracle.com`). Hostnames only — with HTTPS a URL path is invisible to the machine, so a rule cannot say "this page but not that one" |
+| Blocked | the lab's own subnet only |
+
+Lists are saved as named presets (*Java docs*, *Nothing but the college site*) and
+reused in exam presets. A standalone policy always has a duration — *this lesson*
+(default 90 min), *N minutes*, or *until I lift it* — and, like an exam, an absolute hard
+limit (`Defaults.InternetPolicyHardLimit`, 8 h) past which the agent restores the
+machine on its own. If an exam starts while a standalone policy is in force, the exam's
+policy wins; when the exam ends, the standalone one is re-applied if it is still within
+its limits, so a "no internet today" is not silently cancelled by a test.
+
+How the whitelist is enforced, because this is the part that can go wrong:
+
+1. The agent installs the outbound block rules and the subnet exemption (same as
+   *Blocked*), plus a rule allowing UDP/TCP 53 to the loopback interface only.
+2. It starts a resolver on `127.0.0.1:53` and points the NIC's DNS at it, remembering the
+   previous DNS servers in the persisted policy state so they can be put back.
+3. For an allowed name the resolver forwards to the previous upstream, returns the real
+   answer, and adds every address in it (following CNAMEs) to the allow rule set with an
+   expiry a little longer than the record's TTL. For any other name it answers `REFUSED`.
+4. A browser that ignores the system resolver (DNS-over-HTTPS) still resolves only through
+   addresses the firewall lets it reach — which, for an unlisted site, it cannot. The
+   result is a blocked page, not a bypass.
+5. Restore = remove the rule group, stop the resolver, put the NIC's DNS back. This runs on
+   policy end, at the hard limit, and **first thing on every service start**.
+
+Known limits, accepted: a site behind a large CDN may need its CDN hostnames listed too
+(the console shows the resolver's refused names for the last minutes, so the missing one
+is a click away); a phone hotspot bypasses everything, exactly as it did before
+LabControl existed; captive-portal or proxy networks (`D-10` on-site checklist) may need
+the proxy address exempted.
 
 ## 7. Updating LabControl itself
 
@@ -321,14 +437,15 @@ than engineered around.
   scales from 1 to 30 PCs; beyond what fits, tiles shrink and the mosaic scrolls.
 - **Selection model**: click = select, ⌘/Ctrl-click = multi, ⌘A = all. Toolbar
   actions apply to the selection: Wake, Shutdown, Reboot, Log off, Lock, Unlock,
-  Broadcast, Exam mode…, Run script…, Install package…, Reset profile, Send file,
-  Collect files.
+  Broadcast, Exam mode…, Internet… (open / whitelist / blocked, §6.2), Run script…,
+  Install package…, Reset profile, Send files… (§6, `D-23`), Collect files.
 - **Single-PC view**: double-click a tile → full-size stream with input control toggle.
 - **Jobs panel**: every action becomes a job with per-PC rows (pending / running /
   ok / failed + log). Jobs persist in `logs/`.
 - **Packages** and **Scripts** panels: manage the catalog; "Install on all missing".
 - **Settings**: lab key (export backup, reprint the recovery code, change the
-  passphrase), console instances (this one, others seen, revoke), enrollment codes,
+  passphrase), teacher machines (this one, others seen, *Take over*, revoke behind a
+  confirmation — §3.7), enrollment codes,
   build USB installer.
 
 ## 9. Threat model (short)
@@ -356,11 +473,14 @@ Teacher-side risks, new since the console became replaceable:
 | Binaries are unsigned | antivirus / SmartScreen may quarantine the agent | accepted (see D-15); the installer registers an exclusion and the console reports agents that stop reporting |
 
 Out of scope: a student with a live USB or BIOS access (physical security is the
-college's job), and network attackers on the lab LAN beyond the students themselves.
+college's job), a student on a phone hotspot (the internet controls of §6.2 cover the
+lab's wire, not the student's pocket), and network attackers on the lab LAN beyond the
+students themselves.
 
 ## 10. Non-goals
 
-Multi-lab, two consoles driving one lab at the same time (§3.6), cloud relay, mobile
+Multi-lab, two consoles *sharing* one lab at the same time (§3.7.2 — alternating teacher
+machines are in scope, a split room is tolerated, a shared room is not), cloud relay, mobile
 console, Linux/macOS student agents
 (possible later; keep `LabControl.Agent` behind an `IPlatformAgent` seam but do not
 build it now), grading/LMS integration.

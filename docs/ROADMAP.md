@@ -109,7 +109,7 @@ live — **and the whole lab can be moved to a different teacher computer withou
 a single PC**. Proven entirely on the Mac against `FakeAgent`; no Windows machine needed.
 
 This is the milestone that implements `docs/ARCHITECTURE.md` §3 and decisions
-`D-13`/`D-14`. It is deliberately front-loaded: getting the trust model wrong is the one
+`D-13`/`D-14`/`D-21`. It is deliberately front-loaded: getting the trust model wrong is the one
 mistake that would later require a walk to every PC to fix.
 
 **Deliverables**
@@ -126,6 +126,11 @@ mistake that would later require a walk to every PC to fix.
 - **Migration**: *Import lab key* (file + passphrase, or recovery code) → mint a new
   instance → restore the machine list and layout → beacon. Plus instance revocation and
   the revocation list pushed to agents on connect.
+- **Alternating teacher machines** (`D-21`, ARCHITECTURE §3.7): the machine list self-heals
+  from agents that connect with a valid certificate; `instances[]` in `lab.json`; the
+  *other teacher machine* banner with the PCs it holds; *Take over the lab* via the
+  beacon `take` field; revocation entries signed by the lab key and merged as a set from
+  `RevocationState`; revoke moved behind a confirmation in Settings.
 - Console gRPC server on `47800/tcp` with **mutual TLS** validated against the lab CA on
   both sides, plus revocation checking.
 - UDP beacon on `47801` in the v2 format (instance public key + CA endorsement +
@@ -166,8 +171,18 @@ mistake that would later require a walk to every PC to fix.
   remove the first holder and confirm their passphrase no longer opens anything.
 - Revoke the old instance; an agent presented with the old leaf certificate refuses it
   and says why.
-- Start a second console instance for the same lab while the first is running: both warn
-  that another instance is beaconing, and name it.
+- **Alternation test.** Two console profiles (A and B) for the same lab, both with the lab
+  key imported. Run A with 30 fake agents; add a PC on A; close A; start B. All 30 agents
+  are online on B within 15 s, the PC added on A is present on B, and nobody was asked for
+  a passphrase. Close B, start A: same result in reverse.
+- **Two live consoles.** Start B while A is running and holds all 30 agents. Nothing on
+  the agents changes. B shows the banner naming A and listing the 30 PCs it holds; A shows
+  the banner naming B with 0 PCs. Press *Take over* on B: every agent re-homes to B within
+  15 s, A's tiles go to *held by B*, and a lock job issued on A while B held a PC is never
+  delivered. No agent ever holds two `Link` streams.
+- Revoke an agent on B, close B, start A: the first agent that connects to A brings the
+  revocation with it and A refuses the revoked agent thereafter. A forged revocation entry
+  (unsigned or signed by the wrong key) offered by a fake agent is ignored.
 - Kill the console and restart it — every agent reconnects within 15 s.
 - Change the console's bound address — every agent follows the new beacon within 15 s.
 - A forged beacon (valid JSON, wrong CA endorsement) is rejected without a connection
@@ -318,7 +333,10 @@ never walk again — including when the teacher machine is replaced.
   **secret-free** payload of `docs/INSTALLER.md`: public CA certificate + a batch of
   single-use enrollment codes.
 - File transfer both directions: `PullFile` and `PushFile`, hash-verified, resuming after
-  a reconnect.
+  a reconnect. Its first consumer is `install_package` — the reason the channel exists.
+- **Send files to students** (`D-23`): `send_file` lands in `Materials` on the `student`
+  desktop, optional *open after delivery* through the helper, one job per file, a batch
+  entry in the jobs panel expanding to per-file, per-PC rows; *Send files…* on the toolbar.
 - `self_update`, the full version (`D-19`, `docs/ARCHITECTURE.md` §7.2): a bundle whose
   manifest (version, per-file SHA-256, minimum installed version) is **signed with the lab
   key** and verified by the agent against its pinned `ca.crt`; unpack into a new version
@@ -349,6 +367,11 @@ never walk again — including when the teacher machine is replaced.
   unexpected in the console, and remove it in one click.
 - Pushing a 500 MB file to all 14 PCs in parallel completes, is hash-verified, and
   survives one PC losing its link mid-transfer.
+- *Send files…* with a 20 MB `.docx` and a `.pdf` to all 14 PCs: both appear in
+  `Materials` on every `student` desktop within a minute, the `.docx` opens on every
+  screen when *open after delivery* is ticked, a second send of the same file replaces the
+  first without a duplicate, and a `.exe` sent this way lands as a file and is not run.
+  Immediately afterwards an `install_package` job on the same PCs still works unchanged.
 - `self_update` upgrades every agent, and they reconnect on the new version.
 - **The deliberately broken release.** Push a bundle whose agent exits on start to all 14
   PCs. Every one of them is back on the previous version and online **without anyone
@@ -385,10 +408,15 @@ never walk again — including when the teacher machine is replaced.
   - *Allowed programs* — whitelist enforced by the helper via process-start events,
     matched by **executable name only** (no process-tree following), with a hard-coded
     never-touch set (session, shell and OS processes, LabControl itself).
-  - *Internet block* — outbound firewall rules in a LabControl rule group, exempting the
-    console, removed automatically.
+  - *Internet* — the internet policy of `D-22` (*blocked* or a *whitelist* preset) for the
+    exam's lifetime, overriding any standalone policy and handing back to it at the end.
   - *Collect work* — one folder, chosen while setting up the exam, zipped and uploaded
     from every PC at the end, filed under `<exam>/PC-07/`.
+- **Internet control as a standalone action** (`D-22`, `docs/ARCHITECTURE.md` §6.2):
+  *open* / *whitelist* / *blocked* per PC or lab-wide, with a duration (*this lesson*, *N
+  minutes*, *until I lift it*) and an 8 h hard limit; hostname presets with wildcards; the
+  loopback resolver that turns allowed names into time-limited firewall allow rules; the
+  *recently refused names* list in the console; a tile badge and `InternetState` reporting.
 - Fail-safe machinery for all of the above: state persisted on the agent, an absolute
   hard limit, and "restore first, then re-apply" on service start.
 - **Profile reset**: full (log off `student`, delete the profile via `Win32_UserProfile`,
@@ -402,6 +430,15 @@ never walk again — including when the teacher machine is replaced.
   rebooted while locked.
 - Each exam switch works **alone**: a timer-only session leaves the internet and the
   programs untouched; an internet-block-only session shows no countdown.
+- **Internet control drill.** *Blocked* on all 14 PCs: no site loads, the console keeps
+  every PC online, `install_package` and *Send files* still work. *Whitelist* with
+  `*.jetbrains.com` and `docs.oracle.com`: those load in a browser (including a browser with
+  DNS-over-HTTPS switched on), everything else shows a blocked page within 2 s, and the
+  refused names appear in the console. *Open* restores the original DNS servers exactly.
+  Kill the agent service under a whitelist: on restart the PC has its internet back before
+  anything is re-applied; pull the PC's power under a whitelist: same result after boot.
+- A standalone *blocked* policy set for the lesson survives an exam that starts and ends
+  inside it, and is still in force after the exam.
 - **Fail-safe drill, mandatory.** Start an exam with the internet blocked and the
   whitelist on, then close the console's laptop and leave it closed. Every PC restores
   itself at the hard limit. Repeat by killing the agent service mid-exam: on restart the
@@ -414,7 +451,8 @@ never walk again — including when the teacher machine is replaced.
 - Profile reset returns a deliberately messed-up `student` desktop to a clean state in
   one command, and the PC comes back online by itself.
 
-**Rough size.** Large. The whitelist and the firewall switch are the risky parts.
+**Rough size.** Large. The program whitelist, the firewall switch and the loopback
+resolver are the risky parts.
 
 ---
 
@@ -515,7 +553,7 @@ Kept here so the reasoning is not lost.
 
 | Question | Answer | Where it landed |
 |---|---|---|
-| Is the teacher machine fixed? | One console at a time, but the software must move to other labs and other master machines; needs a security scheme for replacement | `D-13`, ARCHITECTURE §3, M1 |
+| Is the teacher machine fixed? | No. Several teacher machines take turns (MacBook some days, the Windows desk PC on others); one drives the lab at a time; the software must also move to other labs; needs a security scheme for replacement | `D-13`, `D-21`, ARCHITECTURE §3, M1 |
 | Code signing? | None available; accept warnings and add an antivirus exclusion | `D-15`, INSTALLER step 6a |
 | Which packages on day one? | None. The catalog ships empty; what matters is a comfortable way to add installers later | `D-16` context, M6 |
 | Do installers need downloading? | No. The lab's software is already installed; testing will use an arbitrary program later | M6 |
@@ -523,9 +561,11 @@ Kept here so the reasoning is not lost.
 | Lab size? | Design and load-test for up to 30 PCs | `D-17` |
 | Where to test the real agent? | Both a Windows VM (fast, destructive tests) and `PC-00` in the lab (WoL, capture, performance) | M2 |
 | Can someone else open the lab key? | Yes — multiple named key holders, each with their own passphrase | `D-13`, ARCHITECTURE §3.2, M1 |
-| Two consoles at once? | No. A second machine replaces the first; simultaneous consoles are out of scope | `D-13`, ARCHITECTURE §3.6 |
+| Two consoles at once? | Not a mode, but it must not break: two live consoles split the room, never share a PC, and either can *Take over*. A shared room is out of scope | `D-21`, ARCHITECTURE §3.7 |
 | What does *collect work* take? | One dedicated folder, chosen when the exam is set up — not the whole desktop | `D-16`, M5 |
 | How precise is the whitelist? | Executable names only; no following of child processes | `D-16`, M5 |
+| Internet control outside exams? | Yes: *open* / *whitelist* (hostnames, wildcards) / *blocked*, standalone with a duration and a hard limit, and the same thing as the exam's internet switch | `D-22`, ARCHITECTURE §6.2, M5 |
+| Sending files to students? | Yes — but the file channel exists first for installing software without a USB walk, and that flow stays untouched; handouts land in `Materials` on the student desktop | `D-23`, ARCHITECTURE §6, M4 |
 | How does LabControl update itself? | Side-by-side version directories, a bundle signed by the lab key, 10-minute probation and a rollback driven from outside the agent; the console is updated by replacing its binary | `D-19`, ARCHITECTURE §7, M2 + M4 |
 | How do old agents and new consoles coexist? | A frozen protocol subset (`Hello`, `Heartbeat`, `Job{self_update}`, `JobResult`); an old agent is never refused, only marked outdated | `D-19`, PROTOCOL *Versioning*, M1 |
 
@@ -536,6 +576,6 @@ remaining unknowns are physical facts about the room, in the on-site checklist.
 
 ## Out of scope for v1
 
-Multi-lab management from one console, two consoles driving one lab at the same time,
-cloud relay, mobile console, Linux/macOS student agents, grading or LMS integration,
+Multi-lab management from one console, two consoles *sharing* one lab at the same time
+(alternating teacher machines are in scope, `D-21`), cloud relay, mobile console, Linux/macOS student agents, grading or LMS integration,
 student-initiated help requests, session recording.

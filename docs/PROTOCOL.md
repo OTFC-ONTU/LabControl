@@ -20,12 +20,18 @@ document explains intent and flows. **Update this file whenever a .proto changes
 ## Discovery beacon (UDP, plain JSON, ≤ 512 bytes)
 
 ```json
-{"v":2,"lab":"<lab_id>","inst":"<instance_id>","host":"192.168.1.23","port":47800,
- "ts":1725450000,
+{"v":2,"lab":"<lab_id>","inst":"<instance_id>","name":"Lab PC","host":"192.168.1.23",
+ "port":47800,"ts":1725450000,
+ "take":1725450010,
  "pub":"<base64: console instance public key, P-256 compressed, 33 B>",
  "end":"<base64: CA signature over lab_id|inst|pub, 64 B>",
  "sig":"<base64: instance-key signature over all preceding fields, 64 B>"}
 ```
+
+`take` is optional. A console includes it for 30 s after the teacher presses *Take over
+the lab* (`docs/ARCHITECTURE.md` §3.7.2), set to the moment of the press. `name` is the
+instance's display name, so a console that sees another beacon can name it in the banner
+without any other exchange.
 
 The beacon is verifiable **offline, with no shared secret**. An agent accepts it only if
 `lab` matches its own, `end` verifies against the **pinned CA public key**, `sig`
@@ -40,6 +46,15 @@ Consequences:
   same `end` chain to the same CA, so every agent follows it without being touched.
 - Forged beacons cost a rejected TLS handshake. Agents ignore beacons while connected,
   and rate-limit dial attempts (≥ 2 s apart, exponential backoff per endpoint).
+- The one exception to "ignore while connected" is `take`: a linked agent that receives a
+  fully verified beacon from a **different** instance whose `take` is newer than the
+  moment its current link was established closes that link and dials the taker. Each
+  `take` value is honoured once, so a console rebroadcasting the same value for 30 s does
+  not cause a re-dial loop, and two consoles pressing the button alternately simply move
+  the room back and forth — never split a PC between them.
+- Consoles listen on the beacon port too. A verified beacon from another instance of the
+  same lab is recorded in `lab.json` `instances[]` and drives the *other teacher machine*
+  banner; a beacon that fails verification is dropped exactly as an agent would drop it.
 
 ## gRPC services (`labcontrol.v1`)
 
@@ -74,14 +89,30 @@ the CA it pinned at install. No token, no password, no shared secret is exchange
 
 `AgentMessage` (oneof): `Hello`, `Heartbeat`, `Inventory`, `SessionState`
 (logon/logoff/lock/ unlock, active user), `JobProgress`, `JobResult`, `Event` (error,
-warning, info), `Pong`.
+warning, info), `Pong`, `ExamState`, `InternetState` (see *Internet policy*), `RevocationState` (every signed revocation entry the
+agent holds — sent right after `Hello`, so a console that was not running when another
+teacher machine revoked something learns of it from the first agent that connects).
 
-`ConsoleMessage` (oneof): `Welcome` (server time, instance id, revocation list
-version, config), `Ping`, `Job` (see below), `VideoControl` (start/stop, mode
+`ConsoleMessage` (oneof): `Welcome` (server time, instance id and name, the serials the
+console holds revoked), `Ping`, `Job` (see below), `VideoControl` (start/stop, mode
 `thumbnail|full`, fps, quality), `Input` (mouse move/button/wheel, key down/up, unicode
 text), `Overlay` (lock / unlock / broadcast start / broadcast stop, message text),
-`ExamMode` (see below), `Revocation` (revoked certificate list + version),
-`UpdateAgent`.
+`ExamMode` (see below), `InternetPolicy` (see below), `Revocation` (signed revocation entries — the console sends the
+ones the agent's `RevocationState` was missing, the agent keeps the union), `UpdateAgent`.
+
+### Revocation entries
+
+```
+RevocationEntry { serial, revoked_at_unix, reason, signature }
+```
+
+`signature` is the **lab key's** signature over `serial|revoked_at_unix|reason`. Revoking
+already requires unlocking the lab key (`docs/ARCHITECTURE.md` §3.2), so signing costs
+nothing extra, and it means that neither an agent nor a console ever accepts a revocation
+on the say-so of a TLS peer alone: an entry that does not verify against the pinned CA is
+dropped and logged. Because entries are self-authenticating, the list has no version and
+no owner — every party keeps the union of what it has seen, in any order, which is what
+lets several teacher machines revoke independently (`D-21`).
 
 ### `Job` — every action is a job
 
@@ -99,6 +130,49 @@ queued in the console (`pending`) and delivered on the next `Link`, unless
 Wake-on-LAN is not a job — it is a console-side UDP send; the "result" is the agent
 showing up on `Link` within the WoL timeout (default 90 s).
 
+### Files: `install_package` and `send_file`
+
+Both pull the file with `PullFile` (hash-verified, resumable) and differ only in where it
+lands and what happens next (`D-23`):
+
+| | `install_package` | `send_file` |
+|---|---|---|
+| args | `package`, `version`, `ref`, `sha256` | `ref`, `sha256`, `name`, `open` (`true`/`false`, default `false`) |
+| lands in | agent staging directory under `ProgramData`, deleted afterwards | `Materials` on the `student` desktop, overwriting a same-named file |
+| then | run silently as SYSTEM with the catalog's arguments, verify `detect` | if `open`, the helper opens it in the student session with the default application |
+| ever executed | yes — that is the job | never, whatever the extension |
+
+`install_package` is the older and more important of the two and its behaviour is fixed;
+`send_file` is one job per file so that a batch reports per file, per PC.
+
+## Internet policy
+
+```
+InternetPolicy {
+  string   session_id;            // one per policy application, like an exam session
+  Mode     mode;                  // OPEN | WHITELIST | BLOCKED
+  repeated string allowed_hosts;  // WHITELIST only: hostnames, optional leading "*."
+  int64    until_unix;            // 0 = until lifted; otherwise the agent restores itself here
+  int64    hard_limit_unix;       // always set; never more than 8 h out
+  string   preset_name;           // shown on the tile badge and in the student banner
+}
+```
+
+Sent as its own `ConsoleMessage` for a standalone policy (`docs/ARCHITECTURE.md` §6.2) and
+embedded in `ExamMode.internet` for an exam. The agent keeps at most one of each, persisted;
+the exam's wins while the exam is active and the standalone one is re-applied when the
+exam ends if it is still within its limits. `OPEN` with `until_unix = 0` lifts a standalone
+policy. The agent answers every change, and every service start, with:
+
+```
+InternetState { mode, session_id, until_unix, resolver_active,
+                repeated string refused_recently }   // names the whitelist resolver refused
+```
+
+`refused_recently` is what lets the teacher see which CDN hostname a site needs.
+Enforcement (firewall rule group, loopback resolver, DNS restore) is described in
+`docs/ARCHITECTURE.md` §6.2; the fail-safe rules are those of exam mode below.
+
 ## Exam mode
 
 ```
@@ -108,7 +182,7 @@ ExamMode {
   int64    ends_at_unix;          // 0 = no timer; absolute, skew-corrected at Hello
   int64    hard_limit_unix;       // always set; the agent restores itself past this
   string   message;               // shown in the countdown banner
-  bool     block_internet;
+  InternetPolicy internet;        // optional; OPEN or absent = internet untouched
   repeated string allowed_programs;   // executable names; empty = no whitelist enforced
   CollectSpec collect;            // optional; the folder chosen when the exam was set up
 }
@@ -167,7 +241,12 @@ everything else. The helper never talks to the network.
 `Hello` also carries `lab_id` and the agent's certificate serial, so a console that has
 been migrated to a new machine (`docs/ARCHITECTURE.md` §3.6) recognises the PCs it
 restored from backup, and an agent belonging to a different lab is refused with a clear
-message rather than a TLS error.
+message rather than a TLS error. An agent whose certificate chains to the lab CA but
+whose serial the console has never seen is **added to the machine list from `Hello`**,
+not refused — the console's list is a cache of the lab, and another teacher machine may
+have enrolled the PC (§3.7). `Hello.previous_instance_id` names the console the agent
+was linked to before this one (empty on first link since boot); it is what lets a console
+say which PCs the *other* teacher machine currently holds.
 
 ### The frozen subset
 

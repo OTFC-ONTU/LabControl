@@ -110,8 +110,9 @@ forgotten passphrase is recoverable and a leaked backup file is inert. Owner's e
 choice: **passphrases and recovery codes, not a USB-borne key file**, and **more than one
 key holder** — a colleague must be able to open the lab if the owner is ill on an exam
 day, so the master key carries one wrapping per named holder plus the recovery code.
-Equally by the owner's choice, only **one console may be active at a time**: a second
-instance replaces the first rather than running beside it. Everything needed is
+Equally by the owner's choice, only **one console drives the lab at a time** — but several
+teacher machines may hold a console permanently and take turns; see `D-21` for what that
+means in practice. Everything needed is
 in the .NET base class library (`ECDsa`, `CertificateRequest`, `AesGcm`,
 `Rfc2898DeriveBytes`) — no new NuGet dependency.
 Rejected: pinning the console leaf and re-running the installer on every PC after a
@@ -160,7 +161,7 @@ Context: the owner asked for a "test mode", and then for it to be switchable per
 feature, because written work varies — sometimes only a timer is wanted, sometimes a
 locked-down machine.
 Decision: one *exam session* composed of four independent switches — timer with a visible
-countdown, allowed-programs whitelist, internet block, collect-work-at-the-end — saved
+countdown, allowed-programs whitelist, internet control (`D-22`), collect-work-at-the-end — saved
 as named presets. The enforced state lives on the agent and is persisted, so an exam
 survives a console restart, a network drop or a reboot. Every session carries an absolute
 hard limit; past it the agent restores the machine on its own, and on service start the
@@ -187,6 +188,104 @@ scrolls; the video budget and the job fan-out are sized and load-tested for **30
 with measurements rather than guesses.
 Rejected: hard-coding 14 (immediate rewrite when the software moves); designing for 50+
 now (a materially harder streaming problem for a lab that does not exist).
+
+## D-21 — Several teacher machines take turns; two at once is tolerated, never shared
+
+Context: the lab is taught by more than one person. The owner uses a MacBook; a colleague
+uses the Windows PC at the teacher's desk. `D-13` made the teacher machine *replaceable*,
+but "replacement" implies the old machine goes away. Here both stay, and the question is
+what happens on the day they swap — and on the day someone forgets to close the console
+on the other one.
+
+Decision, in three parts, all from the owner:
+
+1. **Alternation is the baseline.** Any number of teacher machines may carry a console
+   for the same lab, each with its own instance certificate minted from the same lab key.
+   Closing the console on one machine and opening it on another is the entire handover;
+   agents re-home themselves via the beacon within ~15 s. To make this cheap, a console's
+   machine list is treated as a cache of what the agents know: an agent presenting a valid
+   lab-issued certificate is added to the list on connect, never rejected as unknown.
+   Revocation entries are signed by the lab key and merged as a set across consoles and
+   agents, so a revocation made on one machine reaches the others through the agents.
+2. **Two live consoles is an exception, not a mode.** It must not break the lab, and it
+   must not become a shared mode either: no PC ever takes commands from two consoles.
+   Agents keep the connection they have (already the rule from `D-05`), so two consoles
+   split the room; each shows an informational banner naming the other and the PCs it
+   holds, and offers *Take over the lab*, implemented as a signed `take` timestamp in the
+   beacon that makes agents re-home to the taker. Last button press wins. There is no
+   console-to-console channel, no locking, no merged view.
+3. **Revoke is not the tool for this.** Revocation stays a security action for a stolen
+   machine, behind the passphrase and a confirmation in Settings, and is no longer
+   offered from the "another instance is running" banner.
+
+Rejected: a shared mode where both consoles see and control the whole room (needs
+arbitration of lock/broadcast/exam/input per PC and a console-to-console channel —
+real complexity for a situation the owner expects never to occur); a console-side
+lease or lock file (no shared storage exists on an isolated LAN, and a stale lease would
+block the next teacher); one-click revoke from the banner (turns a forgotten laptop into
+a re-import job for the owner); syncing the package catalog automatically between
+machines (would need a console-to-console channel; a visible "catalog last changed on
+…" label plus backup import is enough for a catalog that changes a few times a year).
+See `docs/ARCHITECTURE.md` §3.7 and `docs/PROTOCOL.md` (beacon `take`, `Revocation`,
+`RevocationState`).
+
+## D-22 — Internet control is its own action: open, whitelist, blocked
+
+Context: the owner wants to control the internet during ordinary lessons, not only inside
+an exam — sometimes nothing at all, sometimes "only the documentation sites". `D-16` had
+the internet switch only as a part of an exam session, as a plain on/off.
+
+Decision: a standalone **internet policy** with three modes — *open*, *whitelist* (a list
+of hostnames with optional leading wildcard), *blocked* — applied per PC or lab-wide,
+saved as named presets, and reused as the exam mode's internet switch. Enforcement is
+Windows Firewall in every mode (outbound blocked in a LabControl rule group, the lab's
+own subnet exempt). The whitelist resolves names through a resolver the agent runs on
+the loopback interface while the policy is active: allowed names are forwarded upstream
+and their answers added as time-limited allow rules; everything else is refused. Because
+the firewall, not the resolver, is the gate, a browser that resolves elsewhere
+(DNS-over-HTTPS) gains nothing. A standalone policy has a duration and the same fail-safe
+shape as an exam: persisted on the agent, an absolute hard limit (8 h), restore-first on
+service start. An active exam's policy overrides a standalone one and the standalone one
+comes back when the exam ends.
+Accepted limits: hostnames only, never URL paths (invisible under HTTPS); CDN hostnames
+may need listing (the console shows recently refused names to make that easy); a phone
+hotspot is out of reach, as it always was.
+Rejected: a filtering HTTP proxy on the agent or on the console (would have to terminate
+TLS to see paths — a private CA on every PC intercepting student traffic is exactly the
+kind of thing this project should not do, and it breaks certificate pinning in tools like
+IDE update checks); hosts-file editing (no wildcards, does not stop DoH, easy to miss on
+restore); blocking by IP lists maintained by hand (sites move); a whitelist only inside
+exam mode (the owner's everyday case is a lesson, not a test).
+See `docs/ARCHITECTURE.md` §6.2 and `docs/PROTOCOL.md` (`InternetPolicy`, `InternetState`).
+
+## D-23 — One file channel, two landings: installers and handouts
+
+Context: the file channel (`PullFile`) exists **for installing software** — pushing an
+IDE or a JDK to every PC without walking a USB stick around the room is the first thing
+the project was started for. The owner also wants to hand out materials (a `.docx`
+methodical guide, a task sheet) to every student PC. The two must not get in each other's
+way.
+
+Decision: the same hash-verified, resumable channel, with two jobs that never share a
+landing:
+
+- `install_package` (unchanged): the installer is pulled into the agent's private staging
+  directory under `ProgramData`, run silently as SYSTEM, `detect` is verified, the file
+  is deleted. Students never see it; it never touches the `student` profile.
+- `send_file` (new landing): the file is pulled into `Materials` on the `student` desktop
+  (path in `Defaults.cs`), overwriting an older copy of the same name, and is optionally
+  opened at once in the student session through the helper. It is never executed, whatever
+  its extension. One job per file, so every file on every PC has its own result row.
+
+The console offers *Send files…* on the toolbar; the batch is one entry in the jobs panel
+that expands to per-file, per-PC rows. Profile reset (full or light) wipes `Materials` with
+the rest of the desktop, which is the intended way to clear last week's handouts.
+Rejected: a generic "copy file to path" action (invites installers onto the desktop and
+handouts into `Program Files`; a teacher under time pressure should not be choosing
+paths); a shared network folder instead of the channel (needs SMB open on every PC and a
+password somewhere; the channel is already there and authenticated); executing handouts
+"if they are scripts" (that is what `run_script` and the scripts panel are for).
+See `docs/ARCHITECTURE.md` §6 and `docs/PROTOCOL.md` (`send_file`).
 
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 

@@ -197,6 +197,36 @@ public static class Defaults
     /// </summary>
     public static readonly TimeSpan ExamHardLimit = TimeSpan.FromHours(4);
 
-    /// <summary>Firewall rule group used by the exam-mode internet block, so it can be removed as a set.</summary>
-    public const string ExamFirewallRuleGroup = "LabControl Exam";
+    // ---------------------------------------------------------------- internet control
+
+    /// <summary>
+    /// Firewall rule group for every internet policy — standalone or the exam's internet
+    /// switch — so the whole set is removed in one call on restore (D-22, ARCHITECTURE §6.2).
+    /// </summary>
+    public const string InternetFirewallRuleGroup = "LabControl Internet";
+
+    /// <summary>
+    /// A standalone internet policy may never outlive this, whatever the console asked for;
+    /// past it the agent restores the machine on its own, like an exam (D-22).
+    /// </summary>
+    public static readonly TimeSpan InternetPolicyHardLimit = TimeSpan.FromHours(8);
+
+    /// <summary>Default duration offered for a standalone policy: "this lesson".</summary>
+    public static readonly TimeSpan InternetPolicyLessonDuration = TimeSpan.FromMinutes(90);
+
+    /// <summary>Where the whitelist resolver listens while a whitelist policy is active.</summary>
+    public const string WhitelistResolverAddress = "127.0.0.1";
+    public const int WhitelistResolverPort = 53;
+
+    /// <summary>Allow rules learned from the resolver outlive the DNS record's TTL by this much.</summary>
+    public static readonly TimeSpan WhitelistRuleGrace = TimeSpan.FromMinutes(5);
+
+    // ---------------------------------------------------------------- handouts
+
+    /// <summary>
+    /// Where <c>send_file</c> lands, relative to the <c>student</c> profile: a folder on the
+    /// desktop the student cannot miss and a profile reset wipes (D-23). Installers never
+    /// land here; they go to the agent's staging directory.
+    /// </summary>
+    public const string MaterialsRelativePath = @"Desktop\Materials";
 }

@@ -1,34 +1,96 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:LabControl.Console.Localization"
+        xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+        xmlns:views="clr-namespace:LabControl.Console.Views"
         x:Class="LabControl.Console.Views.MainWindow"
-        Title="{loc:Localize MainWindow.Title}"
-        Width="960" Height="640"
-        MinWidth="640" MinHeight="420">
+        x:DataType="vm:MainViewModel"
+        Title="{Binding Title}"
+        Width="1100" Height="720"
+        MinWidth="720" MinHeight="480">
+
+  <Window.Styles>
+    <Style Selector="Border.banner">
+      <Setter Property="Background" Value="{DynamicResource SystemFillColorAttentionBackgroundBrush}" />
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+    </Style>
+    <Style Selector="Border.banner.warning">
+      <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+    </Style>
+    <Style Selector="Button.accent">
+      <Setter Property="Background" Value="{DynamicResource SystemAccentColor}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="IndianRed" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+  </Window.Styles>
 
   <DockPanel>
 
-    <Border DockPanel.Dock="Bottom"
-            Background="{DynamicResource SystemControlBackgroundListLowBrush}"
-            Padding="14,8">
-      <TextBlock Text="{loc:Localize MainWindow.Status}"
-                 Opacity="0.7"
-                 FontSize="12" />
+    <!-- Banners: other teacher machine, renewals, backup, unlocked key (ARCHITECTURE §3.7.2, §3.8, §4). -->
+    <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding Banners}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:BannerViewModel">
+          <Border Classes="banner" Classes.warning="{Binding IsWarning}">
+            <DockPanel>
+              <Button DockPanel.Dock="Right"
+                      Content="{Binding ActionLabel}"
+                      IsVisible="{Binding HasAction}"
+                      Click="OnBannerAction"
+                      Margin="12,0,0,0" />
+              <TextBlock Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <!-- Toolbar: actions apply to the selection (ARCHITECTURE §8). -->
+    <Border DockPanel.Dock="Top" Padding="10,8" BorderThickness="0,0,0,1"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="{loc:Localize Action.Shutdown}" Command="{Binding ShutdownCommand}" />
+        <Button Content="{loc:Localize Action.Reboot}" Command="{Binding RebootCommand}" />
+        <Button Content="{loc:Localize Action.Logoff}" Command="{Binding LogoffCommand}" />
+        <Button Content="{loc:Localize Action.RunScript}" Command="{Binding RunScriptCommand}" />
+        <Rectangle Width="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" Margin="4,0" />
+        <Button Content="{loc:Localize Action.SelectAll}" Command="{Binding SelectAllCommand}" />
+        <Button Content="{loc:Localize Action.ClearSelection}" Command="{Binding ClearSelectionCommand}" />
+        <Rectangle Width="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" Margin="4,0" />
+        <Button Content="{loc:Localize Action.EnrolPcs}" Command="{Binding UnlockCommand}" IsVisible="{Binding !IsUnlocked}" />
+        <Button Content="{loc:Localize Key.Lock}" Command="{Binding LockCommand}" IsVisible="{Binding IsUnlocked}" />
+        <TextBlock Text="{Binding SelectedCount, StringFormat={loc:Localize Main.SelectedFormat}}"
+                   VerticalAlignment="Center" Opacity="0.7" Margin="12,0,0,0" />
+      </StackPanel>
     </Border>
 
-    <StackPanel VerticalAlignment="Center"
-                HorizontalAlignment="Center"
-                MaxWidth="560"
-                Spacing="12">
-      <TextBlock Text="{loc:Localize MainWindow.Heading}"
-                 FontSize="24"
-                 FontWeight="SemiBold"
-                 HorizontalAlignment="Center" />
-      <TextBlock Text="{loc:Localize MainWindow.Body}"
-                 TextWrapping="Wrap"
-                 Opacity="0.75"
-                 TextAlignment="Center" />
-    </StackPanel>
+    <!-- Status bar. -->
+    <Border DockPanel.Dock="Bottom" Padding="14,6"
+            Background="{DynamicResource SystemControlBackgroundListLowBrush}">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Right" Text="{Binding KeyStatus}" Opacity="0.7" FontSize="12" />
+        <TextBlock Text="{Binding StatusLine}" Opacity="0.7" FontSize="12" />
+      </DockPanel>
+    </Border>
+
+    <TabControl Padding="0">
+      <TabItem Header="{loc:Localize Tab.Lab}">
+        <views:LabView />
+      </TabItem>
+      <TabItem Header="{loc:Localize Tab.Jobs}">
+        <views:JobsView />
+      </TabItem>
+      <TabItem Header="{loc:Localize Tab.Events}">
+        <views:EventsView />
+      </TabItem>
+      <TabItem Header="{loc:Localize Tab.Settings}">
+        <views:SettingsView DataContext="{Binding Settings}" />
+      </TabItem>
+    </TabControl>
 
   </DockPanel>
 

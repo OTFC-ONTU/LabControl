@@ -36,6 +36,11 @@ public sealed class ConsoleInstance : IDisposable
 
     public string CertificateSerial => LabCertificates.SerialOf(Certificate);
 
+    public DateTimeOffset ExpiresAt => new(Certificate.NotAfter.ToUniversalTime(), TimeSpan.Zero);
+
+    /// <summary>True once the leaf has less than the renewal lead time left (D-25).</summary>
+    public bool NeedsRemint(DateTimeOffset now) => LabCertificates.NeedsRenewal(Certificate, now);
+
     /// <summary>
     /// Mints a new console instance. Called on first run and again on every migration to
     /// another teacher machine — a new machine always gets its own identity, never a copy
@@ -65,6 +70,47 @@ public sealed class ConsoleInstance : IDisposable
             Endorsement = Beacon.Endorse(lab, instanceId, P256.Compress(key)),
             PrivateKey = protector.Protect(ProtectionReference(instanceId), key.ExportPkcs8PrivateKey()),
             CreatedAtUnix = created.ToUnixTimeSeconds(),
+        };
+
+        return new ConsoleInstance(document, certificate.CopyWithPrivateKey(key));
+    }
+
+    /// <summary>
+    /// Re-mints this instance's leaf when it is close to expiry (ARCHITECTURE §3.8): a new
+    /// key, certificate and endorsement under the <b>same</b> instance id and name, so the
+    /// agents' <c>previous_instance_id</c> and the other consoles' <c>instances[]</c> keep
+    /// naming the same teacher machine. The old document's backup bookkeeping is kept.
+    /// </summary>
+    public static ConsoleInstance Remint(LabKey lab, InstanceDocument existing, ISecretProtector protector, DateTimeOffset? now = null)
+    {
+        var created = now ?? DateTimeOffset.UtcNow;
+
+        using var key = LabCertificates.CreateKey();
+        var certificate = LabCertificates.IssueConsoleInstance(
+            lab.Authority, lab.LabId, existing.InstanceId, existing.InstanceName, key, created);
+
+        // Forget the old key in the keystore; the reference is reused for the new one.
+        try
+        {
+            SecretProtector.For(existing.PrivateKey).Forget(existing.PrivateKey);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
+        {
+        }
+
+        var document = new InstanceDocument
+        {
+            LabId = existing.LabId,
+            InstanceId = existing.InstanceId,
+            InstanceName = existing.InstanceName,
+            Certificate = certificate.Export(X509ContentType.Cert),
+            Endorsement = Beacon.Endorse(lab, existing.InstanceId, P256.Compress(key)),
+            PrivateKey = protector.Protect(ProtectionReference(existing.InstanceId), key.ExportPkcs8PrivateKey()),
+            CreatedAtUnix = created.ToUnixTimeSeconds(),
+            BackupExportedAtUnix = existing.BackupExportedAtUnix,
+            BackupLocation = existing.BackupLocation,
+            BackupFingerprint = existing.BackupFingerprint,
+            RecoveryCodeAcknowledged = existing.RecoveryCodeAcknowledged,
         };
 
         return new ConsoleInstance(document, certificate.CopyWithPrivateKey(key));

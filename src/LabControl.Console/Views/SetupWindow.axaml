@@ -1,0 +1,114 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:LabControl.Console.Localization"
+        xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+        x:Class="LabControl.Console.Views.SetupWindow"
+        x:DataType="vm:SetupViewModel"
+        Title="{loc:Localize Setup.Title}"
+        Width="640" Height="560"
+        MinWidth="560" MinHeight="480"
+        WindowStartupLocation="CenterScreen">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.h">
+      <Setter Property="FontSize" Value="22" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.p">
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Opacity" Value="0.8" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="MinWidth" Value="360" />
+    </Style>
+    <Style Selector="Button.accent">
+      <Setter Property="Background" Value="{DynamicResource SystemAccentColor}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+  </Window.Styles>
+
+  <ScrollViewer>
+    <StackPanel Margin="32" Spacing="12" MaxWidth="560">
+
+      <!-- Step 1: choose -->
+      <StackPanel IsVisible="{Binding IsChoose}" Spacing="12">
+        <TextBlock Classes="h" Text="{loc:Localize Setup.Welcome}" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.WelcomeBody}" />
+        <Button Classes="accent" Content="{loc:Localize Setup.CreateLab}" Command="{Binding ChooseCreateCommand}" HorizontalAlignment="Left" Padding="16,8" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.CreateLabHint}" />
+        <Button Content="{loc:Localize Setup.ImportLab}" Command="{Binding ChooseImportCommand}" HorizontalAlignment="Left" Padding="16,8" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.ImportLabHint}" />
+      </StackPanel>
+
+      <!-- Step 2a: create -->
+      <StackPanel IsVisible="{Binding IsCreate}" Spacing="10">
+        <TextBlock Classes="h" Text="{loc:Localize Setup.CreateLab}" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.CreateBody}" />
+        <TextBlock Text="{loc:Localize Setup.LabName}" />
+        <TextBox Text="{Binding LabName}" PlaceholderText="{loc:Localize Setup.LabNameExample}" />
+        <TextBlock Text="{loc:Localize Setup.HolderName}" />
+        <TextBox Text="{Binding HolderName}" />
+        <TextBlock Text="{loc:Localize Setup.Passphrase}" />
+        <TextBox Text="{Binding Passphrase}" PasswordChar="•" />
+        <TextBox Text="{Binding PassphraseAgain}" PasswordChar="•" PlaceholderText="{loc:Localize Setup.PassphraseAgain}" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.PassphraseHint}" FontSize="12" />
+        <TextBlock Text="{loc:Localize Setup.InstanceName}" />
+        <TextBox Text="{Binding InstanceName}" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.InstanceNameHint}" FontSize="12" />
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+          <Button Content="{loc:Localize Common.Back}" Command="{Binding BackCommand}" />
+          <Button Classes="accent" Content="{loc:Localize Setup.CreateAction}" Command="{Binding CreateCommand}" IsEnabled="{Binding !IsBusy}" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Step 2b: import -->
+      <StackPanel IsVisible="{Binding IsImport}" Spacing="10">
+        <TextBlock Classes="h" Text="{loc:Localize Setup.ImportLab}" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.ImportBody}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="{loc:Localize Setup.PickBackup}" Command="{Binding PickBackupCommand}" />
+          <TextBlock Text="{Binding BackupFile}" VerticalAlignment="Center" Opacity="0.7" TextTrimming="CharacterEllipsis" MaxWidth="360" />
+        </StackPanel>
+        <TextBlock Classes="p" Text="{Binding BackupSummary}" />
+        <CheckBox Content="{loc:Localize Unlock.UseRecoveryCode}" IsChecked="{Binding UseRecoveryCode}" />
+        <TextBox Text="{Binding ImportSecret}" PasswordChar="•" PlaceholderText="{loc:Localize Unlock.Passphrase}" IsVisible="{Binding !UseRecoveryCode}" />
+        <TextBox Text="{Binding ImportSecret}" PlaceholderText="{loc:Localize Unlock.RecoveryCode}" IsVisible="{Binding UseRecoveryCode}" />
+        <TextBlock Text="{loc:Localize Setup.InstanceName}" />
+        <TextBox Text="{Binding InstanceName}" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.InstanceNameHint}" FontSize="12" />
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+          <Button Content="{loc:Localize Common.Back}" Command="{Binding BackCommand}" />
+          <Button Classes="accent" Content="{loc:Localize Setup.ImportAction}" Command="{Binding ImportCommand}" IsEnabled="{Binding !IsBusy}" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Step 3: recovery code -->
+      <StackPanel IsVisible="{Binding IsRecoveryCode}" Spacing="10">
+        <TextBlock Classes="h" Text="{loc:Localize Setup.RecoveryHeading}" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.RecoveryBody}" />
+        <TextBox Text="{Binding RecoveryCodeText}" IsReadOnly="True" FontFamily="Menlo, Consolas, monospace" FontSize="20" HorizontalContentAlignment="Center" />
+        <CheckBox Content="{loc:Localize Setup.AcknowledgeRecovery}" IsChecked="{Binding RecoveryCodeAcknowledged}" />
+        <Button Classes="accent" Content="{loc:Localize Common.Continue}" Command="{Binding AcknowledgeRecoveryCodeCommand}" IsEnabled="{Binding RecoveryCodeAcknowledged}" HorizontalAlignment="Left" />
+      </StackPanel>
+
+      <!-- Step 4: backup -->
+      <StackPanel IsVisible="{Binding IsBackup}" Spacing="10">
+        <TextBlock Classes="h" Text="{loc:Localize Setup.BackupHeading}" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.BackupBody}" />
+        <Button Classes="accent" Content="{loc:Localize Backup.Export}" Command="{Binding ExportBackupCommand}" HorizontalAlignment="Left" />
+      </StackPanel>
+
+      <!-- Step 5: done -->
+      <StackPanel IsVisible="{Binding IsDone}" Spacing="10">
+        <TextBlock Classes="h" Text="{loc:Localize Setup.DoneHeading}" />
+        <TextBlock Classes="p" Text="{loc:Localize Setup.DoneBody}" />
+        <TextBlock Classes="p" Text="{Binding BackupPath}" FontSize="12" />
+        <Button Classes="accent" Content="{loc:Localize Setup.OpenConsole}" Click="OnFinish" HorizontalAlignment="Left" Padding="16,8" />
+      </StackPanel>
+
+      <TextBlock Text="{Binding Error}" Foreground="IndianRed" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+    </StackPanel>
+  </ScrollViewer>
+
+</Window>

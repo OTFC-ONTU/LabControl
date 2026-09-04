@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:LabControl.Console.Localization"
+             xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+             x:Class="LabControl.Console.Views.JobsView"
+             x:DataType="vm:MainViewModel">
+
+  <Grid RowDefinitions="Auto,*,Auto,160">
+
+    <Grid Grid.Row="0" ColumnDefinitions="90,80,140,120,60,*" Margin="12,8,12,4">
+      <TextBlock Grid.Column="0" Text="{loc:Localize Jobs.Time}" FontWeight="SemiBold" FontSize="12" />
+      <TextBlock Grid.Column="1" Text="{loc:Localize Jobs.Pc}" FontWeight="SemiBold" FontSize="12" />
+      <TextBlock Grid.Column="2" Text="{loc:Localize Jobs.Kind}" FontWeight="SemiBold" FontSize="12" />
+      <TextBlock Grid.Column="3" Text="{loc:Localize Jobs.State}" FontWeight="SemiBold" FontSize="12" />
+      <TextBlock Grid.Column="4" Text="%" FontWeight="SemiBold" FontSize="12" />
+      <TextBlock Grid.Column="5" Text="{loc:Localize Jobs.Message}" FontWeight="SemiBold" FontSize="12" />
+    </Grid>
+
+    <ListBox Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" Margin="8,0">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:JobRowViewModel">
+          <Grid ColumnDefinitions="90,80,140,120,60,*">
+            <TextBlock Grid.Column="0" Text="{Binding Created}" />
+            <TextBlock Grid.Column="1" Text="{Binding Pc}" />
+            <TextBlock Grid.Column="2" Text="{Binding Kind}" />
+            <TextBlock Grid.Column="3" Text="{Binding State}" Foreground="{Binding IsFailed, Converter={x:Static vm:RowConverters.FailedBrush}}" />
+            <TextBlock Grid.Column="4" Text="{Binding Percent}" />
+            <TextBlock Grid.Column="5" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <TextBlock Grid.Row="2" Text="{loc:Localize Jobs.Output}" Margin="12,8,12,2" FontSize="12" Opacity="0.7" />
+    <TextBox Grid.Row="3" Margin="12,0,12,12"
+             Text="{Binding SelectedJob.Output, FallbackValue=''}"
+             IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+             FontFamily="Menlo, Consolas, monospace" FontSize="12" />
+  </Grid>
+
+</UserControl>

@@ -1,53 +1,205 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
-  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
-    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
-    <xsd:element name="root" msdata:IsDataSet="true">
-      <xsd:complexType>
-        <xsd:choice maxOccurs="unbounded">
-          <xsd:element name="data">
-            <xsd:complexType>
-              <xsd:sequence>
-                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
-                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
-              </xsd:sequence>
-              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
-              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
-              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
-              <xsd:attribute ref="xml:space" />
-            </xsd:complexType>
-          </xsd:element>
-          <xsd:element name="resheader">
-            <xsd:complexType>
-              <xsd:sequence>
-                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
-              </xsd:sequence>
-              <xsd:attribute name="name" type="xsd:string" use="required" />
-            </xsd:complexType>
-          </xsd:element>
-        </xsd:choice>
-      </xsd:complexType>
-    </xsd:element>
-  </xsd:schema>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
-
-  <data name="App.Title" xml:space="preserve">
-    <value>LabControl</value>
-    <comment>Application name. Not translated.</comment>
-  </data>
-  <data name="MainWindow.Title" xml:space="preserve">
-    <value>LabControl — lab console</value>
-  </data>
-  <data name="MainWindow.Heading" xml:space="preserve">
-    <value>No lab configured yet</value>
-  </data>
-  <data name="MainWindow.Body" xml:space="preserve">
-    <value>This is the M0 skeleton: the console starts, the localization pipeline works, and nothing else does. The first-run wizard that creates the lab key arrives in M1.</value>
-  </data>
-  <data name="MainWindow.Status" xml:space="preserve">
-    <value>Milestone M0 — skeleton and toolchain</value>
-  </data>
+  <data name="App.Title" xml:space="preserve"><value>LabControl</value></data>
+  <data name="MainWindow.Title" xml:space="preserve"><value>LabControl</value></data>
+  <data name="MainWindow.Heading" xml:space="preserve"><value>LabControl</value></data>
+  <data name="MainWindow.Body" xml:space="preserve"><value></value></data>
+  <data name="MainWindow.Status" xml:space="preserve"><value></value></data>
+  <data name="Main.Title" xml:space="preserve"><value>{0} — {1} · LabControl</value></data>
+  <data name="Main.Status" xml:space="preserve"><value>{0} of {1} PCs online · this console: {2} · port {3}</value></data>
+  <data name="Main.SelectedFormat" xml:space="preserve"><value>{0} selected</value></data>
+  <data name="Tab.Lab" xml:space="preserve"><value>Lab</value></data>
+  <data name="Tab.Jobs" xml:space="preserve"><value>Jobs</value></data>
+  <data name="Tab.Events" xml:space="preserve"><value>Events</value></data>
+  <data name="Tab.Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Common.Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Common.Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common.Back" xml:space="preserve"><value>Back</value></data>
+  <data name="Common.Continue" xml:space="preserve"><value>Continue</value></data>
+  <data name="Common.Done" xml:space="preserve"><value>Done</value></data>
+  <data name="Common.Quit" xml:space="preserve"><value>Quit</value></data>
+  <data name="Action.Shutdown" xml:space="preserve"><value>Shut down</value></data>
+  <data name="Action.Reboot" xml:space="preserve"><value>Reboot</value></data>
+  <data name="Action.Logoff" xml:space="preserve"><value>Log off</value></data>
+  <data name="Action.RunScript" xml:space="preserve"><value>Run script…</value></data>
+  <data name="Action.SelectAll" xml:space="preserve"><value>Select all</value></data>
+  <data name="Action.ClearSelection" xml:space="preserve"><value>Clear selection</value></data>
+  <data name="Action.EnrolPcs" xml:space="preserve"><value>Enrol PCs…</value></data>
+  <data name="Lab.Empty" xml:space="preserve"><value>No PCs yet. Write a USB payload in Settings, run the installer (or FakeAgent) on the PCs, then press Enrol PCs and type the passphrase once — the PCs enrol themselves and appear here.</value></data>
+  <data name="Tile.Online" xml:space="preserve"><value>online</value></data>
+  <data name="Tile.Offline" xml:space="preserve"><value>offline</value></data>
+  <data name="Tile.Outdated" xml:space="preserve"><value>online — outdated agent, update it</value></data>
+  <data name="Tile.HeldBy" xml:space="preserve"><value>held by {0}</value></data>
+  <data name="Tile.AnotherConsole" xml:space="preserve"><value>another console</value></data>
+  <data name="Tile.Now" xml:space="preserve"><value>now</value></data>
+  <data name="Tile.Never" xml:space="preserve"><value>never</value></data>
+  <data name="Tile.RenewalDue" xml:space="preserve"><value>certificate needs renewing</value></data>
+  <data name="Tile.AgentVersionFormat" xml:space="preserve"><value>agent {0}</value></data>
+  <data name="Tile.SerialFormat" xml:space="preserve"><value>certificate {0}</value></data>
+  <data name="Tile.LastSeenFormat" xml:space="preserve"><value>last seen {0}</value></data>
+  <data name="Machine.Remove" xml:space="preserve"><value>Remove from lab</value></data>
+  <data name="Machine.RemoveConfirm" xml:space="preserve"><value>Remove {0} from this console's list? Its certificate stays valid; if it connects again it will be added back. Revoke the certificate instead if the PC must never connect.</value></data>
+  <data name="Machine.Revoke" xml:space="preserve"><value>Revoke certificate…</value></data>
+  <data name="Revoke.Action" xml:space="preserve"><value>Revoke</value></data>
+  <data name="Revoke.MachineConfirm" xml:space="preserve"><value>Revoke the certificate of {0}? The PC will be refused by every console of this lab from now on and needs Setup.exe --rekey to come back.</value></data>
+  <data name="Revoke.MachineReason" xml:space="preserve"><value>{0} revoked by the teacher</value></data>
+  <data name="Revoke.InstanceConfirm" xml:space="preserve"><value>Revoke the console "{0}"? It will stop working until someone imports the backup on it again. Do this for a stolen or lost machine only — a colleague's console that simply exists does not need revoking.</value></data>
+  <data name="Revoke.InstanceReason" xml:space="preserve"><value>console {0} revoked</value></data>
+  <data name="Unlock.Title" xml:space="preserve"><value>Unlock the lab key</value></data>
+  <data name="Unlock.Heading" xml:space="preserve"><value>Unlock the lab key</value></data>
+  <data name="Unlock.Action" xml:space="preserve"><value>Unlock</value></data>
+  <data name="Unlock.Passphrase" xml:space="preserve"><value>Passphrase</value></data>
+  <data name="Unlock.RecoveryCode" xml:space="preserve"><value>Recovery code</value></data>
+  <data name="Unlock.UseRecoveryCode" xml:space="preserve"><value>Use the recovery code instead</value></data>
+  <data name="Unlock.NeedPassphrase" xml:space="preserve"><value>Type a passphrase.</value></data>
+  <data name="Unlock.Wrong" xml:space="preserve"><value>That does not open the lab key. Try again, or use the recovery code.</value></data>
+  <data name="Unlock.ReasonEnrol" xml:space="preserve"><value>Enrolling PCs and renewing their certificates need the lab key. It stays unlocked for 15 minutes after you last use it, or until you lock it.</value></data>
+  <data name="Unlock.ReasonRenewal" xml:space="preserve"><value>Some PCs need their certificates renewed. Unlock the lab key and they will renew on their own within a minute.</value></data>
+  <data name="Unlock.ReasonSettings" xml:space="preserve"><value>This setting changes the lab key.</value></data>
+  <data name="Unlock.ReasonHolders" xml:space="preserve"><value>Adding or removing a key holder needs the lab key.</value></data>
+  <data name="Unlock.ReasonRecovery" xml:space="preserve"><value>Printing a new recovery code needs the lab key.</value></data>
+  <data name="Unlock.ReasonBackup" xml:space="preserve"><value>Exporting a backup needs the lab key.</value></data>
+  <data name="Unlock.ReasonRevoke" xml:space="preserve"><value>Revoking a certificate needs the lab key.</value></data>
+  <data name="Unlock.ReasonRemint" xml:space="preserve"><value>This console's own certificate is about to expire. Unlock the lab key once to renew it; cancel to keep the current one for now.</value></data>
+  <data name="Key.Locked" xml:space="preserve"><value>Lab key locked</value></data>
+  <data name="Key.UnlockedUntil" xml:space="preserve"><value>Lab key unlocked — locks itself at {0}</value></data>
+  <data name="Key.Lock" xml:space="preserve"><value>Lock</value></data>
+  <data name="Key.Unlocked" xml:space="preserve"><value>The lab key was unlocked.</value></data>
+  <data name="Key.UnlockHint" xml:space="preserve"><value>The passphrase is needed only to enrol PCs, renew certificates, revoke, add holders and export backups. Daily use never asks for it.</value></data>
+  <data name="Key.AddHolder" xml:space="preserve"><value>Add key holder…</value></data>
+  <data name="Key.AddHolderHint" xml:space="preserve"><value>A colleague who can open the lab with their own passphrase — so an exam is not stopped by one teacher being ill.</value></data>
+  <data name="Key.HolderName" xml:space="preserve"><value>Name</value></data>
+  <data name="Key.HolderPassphrase" xml:space="preserve"><value>Their passphrase</value></data>
+  <data name="Key.HolderPassphraseAgain" xml:space="preserve"><value>Their passphrase again</value></data>
+  <data name="Key.HolderAdded" xml:space="preserve"><value>Key holder "{0}" added.</value></data>
+  <data name="Key.RemoveHolder" xml:space="preserve"><value>Remove</value></data>
+  <data name="Key.RemoveHolderConfirm" xml:space="preserve"><value>Remove "{0}" as a key holder? Their passphrase will no longer open this lab. Export a new backup afterwards.</value></data>
+  <data name="Key.HolderRemoved" xml:space="preserve"><value>Key holder "{0}" removed.</value></data>
+  <data name="Key.SinceFormat" xml:space="preserve"><value>since {0}</value></data>
+  <data name="Key.HoldersHint" xml:space="preserve"><value>Every holder is equal. The last one cannot be removed.</value></data>
+  <data name="Key.Reprint" xml:space="preserve"><value>Print a new recovery code…</value></data>
+  <data name="Key.ReprintConfirm" xml:space="preserve"><value>Print a new recovery code? The old one stops working the moment the key is saved. Export a new backup afterwards.</value></data>
+  <data name="Key.RecoveryReprinted" xml:space="preserve"><value>A new recovery code was printed; the old one is void.</value></data>
+  <data name="Settings.Lab" xml:space="preserve"><value>Lab</value></data>
+  <data name="Settings.LabName" xml:space="preserve"><value>Lab</value></data>
+  <data name="Settings.LabId" xml:space="preserve"><value>Lab id</value></data>
+  <data name="Settings.ThisMachine" xml:space="preserve"><value>This console</value></data>
+  <data name="Settings.InstanceId" xml:space="preserve"><value>Instance id</value></data>
+  <data name="Settings.InstanceCertificate" xml:space="preserve"><value>Certificate</value></data>
+  <data name="Settings.Endpoint" xml:space="preserve"><value>Listening on</value></data>
+  <data name="Settings.EndpointHint" xml:space="preserve"><value>The address and port come from the command line (--bind, --port); the beacon tells the PCs where to connect, so they follow a change by themselves.</value></data>
+  <data name="Settings.DataDirectory" xml:space="preserve"><value>Data directory</value></data>
+  <data name="Settings.LabKey" xml:space="preserve"><value>Lab key</value></data>
+  <data name="Settings.Holders" xml:space="preserve"><value>Key holders</value></data>
+  <data name="Settings.RecoveryCode" xml:space="preserve"><value>Recovery code</value></data>
+  <data name="Settings.Backup" xml:space="preserve"><value>Backup</value></data>
+  <data name="Settings.TeacherMachines" xml:space="preserve"><value>Other teacher machines</value></data>
+  <data name="Settings.TeacherMachinesHint" xml:space="preserve"><value>Consoles of this lab seen beaconing or reported by PCs. Revoke one only if it was stolen or lost.</value></data>
+  <data name="Settings.NoOtherMachines" xml:space="preserve"><value>None seen yet.</value></data>
+  <data name="Settings.LiveNow" xml:space="preserve"><value>· running now</value></data>
+  <data name="Settings.Revoked" xml:space="preserve"><value>· revoked</value></data>
+  <data name="Settings.Enrolment" xml:space="preserve"><value>Enrolment</value></data>
+  <data name="Settings.VersionFormat" xml:space="preserve"><value>LabControl console {0}</value></data>
+  <data name="Backup.Export" xml:space="preserve"><value>Export backup…</value></data>
+  <data name="Backup.FileType" xml:space="preserve"><value>LabControl backup</value></data>
+  <data name="Backup.Current" xml:space="preserve"><value>Backed up {0} to {1}.</value></data>
+  <data name="Backup.Stale" xml:space="preserve"><value>The lab key changed since the last backup (a holder or the recovery code). Export a new backup.</value></data>
+  <data name="Backup.Missing" xml:space="preserve"><value>No backup has been exported from this console yet.</value></data>
+  <data name="Backup.Exported" xml:space="preserve"><value>Backup exported to {0}.</value></data>
+  <data name="Backup.Hint" xml:space="preserve"><value>The backup is the one file that moves the lab to another computer. It opens with any holder's passphrase or the recovery code and is useless without them.</value></data>
+  <data name="Banner.OtherConsole" xml:space="preserve"><value>{0} is also running this lab and holds {1} of {2} PCs ({3}).</value></data>
+  <data name="Banner.TookOver" xml:space="preserve"><value>{0} took over the lab at {1} and holds {2} of {3} PCs ({4}).</value></data>
+  <data name="Banner.TakeOver" xml:space="preserve"><value>Take over the lab</value></data>
+  <data name="Banner.Renewal" xml:space="preserve"><value>{0} certificate(s) need renewing — unlock the lab key and the PCs will renew by themselves.</value></data>
+  <data name="Banner.UnlockKey" xml:space="preserve"><value>Unlock the lab key…</value></data>
+  <data name="Banner.BackupMissing" xml:space="preserve"><value>No backup yet. Without one, losing this computer means reinstalling every PC.</value></data>
+  <data name="Banner.BackupStale" xml:space="preserve"><value>The lab key changed since the last backup. Export a new one.</value></data>
+  <data name="Banner.ExportBackup" xml:space="preserve"><value>Export backup…</value></data>
+  <data name="Enroll.UnusedFormat" xml:space="preserve"><value>{0} unused enrollment code(s).</value></data>
+  <data name="Enroll.PcCount" xml:space="preserve"><value>PCs on this stick:</value></data>
+  <data name="Enroll.WritePayload" xml:space="preserve"><value>Write USB payload…</value></data>
+  <data name="Enroll.PayloadWritten" xml:space="preserve"><value>USB payload written to {0}. Point FakeAgent --payload (or the installer) at it.</value></data>
+  <data name="Enroll.Hint" xml:space="preserve"><value>Writes ca.crt and setup.json with one single-use code per PC plus spares into a LabControl folder. The stick carries no secret.</value></data>
+  <data name="Code.UsedBy" xml:space="preserve"><value>used by {0}</value></data>
+  <data name="Code.Unused" xml:space="preserve"><value>unused</value></data>
+  <data name="Jobs.Time" xml:space="preserve"><value>Time</value></data>
+  <data name="Jobs.Pc" xml:space="preserve"><value>PC</value></data>
+  <data name="Jobs.Kind" xml:space="preserve"><value>Job</value></data>
+  <data name="Jobs.State" xml:space="preserve"><value>State</value></data>
+  <data name="Jobs.Message" xml:space="preserve"><value>Result</value></data>
+  <data name="Jobs.Output" xml:space="preserve"><value>Output of the selected job</value></data>
+  <data name="Job.Shutdown" xml:space="preserve"><value>Shut down</value></data>
+  <data name="Job.Reboot" xml:space="preserve"><value>Reboot</value></data>
+  <data name="Job.Logoff" xml:space="preserve"><value>Log off</value></data>
+  <data name="Job.RunScript" xml:space="preserve"><value>Run script</value></data>
+  <data name="Job.InstallPackage" xml:space="preserve"><value>Install package</value></data>
+  <data name="Job.ResetProfile" xml:space="preserve"><value>Reset profile</value></data>
+  <data name="Job.SendFile" xml:space="preserve"><value>Send file</value></data>
+  <data name="Job.CollectFiles" xml:space="preserve"><value>Collect files</value></data>
+  <data name="Job.SetConfig" xml:space="preserve"><value>Set configuration</value></data>
+  <data name="Job.SelfUpdate" xml:space="preserve"><value>Update agent</value></data>
+  <data name="Job.Rekey" xml:space="preserve"><value>Re-key</value></data>
+  <data name="Job.KindUnspecified" xml:space="preserve"><value>Job</value></data>
+  <data name="JobState.Pending" xml:space="preserve"><value>pending</value></data>
+  <data name="JobState.Delivered" xml:space="preserve"><value>delivered</value></data>
+  <data name="JobState.Running" xml:space="preserve"><value>running</value></data>
+  <data name="JobState.Succeeded" xml:space="preserve"><value>done</value></data>
+  <data name="JobState.Failed" xml:space="preserve"><value>failed</value></data>
+  <data name="JobState.NotDelivered" xml:space="preserve"><value>not delivered</value></data>
+  <data name="JobState.TimedOut" xml:space="preserve"><value>timed out</value></data>
+  <data name="Events.Time" xml:space="preserve"><value>Time</value></data>
+  <data name="Events.Severity" xml:space="preserve"><value>Level</value></data>
+  <data name="Events.Pc" xml:space="preserve"><value>PC</value></data>
+  <data name="Events.Message" xml:space="preserve"><value>Event</value></data>
+  <data name="Severity.Info" xml:space="preserve"><value>info</value></data>
+  <data name="Severity.Warning" xml:space="preserve"><value>warning</value></data>
+  <data name="Severity.Error" xml:space="preserve"><value>error</value></data>
+  <data name="Script.Heading" xml:space="preserve"><value>Run a script on {0} PC(s)</value></data>
+  <data name="Script.Hint" xml:space="preserve"><value>Until M2 the script runs only on simulated PCs: they print the given number of lines and exit with the given code.</value></data>
+  <data name="Script.Name" xml:space="preserve"><value>Script</value></data>
+  <data name="Script.Lines" xml:space="preserve"><value>Lines of output</value></data>
+  <data name="Script.ExitCode" xml:space="preserve"><value>Exit code</value></data>
+  <data name="Script.Timeout" xml:space="preserve"><value>Inactivity timeout, seconds</value></data>
+  <data name="Script.Run" xml:space="preserve"><value>Run</value></data>
+  <data name="Setup.Title" xml:space="preserve"><value>LabControl — first run</value></data>
+  <data name="Setup.Welcome" xml:space="preserve"><value>Welcome to LabControl</value></data>
+  <data name="Setup.WelcomeBody" xml:space="preserve"><value>This computer has no lab yet. Create a new one, or import an existing lab from its backup file to make this computer another console for it.</value></data>
+  <data name="Setup.CreateLab" xml:space="preserve"><value>Create a new lab</value></data>
+  <data name="Setup.CreateLabHint" xml:space="preserve"><value>The first time LabControl is used for a room. Creates the lab key and this console.</value></data>
+  <data name="Setup.ImportLab" xml:space="preserve"><value>Import a lab from a backup…</value></data>
+  <data name="Setup.ImportLabHint" xml:space="preserve"><value>A second teacher machine, or a replacement for one that died. Nothing on the student PCs changes.</value></data>
+  <data name="Setup.CreateBody" xml:space="preserve"><value>The lab key is the identity of the room. Choose a passphrase you will remember; a recovery code is shown next in case you do not.</value></data>
+  <data name="Setup.LabName" xml:space="preserve"><value>Lab name</value></data>
+  <data name="Setup.LabNameExample" xml:space="preserve"><value>e.g. Room 214</value></data>
+  <data name="Setup.HolderName" xml:space="preserve"><value>Your name (the first key holder)</value></data>
+  <data name="Setup.Passphrase" xml:space="preserve"><value>Passphrase</value></data>
+  <data name="Setup.PassphraseAgain" xml:space="preserve"><value>Passphrase again</value></data>
+  <data name="Setup.PassphraseHint" xml:space="preserve"><value>At least 8 characters. Needed only for enrolling PCs, renewals, revocations and backups — never for daily use.</value></data>
+  <data name="Setup.InstanceName" xml:space="preserve"><value>Name of this console</value></data>
+  <data name="Setup.InstanceNameHint" xml:space="preserve"><value>How this computer appears to other consoles and in logs, e.g. MacBook or Lab PC.</value></data>
+  <data name="Setup.CreateAction" xml:space="preserve"><value>Create the lab</value></data>
+  <data name="Setup.NeedLabName" xml:space="preserve"><value>Give the lab a name.</value></data>
+  <data name="Setup.NeedHolderName" xml:space="preserve"><value>Give the key holder a name.</value></data>
+  <data name="Setup.PassphraseTooShort" xml:space="preserve"><value>The passphrase needs at least 8 characters.</value></data>
+  <data name="Setup.PassphraseMismatch" xml:space="preserve"><value>The two passphrases differ.</value></data>
+  <data name="Setup.NeedInstanceName" xml:space="preserve"><value>Give this console a name.</value></data>
+  <data name="Setup.RecoveryHeading" xml:space="preserve"><value>Write down the recovery code</value></data>
+  <data name="Setup.RecoveryBody" xml:space="preserve"><value>This code opens the lab if every passphrase is forgotten. It is shown once. Write it on paper and keep it away from this computer — a wallet, a safe, a drawer at home.</value></data>
+  <data name="Setup.AcknowledgeRecovery" xml:space="preserve"><value>I have written the recovery code down</value></data>
+  <data name="Setup.AcknowledgeFirst" xml:space="preserve"><value>Confirm that you wrote the code down first.</value></data>
+  <data name="Setup.BackupHeading" xml:space="preserve"><value>Export a backup</value></data>
+  <data name="Setup.BackupBody" xml:space="preserve"><value>The backup is what moves the lab to another computer. Save it somewhere that survives this computer — a USB stick, a cloud folder. The wizard cannot finish without it.</value></data>
+  <data name="Setup.DoneHeading" xml:space="preserve"><value>The lab is ready</value></data>
+  <data name="Setup.DoneBody" xml:space="preserve"><value>Next: Settings → Write USB payload, install the PCs with it, then press Enrol PCs.</value></data>
+  <data name="Setup.OpenConsole" xml:space="preserve"><value>Open the console</value></data>
+  <data name="Setup.ImportBody" xml:space="preserve"><value>Pick the backup file, open it with a holder's passphrase or the recovery code, and name this console. The PCs will find it by themselves.</value></data>
+  <data name="Setup.PickBackup" xml:space="preserve"><value>Choose backup file…</value></data>
+  <data name="Setup.BackupSummary" xml:space="preserve"><value>Lab "{0}", exported {1} by {2}. Key holders: {3}.</value></data>
+  <data name="Setup.NeedBackupFile" xml:space="preserve"><value>Choose a backup file first.</value></data>
+  <data name="Setup.BadRecoveryCode" xml:space="preserve"><value>That is not a recovery code (letters and digits, dashes optional).</value></data>
+  <data name="Setup.ImportAction" xml:space="preserve"><value>Import the lab</value></data>
 </root>

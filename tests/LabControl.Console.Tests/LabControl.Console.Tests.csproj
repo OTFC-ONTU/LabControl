@@ -10,6 +10,10 @@
 
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
+    <!-- Headless Avalonia with Skia rendering: the windows are built and drawn for real, off
+         screen, so a test can click the wizard and save a PNG of what the teacher would see. -->
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Skia" />
   </ItemGroup>
 
   <ItemGroup>

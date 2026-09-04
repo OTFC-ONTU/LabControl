@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:LabControl.Console.Localization"
+             xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+             x:Class="LabControl.Console.Views.LabView"
+             x:DataType="vm:MainViewModel">
+
+  <UserControl.Resources>
+    <!-- One PC. The canvas in code-behind positions and drags these; the template only draws. -->
+    <DataTemplate x:Key="TileTemplate" x:DataType="vm:MachineTileViewModel">
+      <Border Classes="tile"
+              Classes.selected="{Binding IsSelected}"
+              Classes.online="{Binding IsOnline}"
+              Classes.outdated="{Binding Status, Converter={x:Static vm:TileConverters.IsOutdated}}"
+              Classes.held="{Binding Status, Converter={x:Static vm:TileConverters.IsHeld}}"
+              Margin="4" Padding="8" CornerRadius="6" BorderThickness="2">
+        <ToolTip.Tip>
+          <StackPanel Spacing="2">
+            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding StatusText}" />
+            <TextBlock Text="{Binding Hostname}" />
+            <TextBlock Text="{Binding Address}" />
+            <TextBlock Text="{Binding AgentVersion, StringFormat={loc:Localize Tile.AgentVersionFormat}}" />
+            <TextBlock Text="{Binding CertificateSerial, StringFormat={loc:Localize Tile.SerialFormat}}" />
+            <TextBlock Text="{Binding LastSeen, StringFormat={loc:Localize Tile.LastSeenFormat}}" />
+          </StackPanel>
+        </ToolTip.Tip>
+        <DockPanel>
+          <DockPanel DockPanel.Dock="Top">
+            <Ellipse DockPanel.Dock="Right" Width="10" Height="10" Classes="dot" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15" />
+          </DockPanel>
+          <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+          <StackPanel Spacing="1" Margin="0,4,0,0">
+            <TextBlock Text="{Binding Hostname}" FontSize="12" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding LoggedOnUser}" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{loc:Localize Tile.RenewalDue}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding NeedsRenewal}" />
+          </StackPanel>
+        </DockPanel>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="Border.tile">
+      <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListLowBrush}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Opacity" Value="0.6" />
+    </Style>
+    <Style Selector="Border.tile.online">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Border.tile.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}" />
+    </Style>
+    <Style Selector="Border.tile Ellipse.dot">
+      <Setter Property="Fill" Value="Gray" />
+    </Style>
+    <Style Selector="Border.tile.online Ellipse.dot">
+      <Setter Property="Fill" Value="LimeGreen" />
+    </Style>
+    <Style Selector="Border.tile.outdated Ellipse.dot">
+      <Setter Property="Fill" Value="DarkOrange" />
+    </Style>
+    <Style Selector="Border.tile.held Ellipse.dot">
+      <Setter Property="Fill" Value="DodgerBlue" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid>
+    <ScrollViewer Name="Scroller" HorizontalScrollBarVisibility="Auto">
+      <Canvas Name="TileCanvas" Background="Transparent" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top" />
+    </ScrollViewer>
+    <TextBlock Text="{loc:Localize Lab.Empty}"
+               IsVisible="{Binding !Machines.Count}"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               TextWrapping="Wrap" MaxWidth="480" TextAlignment="Center" Opacity="0.7" />
+  </Grid>
+
+</UserControl>

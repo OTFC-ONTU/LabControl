@@ -38,6 +38,8 @@
 
   <ItemGroup Label="Testing">
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
+    <PackageVersion Include="Avalonia.Headless" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Skia" Version="12.1.2" />
   </ItemGroup>
 
 </Project>

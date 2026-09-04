@@ -1,0 +1,131 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:LabControl.Console.Localization"
+             xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+             x:Class="LabControl.Console.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.h">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,16,0,6" />
+    </Style>
+    <Style Selector="TextBlock.k">
+      <Setter Property="Opacity" Value="0.7" />
+      <Setter Property="MinWidth" Value="160" />
+    </Style>
+    <Style Selector="TextBlock.v">
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Margin="20,4,20,20" Spacing="4" MaxWidth="900" HorizontalAlignment="Left">
+
+      <TextBlock Classes="h" Text="{loc:Localize Settings.Lab}" />
+      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" >
+        <TextBlock Grid.Row="0" Grid.Column="0" Classes="k" Text="{loc:Localize Settings.LabName}" />
+        <TextBlock Grid.Row="0" Grid.Column="1" Classes="v" Text="{Binding LabName}" />
+        <TextBlock Grid.Row="1" Grid.Column="0" Classes="k" Text="{loc:Localize Settings.LabId}" />
+        <TextBlock Grid.Row="1" Grid.Column="1" Classes="v" Text="{Binding LabId}" />
+        <TextBlock Grid.Row="2" Grid.Column="0" Classes="k" Text="{loc:Localize Settings.ThisMachine}" />
+        <TextBlock Grid.Row="2" Grid.Column="1" Classes="v" Text="{Binding InstanceName}" />
+        <TextBlock Grid.Row="3" Grid.Column="0" Classes="k" Text="{loc:Localize Settings.InstanceId}" />
+        <TextBlock Grid.Row="3" Grid.Column="1" Classes="v" Text="{Binding InstanceId}" />
+        <TextBlock Grid.Row="4" Grid.Column="0" Classes="k" Text="{loc:Localize Settings.InstanceCertificate}" />
+        <TextBlock Grid.Row="4" Grid.Column="1" Classes="v">
+          <Run Text="{Binding InstanceSerial}" /><Run Text=" — " /><Run Text="{Binding InstanceExpires}" />
+        </TextBlock>
+        <TextBlock Grid.Row="5" Grid.Column="0" Classes="k" Text="{loc:Localize Settings.Endpoint}" />
+        <TextBlock Grid.Row="5" Grid.Column="1" Classes="v" Text="{Binding Endpoint}" />
+        <TextBlock Grid.Row="6" Grid.Column="0" Classes="k" Text="{loc:Localize Settings.DataDirectory}" />
+        <TextBlock Grid.Row="6" Grid.Column="1" Classes="v" Text="{Binding DataDirectory}" />
+      </Grid>
+      <TextBlock Text="{loc:Localize Settings.EndpointHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+
+      <TextBlock Classes="h" Text="{loc:Localize Settings.LabKey}" />
+      <TextBlock Text="{Binding KeyStatus}" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="{loc:Localize Unlock.Action}" Command="{Binding UnlockCommand}" IsVisible="{Binding !IsUnlocked}" />
+        <Button Content="{loc:Localize Key.Lock}" Command="{Binding LockCommand}" IsVisible="{Binding IsUnlocked}" />
+        <Button Content="{loc:Localize Key.Reprint}" Command="{Binding ReprintRecoveryCodeCommand}" />
+      </StackPanel>
+      <TextBlock Text="{loc:Localize Key.UnlockHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+
+      <TextBlock Classes="h" Text="{loc:Localize Settings.Holders}" />
+      <ItemsControl ItemsSource="{Binding Holders}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:HolderRowViewModel">
+            <DockPanel Margin="0,2">
+              <Button DockPanel.Dock="Right" Content="{loc:Localize Key.RemoveHolder}"
+                      Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RemoveHolderCommand}"
+                      CommandParameter="{Binding}" />
+              <TextBlock Text="{Binding Name}" VerticalAlignment="Center" MinWidth="200" />
+              <TextBlock Text="{Binding Since, StringFormat={loc:Localize Key.SinceFormat}}" VerticalAlignment="Center" Opacity="0.7" />
+            </DockPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Button Content="{loc:Localize Key.AddHolder}" Command="{Binding AddHolderCommand}" HorizontalAlignment="Left" />
+      <TextBlock Text="{loc:Localize Key.HoldersHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+
+      <TextBlock Classes="h" Text="{loc:Localize Settings.Backup}" />
+      <TextBlock Text="{Binding BackupStatus}" TextWrapping="Wrap" Foreground="{Binding BackupIsCurrent, Converter={x:Static vm:SettingsConverters.BackupBrush}}" />
+      <Button Content="{loc:Localize Backup.Export}" Command="{Binding ExportBackupCommand}" HorizontalAlignment="Left" />
+      <TextBlock Text="{loc:Localize Backup.Hint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+
+      <TextBlock Classes="h" Text="{loc:Localize Settings.TeacherMachines}" />
+      <TextBlock Text="{loc:Localize Settings.TeacherMachinesHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+      <ItemsControl ItemsSource="{Binding OtherMachines}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:InstanceRowViewModel">
+            <DockPanel Margin="0,2">
+              <Button DockPanel.Dock="Right" Content="{loc:Localize Revoke.Action}"
+                      IsEnabled="{Binding CanRevoke}"
+                      Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RevokeMachineCommand}"
+                      CommandParameter="{Binding}" />
+              <StackPanel>
+                <TextBlock>
+                  <Run Text="{Binding Name}" FontWeight="SemiBold" />
+                  <Run Text="{Binding IsLive, Converter={x:Static vm:SettingsConverters.LiveText}}" />
+                  <Run Text="{Binding IsRevoked, Converter={x:Static vm:SettingsConverters.RevokedText}}" Foreground="IndianRed" />
+                </TextBlock>
+                <TextBlock Opacity="0.7" FontSize="12">
+                  <Run Text="{Binding InstanceId}" /><Run Text="   " />
+                  <Run Text="{Binding CertificateSerial}" /><Run Text="   " />
+                  <Run Text="{Binding LastSeen}" />
+                </TextBlock>
+              </StackPanel>
+            </DockPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Text="{loc:Localize Settings.NoOtherMachines}" IsVisible="{Binding !OtherMachines.Count}" Opacity="0.6" />
+
+      <TextBlock Classes="h" Text="{loc:Localize Settings.Enrolment}" />
+      <TextBlock Text="{Binding UnusedCodes, StringFormat={loc:Localize Enroll.UnusedFormat}}" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="{loc:Localize Enroll.PcCount}" VerticalAlignment="Center" />
+        <NumericUpDown Value="{Binding PayloadPcCount}" Minimum="1" Maximum="30" Increment="1" FormatString="0" Width="110" />
+        <Button Content="{loc:Localize Enroll.WritePayload}" Command="{Binding WritePayloadCommand}" />
+      </StackPanel>
+      <TextBlock Text="{loc:Localize Enroll.Hint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+      <ItemsControl ItemsSource="{Binding Codes}" Margin="0,6,0,0">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:CodeRowViewModel">
+            <Grid ColumnDefinitions="200,220,*" Margin="0,1">
+              <TextBlock Grid.Column="0" Text="{Binding Code}" FontFamily="Menlo, Consolas, monospace" />
+              <TextBlock Grid.Column="1" Text="{Binding Batch}" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+              <TextBlock Grid.Column="2" Text="{Binding Status}" />
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <TextBlock Text="{Binding LastMessage}" Margin="0,12,0,0" TextWrapping="Wrap" Foreground="SeaGreen" />
+      <TextBlock Text="{Binding Version, StringFormat={loc:Localize Settings.VersionFormat}}" Opacity="0.5" FontSize="12" Margin="0,16,0,0" />
+    </StackPanel>
+  </ScrollViewer>
+
+</UserControl>

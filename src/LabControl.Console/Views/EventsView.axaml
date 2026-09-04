@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:LabControl.Console.Localization"
+             xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+             x:Class="LabControl.Console.Views.EventsView"
+             x:DataType="vm:MainViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+    <Grid Grid.Row="0" ColumnDefinitions="150,80,80,*" Margin="12,8,12,4">
+      <TextBlock Grid.Column="0" Text="{loc:Localize Events.Time}" FontWeight="SemiBold" FontSize="12" />
+      <TextBlock Grid.Column="1" Text="{loc:Localize Events.Severity}" FontWeight="SemiBold" FontSize="12" />
+      <TextBlock Grid.Column="2" Text="{loc:Localize Events.Pc}" FontWeight="SemiBold" FontSize="12" />
+      <TextBlock Grid.Column="3" Text="{loc:Localize Events.Message}" FontWeight="SemiBold" FontSize="12" />
+    </Grid>
+
+    <ListBox Grid.Row="1" ItemsSource="{Binding Events}" Margin="8,0,8,8">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:EventRowViewModel">
+          <Grid ColumnDefinitions="150,80,80,*">
+            <TextBlock Grid.Column="0" Text="{Binding Time}" />
+            <TextBlock Grid.Column="1" Text="{Binding Severity}" Foreground="{Binding Record.Severity, Converter={x:Static vm:RowConverters.SeverityBrush}}" />
+            <TextBlock Grid.Column="2" Text="{Binding Pc}" />
+            <TextBlock Grid.Column="3" Text="{Binding Message}" TextWrapping="Wrap" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+
+</UserControl>

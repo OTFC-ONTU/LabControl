@@ -191,12 +191,17 @@ document explains intent and flows. <strong>Update this file whenever a .proto c
 </tbody>
 </table></div>
 <h2 id="discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)<a class="anchor" href="#discovery-beacon-udp-plain-json-512-bytes" aria-label="Link to this section">#</a></h2>
-<pre><code class="language-json">{&quot;v&quot;:2,&quot;lab&quot;:&quot;&lt;lab_id&gt;&quot;,&quot;inst&quot;:&quot;&lt;instance_id&gt;&quot;,&quot;host&quot;:&quot;192.168.1.23&quot;,&quot;port&quot;:47800,
- &quot;ts&quot;:1725450000,
+<pre><code class="language-json">{&quot;v&quot;:2,&quot;lab&quot;:&quot;&lt;lab_id&gt;&quot;,&quot;inst&quot;:&quot;&lt;instance_id&gt;&quot;,&quot;name&quot;:&quot;Lab PC&quot;,&quot;host&quot;:&quot;192.168.1.23&quot;,
+ &quot;port&quot;:47800,&quot;ts&quot;:1725450000,
+ &quot;take&quot;:1725450010,
  &quot;pub&quot;:&quot;&lt;base64: console instance public key, P-256 compressed, 33 B&gt;&quot;,
  &quot;end&quot;:&quot;&lt;base64: CA signature over lab_id|inst|pub, 64 B&gt;&quot;,
  &quot;sig&quot;:&quot;&lt;base64: instance-key signature over all preceding fields, 64 B&gt;&quot;}
 </code></pre>
+<p><code>take</code> is optional. A console includes it for 30 s after the teacher presses <em>Take over
+the lab</em> (<code>docs/ARCHITECTURE.md</code> §3.7.2), set to the moment of the press. <code>name</code> is the
+instance's display name, so a console that sees another beacon can name it in the banner
+without any other exchange.</p>
 <p>The beacon is verifiable <strong>offline, with no shared secret</strong>. An agent accepts it only if
 <code>lab</code> matches its own, <code>end</code> verifies against the <strong>pinned CA public key</strong>, <code>sig</code>
 verifies against <code>pub</code>, and <code>ts</code> is within ±60 s. Then it dials <code>host:port</code> and completes
@@ -209,6 +214,15 @@ mutual TLS, which is the real gate — the beacon only says <em>where</em> to lo
 same <code>end</code> chain to the same CA, so every agent follows it without being touched.</li>
 <li>Forged beacons cost a rejected TLS handshake. Agents ignore beacons while connected,
 and rate-limit dial attempts (≥ 2 s apart, exponential backoff per endpoint).</li>
+<li>The one exception to &quot;ignore while connected&quot; is <code>take</code>: a linked agent that receives a
+fully verified beacon from a <strong>different</strong> instance whose <code>take</code> is newer than the
+moment its current link was established closes that link and dials the taker. Each
+<code>take</code> value is honoured once, so a console rebroadcasting the same value for 30 s does
+not cause a re-dial loop, and two consoles pressing the button alternately simply move
+the room back and forth — never split a PC between them.</li>
+<li>Consoles listen on the beacon port too. A verified beacon from another instance of the
+same lab is recorded in <code>lab.json</code> <code>instances[]</code> and drives the <em>other teacher machine</em>
+banner; a beacon that fails verification is dropped exactly as an agent would drop it.</li>
 </ul>
 <h2 id="grpc-services-labcontrol.v1">gRPC services (<code>labcontrol.v1</code>)<a class="anchor" href="#grpc-services-labcontrol.v1" aria-label="Link to this section">#</a></h2>
 <h3 id="enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists"><code>EnrollmentService</code> (console is the server; used once per PC, before mTLS exists)<a class="anchor" href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists" aria-label="Link to this section">#</a></h3>
@@ -233,13 +247,25 @@ revocation list before accepting the stream; the agent validates the console lea
 the CA it pinned at install. No token, no password, no shared secret is exchanged.</p>
 <p><code>AgentMessage</code> (oneof): <code>Hello</code>, <code>Heartbeat</code>, <code>Inventory</code>, <code>SessionState</code>
 (logon/logoff/lock/ unlock, active user), <code>JobProgress</code>, <code>JobResult</code>, <code>Event</code> (error,
-warning, info), <code>Pong</code>.</p>
-<p><code>ConsoleMessage</code> (oneof): <code>Welcome</code> (server time, instance id, revocation list
-version, config), <code>Ping</code>, <code>Job</code> (see below), <code>VideoControl</code> (start/stop, mode
+warning, info), <code>Pong</code>, <code>ExamState</code>, <code>RevocationState</code> (every signed revocation entry the
+agent holds — sent right after <code>Hello</code>, so a console that was not running when another
+teacher machine revoked something learns of it from the first agent that connects).</p>
+<p><code>ConsoleMessage</code> (oneof): <code>Welcome</code> (server time, instance id and name, the serials the
+console holds revoked), <code>Ping</code>, <code>Job</code> (see below), <code>VideoControl</code> (start/stop, mode
 <code>thumbnail|full</code>, fps, quality), <code>Input</code> (mouse move/button/wheel, key down/up, unicode
 text), <code>Overlay</code> (lock / unlock / broadcast start / broadcast stop, message text),
-<code>ExamMode</code> (see below), <code>Revocation</code> (revoked certificate list + version),
-<code>UpdateAgent</code>.</p>
+<code>ExamMode</code> (see below), <code>Revocation</code> (signed revocation entries — the console sends the
+ones the agent's <code>RevocationState</code> was missing, the agent keeps the union), <code>UpdateAgent</code>.</p>
+<h3 id="revocation-entries">Revocation entries<a class="anchor" href="#revocation-entries" aria-label="Link to this section">#</a></h3>
+<pre><code>RevocationEntry { serial, revoked_at_unix, reason, signature }
+</code></pre>
+<p><code>signature</code> is the <strong>lab key's</strong> signature over <code>serial|revoked_at_unix|reason</code>. Revoking
+already requires unlocking the lab key (<code>docs/ARCHITECTURE.md</code> §3.2), so signing costs
+nothing extra, and it means that neither an agent nor a console ever accepts a revocation
+on the say-so of a TLS peer alone: an entry that does not verify against the pinned CA is
+dropped and logged. Because entries are self-authenticating, the list has no version and
+no owner — every party keeps the union of what it has seen, in any order, which is what
+lets several teacher machines revoke independently (<code>D-21</code>).</p>
 <h3 id="job-every-action-is-a-job"><code>Job</code> — every action is a job<a class="anchor" href="#job-every-action-is-a-job" aria-label="Link to this section">#</a></h3>
 <pre><code>Job { id, kind, args map&lt;string,string&gt;, timeout_s }
 kinds: shutdown | reboot | logoff | run_script | install_package | reset_profile |
@@ -308,7 +334,12 @@ everything else. The helper never talks to the network.</p>
 <p><code>Hello</code> also carries <code>lab_id</code> and the agent's certificate serial, so a console that has
 been migrated to a new machine (<code>docs/ARCHITECTURE.md</code> §3.6) recognises the PCs it
 restored from backup, and an agent belonging to a different lab is refused with a clear
-message rather than a TLS error.</p>
+message rather than a TLS error. An agent whose certificate chains to the lab CA but
+whose serial the console has never seen is <strong>added to the machine list from <code>Hello</code></strong>,
+not refused — the console's list is a cache of the lab, and another teacher machine may
+have enrolled the PC (§3.7). <code>Hello.previous_instance_id</code> names the console the agent
+was linked to before this one (empty on first link since boot); it is what lets a console
+say which PCs the <em>other</em> teacher machine currently holds.</p>
 <h3 id="the-frozen-subset">The frozen subset<a class="anchor" href="#the-frozen-subset" aria-label="Link to this section">#</a></h3>
 <p>Four things are <strong>frozen at wire version 1 and may never change</strong>: the <code>Hello</code> message,
 the <code>Heartbeat</code> message, <code>Job</code> with <code>kind: self_update</code>, and <code>JobResult</code>. Fields may be
@@ -380,9 +411,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-04 16:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 14:42 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#updateagent-and-the-self_update-job">UpdateAgent and the self_update job</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#updateagent-and-the-self_update-job">UpdateAgent and the self_update job</a></li></ul></nav>
 </div>
 </body>
 </html>

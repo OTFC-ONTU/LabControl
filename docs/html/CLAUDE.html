@@ -161,7 +161,9 @@ runtime programs on the student PCs.</strong></li>
 Linux nice-to-have. The lab's identity is a private CA, not the console's certificate,
 so the teacher machine can die, be stolen or be swapped for a Windows PC and the lab
 keeps working after importing one encrypted backup file — <strong>without touching a single
-student PC</strong> (docs/ARCHITECTURE.md §3, D-13). Nothing may hard-code which computer
+student PC</strong> (docs/ARCHITECTURE.md §3, D-13). Several teacher machines may hold a
+console permanently and <strong>take turns</strong> (MacBook one day, the Windows desk PC the next);
+one drives the lab at a time, two at once is tolerated but never shared (§3.7, D-21). Nothing may hard-code which computer
 runs the console, and nothing may hard-code 14 PCs: design for <strong>up to 30</strong> (D-17).</li>
 <li><strong>Student agent is Windows-only</strong> (10/11 x64). Runs as a Windows service, survives
 reboots, cannot be killed or uninstalled by the student.</li>
@@ -292,7 +294,7 @@ the one part that is expensive to get wrong, because a mistake there is only fix
 visiting every PC.</p>
 
 </article>
-<footer>Generated 2026-09-04 16:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 14:42 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

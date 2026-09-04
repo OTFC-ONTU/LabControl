@@ -29,7 +29,9 @@ behind this, so **everything must be zero-maintenance and self-explanatory**.
    Linux nice-to-have. The lab's identity is a private CA, not the console's certificate,
    so the teacher machine can die, be stolen or be swapped for a Windows PC and the lab
    keeps working after importing one encrypted backup file — **without touching a single
-   student PC** (docs/ARCHITECTURE.md §3, D-13). Nothing may hard-code which computer
+   student PC** (docs/ARCHITECTURE.md §3, D-13). Several teacher machines may hold a
+   console permanently and **take turns** (MacBook one day, the Windows desk PC the next);
+   one drives the lab at a time, two at once is tolerated but never shared (§3.7, D-21). Nothing may hard-code which computer
    runs the console, and nothing may hard-code 14 PCs: design for **up to 30** (D-17).
 2. **Student agent is Windows-only** (10/11 x64). Runs as a Windows service, survives
    reboots, cannot be killed or uninstalled by the student.

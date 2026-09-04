@@ -109,7 +109,7 @@ live — **and the whole lab can be moved to a different teacher computer withou
 a single PC**. Proven entirely on the Mac against `FakeAgent`; no Windows machine needed.
 
 This is the milestone that implements `docs/ARCHITECTURE.md` §3 and decisions
-`D-13`/`D-14`. It is deliberately front-loaded: getting the trust model wrong is the one
+`D-13`/`D-14`/`D-21`. It is deliberately front-loaded: getting the trust model wrong is the one
 mistake that would later require a walk to every PC to fix.
 
 **Deliverables**
@@ -126,6 +126,11 @@ mistake that would later require a walk to every PC to fix.
 - **Migration**: *Import lab key* (file + passphrase, or recovery code) → mint a new
   instance → restore the machine list and layout → beacon. Plus instance revocation and
   the revocation list pushed to agents on connect.
+- **Alternating teacher machines** (`D-21`, ARCHITECTURE §3.7): the machine list self-heals
+  from agents that connect with a valid certificate; `instances[]` in `lab.json`; the
+  *other teacher machine* banner with the PCs it holds; *Take over the lab* via the
+  beacon `take` field; revocation entries signed by the lab key and merged as a set from
+  `RevocationState`; revoke moved behind a confirmation in Settings.
 - Console gRPC server on `47800/tcp` with **mutual TLS** validated against the lab CA on
   both sides, plus revocation checking.
 - UDP beacon on `47801` in the v2 format (instance public key + CA endorsement +
@@ -166,8 +171,18 @@ mistake that would later require a walk to every PC to fix.
   remove the first holder and confirm their passphrase no longer opens anything.
 - Revoke the old instance; an agent presented with the old leaf certificate refuses it
   and says why.
-- Start a second console instance for the same lab while the first is running: both warn
-  that another instance is beaconing, and name it.
+- **Alternation test.** Two console profiles (A and B) for the same lab, both with the lab
+  key imported. Run A with 30 fake agents; add a PC on A; close A; start B. All 30 agents
+  are online on B within 15 s, the PC added on A is present on B, and nobody was asked for
+  a passphrase. Close B, start A: same result in reverse.
+- **Two live consoles.** Start B while A is running and holds all 30 agents. Nothing on
+  the agents changes. B shows the banner naming A and listing the 30 PCs it holds; A shows
+  the banner naming B with 0 PCs. Press *Take over* on B: every agent re-homes to B within
+  15 s, A's tiles go to *held by B*, and a lock job issued on A while B held a PC is never
+  delivered. No agent ever holds two `Link` streams.
+- Revoke an agent on B, close B, start A: the first agent that connects to A brings the
+  revocation with it and A refuses the revoked agent thereafter. A forged revocation entry
+  (unsigned or signed by the wrong key) offered by a fake agent is ignored.
 - Kill the console and restart it — every agent reconnects within 15 s.
 - Change the console's bound address — every agent follows the new beacon within 15 s.
 - A forged beacon (valid JSON, wrong CA endorsement) is rejected without a connection
@@ -515,7 +530,7 @@ Kept here so the reasoning is not lost.
 
 | Question | Answer | Where it landed |
 |---|---|---|
-| Is the teacher machine fixed? | One console at a time, but the software must move to other labs and other master machines; needs a security scheme for replacement | `D-13`, ARCHITECTURE §3, M1 |
+| Is the teacher machine fixed? | No. Several teacher machines take turns (MacBook some days, the Windows desk PC on others); one drives the lab at a time; the software must also move to other labs; needs a security scheme for replacement | `D-13`, `D-21`, ARCHITECTURE §3, M1 |
 | Code signing? | None available; accept warnings and add an antivirus exclusion | `D-15`, INSTALLER step 6a |
 | Which packages on day one? | None. The catalog ships empty; what matters is a comfortable way to add installers later | `D-16` context, M6 |
 | Do installers need downloading? | No. The lab's software is already installed; testing will use an arbitrary program later | M6 |
@@ -523,7 +538,7 @@ Kept here so the reasoning is not lost.
 | Lab size? | Design and load-test for up to 30 PCs | `D-17` |
 | Where to test the real agent? | Both a Windows VM (fast, destructive tests) and `PC-00` in the lab (WoL, capture, performance) | M2 |
 | Can someone else open the lab key? | Yes — multiple named key holders, each with their own passphrase | `D-13`, ARCHITECTURE §3.2, M1 |
-| Two consoles at once? | No. A second machine replaces the first; simultaneous consoles are out of scope | `D-13`, ARCHITECTURE §3.6 |
+| Two consoles at once? | Not a mode, but it must not break: two live consoles split the room, never share a PC, and either can *Take over*. A shared room is out of scope | `D-21`, ARCHITECTURE §3.7 |
 | What does *collect work* take? | One dedicated folder, chosen when the exam is set up — not the whole desktop | `D-16`, M5 |
 | How precise is the whitelist? | Executable names only; no following of child processes | `D-16`, M5 |
 | How does LabControl update itself? | Side-by-side version directories, a bundle signed by the lab key, 10-minute probation and a rollback driven from outside the agent; the console is updated by replacing its binary | `D-19`, ARCHITECTURE §7, M2 + M4 |
@@ -536,6 +551,6 @@ remaining unknowns are physical facts about the room, in the on-site checklist.
 
 ## Out of scope for v1
 
-Multi-lab management from one console, two consoles driving one lab at the same time,
-cloud relay, mobile console, Linux/macOS student agents, grading or LMS integration,
+Multi-lab management from one console, two consoles *sharing* one lab at the same time
+(alternating teacher machines are in scope, `D-21`), cloud relay, mobile console, Linux/macOS student agents, grading or LMS integration,
 student-initiated help requests, session recording.

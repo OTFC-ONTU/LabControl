@@ -65,6 +65,7 @@ message AgentMessage {
     Event        event         = 7;
     Pong         pong          = 8;
     ExamState    exam_state    = 9;
+    RevocationState revocation_state = 10;  // sent right after Hello (D-21)
   }
 }
 
@@ -93,6 +94,9 @@ message Hello {
   string mac                = 7;
   int64  boot_time_unix     = 8;
   UpdateState update_state  = 9;  // where this PC stands in a rollout (D-19)
+  // The console instance this agent was linked to before this link, empty if none since
+  // boot. Lets a console name the PCs another teacher machine currently holds (D-21).
+  string previous_instance_id = 10;
 }
 
 // Reported in Hello so a failed rollout is visible in the lab view rather than only in a
@@ -114,7 +118,10 @@ message Welcome {
   int64  server_time_unix    = 1;  // agents correct their clock skew from this
   string instance_id         = 2;  // which console instance is serving the lab
   string instance_name       = 3;
-  int32  revocation_version  = 4;
+  reserved 4;                      // was revocation_version; the list is a set now (D-21)
+  repeated string revoked_serials = 5;  // what this console holds; the agent answers
+                                        // with RevocationState and the console sends
+                                        // the entries the agent is missing
 }
 
 message Heartbeat { int64 sent_at_unix = 1; }
@@ -307,9 +314,26 @@ message ExamState {
 // Trust maintenance
 // ---------------------------------------------------------------------------
 
+// One revoked certificate -- a console instance or an agent alike. Self-authenticating:
+// `signature` is the LAB KEY's signature over serial|revoked_at_unix|reason, verified
+// against the pinned CA by whoever receives it. There is no list version and no owner;
+// every party keeps the union of the entries it has seen (D-21).
+message RevocationEntry {
+  string serial          = 1;
+  int64  revoked_at_unix = 2;
+  string reason          = 3;
+  bytes  signature       = 4;
+}
+
 message Revocation {
-  int32 version                      = 1;
-  repeated string revoked_serials    = 2;  // console instances and agents alike
+  reserved 1, 2;                          // was version + bare serials
+  repeated RevocationEntry entries = 3;
+}
+
+// Agent -> console, right after Hello: everything the agent holds revoked, so a console
+// that was switched off when another teacher machine revoked something catches up.
+message RevocationState {
+  repeated RevocationEntry entries = 1;
 }
 
 message UpdateAgent {

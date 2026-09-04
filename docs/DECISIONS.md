@@ -110,8 +110,9 @@ forgotten passphrase is recoverable and a leaked backup file is inert. Owner's e
 choice: **passphrases and recovery codes, not a USB-borne key file**, and **more than one
 key holder** — a colleague must be able to open the lab if the owner is ill on an exam
 day, so the master key carries one wrapping per named holder plus the recovery code.
-Equally by the owner's choice, only **one console may be active at a time**: a second
-instance replaces the first rather than running beside it. Everything needed is
+Equally by the owner's choice, only **one console drives the lab at a time** — but several
+teacher machines may hold a console permanently and take turns; see `D-21` for what that
+means in practice. Everything needed is
 in the .NET base class library (`ECDsa`, `CertificateRequest`, `AesGcm`,
 `Rfc2898DeriveBytes`) — no new NuGet dependency.
 Rejected: pinning the console leaf and re-running the installer on every PC after a
@@ -187,6 +188,46 @@ scrolls; the video budget and the job fan-out are sized and load-tested for **30
 with measurements rather than guesses.
 Rejected: hard-coding 14 (immediate rewrite when the software moves); designing for 50+
 now (a materially harder streaming problem for a lab that does not exist).
+
+## D-21 — Several teacher machines take turns; two at once is tolerated, never shared
+
+Context: the lab is taught by more than one person. The owner uses a MacBook; a colleague
+uses the Windows PC at the teacher's desk. `D-13` made the teacher machine *replaceable*,
+but "replacement" implies the old machine goes away. Here both stay, and the question is
+what happens on the day they swap — and on the day someone forgets to close the console
+on the other one.
+
+Decision, in three parts, all from the owner:
+
+1. **Alternation is the baseline.** Any number of teacher machines may carry a console
+   for the same lab, each with its own instance certificate minted from the same lab key.
+   Closing the console on one machine and opening it on another is the entire handover;
+   agents re-home themselves via the beacon within ~15 s. To make this cheap, a console's
+   machine list is treated as a cache of what the agents know: an agent presenting a valid
+   lab-issued certificate is added to the list on connect, never rejected as unknown.
+   Revocation entries are signed by the lab key and merged as a set across consoles and
+   agents, so a revocation made on one machine reaches the others through the agents.
+2. **Two live consoles is an exception, not a mode.** It must not break the lab, and it
+   must not become a shared mode either: no PC ever takes commands from two consoles.
+   Agents keep the connection they have (already the rule from `D-05`), so two consoles
+   split the room; each shows an informational banner naming the other and the PCs it
+   holds, and offers *Take over the lab*, implemented as a signed `take` timestamp in the
+   beacon that makes agents re-home to the taker. Last button press wins. There is no
+   console-to-console channel, no locking, no merged view.
+3. **Revoke is not the tool for this.** Revocation stays a security action for a stolen
+   machine, behind the passphrase and a confirmation in Settings, and is no longer
+   offered from the "another instance is running" banner.
+
+Rejected: a shared mode where both consoles see and control the whole room (needs
+arbitration of lock/broadcast/exam/input per PC and a console-to-console channel —
+real complexity for a situation the owner expects never to occur); a console-side
+lease or lock file (no shared storage exists on an isolated LAN, and a stale lease would
+block the next teacher); one-click revoke from the banner (turns a forgotten laptop into
+a re-import job for the owner); syncing the package catalog automatically between
+machines (would need a console-to-console channel; a visible "catalog last changed on
+…" label plus backup import is enough for a catalog that changes a few times a year).
+See `docs/ARCHITECTURE.md` §3.7 and `docs/PROTOCOL.md` (beacon `take`, `Revocation`,
+`RevocationState`).
 
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 

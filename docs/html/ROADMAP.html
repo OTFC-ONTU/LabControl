@@ -276,7 +276,7 @@ with no internet connection.</li>
 live — <strong>and the whole lab can be moved to a different teacher computer without touching
 a single PC</strong>. Proven entirely on the Mac against <code>FakeAgent</code>; no Windows machine needed.</p>
 <p>This is the milestone that implements <code>docs/ARCHITECTURE.md</code> §3 and decisions
-<code>D-13</code>/<code>D-14</code>. It is deliberately front-loaded: getting the trust model wrong is the one
+<code>D-13</code>/<code>D-14</code>/<code>D-21</code>. It is deliberately front-loaded: getting the trust model wrong is the one
 mistake that would later require a walk to every PC to fix.</p>
 <p><strong>Deliverables</strong></p>
 <ul>
@@ -292,6 +292,11 @@ encrypted-file fallback).</li>
 <li><strong>Migration</strong>: <em>Import lab key</em> (file + passphrase, or recovery code) → mint a new
 instance → restore the machine list and layout → beacon. Plus instance revocation and
 the revocation list pushed to agents on connect.</li>
+<li><strong>Alternating teacher machines</strong> (<code>D-21</code>, ARCHITECTURE §3.7): the machine list self-heals
+from agents that connect with a valid certificate; <code>instances[]</code> in <code>lab.json</code>; the
+<em>other teacher machine</em> banner with the PCs it holds; <em>Take over the lab</em> via the
+beacon <code>take</code> field; revocation entries signed by the lab key and merged as a set from
+<code>RevocationState</code>; revoke moved behind a confirmation in Settings.</li>
 <li>Console gRPC server on <code>47800/tcp</code> with <strong>mutual TLS</strong> validated against the lab CA on
 both sides, plus revocation checking.</li>
 <li>UDP beacon on <code>47801</code> in the v2 format (instance public key + CA endorsement +
@@ -332,8 +337,18 @@ reconnect <strong>with no change on the agent side at all</strong>. Then repeat 
 remove the first holder and confirm their passphrase no longer opens anything.</li>
 <li>Revoke the old instance; an agent presented with the old leaf certificate refuses it
 and says why.</li>
-<li>Start a second console instance for the same lab while the first is running: both warn
-that another instance is beaconing, and name it.</li>
+<li><strong>Alternation test.</strong> Two console profiles (A and B) for the same lab, both with the lab
+key imported. Run A with 30 fake agents; add a PC on A; close A; start B. All 30 agents
+are online on B within 15 s, the PC added on A is present on B, and nobody was asked for
+a passphrase. Close B, start A: same result in reverse.</li>
+<li><strong>Two live consoles.</strong> Start B while A is running and holds all 30 agents. Nothing on
+the agents changes. B shows the banner naming A and listing the 30 PCs it holds; A shows
+the banner naming B with 0 PCs. Press <em>Take over</em> on B: every agent re-homes to B within
+15 s, A's tiles go to <em>held by B</em>, and a lock job issued on A while B held a PC is never
+delivered. No agent ever holds two <code>Link</code> streams.</li>
+<li>Revoke an agent on B, close B, start A: the first agent that connects to A brings the
+revocation with it and A refuses the revoked agent thereafter. A forged revocation entry
+(unsigned or signed by the wrong key) offered by a fake agent is ignored.</li>
 <li>Kill the console and restart it — every agent reconnects within 15 s.</li>
 <li>Change the console's bound address — every agent follows the new beacon within 15 s.</li>
 <li>A forged beacon (valid JSON, wrong CA endorsement) is rejected without a connection
@@ -656,8 +671,8 @@ configure?</li>
 <tbody>
 <tr>
 <td>Is the teacher machine fixed?</td>
-<td>One console at a time, but the software must move to other labs and other master machines; needs a security scheme for replacement</td>
-<td><code>D-13</code>, ARCHITECTURE §3, M1</td>
+<td>No. Several teacher machines take turns (MacBook some days, the Windows desk PC on others); one drives the lab at a time; the software must also move to other labs; needs a security scheme for replacement</td>
+<td><code>D-13</code>, <code>D-21</code>, ARCHITECTURE §3, M1</td>
 </tr>
 <tr>
 <td>Code signing?</td>
@@ -696,8 +711,8 @@ configure?</li>
 </tr>
 <tr>
 <td>Two consoles at once?</td>
-<td>No. A second machine replaces the first; simultaneous consoles are out of scope</td>
-<td><code>D-13</code>, ARCHITECTURE §3.6</td>
+<td>Not a mode, but it must not break: two live consoles split the room, never share a PC, and either can <em>Take over</em>. A shared room is out of scope</td>
+<td><code>D-21</code>, ARCHITECTURE §3.7</td>
 </tr>
 <tr>
 <td>What does <em>collect work</em> take?</td>
@@ -725,12 +740,12 @@ configure?</li>
 <p>None outstanding. Every question raised so far is answered and recorded above; the
 remaining unknowns are physical facts about the room, in the on-site checklist.</p>
 <h2 id="out-of-scope-for-v1">Out of scope for v1<a class="anchor" href="#out-of-scope-for-v1" aria-label="Link to this section">#</a></h2>
-<p>Multi-lab management from one console, two consoles driving one lab at the same time,
-cloud relay, mobile console, Linux/macOS student agents, grading or LMS integration,
+<p>Multi-lab management from one console, two consoles <em>sharing</em> one lab at the same time
+(alternating teacher machines are in scope, <code>D-21</code>), cloud relay, mobile console, Linux/macOS student agents, grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-04 16:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 14:42 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

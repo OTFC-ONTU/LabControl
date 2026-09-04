@@ -232,8 +232,9 @@ forgotten passphrase is recoverable and a leaked backup file is inert. Owner's e
 choice: <strong>passphrases and recovery codes, not a USB-borne key file</strong>, and <strong>more than one
 key holder</strong> — a colleague must be able to open the lab if the owner is ill on an exam
 day, so the master key carries one wrapping per named holder plus the recovery code.
-Equally by the owner's choice, only <strong>one console may be active at a time</strong>: a second
-instance replaces the first rather than running beside it. Everything needed is
+Equally by the owner's choice, only <strong>one console drives the lab at a time</strong> — but several
+teacher machines may hold a console permanently and take turns; see <code>D-21</code> for what that
+means in practice. Everything needed is
 in the .NET base class library (<code>ECDsa</code>, <code>CertificateRequest</code>, <code>AesGcm</code>,
 <code>Rfc2898DeriveBytes</code>) — no new NuGet dependency.
 Rejected: pinning the console leaf and re-running the installer on every PC after a
@@ -301,6 +302,43 @@ scrolls; the video budget and the job fan-out are sized and load-tested for <str
 with measurements rather than guesses.
 Rejected: hard-coding 14 (immediate rewrite when the software moves); designing for 50+
 now (a materially harder streaming problem for a lab that does not exist).</p>
+<h2 id="d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared<a class="anchor" href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared" aria-label="Link to this section">#</a></h2>
+<p>Context: the lab is taught by more than one person. The owner uses a MacBook; a colleague
+uses the Windows PC at the teacher's desk. <code>D-13</code> made the teacher machine <em>replaceable</em>,
+but &quot;replacement&quot; implies the old machine goes away. Here both stay, and the question is
+what happens on the day they swap — and on the day someone forgets to close the console
+on the other one.</p>
+<p>Decision, in three parts, all from the owner:</p>
+<ol>
+<li><strong>Alternation is the baseline.</strong> Any number of teacher machines may carry a console
+for the same lab, each with its own instance certificate minted from the same lab key.
+Closing the console on one machine and opening it on another is the entire handover;
+agents re-home themselves via the beacon within ~15 s. To make this cheap, a console's
+machine list is treated as a cache of what the agents know: an agent presenting a valid
+lab-issued certificate is added to the list on connect, never rejected as unknown.
+Revocation entries are signed by the lab key and merged as a set across consoles and
+agents, so a revocation made on one machine reaches the others through the agents.</li>
+<li><strong>Two live consoles is an exception, not a mode.</strong> It must not break the lab, and it
+must not become a shared mode either: no PC ever takes commands from two consoles.
+Agents keep the connection they have (already the rule from <code>D-05</code>), so two consoles
+split the room; each shows an informational banner naming the other and the PCs it
+holds, and offers <em>Take over the lab</em>, implemented as a signed <code>take</code> timestamp in the
+beacon that makes agents re-home to the taker. Last button press wins. There is no
+console-to-console channel, no locking, no merged view.</li>
+<li><strong>Revoke is not the tool for this.</strong> Revocation stays a security action for a stolen
+machine, behind the passphrase and a confirmation in Settings, and is no longer
+offered from the &quot;another instance is running&quot; banner.</li>
+</ol>
+<p>Rejected: a shared mode where both consoles see and control the whole room (needs
+arbitration of lock/broadcast/exam/input per PC and a console-to-console channel —
+real complexity for a situation the owner expects never to occur); a console-side
+lease or lock file (no shared storage exists on an isolated LAN, and a stale lease would
+block the next teacher); one-click revoke from the banner (turns a forgotten laptop into
+a re-import job for the owner); syncing the package catalog automatically between
+machines (would need a console-to-console channel; a visible &quot;catalog last changed on
+…&quot; label plus backup import is enough for a catalog that changes a few times a year).
+See <code>docs/ARCHITECTURE.md</code> §3.7 and <code>docs/PROTOCOL.md</code> (beacon <code>take</code>, <code>Revocation</code>,
+<code>RevocationState</code>).</p>
 <h2 id="d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated<a class="anchor" href="#d-12-documentation-markdown-is-the-source-html-is-generated" aria-label="Link to this section">#</a></h2>
 <p>Context: the owner wants every document available as a readable <code>.html</code> next to the
 <code>.md</code>. Maintaining two hand-written copies guarantees they drift apart, and a drifted
@@ -487,9 +525,9 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-04 16:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-04 14:42 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>
 </body>
 </html>

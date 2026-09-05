@@ -594,31 +594,48 @@ development install, by the installer and by the simulator — a difference betw
 a bug that would only surface on a student PC.</p>
 <p>Decisions:</p>
 <ol>
-<li><strong><code>AgentProvisioning</code> in <code>LabControl.Shared</code> is INSTALLER.md step 4.</strong> It takes an
+<li><p><strong><code>AgentProvisioning</code> in <code>LabControl.Shared</code> is INSTALLER.md step 4.</strong> It takes an
 enrollment code the caller already spent on the stick, generates the keypair, pins the
 authority and writes <code>agent.json</code>. <code>FakeAgent</code>, <code>agent.exe --install</code> and the M4 installer
 all call it; the only thing that differs is the <code>KeyProtection</code> — plain PKCS#8 for the
 simulator, DPAPI at machine scope for a real PC (<code>MachineKeyProtection</code>, entropy bound to
-the key's purpose). <code>SetupPayload</code> moved from <code>FakeAgent</code> to <code>Shared</code> for the same reason.</li>
-<li><strong><code>agent.exe --install --payload &lt;dir&gt; --number N</code> is the seam.</strong> The installer is a
+the key's purpose). <code>SetupPayload</code> moved from <code>FakeAgent</code> to <code>Shared</code> for the same reason.</p>
+</li>
+<li><p><strong><code>agent.exe --install --payload &lt;dir&gt; --number N</code> is the seam.</strong> The installer is a
 separate executable, and a PowerShell script cannot do DPAPI-at-machine-scope with the
 same entropy as C#. Making the agent able to provision itself means every installer —
 <code>scripts/dev-install.ps1</code> today, Setup.exe in M4 — delegates the trust material to the
-one binary that will later read it. It does not need the console to be reachable.</li>
-<li><strong>The service never exits on a bad state.</strong> No <code>agent.json</code> yet, an unreadable key, a
+one binary that will later read it. It does not need the console to be reachable.</p>
+</li>
+<li><p><strong>The service never exits on a bad state.</strong> No <code>agent.json</code> yet, an unreadable key, a
 schema from a newer build: the service logs once, waits <code>UnprovisionedRetryInterval</code> and
 looks again. Exiting would trigger the recovery action (restart ×3, then <code>--rollback</code> in
-M4) and turn an ordinary &quot;Setup wrote the binaries before the identity&quot; into a rollback.</li>
-<li><strong>ACLs are verified by the agent, not only set by the installer.</strong> At every start the
+M4) and turn an ordinary &quot;Setup wrote the binaries before the identity&quot; into a rollback.</p>
+</li>
+<li><p><strong>ACLs are verified by the agent, not only set by the installer.</strong> At every start the
 agent checks that <code>Users</code>, <code>Authenticated Users</code>, <code>Everyone</code> and <code>INTERACTIVE</code> have no
 read access to <code>ProgramData\LabControl\</code> and reports a violation as an event through the
 link. <code>AgentLink.Report()</code> queues events raised while unlinked and flushes them after the
-next <code>Welcome</code>, so a problem found before the first link still reaches the console.</li>
-<li><strong><code>dev-install.ps1</code> does what Setup will, and nothing Setup would not.</strong> Same layout
+next <code>Welcome</code>, so a problem found before the first link still reaches the console.</p>
+</li>
+<li><p><strong><code>dev-install.ps1</code> does what Setup will, and nothing Setup would not.</strong> Same layout
 (<code>app\&lt;version&gt;</code>, <code>app\current</code>), same service configuration (LocalSystem, auto-start,
 restart ×3 at 10 s), same firewall group and Defender exclusion. It skips the hostname,
 Wake-on-LAN, power and the <code>student</code> account because none of them is needed to test the
-agent, and it is documented as development-only in the README.</li>
+agent, and it is documented as development-only in the README.</p>
+</li>
+<li><p><strong>Never an ephemeral TLS key on Windows.</strong> The first VM run (2026-09-05) enrolled fine
+and then failed every mutual-TLS handshake with SChannel's <em>the credentials supplied to
+the package were not recognized</em>: <code>TlsCertificate.ForTls</code> imported the PKCS#12 with
+<code>EphemeralKeySet</code>, which SChannel cannot use for client or server authentication. The
+key now lands in a CNG container for the object's lifetime — the machine store when the
+process is SYSTEM (the service), the user store otherwise (a console on Windows). macOS
+and Linux were never affected, which is why M1's tests could not catch it.</p>
+</li>
+<li><p><strong>Scripts that Windows PowerShell 5.1 will read are ASCII with a UTF-8 BOM.</strong> Without
+a BOM, 5.1 parses the file as ANSI and a UTF-8 em dash decodes to a curly quote that
+terminates a string. <code>dev-install.ps1</code> carries a BOM and no non-ASCII character.</p>
+</li>
 </ol>
 <p>Rejected: provisioning in PowerShell (no <code>ExportPkcs8PrivateKey</code> on Windows PowerShell
 5.1, and a second implementation of step 4 to keep in step); a <code>LabControl.Agent.Core</code>
@@ -821,7 +838,7 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-05 12:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 17:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>

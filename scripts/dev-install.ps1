@@ -1,10 +1,10 @@
-<#
+﻿<#
 .SYNOPSIS
   Development-only installer for the LabControl agent (ROADMAP M2). Run as Administrator
   on the Windows VM or on PC-00 until the real Setup.exe exists (M4).
 
 .DESCRIPTION
-  Lays the PC out exactly as Setup.exe will (docs/INSTALLER.md steps 3-6a, ARCHITECTURE §5):
+  Lays the PC out exactly as Setup.exe will (docs/INSTALLER.md steps 3-6a, ARCHITECTURE section 5):
 
     C:\Program Files\LabControl\app\<version>\agent.exe, session.exe   side-by-side (D-19)
     C:\Program Files\LabControl\app\current                              names <version>
@@ -95,7 +95,7 @@ if ($Uninstall) {
         Done 'deleted'
     }
     if ($PurgeData -and (Test-Path $DataDir)) {
-        Step "Deleting $DataDir (the PC's identity — it will get a new agent id next time)"
+        Step "Deleting $DataDir (the PC's identity - it will get a new agent id next time)"
         Remove-Item -Recurse -Force $DataDir
         Done 'deleted'
     } elseif (Test-Path $DataDir) {
@@ -111,6 +111,20 @@ $agentSource   = Join-Path $Build 'agent.exe'
 $sessionSource = Join-Path $Build 'session.exe'
 if (-not (Test-Path $agentSource))   { throw "agent.exe not found in $Build" }
 if (-not (Test-Path $sessionSource)) { throw "session.exe not found in $Build" }
+
+# The UTM shared folder is a WebDAV drive, and Windows refuses WebDAV files larger than
+# 50 MB by default; agent.exe is bigger. Raise the limit once. Restarting WebClient drops
+# the drive for a few seconds, so wait for the build directory to come back.
+$webClient = 'HKLM:\SYSTEM\CurrentControlSet\Services\WebClient\Parameters'
+if ((Get-Service WebClient -ErrorAction SilentlyContinue) -and (Get-ItemProperty $webClient -ErrorAction SilentlyContinue).FileSizeLimitInBytes -ne 4294967295) {
+    Step 'Raising the WebDAV file size limit (shared folders)'
+    Set-ItemProperty $webClient -Name FileSizeLimitInBytes -Value 4294967295 -Type DWord
+    Restart-Service WebClient -Force
+    $deadline = (Get-Date).AddSeconds(60)
+    while (-not (Test-Path $agentSource) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2; Get-ChildItem $Build -ErrorAction SilentlyContinue | Out-Null }
+    if (-not (Test-Path $agentSource)) { throw "$Build is not reachable after restarting WebClient; reopen the drive in Explorer and run again." }
+    Done 'limit raised'
+}
 
 Step 'Reading the version from agent.exe'
 $version = (& $agentSource --version | Select-Object -Last 1).Trim()

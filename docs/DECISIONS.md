@@ -527,6 +527,17 @@ Decisions:
    Wake-on-LAN, power and the `student` account because none of them is needed to test the
    agent, and it is documented as development-only in the README.
 
+6. **Never an ephemeral TLS key on Windows.** The first VM run (2026-09-05) enrolled fine
+   and then failed every mutual-TLS handshake with SChannel's *the credentials supplied to
+   the package were not recognized*: `TlsCertificate.ForTls` imported the PKCS#12 with
+   `EphemeralKeySet`, which SChannel cannot use for client or server authentication. The
+   key now lands in a CNG container for the object's lifetime — the machine store when the
+   process is SYSTEM (the service), the user store otherwise (a console on Windows). macOS
+   and Linux were never affected, which is why M1's tests could not catch it.
+7. **Scripts that Windows PowerShell 5.1 will read are ASCII with a UTF-8 BOM.** Without
+   a BOM, 5.1 parses the file as ANSI and a UTF-8 em dash decodes to a curly quote that
+   terminates a string. `dev-install.ps1` carries a BOM and no non-ASCII character.
+
 Rejected: provisioning in PowerShell (no `ExportPkcs8PrivateKey` on Windows PowerShell
 5.1, and a second implementation of step 4 to keep in step); a `LabControl.Agent.Core`
 library shared by the agent and Setup (a seventh project for a routine that fits in one

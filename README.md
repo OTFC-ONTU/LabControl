@@ -94,26 +94,30 @@ get `win-x64`. `tools/publish-all.sh` produces both.
    gateway address of the `vmnet` bridge (usually `192.168.64.1`). UDP broadcasts from the Mac
    do reach the VM on that bridge, but if the PC stays *searching*, pin the console with
    `-ConsoleHost 192.168.64.1` — that is what `console_host` in `agent.json` is for.
-3. **Publish and share.** `tools/publish-all.sh`, then expose `artifacts/win-arm64` and the
-   USB payload folder (Settings → *Write USB payload…*) to the VM: a UTM shared directory
-   (mounted as a drive by the SPICE tools), or a network share.
-4. **Install** from an elevated PowerShell in the VM:
-
-   ```powershell
-   Set-ExecutionPolicy -Scope Process Bypass
-   \\path\to\scripts\dev-install.ps1 -Build Z:\win-arm64 -Payload Z:\usb -Number 1 -ConsoleHost 192.168.64.1
-   ```
-
-   The script lays out `C:\Program Files\LabControl\app\<version>\`, locks down
-   `C:\ProgramData\LabControl\`, runs `agent.exe --install` (keypair under DPAPI, pinned
-   `ca.crt`, one enrollment code from the stick, `agent.json`), registers the `LabControl`
-   service and starts it. Then open *Enrol PCs* in the console: the VM enrols and appears
-   as `PC-01` with its real inventory.
+3. **Publish and share.** Make a folder to share, say `~/LabVM`, and put in it the
+   published build as `win-arm64\` (`agent.exe`, `session.exe`), the USB payload as `usb\`
+   (Settings → *Write USB payload…* in the console, pointed at `~/LabVM/usb`) and both
+   files from `scripts/` (`dev-install.ps1`, `dev-install.cmd`). Point the VM's shared
+   directory at it (UTM: the folder icon in the VM window); the SPICE tools mount it as
+   drive `Z:`.
+4. **Install** in the VM: open `Z:` in Explorer and double-click `dev-install.cmd`
+   (edit the PC number and the console address at the top of it first if they differ; the
+   default is `-Number 1 -ConsoleHost 192.168.64.1`). Accept the SmartScreen and UAC
+   prompts. The script raises the WebDAV size limit the shared drive needs, lays out
+   `C:\Program Files\LabControl\app\<version>\`, locks down `C:\ProgramData\LabControl\`,
+   runs `agent.exe --install` (keypair under DPAPI, pinned `ca.crt`, one enrollment code
+   from the stick, `agent.json`), registers the `LabControl` service and starts it. Then
+   open *Enrol PCs* in the console and type the passphrase: the VM enrols within half a
+   minute and appears as `PC-01` with its real inventory.
 5. **Watch and iterate.** The log is
    `C:\ProgramData\LabControl\logs\agent-<date>.log`; `agent.exe --run --verbose` runs the
-   same agent in the foreground. Re-running `dev-install.ps1` with a new build installs it
-   side by side and repoints the service; `-Uninstall` removes everything but the PC's
-   identity, `-Uninstall -PurgeData` removes that too.
+   same agent in the foreground. Re-running `dev-install.cmd` with a new build installs it
+   side by side and repoints the service, keeping the PC's identity. Two things to know
+   about the shared drive: Windows caches WebDAV files, so a rebuilt file with the same
+   name may be served stale for a while — publish a new build into a differently named
+   folder if in doubt — and restarting the `WebClient` service (which the script does once)
+   can leave `Z:` unavailable until the VM is rebooted. `dev-install.ps1 -Uninstall`
+   removes everything but the PC's identity, `-Uninstall -PurgeData` removes that too.
 
 Requires the .NET 10 SDK and nothing else. The `net10.0-windows` projects compile on
 macOS and Linux too (they just cannot run there), so a broken Windows build is caught

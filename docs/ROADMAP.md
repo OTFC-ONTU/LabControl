@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portion 1 of 4 built 2026-09-05) | M1, Windows VM |
+| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portion 1 of 4 verified on the VM 2026-09-05) | M1, Windows VM |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -323,8 +323,15 @@ Wake-on-LAN from the console and `run_script`; **(4)** the minimal push-and-rest
   across a reconnect. `InstallLayout` is the `app\<version>` arithmetic, unit-tested on the
   Mac. `scripts/dev-install.ps1` lays the PC out as Setup will, provisions, registers the
   service with restart-on-failure, adds the firewall rule and the Defender exclusion.
-  Jobs are answered with *not in this build* until portion 3. Not yet run on Windows: the
-  owner is installing a VM (README, *Testing the agent in a Windows VM*).
+  Jobs are answered with *not in this build* until portion 3.
+- *Portion 1 on the VM (2026-09-05).* Windows 11 ARM64 in UTM on the MacBook, installed
+  by `dev-install.cmd` from the shared folder. The service started, waited for the lab key
+  with the right message, enrolled the moment the key was unlocked, then failed its first
+  mutual-TLS handshake — SChannel refuses ephemeral keys, a Windows-only bug M1's tests on
+  the Mac could not see (`D-29` item 6). Fixed, republished, and `PC-01` linked, stayed
+  linked and reported its inventory (hostname, MAC, version, the interactive user). Two
+  more Windows-only lessons landed in the script: PowerShell 5.1 needs a BOM, and the UTM
+  shared drive needs its WebDAV size limit raised (`D-29` item 7, README).
 
 **Acceptance criteria**
 

@@ -169,7 +169,7 @@ implement.</p>
 <tr>
 <td><strong>M2</strong></td>
 <td>Windows agent: service, helper, power, scripts</td>
-<td><strong>in progress</strong> (portion 1 of 4 built 2026-09-05)</td>
+<td><strong>in progress</strong> (portion 1 of 4 verified on the VM 2026-09-05)</td>
 <td>M1, Windows VM</td>
 </tr>
 <tr>
@@ -480,8 +480,15 @@ wrong one as an event; <code>AgentLink</code> gained <code>Report()</code> for e
 across a reconnect. <code>InstallLayout</code> is the <code>app\&lt;version&gt;</code> arithmetic, unit-tested on the
 Mac. <code>scripts/dev-install.ps1</code> lays the PC out as Setup will, provisions, registers the
 service with restart-on-failure, adds the firewall rule and the Defender exclusion.
-Jobs are answered with <em>not in this build</em> until portion 3. Not yet run on Windows: the
-owner is installing a VM (README, <em>Testing the agent in a Windows VM</em>).</li>
+Jobs are answered with <em>not in this build</em> until portion 3.</li>
+<li><em>Portion 1 on the VM (2026-09-05).</em> Windows 11 ARM64 in UTM on the MacBook, installed
+by <code>dev-install.cmd</code> from the shared folder. The service started, waited for the lab key
+with the right message, enrolled the moment the key was unlocked, then failed its first
+mutual-TLS handshake — SChannel refuses ephemeral keys, a Windows-only bug M1's tests on
+the Mac could not see (<code>D-29</code> item 6). Fixed, republished, and <code>PC-01</code> linked, stayed
+linked and reported its inventory (hostname, MAC, version, the interactive user). Two
+more Windows-only lessons landed in the script: PowerShell 5.1 needs a BOM, and the UTM
+shared drive needs its WebDAV size limit raised (<code>D-29</code> item 7, README).</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -853,7 +860,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-05 12:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 17:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

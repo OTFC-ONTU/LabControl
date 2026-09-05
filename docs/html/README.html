@@ -222,44 +222,46 @@ MacBook (fast, revertible) and on <code>PC-00</code> in the lab (real NIC, real 
 Silicon the VM is <strong>Windows 11 ARM</strong>, so the agent is published as <code>win-arm64</code>; the lab PCs
 get <code>win-x64</code>. <code>tools/publish-all.sh</code> produces both.</p>
 <ol>
-<li><p><strong>Install a VM.</strong> <a href="https://mac.getutm.app">UTM</a> is free: <em>Create a New Virtual
+<li><strong>Install a VM.</strong> <a href="https://mac.getutm.app">UTM</a> is free: <em>Create a New Virtual
 Machine → Virtualize → Windows</em>, tick <em>Install Windows 10 or higher</em> and let UTM
 download the Windows 11 ARM installer; 4 GB RAM and 64 GB disk are plenty. Install the
 SPICE guest tools when prompted (shared folders, clipboard). Take a snapshot once Windows
-is on the desktop — every destructive test starts from it.</p>
-</li>
-<li><p><strong>Network.</strong> Leave UTM's <em>Shared Network</em>; the Mac is reachable from the VM at the
+is on the desktop — every destructive test starts from it.</li>
+<li><strong>Network.</strong> Leave UTM's <em>Shared Network</em>; the Mac is reachable from the VM at the
 gateway address of the <code>vmnet</code> bridge (usually <code>192.168.64.1</code>). UDP broadcasts from the Mac
 do reach the VM on that bridge, but if the PC stays <em>searching</em>, pin the console with
-<code>-ConsoleHost 192.168.64.1</code> — that is what <code>console_host</code> in <code>agent.json</code> is for.</p>
-</li>
-<li><p><strong>Publish and share.</strong> <code>tools/publish-all.sh</code>, then expose <code>artifacts/win-arm64</code> and the
-USB payload folder (Settings → <em>Write USB payload…</em>) to the VM: a UTM shared directory
-(mounted as a drive by the SPICE tools), or a network share.</p>
-</li>
-<li><p><strong>Install</strong> from an elevated PowerShell in the VM:</p>
-<pre><code class="language-powershell">Set-ExecutionPolicy -Scope Process Bypass
-\\path\to\scripts\dev-install.ps1 -Build Z:\win-arm64 -Payload Z:\usb -Number 1 -ConsoleHost 192.168.64.1
-</code></pre>
-<p>The script lays out <code>C:\Program Files\LabControl\app\&lt;version&gt;\</code>, locks down
-<code>C:\ProgramData\LabControl\</code>, runs <code>agent.exe --install</code> (keypair under DPAPI, pinned
-<code>ca.crt</code>, one enrollment code from the stick, <code>agent.json</code>), registers the <code>LabControl</code>
-service and starts it. Then open <em>Enrol PCs</em> in the console: the VM enrols and appears
-as <code>PC-01</code> with its real inventory.</p>
-</li>
-<li><p><strong>Watch and iterate.</strong> The log is
+<code>-ConsoleHost 192.168.64.1</code> — that is what <code>console_host</code> in <code>agent.json</code> is for.</li>
+<li><strong>Publish and share.</strong> Make a folder to share, say <code>~/LabVM</code>, and put in it the
+published build as <code>win-arm64\</code> (<code>agent.exe</code>, <code>session.exe</code>), the USB payload as <code>usb\</code>
+(Settings → <em>Write USB payload…</em> in the console, pointed at <code>~/LabVM/usb</code>) and both
+files from <code>scripts/</code> (<code>dev-install.ps1</code>, <code>dev-install.cmd</code>). Point the VM's shared
+directory at it (UTM: the folder icon in the VM window); the SPICE tools mount it as
+drive <code>Z:</code>.</li>
+<li><strong>Install</strong> in the VM: open <code>Z:</code> in Explorer and double-click <code>dev-install.cmd</code>
+(edit the PC number and the console address at the top of it first if they differ; the
+default is <code>-Number 1 -ConsoleHost 192.168.64.1</code>). Accept the SmartScreen and UAC
+prompts. The script raises the WebDAV size limit the shared drive needs, lays out
+<code>C:\Program Files\LabControl\app\&lt;version&gt;\</code>, locks down <code>C:\ProgramData\LabControl\</code>,
+runs <code>agent.exe --install</code> (keypair under DPAPI, pinned <code>ca.crt</code>, one enrollment code
+from the stick, <code>agent.json</code>), registers the <code>LabControl</code> service and starts it. Then
+open <em>Enrol PCs</em> in the console and type the passphrase: the VM enrols within half a
+minute and appears as <code>PC-01</code> with its real inventory.</li>
+<li><strong>Watch and iterate.</strong> The log is
 <code>C:\ProgramData\LabControl\logs\agent-&lt;date&gt;.log</code>; <code>agent.exe --run --verbose</code> runs the
-same agent in the foreground. Re-running <code>dev-install.ps1</code> with a new build installs it
-side by side and repoints the service; <code>-Uninstall</code> removes everything but the PC's
-identity, <code>-Uninstall -PurgeData</code> removes that too.</p>
-</li>
+same agent in the foreground. Re-running <code>dev-install.cmd</code> with a new build installs it
+side by side and repoints the service, keeping the PC's identity. Two things to know
+about the shared drive: Windows caches WebDAV files, so a rebuilt file with the same
+name may be served stale for a while — publish a new build into a differently named
+folder if in doubt — and restarting the <code>WebClient</code> service (which the script does once)
+can leave <code>Z:</code> unavailable until the VM is rebooted. <code>dev-install.ps1 -Uninstall</code>
+removes everything but the PC's identity, <code>-Uninstall -PurgeData</code> removes that too.</li>
 </ol>
 <p>Requires the .NET 10 SDK and nothing else. The <code>net10.0-windows</code> projects compile on
 macOS and Linux too (they just cannot run there), so a broken Windows build is caught
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-05 12:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 17:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

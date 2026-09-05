@@ -174,9 +174,14 @@ the USB payload, real inventory (CsWin32 + registry), the `app\<version>` layout
 `scripts/dev-install.ps1` (`D-29`). Portion 2 is verified on the VM too: `Agent.Session` is a
 real helper supervised by the service over the named pipe (`SessionSupervisor`,
 `SessionLauncher`, `PipeFraming`; `D-30`), and `SessionState` carries `locked` and
-`helper_alive` to the tile. **Portion 3 is next**: power jobs, Wake-on-LAN from the console,
-a minimal `PullFile` and `run_script` on top of it (`D-31`; the teacher-facing script library
-is M4); jobs answer *not in this build* until then. `Setup` is still a skeleton (M4).
+`helper_alive` to the tile. **Portion 3 is built (2026-09-05) and awaits its VM run**: power
+jobs (`PowerControl`), Wake-on-LAN from the console (`Shared/Power/WakeOnLan`, tracked in
+`LabSession`), the minimal `PullFile` (`FileOffers` on the console, `AgentLink.PullFileAsync`
+on the agent) and `run_script` on top of it (`ScriptRunner`, `UserProcessLauncher`,
+`Shared/Jobs/ProcessRunner`; `D-31`, `D-32`); the teacher-facing script library is M4 and
+the console has only the development *Run test script…* dialog until then. Jobs outlive a
+dropped link (`D-32` item 7). **Portion 4 is next**: the minimal push-and-restart.
+`Setup` is still a skeleton (M4).
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

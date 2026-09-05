@@ -26,3 +26,24 @@ TOKEN_TYPE
 PROCESS_CREATION_FLAGS
 STARTUPINFOW
 PROCESS_INFORMATION
+
+// Power jobs: shutdown / reboot with SE_SHUTDOWN_NAME, log off the interactive session (PowerControl, D-32)
+InitiateSystemShutdownEx
+SHUTDOWN_REASON
+WTSLogoffSession
+LookupPrivilegeValue
+AdjustTokenPrivileges
+TOKEN_PRIVILEGES
+LUID_AND_ATTRIBUTES
+TOKEN_PRIVILEGES_ATTRIBUTES
+SE_SHUTDOWN_NAME
+
+// run_script as the student: the user's token, pipes the child inherits, the OEM code page it prints in (UserProcessLauncher, ScriptRunner)
+WTSQueryUserToken
+CreatePipe
+SetHandleInformation
+HANDLE_FLAGS
+SECURITY_ATTRIBUTES
+GetOEMCP
+
+WIN32_ERROR

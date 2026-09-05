@@ -196,7 +196,9 @@ DPAPI-protected store, provisioning from the USB payload, real inventory, the si
 version layout and <code>scripts/dev-install.ps1</code> — and portion 2 — <code>session.exe</code> living on the
 student's desktop as SYSTEM, supervised by the service over a named pipe, with the console
 showing who is logged on, whether the screen is locked and whether the helper is up — are
-verified on the Windows VM. Portion 3 (power jobs, Wake-on-LAN, <code>run_script</code>) is next, then
+verified on the Windows VM. Portion 3 — shutdown / reboot / log off, Wake-on-LAN from the
+console, the minimal <code>PullFile</code> and <code>run_script</code> with streamed output and a kill at the
+timeout, plus a development-only <em>Run test script…</em> — is built and awaits its VM run; then
 push-and-restart (<a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>).</p>
 <h2 id="quick-start">Quick start<a class="anchor" href="#quick-start" aria-label="Link to this section">#</a></h2>
 <pre><code class="language-bash">dotnet build
@@ -274,7 +276,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-05 23:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 23:30 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

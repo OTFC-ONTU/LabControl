@@ -80,6 +80,11 @@ public sealed partial class MachineTileViewModel : ObservableObject
     [ObservableProperty]
     public partial bool NeedsRenewal { get; set; }
 
+    /// <summary>A magic packet went out and the PC has not linked yet (ARCHITECTURE §6).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    public partial bool IsWaking { get; set; }
+
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
 
@@ -104,11 +109,12 @@ public sealed partial class MachineTileViewModel : ObservableObject
         TileStatus.Online => Strings.Get("Tile.Online"),
         TileStatus.Outdated => Strings.Get("Tile.Outdated"),
         TileStatus.HeldElsewhere => Strings.Format("Tile.HeldBy", HeldBy),
-        _ => Strings.Get("Tile.Offline"),
+        _ => IsWaking ? Strings.Get("Tile.Waking") : Strings.Get("Tile.Offline"),
     };
 
-    public void Refresh(MachineRecord machine, AgentConnection? connection, string? heldBy, DateTimeOffset now)
+    public void Refresh(MachineRecord machine, AgentConnection? connection, string? heldBy, DateTimeOffset now, bool waking = false)
     {
+        IsWaking = waking && connection is null;
         Number = machine.Number;
         OnPropertyChanged(nameof(Name));
         Hostname = machine.Hostname;

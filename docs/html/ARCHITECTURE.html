@@ -553,6 +553,11 @@ C:\ProgramData\LabControl\     agent.json  {schema_version, agent_id, number, la
                                            emptied once the new version proves itself (§7)
                                logs\       rolling agent log (7 days)
                                cache\      downloaded package installers (cleaned after install)
+                               jobs\&lt;id&gt;\  a run_script's file while it runs as SYSTEM; removed
+                                           with the result (D-32)
+C:\Users\Public\LabControl\    jobs\&lt;id&gt;\  the same for a script that runs as the student: it
+                                           must be able to read it, and nobody weaker than the
+                                           student can write there (D-32)
 </code></pre>
 <p>ACL: <code>SYSTEM</code> + <code>Administrators</code> full control, <code>Users</code> read/execute on Program Files,
 <strong>no access</strong> for <code>Users</code> to <code>ProgramData\LabControl</code>.</p>
@@ -584,11 +589,11 @@ covered without a second visit.</p>
 </tr>
 <tr>
 <td>Shutdown / reboot / logoff</td>
-<td>Agent: <code>ExitWindowsEx</code> / <code>InitiateSystemShutdownEx</code> with <code>SE_SHUTDOWN_NAME</code>.</td>
+<td>Agent: <code>InitiateSystemShutdownEx</code> with <code>SE_SHUTDOWN_NAME</code>, immediate and forced (the result leaves 2 s before the call, <code>D-32</code>); log off with <code>WTSLogoffSession</code> on the interactive session — <code>ExitWindowsEx</code> would only log off session 0.</td>
 </tr>
 <tr>
 <td>Run script</td>
-<td>Agent runs <code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File …</code> or <code>cmd /c</code> as SYSTEM (default) or in the student session via the helper (<code>as: user</code>). stdout/stderr/exit code streamed back.</td>
+<td>Agent pulls the script through <code>PullFile</code> (<code>D-31</code>) and runs <code>powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File …</code> or <code>cmd.exe /d /c …</code> as SYSTEM (default) or <strong>as the student in the student's session</strong> (<code>as: user</code>: the user's token from <code>WTSQueryUserToken</code>, <code>CreateProcessAsUser</code> with pipes the service reads — not through the helper, which is SYSTEM). stdout/stderr streamed line by line, exit code in the result, the whole process tree killed after <code>timeout_s</code> of silence (<code>D-32</code>).</td>
 </tr>
 <tr>
 <td>Install package</td>
@@ -891,7 +896,7 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-09-05 23:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 23:30 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#three-separate-identities">3.1 Three separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>

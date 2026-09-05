@@ -16,12 +16,14 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
     private readonly DirectoryAgentStore _store;
     private readonly ILogger _log;
     private readonly DateTimeOffset _bootedAt = WindowsInventory.BootTime();
+    private readonly ScriptRunner _scripts;
 
     public WindowsAgentBehaviour(DirectoryAgentStore store, ILogger log)
     {
         _store = store;
         _log = log;
         Link = new AgentLink(store, this, log);
+        _scripts = new ScriptRunner(Link, log);
 
         Link.Linked += (_, name) => _log.LogInformation("{Pc}: linked to {Console}", Link.Name, name);
         Link.Unlinked += reason => _log.LogInformation("{Pc}: unlinked — {Reason}", Link.Name, reason);
@@ -66,19 +68,92 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         }
     }
 
-    public Task<JobResult> RunJobAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
+    public async Task<JobResult> RunJobAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
     {
         _log.LogInformation("{Pc}: job {Kind} {Id}", Link.Name, job.Kind, job.Id);
 
-        // Power, scripts and the rest land in the next portions of M2 (ROADMAP). Until then
-        // the console hears "not in this build" instead of a timeout.
-        return Task.FromResult(new JobResult
+        switch (job.Kind)
+        {
+            case Job.Types.Kind.Shutdown:
+                return Power(job, reboot: false);
+
+            case Job.Types.Kind.Reboot:
+                return Power(job, reboot: true);
+
+            case Job.Types.Kind.Logoff:
+                return Logoff(job);
+
+            case Job.Types.Kind.RunScript:
+                return await _scripts.RunAsync(job, report, token);
+
+            default:
+                // Packages, profile reset, files and the update land in later portions of M2
+                // and in M4 (ROADMAP). Until then the console hears "not in this build".
+                return new JobResult
+                {
+                    JobId = job.Id,
+                    Ok = false,
+                    ExitCode = -1,
+                    Message = $"This agent build ({Program.Version}) does not run {job.Kind} jobs yet.",
+                };
+        }
+    }
+
+    /// <summary>
+    /// Shutdown and reboot answer first and act <see cref="Defaults.PowerJobDelay"/> later, so
+    /// the result is on the wire before Windows tears the link down (D-32). What can fail
+    /// early — the privilege — is checked before answering; a failure of the call itself is
+    /// reported as an event, because by then the result has left.
+    /// </summary>
+    private JobResult Power(Job job, bool reboot)
+    {
+        var what = reboot ? "reboot" : "shutdown";
+        var problem = PowerControl.PrepareShutdown();
+        if (problem is not null)
+        {
+            _log.LogError("{Pc}: cannot {What}: {Problem}", Link.Name, what, problem);
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"Cannot {what}: {problem}" };
+        }
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(Defaults.PowerJobDelay);
+            _log.LogInformation("{Pc}: {What} now (forced, no warning)", Link.Name, what);
+            var failure = PowerControl.Shutdown(reboot);
+            if (failure is not null)
+            {
+                _log.LogError("{Pc}: {What} failed: {Failure}", Link.Name, what, failure);
+                Link.Report(Event.Types.Severity.Error, "power.failed", $"The {what} did not happen: {failure}");
+            }
+        });
+
+        return new JobResult
         {
             JobId = job.Id,
-            Ok = false,
-            ExitCode = -1,
-            Message = $"This agent build ({Program.Version}) does not run {job.Kind} jobs yet.",
-        });
+            Ok = true,
+            ExitCode = 0,
+            Message = reboot
+                ? $"Rebooting in {Defaults.PowerJobDelay.TotalSeconds:0} s (forced; applications are closed without saving)."
+                : $"Shutting down in {Defaults.PowerJobDelay.TotalSeconds:0} s (forced; applications are closed without saving).",
+        };
+    }
+
+    private JobResult Logoff(Job job)
+    {
+        var session = InteractiveSession.Snapshot();
+        if (!session.HasSession || !session.HasUser)
+        {
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = "Nobody is logged on to this PC; there is no session to log off." };
+        }
+
+        var failure = PowerControl.Logoff(session.SessionId!.Value);
+        if (failure is not null)
+        {
+            _log.LogError("{Pc}: logoff failed: {Failure}", Link.Name, failure);
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"Could not log {session.User} off: {failure}" };
+        }
+
+        return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = $"Logging {session.User} off (session {session.SessionId}); the session helper follows the new session." };
     }
 
     public async ValueTask DisposeAsync()

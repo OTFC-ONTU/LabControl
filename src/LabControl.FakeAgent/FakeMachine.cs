@@ -1,6 +1,7 @@
 using System.Globalization;
 using Google.Protobuf;
 using LabControl.Shared;
+using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
@@ -161,15 +162,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
                 return Ok(job, "Logged the student off (simulated; auto-logon brings them back in 5 s).");
 
             case Job.Types.Kind.RunScript:
-                var lines = job.Args.TryGetValue("lines", out var count) && int.TryParse(count, out var n) ? n : 5;
-                var exit = job.Args.TryGetValue("exit", out var code) && int.TryParse(code, out var e) ? e : 0;
-                for (var i = 1; i <= lines; i++)
-                {
-                    await Task.Delay(TimeSpan.FromMilliseconds(200 + _random.Next(300)), token);
-                    await report(new JobProgress { JobId = job.Id, Percent = i * 100 / lines, Line = $"line {i} of {lines} from {Name}" });
-                }
-
-                return new JobResult { JobId = job.Id, Ok = exit == 0, ExitCode = exit, Message = $"exit {exit}" };
+                return await RunScriptAsync(job, report, token);
 
             case Job.Types.Kind.SelfUpdate:
                 return Ok(job, "Update accepted (simulated; nothing installed).");
@@ -181,6 +174,115 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     }
 
     private static JobResult Ok(Job job, string message) => new() { JobId = job.Id, Ok = true, ExitCode = 0, Message = message };
+
+    /// <summary>
+    /// <c>run_script</c> on a simulated PC: the file channel is real — the script is pulled
+    /// through <c>PullFile</c> and hash-checked exactly as the Windows agent does — and only
+    /// the shell is pretended. The pretence understands what the console's built-in test
+    /// scripts contain (<see cref="TestScripts"/>): a printed line, <c>exit N</c> and a sleep,
+    /// with the same inactivity timeout the real agent enforces, so the console can be
+    /// developed against the acceptance scripts on the Mac.
+    /// </summary>
+    private async Task<JobResult> RunScriptAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
+    {
+        if (!RunScriptRequest.TryParse(job, out var request, out var error))
+        {
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"This job cannot run: {error}." };
+        }
+
+        string text;
+        try
+        {
+            using var buffer = new MemoryStream();
+            var bytes = await Link.PullFileAsync(request.Reference, request.Sha256, buffer, token);
+            text = System.Text.Encoding.UTF8.GetString(buffer.ToArray()).TrimStart('\uFEFF');
+            _log.LogInformation("{Pc}: pulled {Name} ({Bytes} bytes), running as {RunAs} with {Shell} (simulated)", Name, request.Name, bytes, request.RunAs, request.Shell);
+        }
+        catch (FilePullException ex)
+        {
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = ex.Message };
+        }
+
+        if (request.RunAs == ScriptRunAs.User && LoggedOnUser is null)
+        {
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = "The script was to run as the logged-on user, but nobody is logged on to this PC right now." };
+        }
+
+        var started = DateTimeOffset.UtcNow;
+        var lines = 0;
+        var exitCode = 0;
+        var user = request.RunAs == ScriptRunAs.User ? LoggedOnUser! : "SYSTEM";
+
+        async Task Print(string line)
+        {
+            lines++;
+            await report(new JobProgress { JobId = job.Id, Percent = 0, Line = line });
+            await Task.Delay(TimeSpan.FromMilliseconds(5 + _random.Next(20)), token);
+        }
+
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#') || line.StartsWith("rem ", StringComparison.OrdinalIgnoreCase) || line.StartsWith('@') || line.StartsWith(':'))
+            {
+                continue;
+            }
+
+            // for ($i = 1; $i -le N; $i++) { Write-Output "line $i of N" }  |  for /l %%i in (1,1,N) do echo line %%i of N
+            var count = System.Text.RegularExpressions.Regex.Match(line, @"(?:-le|in \(1,1,)\s*(\d+)");
+            if (count.Success && (line.Contains("Write-Output", StringComparison.Ordinal) || line.Contains("echo", StringComparison.Ordinal)))
+            {
+                var n = int.Parse(count.Groups[1].Value, CultureInfo.InvariantCulture);
+                for (var i = 1; i <= n; i++)
+                {
+                    await Print($"line {i} of {n}");
+                }
+
+                continue;
+            }
+
+            var exit = System.Text.RegularExpressions.Regex.Match(line, @"^exit(?: /b)?\s+(\d+)");
+            if (exit.Success)
+            {
+                exitCode = int.Parse(exit.Groups[1].Value, CultureInfo.InvariantCulture);
+                break;
+            }
+
+            if (line.Contains("Start-Sleep", StringComparison.Ordinal) || line.StartsWith("timeout ", StringComparison.OrdinalIgnoreCase) || line.StartsWith("goto", StringComparison.OrdinalIgnoreCase))
+            {
+                // The hang: silence until the agent's inactivity timeout kills the tree.
+                await Task.Delay(request.Timeout, token);
+                return new JobResult
+                {
+                    JobId = job.Id,
+                    Ok = false,
+                    ExitCode = -1,
+                    Message = $"Killed after {request.Timeout.TotalSeconds:0} s without output ({lines} line(s) received, {(DateTimeOffset.UtcNow - started).TotalSeconds:0} s in total). The script and everything it started were terminated. (simulated)",
+                };
+            }
+
+            var print = System.Text.RegularExpressions.Regex.Match(line, @"^(?:Write-Output\s+""(?<text>.*)""|echo\s+(?<text>.*))$");
+            if (print.Success)
+            {
+                var value = print.Groups["text"].Value
+                    .Replace("$env:USERNAME", user, StringComparison.Ordinal)
+                    .Replace("%USERNAME%", user, StringComparison.Ordinal)
+                    .Replace("$PWD", "~/.labcontrol-fake (simulated)", StringComparison.Ordinal)
+                    .Replace("%CD%", "~/.labcontrol-fake (simulated)", StringComparison.Ordinal);
+                value = System.Text.RegularExpressions.Regex.Replace(value, @"\$\([^)]*\)|\$[A-Za-z_:]+|%[^%]+%", "(simulated)");
+                await Print(value);
+                continue;
+            }
+
+            if (line.StartsWith("for /f", StringComparison.OrdinalIgnoreCase))
+            {
+                await Print($"account: {Name.ToLowerInvariant()}\\{user.ToLowerInvariant()} (simulated)");
+            }
+        }
+
+        var elapsed = (DateTimeOffset.UtcNow - started).TotalSeconds.ToString("0", CultureInfo.InvariantCulture);
+        return new JobResult { JobId = job.Id, Ok = exitCode == 0, ExitCode = exitCode, Message = $"exit {exitCode} after {elapsed} s, {lines} line(s) (simulated)" };
+    }
 
     private void PublishSession(SessionState.Types.Kind kind) => Link.PublishSessionState(new SessionState
     {

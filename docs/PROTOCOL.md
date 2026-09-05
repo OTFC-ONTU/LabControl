@@ -208,13 +208,61 @@ when its link dropped is closed the same way rather than kept for its return (`D
 `JobProgress`, whichever is later: a long installation that keeps reporting progress is
 never cut off, one that goes silent is closed as `timed_out`.
 
+A job belongs to the PC, not to the link (`D-32`): the agent runs it under its own
+lifetime, not the stream's, so a cable pulled mid-script does not kill the script.
+`JobProgress` lines go out on whatever link is up at that moment and are otherwise dropped;
+the `JobResult` is kept in the agent's ledger and sent right after the next `Welcome`, and
+the in-flight job the console re-sends on that link is answered from the same ledger. A
+job's result is therefore never lost and a job never runs twice.
+
 Wake-on-LAN is not a job — it is a console-side UDP send; the "result" is the agent
-showing up on `Link` within the WoL timeout (default 90 s).
+showing up on `Link` within the WoL timeout (default 90 s). The console sends the magic
+packet three times a second apart — limited broadcast, the directed broadcast of every
+subnet it is on, and unicast to `last_ip` — keeps a *pending wake* per PC (the tile says
+*waking…*) and closes it with an event: `wake.woke` with the seconds it took, or
+`wake.failed` naming what to check on the PC (`D-32`).
+
+### `run_script`
+
+The script reaches the PC as a **file through `PullFile`** (`D-31`); the job carries only
+how to fetch and run it:
+
+| arg | values | meaning |
+|---|---|---|
+| `ref` | SHA-256, hex | the `PullFile` reference — it *is* the hash of the content |
+| `sha256` | hex | verified on the PC before the file is used; a mismatch is a failed job, nothing runs |
+| `shell` | `powershell` (default) \| `cmd` | `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File …` (Windows PowerShell 5.1) or `cmd.exe /d /c …` |
+| `as` | `system` (default) \| `user` | as the service (SYSTEM, session 0, no desktop), or in the interactive session as the account logged on there — refused with a clear message when nobody is |
+| `timeout_s` | seconds, default 120 | **inactivity**: no line of output for this long and the agent kills the script and every process it started |
+| `name` | optional | file name on the PC; sanitised to letters, digits, `-`, `_`, `.` |
+
+Every line of stdout and stderr is a `JobProgress` (`percent` 0, stderr lines prefixed
+`[stderr] `; at most 10 000 lines, then a note). `JobResult` carries the exit code
+(`ok` = exit 0); a killed script is `ok: false`, `exit_code: -1` and a message saying it
+was killed after N s without output. The console sets the job's own `timeout_seconds` to
+`timeout_s` plus a 30 s grace, so the agent's *killed* result always arrives before the
+console gives up on the job (`D-32`). Output is decoded in the PC's OEM code page, which is
+what both interpreters print in; `.ps1` files are written with a UTF-8 byte-order mark and
+`.cmd` files transcoded to the OEM code page, so Cyrillic survives both ways.
+
+### `PullFile` — the file channel
+
+Every file that goes to a PC — a script today (`D-31`), a package, a handout or an update
+bundle in M4 — is pulled by the agent with `PullFile(FileRequest{reference, offset})` and
+arrives as a stream of `FileChunk`. The console serves only what it has *offered*: the
+reference is the content's SHA-256, chunks are 64 KiB, and the last chunk carries `last`,
+the `sha256` and `total_bytes`. The agent hashes what it receives and compares it with the
+job's `sha256` **and** the last chunk's; either mismatch discards the file. A chunk that
+does not arrive within 30 s abandons the pull. The M2 form is **minimal**: `offset` must
+be 0 and a pull that breaks starts again from the beginning (`Unimplemented` otherwise);
+resume lands in M4 with the files large enough to need it (`D-31`). A reference the
+console is not offering is `NotFound` and an event, and only this lab's agents may pull —
+the peer certificate is checked like on `Link`.
 
 ### Files: `install_package` and `send_file`
 
-Both pull the file with `PullFile` (hash-verified, resumable) and differ only in where it
-lands and what happens next (`D-23`):
+Both pull the file with `PullFile` (hash-verified, resumable from M4) and differ only in
+where it lands and what happens next (`D-23`):
 
 | | `install_package` | `send_file` |
 |---|---|---|

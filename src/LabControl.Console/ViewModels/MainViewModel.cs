@@ -76,7 +76,7 @@ public sealed partial class MainViewModel : ObservableObject
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(RunScriptCommand), nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(RunScriptCommand), nameof(RemoveSelectedCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
@@ -145,7 +145,7 @@ public sealed partial class MainViewModel : ObservableObject
                          ?? (others.Count == 1 ? others[0].Name : Strings.Get("Tile.AnotherConsole"));
             }
 
-            tile.Refresh(machine, connection, heldBy, now);
+            tile.Refresh(machine, connection, heldBy, now, _session.Waking(machine.AgentId) is not null);
 
             if (layout.TryGetValue(machine.Number, out var cell))
             {
@@ -248,6 +248,10 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool HasSelection => SelectedCount > 0;
 
+    /// <summary>Wake-on-LAN for the selected PCs that are off; the outcome arrives as events and on the tile (ARCHITECTURE §6).</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private Task WakeAsync() => _session.WakeAsync(Selected.Select(t => t.AgentId).ToArray());
+
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void Shutdown() => CreateJobs(Job.Types.Kind.Shutdown);
 
@@ -257,17 +261,21 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void Logoff() => CreateJobs(Job.Types.Kind.Logoff);
 
+    /// <summary>Development-only until M4 (D-31 item 3): one of the built-in test scripts to the selected PCs.</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task RunScriptAsync()
     {
-        var answer = await _dialogs.RunScriptAsync(SelectedCount);
-        if (answer is null)
+        var choice = await _dialogs.RunTestScriptAsync(SelectedCount);
+        if (choice is null)
         {
             return;
         }
 
-        var args = new Dictionary<string, string>(answer.Args) { ["script"] = answer.Script };
-        CreateJobs(Job.Types.Kind.RunScript, args, answer.Timeout);
+        var targets = Selected.Select(t => t.AgentId).ToArray();
+        if (targets.Length > 0)
+        {
+            _session.RunTestScript(targets, choice);
+        }
     }
 
     private void CreateJobs(Job.Types.Kind kind, IReadOnlyDictionary<string, string>? args = null, TimeSpan? timeout = null)

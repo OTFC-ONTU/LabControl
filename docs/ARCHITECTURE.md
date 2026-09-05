@@ -324,6 +324,11 @@ C:\ProgramData\LabControl\     agent.json  {schema_version, agent_id, number, la
                                            emptied once the new version proves itself (§7)
                                logs\       rolling agent log (7 days)
                                cache\      downloaded package installers (cleaned after install)
+                               jobs\<id>\  a run_script's file while it runs as SYSTEM; removed
+                                           with the result (D-32)
+C:\Users\Public\LabControl\    jobs\<id>\  the same for a script that runs as the student: it
+                                           must be able to read it, and nobody weaker than the
+                                           student can write there (D-32)
 ```
 ACL: `SYSTEM` + `Administrators` full control, `Users` read/execute on Program Files,
 **no access** for `Users` to `ProgramData\LabControl`.
@@ -341,8 +346,8 @@ covered without a second visit.
 | Screen mosaic | Session helper captures via DXGI Desktop Duplication (GDI `BitBlt` fallback), downscales to tile size (e.g. 320×180), JPEG q≈50, 2 fps per PC → one small stream per PC. |
 | Full view + control | Console requests `quality=full` for one agent: full-resolution dirty-rectangle JPEG tiles up to 15–20 fps; mouse/keyboard events → `SendInput` in the helper. Optional H.264 via Media Foundation later (ROADMAP M6). |
 | Wake-on-LAN | Console sends magic packet (UDP broadcast `:9`, plus directed to `last_ip`). MAC comes from enrollment. Installer enables WoL on the NIC and disables Fast Startup/hibernation (they break WoL on Windows). |
-| Shutdown / reboot / logoff | Agent: `ExitWindowsEx` / `InitiateSystemShutdownEx` with `SE_SHUTDOWN_NAME`. |
-| Run script | Agent runs `powershell.exe -NoProfile -ExecutionPolicy Bypass -File …` or `cmd /c` as SYSTEM (default) or in the student session via the helper (`as: user`). stdout/stderr/exit code streamed back. |
+| Shutdown / reboot / logoff | Agent: `InitiateSystemShutdownEx` with `SE_SHUTDOWN_NAME`, immediate and forced (the result leaves 2 s before the call, `D-32`); log off with `WTSLogoffSession` on the interactive session — `ExitWindowsEx` would only log off session 0. |
+| Run script | Agent pulls the script through `PullFile` (`D-31`) and runs `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File …` or `cmd.exe /d /c …` as SYSTEM (default) or **as the student in the student's session** (`as: user`: the user's token from `WTSQueryUserToken`, `CreateProcessAsUser` with pipes the service reads — not through the helper, which is SYSTEM). stdout/stderr streamed line by line, exit code in the result, the whole process tree killed after `timeout_s` of silence (`D-32`). |
 | Install package | Catalog entry = `{name, version, installer file, silent args, detect: {path|registry|command}}`. Console pushes the installer over the file stream (LAN, no internet needed), agent runs it silently, verifies `detect`, reports result. `winget`/`choco` are *not* used (winget does not work under SYSTEM). **This is the reason the file channel exists** — installing an IDE on every PC without walking a USB stick around the room — and nothing built on the channel later may change how it behaves (`D-23`). |
 | Send files to students | The same `PullFile` channel with a different landing: the file goes to `Materials` on the `student` desktop (path in `Defaults.cs`), hash-verified, optionally opened at once in the student session by the helper. One job per file, so a batch of three handouts to 14 PCs is 42 rows in the jobs panel with a result each. Installers never land here and handouts are never executed (`D-23`). |
 | Broadcast teacher screen | Console captures its own screen (macOS: CoreGraphics `CGDisplayCreateImage`/ScreenCaptureKit via P/Invoke — needs Screen Recording permission; Windows: DXGI) → JPEG stream → helper shows a topmost full-screen window, input blocked. |

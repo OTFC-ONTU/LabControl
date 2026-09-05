@@ -22,10 +22,11 @@
   <data name="Common.Continue" xml:space="preserve"><value>Continue</value></data>
   <data name="Common.Done" xml:space="preserve"><value>Done</value></data>
   <data name="Common.Quit" xml:space="preserve"><value>Quit</value></data>
+  <data name="Action.Wake" xml:space="preserve"><value>Wake</value></data>
   <data name="Action.Shutdown" xml:space="preserve"><value>Shut down</value></data>
   <data name="Action.Reboot" xml:space="preserve"><value>Reboot</value></data>
   <data name="Action.Logoff" xml:space="preserve"><value>Log off</value></data>
-  <data name="Action.RunScript" xml:space="preserve"><value>Run script…</value></data>
+  <data name="Action.RunScript" xml:space="preserve"><value>Run test script…</value></data>
   <data name="Action.SelectAll" xml:space="preserve"><value>Select all</value></data>
   <data name="Action.ClearSelection" xml:space="preserve"><value>Clear selection</value></data>
   <data name="Action.EnrolPcs" xml:space="preserve"><value>Enrol PCs…</value></data>
@@ -33,6 +34,7 @@
   <data name="Lab.Empty" xml:space="preserve"><value>No PCs yet. Write a USB payload in Settings, run the installer (or FakeAgent) on the PCs, then press Enrol PCs and type the passphrase once — the PCs enrol themselves and appear here.</value></data>
   <data name="Tile.Online" xml:space="preserve"><value>online</value></data>
   <data name="Tile.Offline" xml:space="preserve"><value>offline</value></data>
+  <data name="Tile.Waking" xml:space="preserve"><value>waking…</value></data>
   <data name="Tile.Outdated" xml:space="preserve"><value>online — outdated agent, update it</value></data>
   <data name="Tile.HeldBy" xml:space="preserve"><value>held by {0}</value></data>
   <data name="Tile.AnotherConsole" xml:space="preserve"><value>another console</value></data>
@@ -174,12 +176,20 @@
   <data name="Severity.Info" xml:space="preserve"><value>info</value></data>
   <data name="Severity.Warning" xml:space="preserve"><value>warning</value></data>
   <data name="Severity.Error" xml:space="preserve"><value>error</value></data>
-  <data name="Script.Heading" xml:space="preserve"><value>Run a script on {0} PC(s)</value></data>
-  <data name="Script.Hint" xml:space="preserve"><value>Until M2 the script runs only on simulated PCs: they print the given number of lines and exit with the given code.</value></data>
-  <data name="Script.Name" xml:space="preserve"><value>Script</value></data>
-  <data name="Script.Lines" xml:space="preserve"><value>Lines of output</value></data>
-  <data name="Script.ExitCode" xml:space="preserve"><value>Exit code</value></data>
-  <data name="Script.Timeout" xml:space="preserve"><value>Inactivity timeout, seconds</value></data>
+  <data name="Script.Heading" xml:space="preserve"><value>Run a test script on {0} PC(s)</value></data>
+  <data name="Script.Hint" xml:space="preserve"><value>Development action until the script library arrives in M4: sends one of the console's built-in scripts. Output streams into the Jobs panel; a script that stays silent longer than the timeout is killed on the PC and reported.</value></data>
+  <data name="Script.Kind" xml:space="preserve"><value>Script</value></data>
+  <data name="Script.Kind.HundredLines" xml:space="preserve"><value>Print 100 lines, then exit with code 3</value></data>
+  <data name="Script.Kind.Hang" xml:space="preserve"><value>Hang for ever (must be killed at the timeout)</value></data>
+  <data name="Script.Kind.WhoAmI" xml:space="preserve"><value>Who am I: account, session, directory (proves run-as)</value></data>
+  <data name="Script.Shell" xml:space="preserve"><value>Shell</value></data>
+  <data name="Script.Shell.PowerShell" xml:space="preserve"><value>Windows PowerShell (powershell.exe -File)</value></data>
+  <data name="Script.Shell.Cmd" xml:space="preserve"><value>Command Prompt (cmd.exe /c)</value></data>
+  <data name="Script.RunAs" xml:space="preserve"><value>Run as</value></data>
+  <data name="Script.RunAs.System" xml:space="preserve"><value>SYSTEM (the service, no desktop)</value></data>
+  <data name="Script.RunAs.User" xml:space="preserve"><value>The logged-on user, in their session</value></data>
+  <data name="Script.Timeout" xml:space="preserve"><value>Inactivity timeout, seconds (killed after this long without output)</value></data>
+  <data name="Script.BadTimeout" xml:space="preserve"><value>The timeout must be a whole number of seconds greater than zero.</value></data>
   <data name="Script.Run" xml:space="preserve"><value>Run</value></data>
   <data name="Setup.Title" xml:space="preserve"><value>LabControl — first run</value></data>
   <data name="Setup.Welcome" xml:space="preserve"><value>Welcome to LabControl</value></data>

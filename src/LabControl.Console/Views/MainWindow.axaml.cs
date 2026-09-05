@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using LabControl.Console.Services;
 using LabControl.Console.ViewModels;
 using LabControl.Shared.Identity;
 
@@ -49,5 +50,5 @@ public partial class MainWindow : Window, IDialogs
 
     public Task<string?> PickFolderAsync(string title) => _dialogs.PickFolderAsync(title);
 
-    public Task<ScriptAnswer?> RunScriptAsync(int pcCount) => _dialogs.RunScriptAsync(pcCount);
+    public Task<TestScriptChoice?> RunTestScriptAsync(int pcCount) => _dialogs.RunTestScriptAsync(pcCount);
 }

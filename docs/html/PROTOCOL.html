@@ -376,11 +376,85 @@ when its link dropped is closed the same way rather than kept for its return (<c
 <p><code>timeout_s</code> is a timeout of <em>inactivity</em>, measured from delivery or the latest
 <code>JobProgress</code>, whichever is later: a long installation that keeps reporting progress is
 never cut off, one that goes silent is closed as <code>timed_out</code>.</p>
+<p>A job belongs to the PC, not to the link (<code>D-32</code>): the agent runs it under its own
+lifetime, not the stream's, so a cable pulled mid-script does not kill the script.
+<code>JobProgress</code> lines go out on whatever link is up at that moment and are otherwise dropped;
+the <code>JobResult</code> is kept in the agent's ledger and sent right after the next <code>Welcome</code>, and
+the in-flight job the console re-sends on that link is answered from the same ledger. A
+job's result is therefore never lost and a job never runs twice.</p>
 <p>Wake-on-LAN is not a job — it is a console-side UDP send; the &quot;result&quot; is the agent
-showing up on <code>Link</code> within the WoL timeout (default 90 s).</p>
+showing up on <code>Link</code> within the WoL timeout (default 90 s). The console sends the magic
+packet three times a second apart — limited broadcast, the directed broadcast of every
+subnet it is on, and unicast to <code>last_ip</code> — keeps a <em>pending wake</em> per PC (the tile says
+<em>waking…</em>) and closes it with an event: <code>wake.woke</code> with the seconds it took, or
+<code>wake.failed</code> naming what to check on the PC (<code>D-32</code>).</p>
+<h3 id="run_script"><code>run_script</code><a class="anchor" href="#run_script" aria-label="Link to this section">#</a></h3>
+<p>The script reaches the PC as a <strong>file through <code>PullFile</code></strong> (<code>D-31</code>); the job carries only
+how to fetch and run it:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>arg</th>
+<th>values</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ref</code></td>
+<td>SHA-256, hex</td>
+<td>the <code>PullFile</code> reference — it <em>is</em> the hash of the content</td>
+</tr>
+<tr>
+<td><code>sha256</code></td>
+<td>hex</td>
+<td>verified on the PC before the file is used; a mismatch is a failed job, nothing runs</td>
+</tr>
+<tr>
+<td><code>shell</code></td>
+<td><code>powershell</code> (default) | <code>cmd</code></td>
+<td><code>powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File …</code> (Windows PowerShell 5.1) or <code>cmd.exe /d /c …</code></td>
+</tr>
+<tr>
+<td><code>as</code></td>
+<td><code>system</code> (default) | <code>user</code></td>
+<td>as the service (SYSTEM, session 0, no desktop), or in the interactive session as the account logged on there — refused with a clear message when nobody is</td>
+</tr>
+<tr>
+<td><code>timeout_s</code></td>
+<td>seconds, default 120</td>
+<td><strong>inactivity</strong>: no line of output for this long and the agent kills the script and every process it started</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>optional</td>
+<td>file name on the PC; sanitised to letters, digits, <code>-</code>, <code>_</code>, <code>.</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Every line of stdout and stderr is a <code>JobProgress</code> (<code>percent</code> 0, stderr lines prefixed
+<code>[stderr] </code>; at most 10 000 lines, then a note). <code>JobResult</code> carries the exit code
+(<code>ok</code> = exit 0); a killed script is <code>ok: false</code>, <code>exit_code: -1</code> and a message saying it
+was killed after N s without output. The console sets the job's own <code>timeout_seconds</code> to
+<code>timeout_s</code> plus a 30 s grace, so the agent's <em>killed</em> result always arrives before the
+console gives up on the job (<code>D-32</code>). Output is decoded in the PC's OEM code page, which is
+what both interpreters print in; <code>.ps1</code> files are written with a UTF-8 byte-order mark and
+<code>.cmd</code> files transcoded to the OEM code page, so Cyrillic survives both ways.</p>
+<h3 id="pullfile-the-file-channel"><code>PullFile</code> — the file channel<a class="anchor" href="#pullfile-the-file-channel" aria-label="Link to this section">#</a></h3>
+<p>Every file that goes to a PC — a script today (<code>D-31</code>), a package, a handout or an update
+bundle in M4 — is pulled by the agent with <code>PullFile(FileRequest{reference, offset})</code> and
+arrives as a stream of <code>FileChunk</code>. The console serves only what it has <em>offered</em>: the
+reference is the content's SHA-256, chunks are 64 KiB, and the last chunk carries <code>last</code>,
+the <code>sha256</code> and <code>total_bytes</code>. The agent hashes what it receives and compares it with the
+job's <code>sha256</code> <strong>and</strong> the last chunk's; either mismatch discards the file. A chunk that
+does not arrive within 30 s abandons the pull. The M2 form is <strong>minimal</strong>: <code>offset</code> must
+be 0 and a pull that breaks starts again from the beginning (<code>Unimplemented</code> otherwise);
+resume lands in M4 with the files large enough to need it (<code>D-31</code>). A reference the
+console is not offering is <code>NotFound</code> and an event, and only this lab's agents may pull —
+the peer certificate is checked like on <code>Link</code>.</p>
 <h3 id="files-install_package-and-send_file">Files: <code>install_package</code> and <code>send_file</code><a class="anchor" href="#files-install_package-and-send_file" aria-label="Link to this section">#</a></h3>
-<p>Both pull the file with <code>PullFile</code> (hash-verified, resumable) and differ only in where it
-lands and what happens next (<code>D-23</code>):</p>
+<p>Both pull the file with <code>PullFile</code> (hash-verified, resumable from M4) and differ only in
+where it lands and what happens next (<code>D-23</code>):</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -611,9 +685,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-05 23:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 23:30 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#updateagent-and-the-self_update-job">UpdateAgent and the self_update job</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#updateagent-and-the-self_update-job">UpdateAgent and the self_update job</a></li></ul></nav>
 </div>
 </body>
 </html>

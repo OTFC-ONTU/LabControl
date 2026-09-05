@@ -73,6 +73,22 @@ public static class Defaults
     public static readonly TimeSpan WakeTimeout = TimeSpan.FromSeconds(90);
 
     /// <summary>
+    /// A magic packet is sent this many times, <see cref="WakePacketSpacing"/> apart: a NIC
+    /// that has just been powered down, or a switch still learning the port, can miss one.
+    /// </summary>
+    public const int WakePacketRepeats = 3;
+
+    public static readonly TimeSpan WakePacketSpacing = TimeSpan.FromSeconds(1);
+
+    // ---------------------------------------------------------------- files (PullFile)
+
+    /// <summary>One <c>FileChunk</c> on the wire; small enough that a job is never delayed behind one.</summary>
+    public const int FileChunkBytes = 64 * 1024;
+
+    /// <summary>A file the agent pulls must show a chunk at least this often, or the pull is abandoned.</summary>
+    public static readonly TimeSpan FileChunkTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// A linked agent whose certificate is due for renewal asks again on this backoff while
     /// the console's lab key is locked (D-25); the same ceiling as a reconnect.
     /// </summary>
@@ -304,6 +320,50 @@ public static class Defaults
 
     /// <summary>Agent logs are kept for this many days, then rolled off.</summary>
     public const int AgentLogRetentionDays = 7;
+
+    // ---------------------------------------------------------------- jobs and scripts
+
+    /// <summary>
+    /// Where a job's files land on the PC when it runs as SYSTEM: <c>&lt;data&gt;\jobs\&lt;id&gt;\</c>,
+    /// under the directory only SYSTEM and Administrators can read (ARCHITECTURE §5).
+    /// Deleted once the result has been sent (D-32).
+    /// </summary>
+    public const string JobsDirectoryName = "jobs";
+
+    /// <summary>
+    /// Where a job's files land when it runs in the student session as the student: the
+    /// student must be able to read the script, and nobody weaker than the student can
+    /// write there, so <c>%PUBLIC%\LabControl\jobs\&lt;id&gt;\</c> (D-32).
+    /// </summary>
+    public static string UserJobsDirectory =>
+        Path.Combine(Environment.GetEnvironmentVariable("PUBLIC") ?? @"C:\Users\Public", "LabControl", JobsDirectoryName);
+
+    /// <summary>
+    /// The script's own inactivity timeout when the console did not say: killed after this
+    /// long without a line of output (PROTOCOL, <c>run_script</c>).
+    /// </summary>
+    public static readonly TimeSpan ScriptDefaultTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// The console's inactivity timeout on a <c>run_script</c> job is the script's timeout
+    /// plus this, so the agent's own "killed after N s" result always arrives before the
+    /// console gives up on the job (D-32).
+    /// </summary>
+    public static readonly TimeSpan JobTimeoutGrace = TimeSpan.FromSeconds(30);
+
+    /// <summary>Output lines kept per job on both sides; a script that prints more is cut with a note.</summary>
+    public const int ScriptOutputMaxLines = 10_000;
+
+    /// <summary>
+    /// A power job answers first and acts after this pause, so the <c>JobResult</c> is on
+    /// the wire before the OS starts tearing the link down (D-32).
+    /// </summary>
+    public static readonly TimeSpan PowerJobDelay = TimeSpan.FromSeconds(2);
+
+    /// <summary>The interpreter for <c>shell: powershell</c> — Windows PowerShell 5.1, present on every Windows 10/11.</summary>
+    public const string PowerShellExecutable = "powershell.exe";
+
+    public const string CmdExecutable = "cmd.exe";
 
     // ---------------------------------------------------------------- student account
 

@@ -5,9 +5,12 @@ using Grpc.Core;
 using LabControl.Console.Server;
 using LabControl.Shared;
 using LabControl.Shared.Discovery;
+using LabControl.Shared.Files;
 using LabControl.Shared.Identity;
+using LabControl.Shared.Jobs;
 using LabControl.Shared.Lab;
 using LabControl.Shared.Persistence;
+using LabControl.Shared.Power;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 
@@ -15,6 +18,12 @@ namespace LabControl.Console.Services;
 
 /// <summary>Another teacher machine heard beaconing (ARCHITECTURE §3.7.2).</summary>
 public sealed record OtherConsole(string InstanceId, string Name, string Endpoint, DateTimeOffset LastSeen, DateTimeOffset? TookOverAt);
+
+/// <summary>A Wake-on-LAN in progress: the packets went out, the PC has until <see cref="Deadline"/> to link.</summary>
+public sealed record PendingWake(string AgentId, int Number, DateTimeOffset StartedAt, DateTimeOffset Deadline);
+
+/// <summary>What the development-only <i>Run test script</i> action sends (D-31 item 3).</summary>
+public sealed record TestScriptChoice(TestScriptKind Kind, ScriptShell Shell, ScriptRunAs RunAs, TimeSpan Timeout);
 
 /// <summary>
 /// The running lab on this teacher machine: the identity it serves with, the machine list
@@ -29,6 +38,7 @@ public sealed class LabSession : IAsyncDisposable
     private readonly Func<DateTimeOffset> _clock;
     private readonly Dictionary<string, AgentConnection> _linked = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, OtherConsole> _others = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, PendingWake> _waking = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
     private readonly CancellationTokenSource _stopping = new();
     private readonly JobJournal _journal;
@@ -61,6 +71,7 @@ public sealed class LabSession : IAsyncDisposable
         Registry = new LabRegistry(store.LoadLab(vault.LabId, vault.LabName), Authority);
         Enrollment = new EnrollmentAuthority(store.LoadEnrollment(vault.LabId));
         Jobs = new JobQueue();
+        Files = new FileOffers();
         Events = new EventLog(store.LogsDirectory, _clock);
         _journal = new JobJournal(store.LogsDirectory);
 
@@ -91,6 +102,9 @@ public sealed class LabSession : IAsyncDisposable
     public EnrollmentAuthority Enrollment { get; }
 
     public JobQueue Jobs { get; }
+
+    /// <summary>What agents may pull through <c>PullFile</c> (D-31): scripts now, packages and bundles in M4.</summary>
+    public FileOffers Files { get; }
 
     public EventLog Events { get; }
 
@@ -531,6 +545,7 @@ public sealed class LabSession : IAsyncDisposable
         welcome.RevokedSerials.AddRange(Registry.Revocations.Serials);
         connection.TrySend(new ConsoleMessage { Welcome = welcome });
 
+        NoteWoke(hello.AgentId, who, now);
         DeliverJobs(connection, resendInFlight: true);
         AgentLinked?.Invoke(connection);
         MachinesChanged?.Invoke();
@@ -736,6 +751,20 @@ public sealed class LabSession : IAsyncDisposable
         return created;
     }
 
+    /// <summary>
+    /// The development-only <i>Run test script</i> action (D-31 item 3): offers one of the
+    /// built-in scripts through <c>PullFile</c> and sends a <c>run_script</c> job per PC with
+    /// every parameter the protocol has. The console's inactivity timeout is the script's plus
+    /// a grace, so the agent's own "killed" result always arrives first (D-32).
+    /// </summary>
+    public IReadOnlyList<JobRecord> RunTestScript(IEnumerable<string> agentIds, TestScriptChoice choice)
+    {
+        var name = TestScripts.NameOf(choice.Kind);
+        var offer = Files.OfferText(TestScripts.Text(choice.Kind, choice.Shell), name);
+        var request = new RunScriptRequest(offer.Reference, offer.Sha256, choice.Shell, choice.RunAs, choice.Timeout, name);
+        return CreateJobs(agentIds, Job.Types.Kind.RunScript, request.ToArgs(), choice.Timeout + Defaults.JobTimeoutGrace);
+    }
+
     private void DeliverJobs(AgentConnection connection, bool resendInFlight)
     {
         var now = _clock();
@@ -759,6 +788,190 @@ public sealed class LabSession : IAsyncDisposable
         if (job.IsFinished)
         {
             _journal.Record(job);
+        }
+    }
+
+    // ------------------------------------------------------------------ files (gRPC entry point)
+
+    /// <summary>
+    /// Serves one offered file to an agent (PROTOCOL, <i>Files</i>): the peer must be this
+    /// lab's agent, the reference must be offered, and — in this minimal form — the pull
+    /// starts at offset 0. The last chunk carries the hash and the total.
+    /// </summary>
+    public async Task ServeFileAsync(X509Certificate2? peer, FileRequest request, IServerStreamWriter<FileChunk> outgoing, CancellationToken token)
+    {
+        var name = RequireAgent(peer);
+        var who = string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, name.Number);
+
+        var offer = Files.Find(request.Reference);
+        if (offer is null)
+        {
+            Events.Warning("file.unknown", $"{who} asked for a file this console is not offering ({request.Reference}).", name.Id, name.Number);
+            throw new RpcException(new Status(StatusCode.NotFound, $"this console is not offering '{request.Reference}'"));
+        }
+
+        if (request.Offset != 0)
+        {
+            throw new RpcException(new Status(StatusCode.Unimplemented, "resuming a pull is not supported by this console; pull again from the start"));
+        }
+
+        _log.LogInformation("{Pc} pulls {Name} ({Bytes} bytes, {Reference})", who, offer.Name, offer.Size, offer.Reference);
+
+        await using var stream = offer.Open();
+        var buffer = new byte[Defaults.FileChunkBytes];
+        long offset = 0;
+        var sent = false;
+
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer, token);
+            var last = read < buffer.Length;
+            if (read == 0 && sent)
+            {
+                break;
+            }
+
+            var chunk = new FileChunk
+            {
+                Reference = offer.Reference,
+                Offset = offset,
+                Data = Google.Protobuf.ByteString.CopyFrom(buffer, 0, read),
+                Last = last,
+            };
+
+            if (last)
+            {
+                chunk.Sha256 = offer.Sha256;
+                chunk.TotalBytes = offset + read;
+            }
+
+            await outgoing.WriteAsync(chunk, token);
+            sent = true;
+            offset += read;
+
+            if (last)
+            {
+                break;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ Wake-on-LAN
+
+    /// <summary>
+    /// Sends magic packets to every selected PC that is not linked (ARCHITECTURE §6, PROTOCOL
+    /// <c>Job</c>: not a job — the result is the PC linking within
+    /// <see cref="Defaults.WakeTimeout"/>, reported per PC as an event). A PC already online
+    /// is skipped; one without a MAC cannot be woken and says so.
+    /// </summary>
+    public async Task<IReadOnlyList<PendingWake>> WakeAsync(IEnumerable<string> agentIds)
+    {
+        var started = new List<PendingWake>();
+
+        foreach (var agentId in agentIds)
+        {
+            var machine = Registry.FindByAgentId(agentId);
+            if (machine is null || IsLinked(agentId))
+            {
+                continue;
+            }
+
+            var who = string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, machine.Number);
+            if (!WakeOnLan.TryParseMac(machine.Mac, out _))
+            {
+                Events.Warning("wake.no_mac", $"{who} cannot be woken: the console has no MAC address for it. It is learned at enrolment and from Hello.", agentId, machine.Number);
+                continue;
+            }
+
+            var now = _clock();
+            var pending = new PendingWake(agentId, machine.Number, now, now + Defaults.WakeTimeout);
+            lock (_gate)
+            {
+                _waking[agentId] = pending;
+            }
+
+            started.Add(pending);
+            MachinesChanged?.Invoke();
+
+            var failures = new List<string>();
+            IReadOnlyList<System.Net.IPEndPoint> reached;
+            try
+            {
+                reached = await WakeOnLan.SendAsync(machine.Mac, machine.LastIp, failures.Add, _stopping.Token);
+            }
+            catch (Exception ex) when (ex is System.Net.Sockets.SocketException or OperationCanceledException or FormatException)
+            {
+                reached = [];
+                failures.Add(ex.Message);
+            }
+
+            if (reached.Count == 0)
+            {
+                lock (_gate)
+                {
+                    _waking.Remove(agentId);
+                }
+
+                Events.Error("wake.send_failed", $"{who}: could not send a magic packet at all ({string.Join("; ", failures)}).", agentId, machine.Number);
+                MachinesChanged?.Invoke();
+                continue;
+            }
+
+            Events.Info("wake.sent",
+                $"{who}: magic packet sent to {machine.Mac} via {string.Join(", ", reached.Select(r => r.Address))}; waiting up to {Defaults.WakeTimeout.TotalSeconds:0} s for it to link." +
+                (failures.Count > 0 ? $" Not sent via: {string.Join("; ", failures)}." : string.Empty),
+                agentId, machine.Number);
+        }
+
+        return started;
+    }
+
+    /// <summary>The wake in progress for this PC, if any — the tile shows <i>waking…</i>.</summary>
+    public PendingWake? Waking(string agentId)
+    {
+        lock (_gate)
+        {
+            return _waking.GetValueOrDefault(agentId);
+        }
+    }
+
+    private void NoteWoke(string agentId, string who, DateTimeOffset now)
+    {
+        PendingWake? pending;
+        lock (_gate)
+        {
+            _waking.Remove(agentId, out pending);
+        }
+
+        if (pending is not null)
+        {
+            Events.Info("wake.woke", $"{who} woke: linked {(now - pending.StartedAt).TotalSeconds:0} s after the magic packet.", agentId, pending.Number);
+        }
+    }
+
+    private void TimeOutWakes(DateTimeOffset now)
+    {
+        List<PendingWake> expired;
+        lock (_gate)
+        {
+            expired = _waking.Values.Where(w => now >= w.Deadline).ToList();
+            foreach (var wake in expired)
+            {
+                _waking.Remove(wake.AgentId);
+            }
+        }
+
+        foreach (var wake in expired)
+        {
+            var who = string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, wake.Number);
+            Events.Warning("wake.failed",
+                $"{who} did not wake within {Defaults.WakeTimeout.TotalSeconds:0} s. Check on the PC: Wake-on-LAN in the BIOS/UEFI, Fast Startup off, the NIC's \"Wake on Magic Packet\" property, and that it is plugged in and cabled (INSTALLER.md step 7).",
+                wake.AgentId, wake.Number);
+        }
+
+        if (expired.Count > 0)
+        {
+            MachinesChanged?.Invoke();
         }
     }
 
@@ -889,6 +1102,8 @@ public sealed class LabSession : IAsyncDisposable
                 {
                     Events.Warning("job.timed_out", $"{job.Kind} on agent {job.AgentId}: {job.Message}", job.AgentId);
                 }
+
+                TimeOutWakes(now);
 
                 var gone = false;
                 lock (_gate)

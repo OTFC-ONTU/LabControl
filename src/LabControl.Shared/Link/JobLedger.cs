@@ -65,6 +65,17 @@ public sealed class JobLedger
         }
     }
 
+    public int RunningCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _running.Count;
+            }
+        }
+    }
+
     public int CompletedCount
     {
         get

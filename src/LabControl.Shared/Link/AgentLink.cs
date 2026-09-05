@@ -63,7 +63,9 @@ public sealed class AgentLink : IAsyncDisposable
     private readonly Lock _gateLock = new();
 
     private readonly Queue<Event> _pendingEvents = new();
+    private readonly Queue<JobResult> _pendingResults = new();
     private ChannelWriter<AgentMessage>? _outgoing;
+    private AgentService.AgentServiceClient? _client;
     private SessionState? _latestSessionState;
 
     private Task? _loop;
@@ -102,6 +104,11 @@ public sealed class AgentLink : IAsyncDisposable
     public TimeSpan ClockSkew { get; private set; }
 
     public bool IsEnrolled => _store.Certificate is not null;
+
+    public bool IsLinked => State == LinkState.Linked;
+
+    /// <summary>Jobs the behaviour is running right now, whether or not a link is up.</summary>
+    public int RunningJobs => _ledger.RunningCount;
 
     public string Name => string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, _store.Config.Number);
 
@@ -506,6 +513,7 @@ public sealed class AgentLink : IAsyncDisposable
             lock (_gateLock)
             {
                 _outgoing = outgoing.Writer;
+                _client = client;
                 if (_latestSessionState is { } sessionState)
                 {
                     outgoing.Writer.TryWrite(new AgentMessage { SessionState = sessionState });
@@ -514,6 +522,14 @@ public sealed class AgentLink : IAsyncDisposable
                 while (_pendingEvents.TryDequeue(out var pending))
                 {
                     outgoing.Writer.TryWrite(new AgentMessage { Event = pending });
+                }
+
+                // Results of jobs that finished while there was no link (D-32): the console
+                // re-sends its in-flight jobs after Welcome and the ledger answers those from
+                // the cache too, so a result is never lost and never runs twice.
+                while (_pendingResults.TryDequeue(out var finished))
+                {
+                    outgoing.Writer.TryWrite(new AgentMessage { JobResult = finished });
                 }
             }
 
@@ -529,6 +545,7 @@ public sealed class AgentLink : IAsyncDisposable
                 lock (_gateLock)
                 {
                     _outgoing = null;
+                    _client = null;
                 }
 
                 outgoing.Writer.TryComplete();
@@ -671,14 +688,17 @@ public sealed class AgentLink : IAsyncDisposable
             return;
         }
 
+        // The job runs on the PC, not on the link: a cable pulled mid-script must not kill
+        // the script, and its result must reach the console when the link is back (D-32).
+        // Progress lines go through whatever link is up at the moment, or nowhere; the
+        // result is remembered by the ledger and queued for the next Welcome.
+        var stopping = _stopping.Token;
         _ = Task.Run(async () =>
         {
             JobResult result;
             try
             {
-                result = await _behaviour.RunJobAsync(job,
-                    progress => outgoing.WriteAsync(new AgentMessage { JobProgress = progress }, token).AsTask(),
-                    token);
+                result = await _behaviour.RunJobAsync(job, progress => SendProgressAsync(progress), stopping);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -686,21 +706,146 @@ public sealed class AgentLink : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-                // The link ended mid-job; the result is lost and the console will re-send.
+                // The agent is stopping; the console will re-send after the restart.
                 return;
             }
 
             result.JobId = job.Id;
             _ledger.Complete(result);
-            try
+            SendResult(result);
+        }, CancellationToken.None);
+    }
+
+    private Task SendProgressAsync(JobProgress progress)
+    {
+        lock (_gateLock)
+        {
+            _outgoing?.TryWrite(new AgentMessage { JobProgress = progress });
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void SendResult(JobResult result)
+    {
+        lock (_gateLock)
+        {
+            if (_outgoing is { } outgoing && outgoing.TryWrite(new AgentMessage { JobResult = result }))
             {
-                await outgoing.WriteAsync(new AgentMessage { JobResult = result }, token);
+                return;
             }
-            catch (Exception ex) when (ex is OperationCanceledException or ChannelClosedException)
+
+            _pendingResults.Enqueue(result);
+            _log.LogInformation("{Pc}: job {Job} finished while unlinked; its result waits for the next link", Name, result.JobId);
+        }
+    }
+
+    // ------------------------------------------------------------------ files
+
+    /// <summary>
+    /// Pulls a file the console offered (PROTOCOL, <i>Files</i>; D-31) into
+    /// <paramref name="destination"/> and verifies its SHA-256 against
+    /// <paramref name="expectedSha256"/>. The minimal M2 form: no resume — a pull that
+    /// breaks starts again from the beginning. Throws <see cref="FilePullException"/> with
+    /// the reason in plain language; the caller turns that into a failed job result.
+    /// </summary>
+    public async Task<long> PullFileAsync(string reference, string expectedSha256, Stream destination, CancellationToken token)
+    {
+        AgentService.AgentServiceClient? client;
+        lock (_gateLock)
+        {
+            client = _client;
+        }
+
+        if (client is null)
+        {
+            throw new FilePullException($"cannot pull '{reference}': this PC is not linked to a console right now");
+        }
+
+        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        long received = 0;
+        var sawLast = false;
+        string? declaredHash = null;
+
+        try
+        {
+            using var call = client.PullFile(new FileRequest { Reference = reference, Offset = 0 }, cancellationToken: token);
+            while (true)
             {
-                // Cached; the re-sent job will answer from the ledger.
+                bool more;
+                using (var chunkTimeout = CancellationTokenSource.CreateLinkedTokenSource(token))
+                {
+                    chunkTimeout.CancelAfter(Defaults.FileChunkTimeout);
+                    try
+                    {
+                        more = await call.ResponseStream.MoveNext(chunkTimeout.Token);
+                    }
+                    catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                    {
+                        throw new FilePullException($"the console stopped sending '{reference}' after {received} bytes (no chunk for {Defaults.FileChunkTimeout.TotalSeconds:0} s)");
+                    }
+                    catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && !token.IsCancellationRequested)
+                    {
+                        throw new FilePullException($"the console stopped sending '{reference}' after {received} bytes (no chunk for {Defaults.FileChunkTimeout.TotalSeconds:0} s)");
+                    }
+                }
+
+                if (!more)
+                {
+                    break;
+                }
+
+                var chunk = call.ResponseStream.Current;
+                if (chunk.Offset != received)
+                {
+                    throw new FilePullException($"the console sent '{reference}' out of order (expected offset {received}, got {chunk.Offset})");
+                }
+
+                var data = chunk.Data.Memory;
+                await destination.WriteAsync(data, token);
+                hasher.AppendData(data.Span);
+                received += data.Length;
+
+                if (chunk.Last)
+                {
+                    sawLast = true;
+                    declaredHash = chunk.Sha256;
+                    if (chunk.TotalBytes > 0 && chunk.TotalBytes != received)
+                    {
+                        throw new FilePullException($"'{reference}' is {chunk.TotalBytes} bytes but only {received} arrived");
+                    }
+
+                    break;
+                }
             }
-        }, token);
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            throw new FilePullException($"the console has no file '{reference}' to offer: {ex.Status.Detail}");
+        }
+        catch (RpcException ex) when (!token.IsCancellationRequested)
+        {
+            throw new FilePullException($"pulling '{reference}' failed: {(ex.Status.Detail.Length > 0 ? ex.Status.Detail : ex.StatusCode.ToString())}");
+        }
+
+        if (!sawLast)
+        {
+            throw new FilePullException($"the console closed the stream for '{reference}' after {received} bytes without finishing it");
+        }
+
+        await destination.FlushAsync(token);
+        var actual = Convert.ToHexStringLower(hasher.GetHashAndReset());
+        if (!Files.FileHash.Matches(expectedSha256, actual))
+        {
+            throw new FilePullException($"'{reference}' failed its hash check: expected {expectedSha256}, got {actual}. The file was not used.");
+        }
+
+        if (declaredHash is { Length: > 0 } && !Files.FileHash.Matches(declaredHash, actual))
+        {
+            throw new FilePullException($"the console's own hash for '{reference}' ({declaredHash}) does not match what it sent ({actual}). The file was not used.");
+        }
+
+        return received;
     }
 
     // ------------------------------------------------------------------ loops

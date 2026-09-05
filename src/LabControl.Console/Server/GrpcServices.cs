@@ -49,6 +49,10 @@ public sealed class AgentGrpcService : AgentService.AgentServiceBase
     public override Task<RenewResponse> Renew(RenewRequest request, ServerCallContext context) =>
         Task.FromResult(_session.Renew(context.GetHttpContext().Connection.ClientCertificate, request));
 
-    // Video and files arrive in M3 and M4; until then the base class answers Unimplemented,
+    /// <summary>The agent downloads a file the console offered (PROTOCOL, <i>Files</i>; D-31) — scripts today, packages and bundles in M4.</summary>
+    public override Task PullFile(FileRequest request, IServerStreamWriter<FileChunk> responseStream, ServerCallContext context) =>
+        _session.ServeFileAsync(context.GetHttpContext().Connection.ClientCertificate, request, responseStream, context.CancellationToken);
+
+    // Video (M3) and uploads (M4/M5) are not here yet; the base class answers Unimplemented,
     // which an agent of any version treats as "not available on this console".
 }

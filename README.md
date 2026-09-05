@@ -50,7 +50,9 @@ DPAPI-protected store, provisioning from the USB payload, real inventory, the si
 version layout and `scripts/dev-install.ps1` — and portion 2 — `session.exe` living on the
 student's desktop as SYSTEM, supervised by the service over a named pipe, with the console
 showing who is logged on, whether the screen is locked and whether the helper is up — are
-verified on the Windows VM. Portion 3 (power jobs, Wake-on-LAN, `run_script`) is next, then
+verified on the Windows VM. Portion 3 — shutdown / reboot / log off, Wake-on-LAN from the
+console, the minimal `PullFile` and `run_script` with streamed output and a kill at the
+timeout, plus a development-only *Run test script…* — is built and awaits its VM run; then
 push-and-restart ([`docs/ROADMAP.md`](docs/ROADMAP.md)).
 
 ## Quick start

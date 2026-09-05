@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portions 1 and 2 of 4 verified on the VM 2026-09-05; portion 3 next) | M1, Windows VM |
+| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portions 1 and 2 of 4 verified on the VM 2026-09-05; portion 3 built 2026-09-05, awaiting the VM run) | M1, Windows VM |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -375,6 +375,43 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   and the console did not persist the logged-on user on a session change (it does now).
   The shutdown fix was re-verified the same evening: with the agent linked, an OS shutdown
   ends the log with *stopping → unlinked → LabControl agent stopped* and nothing after it.
+
+- *Portion 3 (built 2026-09-05, awaiting the VM run).* Power jobs on the real agent:
+  shutdown and reboot through `InitiateSystemShutdownEx` with the privilege enabled first,
+  immediate and forced, answered 2 s before the call; log off through `WTSLogoffSession`
+  (`D-32`). `PullFile` in its minimal form on both sides — the console offers files by their
+  SHA-256 (`FileOffers`), serves 64 KiB chunks and checks the peer like `Link`; the agent
+  pulls, hashes and refuses a mismatch (`AgentLink.PullFileAsync`). `run_script` on the
+  agent with every parameter of `D-31`: PowerShell 5.1 or `cmd.exe`, as SYSTEM or as the
+  student in the student's session (`UserProcessLauncher`: `WTSQueryUserToken`,
+  `CreateProcessAsUser`, inherited pipes), output streamed line by line in the OEM code
+  page, the whole tree killed after `timeout_s` of silence, the job directory removed
+  afterwards (`ScriptRunner`, `ProcessRunner`). Jobs now outlive the link: a cable pulled
+  mid-script no longer kills it, and the result is queued for the next `Welcome` — a latent
+  M1 defect found on the way (`D-32` item 7). Wake-on-LAN from the console: *Wake* on the
+  toolbar, three magic packets to every broadcast and to `last_ip`, *waking…* on the tile,
+  `wake.woke` / `wake.failed` events. The development-only *Run test script…* dialog sends
+  one of three built-in scripts (100 lines then `exit 3`; hang; who am I) with shell,
+  run-as and timeout selectable. `FakeAgent` pulls the real file and pretends only the
+  shell. Tests: the magic packet, the `run_script` arguments, `ProcessRunner` driven by
+  `sh` (lines, exit code, kill at the inactivity timeout, cancellation), `PullFile` end to
+  end with a hash mismatch and an unknown reference, the test-script action, a job that
+  finishes while unlinked, and the wake bookkeeping. **To verify on the VM:** (1) *Shut
+  down* — the tile goes offline within 20 s and the VM is off; (2) *Reboot* — the VM is back
+  online by itself with the same agent id; (3) *Log off* — `session.logoff`, *nobody logged
+  on* on the tile, a helper on the logon screen, and after signing in `session.logon`;
+  (4) *Run test script* → *100 lines, exit 3* with PowerShell as SYSTEM: 100 lines in the
+  Jobs panel and `exit 3`, row red; (5) the same with *cmd*; (6) *Hang* with a 10 s
+  timeout: killed after 10 s, the result says so, no leftover `powershell.exe` in Task
+  Manager; (7) *Who am I* as SYSTEM (`user: PC-01$`, session 0) and as the logged-on user
+  (`user: student`, the user's session, directory under `C:\Users\Public\LabControl\jobs`,
+  the Cyrillic line intact) with both shells; (8) *Who am I* as user while signed out — a
+  clear failure, nothing runs; (9) *Hang* with a 120 s timeout, then the VM's network off
+  at 20 s and on again at 50 s: the tile goes offline and back, the job is still *running*,
+  and the *killed* result arrives at 120 s with no `job.timed_out` event; (10) `Wake` on the
+  switched-off VM: `wake.sent` and *waking…*, then `wake.failed` after 90 s — UTM does not
+  implement Wake-on-LAN, so the real wake is a `PC-00` check; (11) `C:\ProgramData\LabControl\jobs`
+  is empty after every job.
 
 **Acceptance criteria**
 

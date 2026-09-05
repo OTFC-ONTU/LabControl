@@ -3,9 +3,11 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using LabControl.Console.Localization;
+using LabControl.Console.Services;
 using LabControl.Console.ViewModels;
 using LabControl.Shared;
 using LabControl.Shared.Identity;
+using LabControl.Shared.Jobs;
 
 namespace LabControl.Console.Views;
 
@@ -242,36 +244,76 @@ public sealed class RecoveryCodeDialog : DialogWindow<bool?>
     }
 }
 
-public sealed class ScriptDialog : DialogWindow<ScriptAnswer>
+/// <summary>
+/// Development-only (D-31 item 3, D-27): sends one of the console's built-in test scripts.
+/// Every <c>run_script</c> parameter is selectable so each can be proved on the VM; the
+/// teacher's script library replaces this in M4.
+/// </summary>
+public sealed class TestScriptDialog : DialogWindow<TestScriptChoice>
 {
-    public ScriptDialog(int pcCount)
+    public TestScriptDialog(int pcCount)
     {
         Title = Strings.Get("Action.RunScript");
 
-        var script = Field(Strings.Get("Script.Name"));
-        script.Text = "hello.ps1";
-        var lines = Field(Strings.Get("Script.Lines"));
-        lines.Text = "5";
-        var exit = Field(Strings.Get("Script.ExitCode"));
-        exit.Text = "0";
+        var kinds = new ComboBox
+        {
+            ItemsSource = new[]
+            {
+                Strings.Get("Script.Kind.HundredLines"),
+                Strings.Get("Script.Kind.Hang"),
+                Strings.Get("Script.Kind.WhoAmI"),
+            },
+            SelectedIndex = 0,
+            MinWidth = 380,
+        };
+
+        var shells = new ComboBox
+        {
+            ItemsSource = new[] { Strings.Get("Script.Shell.PowerShell"), Strings.Get("Script.Shell.Cmd") },
+            SelectedIndex = 0,
+            MinWidth = 380,
+        };
+
+        var runAs = new ComboBox
+        {
+            ItemsSource = new[] { Strings.Get("Script.RunAs.System"), Strings.Get("Script.RunAs.User") },
+            SelectedIndex = 0,
+            MinWidth = 380,
+        };
+
         var timeout = Field(Strings.Get("Script.Timeout"));
-        timeout.Text = "120";
+        timeout.Text = ((int)Defaults.ScriptDefaultTimeout.TotalSeconds).ToString(Strings.Culture);
+
+        var error = new TextBlock { Foreground = Brushes.IndianRed, IsVisible = false, TextWrapping = TextWrapping.Wrap, MaxWidth = 460 };
 
         var ok = Primary(Strings.Get("Script.Run"));
         ok.Click += (_, _) =>
         {
-            var args = new Dictionary<string, string>
+            if (!int.TryParse(timeout.Text, out var seconds) || seconds <= 0)
             {
-                ["lines"] = lines.Text ?? "5",
-                ["exit"] = exit.Text ?? "0",
-            };
-            var seconds = int.TryParse(timeout.Text, out var t) && t > 0 ? t : 120;
-            Finish(new ScriptAnswer(script.Text ?? string.Empty, args, TimeSpan.FromSeconds(seconds)));
+                error.Text = Strings.Get("Script.BadTimeout");
+                error.IsVisible = true;
+                return;
+            }
+
+            Finish(new TestScriptChoice(
+                (TestScriptKind)Math.Max(0, kinds.SelectedIndex),
+                shells.SelectedIndex == 1 ? ScriptShell.Cmd : ScriptShell.PowerShell,
+                runAs.SelectedIndex == 1 ? ScriptRunAs.User : ScriptRunAs.System,
+                TimeSpan.FromSeconds(seconds)));
         };
 
         var cancel = Secondary(Strings.Get("Common.Cancel"));
         cancel.Click += (_, _) => Finish(null);
 
-        Body(Heading(Strings.Format("Script.Heading", pcCount)), Label(Strings.Get("Script.Hint")), script, lines, exit, timeout, Buttons(cancel, ok));
+        Body(
+            Heading(Strings.Format("Script.Heading", pcCount)),
+            Label(Strings.Get("Script.Hint")),
+            Label(Strings.Get("Script.Kind")), kinds,
+            Label(Strings.Get("Script.Shell")), shells,
+            Label(Strings.Get("Script.RunAs")), runAs,
+            Label(Strings.Get("Script.Timeout")), timeout,
+            error,
+            Buttons(cancel, ok));
     }
 }

@@ -1,3 +1,4 @@
+using LabControl.Console.Services;
 using LabControl.Shared.Identity;
 
 namespace LabControl.Console.ViewModels;
@@ -8,8 +9,6 @@ public sealed record UnlockAnswer(string? Passphrase, RecoveryCode? RecoveryCode
 /// <summary>A new key holder from the add-holder dialog.</summary>
 public sealed record HolderAnswer(string Name, string Passphrase);
 
-/// <summary>What the run-script dialog asked for. Arguments go straight into the job.</summary>
-public sealed record ScriptAnswer(string Script, IReadOnlyDictionary<string, string> Args, TimeSpan Timeout);
 
 /// <summary>
 /// The dialogs a view model needs, behind an interface so the view models stay free of
@@ -37,5 +36,6 @@ public interface IDialogs
 
     Task<string?> PickFolderAsync(string title);
 
-    Task<ScriptAnswer?> RunScriptAsync(int pcCount);
+    /// <summary>The development-only <i>Run test script</i> dialog (D-31 item 3): which built-in script, which shell, as whom, how long.</summary>
+    Task<TestScriptChoice?> RunTestScriptAsync(int pcCount);
 }

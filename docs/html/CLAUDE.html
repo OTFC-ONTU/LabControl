@@ -296,9 +296,14 @@ the USB payload, real inventory (CsWin32 + registry), the <code>app\&lt;version&
 <code>scripts/dev-install.ps1</code> (<code>D-29</code>). Portion 2 is verified on the VM too: <code>Agent.Session</code> is a
 real helper supervised by the service over the named pipe (<code>SessionSupervisor</code>,
 <code>SessionLauncher</code>, <code>PipeFraming</code>; <code>D-30</code>), and <code>SessionState</code> carries <code>locked</code> and
-<code>helper_alive</code> to the tile. <strong>Portion 3 is next</strong>: power jobs, Wake-on-LAN from the console,
-a minimal <code>PullFile</code> and <code>run_script</code> on top of it (<code>D-31</code>; the teacher-facing script library
-is M4); jobs answer <em>not in this build</em> until then. <code>Setup</code> is still a skeleton (M4).</p>
+<code>helper_alive</code> to the tile. <strong>Portion 3 is built (2026-09-05) and awaits its VM run</strong>: power
+jobs (<code>PowerControl</code>), Wake-on-LAN from the console (<code>Shared/Power/WakeOnLan</code>, tracked in
+<code>LabSession</code>), the minimal <code>PullFile</code> (<code>FileOffers</code> on the console, <code>AgentLink.PullFileAsync</code>
+on the agent) and <code>run_script</code> on top of it (<code>ScriptRunner</code>, <code>UserProcessLauncher</code>,
+<code>Shared/Jobs/ProcessRunner</code>; <code>D-31</code>, <code>D-32</code>); the teacher-facing script library is M4 and
+the console has only the development <em>Run test script…</em> dialog until then. Jobs outlive a
+dropped link (<code>D-32</code> item 7). <strong>Portion 4 is next</strong>: the minimal push-and-restart.
+<code>Setup</code> is still a skeleton (M4).</p>
 <p>The console's non-UI core lives in <code>src/LabControl.Console/Services</code> (<code>LabSession</code>,
 <code>ConsoleBootstrap</code>, <code>LabKeyVault</code>) and <code>Server/</code>; the agent side shared by <code>FakeAgent</code> and
 the real agent is <code>src/LabControl.Shared/Link/AgentLink.cs</code>, and the install-time routines
@@ -309,7 +314,7 @@ shared by the agent, the simulator and Setup are <code>src/LabControl.Shared/Set
 (<code>tests/&lt;project&gt;/bin/Debug/net10.0/&lt;project&gt;</code>).</p>
 
 </article>
-<footer>Generated 2026-09-05 23:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 23:30 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using LabControl.Console.Localization;
+using LabControl.Console.Services;
 using LabControl.Console.ViewModels;
 using LabControl.Shared.Identity;
 
@@ -34,8 +35,8 @@ public sealed class WindowDialogs : IDialogs
     public async Task<bool> ShowRecoveryCodeAsync(RecoveryCode code) =>
         await Show(new RecoveryCodeDialog(code)) == true;
 
-    public async Task<ScriptAnswer?> RunScriptAsync(int pcCount) =>
-        await Show(new ScriptDialog(pcCount));
+    public async Task<TestScriptChoice?> RunTestScriptAsync(int pcCount) =>
+        await Show(new TestScriptDialog(pcCount));
 
     public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string extension)
     {

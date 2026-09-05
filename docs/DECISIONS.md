@@ -659,6 +659,86 @@ on disk (not in the backup, not visible from the console); building the library 
 3 (the agent has to be proven on the VM first — both earlier portions found a Windows-only
 bug there); syntax highlighting and parameters (add when a real script needs them).
 
+## D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)
+
+Context: portion 3 puts the first *actions* on a real Windows PC — shutdown, reboot, log
+off, run a script — and the first file transfer. Each raised a small question that would
+otherwise be answered differently in the agent, the simulator and the docs.
+
+Decisions:
+
+1. **Shutdown and reboot are immediate and forced** (owner's choice, 2026-09-05):
+   `InitiateSystemShutdownEx` with a zero timeout and `bForceAppsClosed`, so a hung program
+   never keeps a PC on. Warning the class is Lock / Broadcast's job in M5, not a system
+   dialog. The privilege (`SE_SHUTDOWN_NAME`) is enabled *before* the job answers, so a PC
+   that cannot shut down says so in the result; the call itself happens
+   `Defaults.PowerJobDelay` (2 s) later, after the `JobResult` has left, and a failure at
+   that point is an event (`power.failed`) because the result is already gone.
+2. **Log off is `WTSLogoffSession`** on the interactive session, not `ExitWindowsEx`, which
+   only ever logs off the caller's own session — session 0 for a service. It is synchronous
+   enough to answer with the real outcome.
+3. **`as: user` runs the script as the student, from the service, not through the helper.**
+   The helper is SYSTEM in the student's session; the point of `as: user` is the student's
+   *rights* (their profile, their `HKCU`, their desktop), and that needs the student's token
+   either way. The service gets it with `WTSQueryUserToken`, builds the environment from it,
+   starts the interpreter with `CreateProcessAsUser` on `winsta0\default` and reads stdout /
+   stderr through anonymous pipes the child inherits (`UserProcessLauncher`). The service
+   never impersonates the student for its own work.
+4. **Where the script lands follows who runs it.** As SYSTEM: `ProgramData\LabControl\jobs\<id>\`,
+   which `Users` cannot read (ARCHITECTURE §5). As the student: `%PUBLIC%\LabControl\jobs\<id>\`,
+   because the student must be able to read the file, and the only account that could tamper
+   with it there is the student — who is the account it runs as anyway, so nothing is gained.
+   The job directory is **deleted once the result is sent** (owner's choice): the console's
+   `logs/jobs-<day>.jsonl` already keeps the output, and fourteen PCs must not accumulate
+   debris.
+5. **Output is decoded in the OEM code page** (`GetOEMCP`), which is what `powershell.exe`
+   and `cmd.exe` print in when redirected. The console sends every script as UTF-8 with a
+   byte-order mark; the agent keeps the BOM for `.ps1` (PowerShell 5.1 otherwise reads ANSI,
+   `D-29` item 7) and transcodes `.cmd` to the OEM code page, because `cmd.exe` reads a batch
+   file in it. stderr lines are prefixed `[stderr] `; output is capped at 10 000 lines.
+6. **`timeout_s` is the agent's inactivity timeout; the console's `timeout_seconds` is that
+   plus 30 s.** Both are measured from the last line of output, but the console starts its
+   clock at delivery, before the agent has even received the job, so with equal values the
+   console could give up a moment before the agent's own *killed after N s* result arrives.
+   The grace makes the agent's verdict the one the teacher sees. `Process.Kill(entireProcessTree)`
+   takes the children; no Job Object is needed for that.
+7. **A job belongs to the PC, not to the link.** `AgentLink` used to run a job under the
+   stream's cancellation token, so a dropped link cancelled the job, discarded its result and
+   left its id marked *running* in the ledger for ever — the re-sent job was then ignored as a
+   duplicate and the console timed out. That never showed in M1 because simulated jobs
+   finish in milliseconds. Now a job runs under the agent's lifetime, progress goes to the
+   current link or nowhere, the result is queued and flushed after the next `Welcome`, and the
+   ledger answers the re-sent copy. Tested in `FileAndScriptTests`.
+8. **`PullFile` in its minimal form** (`D-31`): the reference is the SHA-256, chunks are
+   64 KiB, `offset` must be 0 (`Unimplemented` otherwise), the last chunk carries the hash
+   and the total, the agent verifies against both the job's hash and the chunk's, and a
+   chunk that does not arrive within 30 s abandons the pull. Offers live in a console-side
+   table (`FileOffers`): text and bytes in memory now, files on disk for M4's packages and
+   bundles through the same table. `PullFile` checks the peer certificate like `Link` does.
+9. **Wake-on-LAN is bookkeeping in the console, not a job.** A *pending wake* per PC with a
+   90 s deadline; `wake.sent` / `wake.woke` (with the seconds it took) / `wake.failed` (naming
+   BIOS, Fast Startup, the NIC property and the cable) / `wake.no_mac` / `wake.send_failed`
+   as events; *waking…* on the tile until it resolves. Three packets a second apart, to the
+   limited broadcast, every subnet's directed broadcast and `last_ip`, because the MacBook is
+   on Wi-Fi and the PCs on the wired side of the same router.
+10. **The development dialog exposes every `run_script` parameter** and a third built-in
+    script, *who am I* (owner's choice, 2026-09-05): without a script that prints the account
+    and session, and without choosing `cmd` and `as: user`, those branches of the agent could
+    not be proved on the VM before M4 builds a view on them. The dialog goes with the library
+    in M4 (`D-31` item 3).
+11. **`FakeAgent` pulls the real file and pretends only the shell.** It runs the genuine
+    `PullFile` and hash check, then recognises the constructs the built-in scripts use — a
+    printed line, `exit N`, a sleep — with the same inactivity timeout the real agent
+    enforces, so the console's jobs panel behaves the same against the simulator and the VM.
+
+Rejected: `ExitWindowsEx` for log off (wrong session); a countdown dialog before shutdown
+(the class is warned by Lock / Broadcast, and a dialog invites the student to cancel);
+running user scripts through the helper (SYSTEM, needs the token anyway); giving `Users`
+read on `ProgramData\LabControl` for user runs (breaks §5); keeping job directories on the
+PC; a `-Command` wrapper to force UTF-8 output (changes `-File`'s exit-code semantics for
+no gain over OEM decoding); Job Objects for the tree kill; a per-job `wake` job kind
+(the PC is off — nothing can run it).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

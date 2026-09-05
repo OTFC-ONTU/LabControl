@@ -573,6 +573,42 @@ switched-off VM: <code>wake.sent</code> and <em>waking…</em>, then <code>wake.
 implement Wake-on-LAN, so the real wake is a <code>PC-00</code> check; (11) <code>C:\ProgramData\LabControl\jobs</code>
 is empty after every job.</p>
 </li>
+<li><p><em>Portion 3 on the VM (2026-09-06, driven from the console by Claude through the
+accessibility tree, the VM signed in as <code>admin</code>, no <code>student</code> account).</em> <strong>Scripts:</strong> <em>100
+lines, exit 3</em> with PowerShell and with <code>cmd</code> — 100 lines each, <code>exit 3</code>, row red; <em>Hang</em>
+with a 10 s timeout — killed after 10 s, result &quot;Killed after 10 s without output (1 line
+received, 11 s in total)&quot;; <em>Who am I</em> in all four combinations — <code>WIN-…$</code> /
+<code>NT AUTHORITY\SYSTEM</code>, session 0, <code>ProgramData\LabControl\jobs\&lt;id&gt;</code> as SYSTEM;
+<code>admin</code>, session 1/2, <code>C:\Users\Public\LabControl\jobs\&lt;id&gt;</code> as the user, both shells.
+Afterwards no <code>powershell.exe</code> / <code>cmd.exe</code> of the agent's in Task Manager (the only one was
+the administrator's own terminal) and both <code>jobs</code> directories empty; <code>agent</code> in session 0,
+<code>session</code> in the user's session. <em>Who am I</em> as user while signed out: &quot;nobody is logged
+on to this PC right now&quot;, nothing ran. <strong>Power:</strong> <em>Log off</em> — <code>session.logoff</code>, a helper
+on the logon screen, <code>session.logon</code> after signing back in; <em>Reboot</em> — link lost 3 s after
+the click, back on its own 19 s later with the same agent id and serial; <em>Shut down</em> —
+link lost 3 s after the click, VM off. <strong>Wake</strong> on the switched-off VM: <code>wake.sent</code> to the
+limited broadcast, the Wi-Fi subnet and <code>last_ip</code>, then <code>wake.failed</code> after 88 s with the
+BIOS / Fast Startup / NIC hints — as expected, UTM has no Wake-on-LAN; the real check is
+<code>PC-00</code>. <strong>The network-drop check (9) is not done:</strong> <code>Disable-NetAdapter</code> on the guest's
+virtio NIC bugchecked Windows (Kernel-Power 41, EventLog 6008, WER 1001) 20 s into the
+120 s <em>Hang</em>; the VM rebooted, the agent re-pulled the script (its ledger is in memory,
+so a reboot re-runs an in-flight job — expected), and the <em>killed after 120 s</em> result
+arrived after the reconnect; the console kept both output lines. The cable pull must be
+done from outside the guest (UTM cannot unplug a running NIC; <code>pfctl</code> on the Mac or the
+real <code>PC-00</code>). <strong>Findings, not yet fixed:</strong> (a) the <em>Who am I</em> Cyrillic line prints as
+<code>??????</code> in all four runs — the VM is <code>en-US</code>, so the OEM code page is 437, which has no
+Cyrillic; <code>D-32</code> item 5's OEM decoding is right for a Ukrainian PC but the output path
+should not depend on the system locale (candidate: set <code>[Console]::OutputEncoding</code> /
+<code>chcp 65001</code> in a tiny launcher and decode UTF-8); (b) the <code>cmd</code> <em>Who am I</em> prints an empty
+<code>session:</code> line (<code>%SESSIONNAME%</code> is unset for a service-started process); (c) every log
+off and log on produces a <code>session.helper_exited</code> / <code>session.helper_down</code> warning pair
+before <code>session.helper_ready</code>, because Windows kills the helper before the supervisor's
+own restart — an intended restart should not read as a crash; (d) <code>session.lock</code> is
+reported at the logon screen right after a log off (WTS flags the empty session as
+locked) — suppress when nobody is logged on; (e) the console log prints the full Kestrel
+connection-reset stack trace at <code>INF</code> on every link drop, and &quot;Error reading message.&quot;
+without the PC's name.</p>
+</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -954,7 +990,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-05 23:30 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-06 01:19 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

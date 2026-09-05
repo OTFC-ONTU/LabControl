@@ -412,6 +412,41 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   switched-off VM: `wake.sent` and *waking…*, then `wake.failed` after 90 s — UTM does not
   implement Wake-on-LAN, so the real wake is a `PC-00` check; (11) `C:\ProgramData\LabControl\jobs`
   is empty after every job.
+- *Portion 3 on the VM (2026-09-06, driven from the console by Claude through the
+  accessibility tree, the VM signed in as `admin`, no `student` account).* **Scripts:** *100
+  lines, exit 3* with PowerShell and with `cmd` — 100 lines each, `exit 3`, row red; *Hang*
+  with a 10 s timeout — killed after 10 s, result "Killed after 10 s without output (1 line
+  received, 11 s in total)"; *Who am I* in all four combinations — `WIN-…$` /
+  `NT AUTHORITY\SYSTEM`, session 0, `ProgramData\LabControl\jobs\<id>` as SYSTEM;
+  `admin`, session 1/2, `C:\Users\Public\LabControl\jobs\<id>` as the user, both shells.
+  Afterwards no `powershell.exe` / `cmd.exe` of the agent's in Task Manager (the only one was
+  the administrator's own terminal) and both `jobs` directories empty; `agent` in session 0,
+  `session` in the user's session. *Who am I* as user while signed out: "nobody is logged
+  on to this PC right now", nothing ran. **Power:** *Log off* — `session.logoff`, a helper
+  on the logon screen, `session.logon` after signing back in; *Reboot* — link lost 3 s after
+  the click, back on its own 19 s later with the same agent id and serial; *Shut down* —
+  link lost 3 s after the click, VM off. **Wake** on the switched-off VM: `wake.sent` to the
+  limited broadcast, the Wi-Fi subnet and `last_ip`, then `wake.failed` after 88 s with the
+  BIOS / Fast Startup / NIC hints — as expected, UTM has no Wake-on-LAN; the real check is
+  `PC-00`. **The network-drop check (9) is not done:** `Disable-NetAdapter` on the guest's
+  virtio NIC bugchecked Windows (Kernel-Power 41, EventLog 6008, WER 1001) 20 s into the
+  120 s *Hang*; the VM rebooted, the agent re-pulled the script (its ledger is in memory,
+  so a reboot re-runs an in-flight job — expected), and the *killed after 120 s* result
+  arrived after the reconnect; the console kept both output lines. The cable pull must be
+  done from outside the guest (UTM cannot unplug a running NIC; `pfctl` on the Mac or the
+  real `PC-00`). **Findings, not yet fixed:** (a) the *Who am I* Cyrillic line prints as
+  `??????` in all four runs — the VM is `en-US`, so the OEM code page is 437, which has no
+  Cyrillic; `D-32` item 5's OEM decoding is right for a Ukrainian PC but the output path
+  should not depend on the system locale (candidate: set `[Console]::OutputEncoding` /
+  `chcp 65001` in a tiny launcher and decode UTF-8); (b) the `cmd` *Who am I* prints an empty
+  `session:` line (`%SESSIONNAME%` is unset for a service-started process); (c) every log
+  off and log on produces a `session.helper_exited` / `session.helper_down` warning pair
+  before `session.helper_ready`, because Windows kills the helper before the supervisor's
+  own restart — an intended restart should not read as a crash; (d) `session.lock` is
+  reported at the logon screen right after a log off (WTS flags the empty session as
+  locked) — suppress when nobody is logged on; (e) the console log prints the full Kestrel
+  connection-reset stack trace at `INF` on every link drop, and "Error reading message."
+  without the PC's name.
 
 **Acceptance criteria**
 

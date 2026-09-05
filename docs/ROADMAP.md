@@ -364,7 +364,8 @@ Wake-on-LAN from the console and `run_script`; **(4)** the minimal push-and-rest
   surfaced and fixed: at OS shutdown the Windows Event Log provider that
   `AddWindowsService` registers threw through the agent loop (now only Serilog is left),
   and the console did not persist the logged-on user on a session change (it does now).
-  The shutdown fix is not yet re-verified on the VM.
+  The shutdown fix was re-verified the same evening: with the agent linked, an OS shutdown
+  ends the log with *stopping → unlinked → LabControl agent stopped* and nothing after it.
 
 **Acceptance criteria**
 

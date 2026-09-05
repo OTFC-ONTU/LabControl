@@ -595,7 +595,7 @@ virtio NIC bugchecked Windows (Kernel-Power 41, EventLog 6008, WER 1001) 20 s in
 so a reboot re-runs an in-flight job — expected), and the <em>killed after 120 s</em> result
 arrived after the reconnect; the console kept both output lines. The cable pull must be
 done from outside the guest (UTM cannot unplug a running NIC; <code>pfctl</code> on the Mac or the
-real <code>PC-00</code>). <strong>Findings, not yet fixed:</strong> (a) the <em>Who am I</em> Cyrillic line prints as
+real <code>PC-00</code>). <strong>Findings</strong> (all five fixed the same night, <code>0133e92</code>; the fixes await their own VM run, see below): (a) the <em>Who am I</em> Cyrillic line prints as
 <code>??????</code> in all four runs — the VM is <code>en-US</code>, so the OEM code page is 437, which has no
 Cyrillic; <code>D-32</code> item 5's OEM decoding is right for a Ukrainian PC but the output path
 should not depend on the system locale (candidate: set <code>[Console]::OutputEncoding</code> /
@@ -607,7 +607,14 @@ own restart — an intended restart should not read as a crash; (d) <code>sessio
 reported at the logon screen right after a log off (WTS flags the empty session as
 locked) — suppress when nobody is logged on; (e) the console log prints the full Kestrel
 connection-reset stack trace at <code>INF</code> on every link drop, and &quot;Error reading message.&quot;
-without the PC's name.</p>
+without the PC's name. <strong>Still to run on the VM after <code>0133e92</code>:</strong> <em>Who am I</em> with both
+shells shows the Cyrillic line intact and the <code>cmd</code> variant a session number; a log off
+and a log on produce only <code>session.logoff</code> / <code>session.logon</code> and <code>session.helper_ready</code>,
+no <code>helper_exited</code> / <code>helper_down</code>; no <code>session.lock</code> at the logon screen; and check (9),
+the network drop, done from the Mac (<code>pfctl</code> blocking 192.168.64.2 for 30 s) rather than
+inside the guest. The two <code>BeaconTests</code> fail while a real console is running on the same
+Mac — the test agents hear its beacon on the shared UDP port — so run them with the
+console closed.</p>
 </li>
 <li><p><em>Portion 3, second pass (2026-09-06).</em> The five findings are fixed (<code>D-32</code> items 5 and
 12): both shells now print UTF-8 whatever the PC's locale, the cmd <em>Who am I</em> reports the
@@ -1000,7 +1007,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-06 01:27 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-06 02:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

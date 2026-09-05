@@ -434,7 +434,7 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   so a reboot re-runs an in-flight job — expected), and the *killed after 120 s* result
   arrived after the reconnect; the console kept both output lines. The cable pull must be
   done from outside the guest (UTM cannot unplug a running NIC; `pfctl` on the Mac or the
-  real `PC-00`). **Findings, not yet fixed:** (a) the *Who am I* Cyrillic line prints as
+  real `PC-00`). **Findings** (all five fixed the same night, `0133e92`; the fixes await their own VM run, see below): (a) the *Who am I* Cyrillic line prints as
   `??????` in all four runs — the VM is `en-US`, so the OEM code page is 437, which has no
   Cyrillic; `D-32` item 5's OEM decoding is right for a Ukrainian PC but the output path
   should not depend on the system locale (candidate: set `[Console]::OutputEncoding` /
@@ -446,7 +446,14 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   reported at the logon screen right after a log off (WTS flags the empty session as
   locked) — suppress when nobody is logged on; (e) the console log prints the full Kestrel
   connection-reset stack trace at `INF` on every link drop, and "Error reading message."
-  without the PC's name.
+  without the PC's name. **Still to run on the VM after `0133e92`:** *Who am I* with both
+  shells shows the Cyrillic line intact and the `cmd` variant a session number; a log off
+  and a log on produce only `session.logoff` / `session.logon` and `session.helper_ready`,
+  no `helper_exited` / `helper_down`; no `session.lock` at the logon screen; and check (9),
+  the network drop, done from the Mac (`pfctl` blocking 192.168.64.2 for 30 s) rather than
+  inside the guest. The two `BeaconTests` fail while a real console is running on the same
+  Mac — the test agents hear its beacon on the shared UDP port — so run them with the
+  console closed.
 - *Portion 3, second pass (2026-09-06).* The five findings are fixed (`D-32` items 5 and
   12): both shells now print UTF-8 whatever the PC's locale, the cmd *Who am I* reports the
   session through `tasklist`, a helper ended by Windows at logon/logoff is a planned

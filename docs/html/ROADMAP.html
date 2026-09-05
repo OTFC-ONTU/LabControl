@@ -169,7 +169,7 @@ implement.</p>
 <tr>
 <td><strong>M2</strong></td>
 <td>Windows agent: service, helper, power, scripts</td>
-<td><strong>in progress</strong> (portion 1 of 4 verified on the VM 2026-09-05)</td>
+<td><strong>in progress</strong> (portion 1 of 4 verified on the VM 2026-09-05; portion 2 built, awaiting the VM run)</td>
 <td>M1, Windows VM</td>
 </tr>
 <tr>
@@ -489,6 +489,28 @@ the Mac could not see (<code>D-29</code> item 6). Fixed, republished, and <code>
 linked and reported its inventory (hostname, MAC, version, the interactive user). Two
 more Windows-only lessons landed in the script: PowerShell 5.1 needs a BOM, and the UTM
 shared drive needs its WebDAV size limit raised (<code>D-29</code> item 7, README).</li>
+<li><em>Portion 2 (built 2026-09-05, awaiting the VM run).</em> <code>LabControl.Agent.Session</code> is a real
+helper and the service supervises it (<code>D-30</code>). The service owns the named pipe, spawns
+<code>session.exe</code> into the console session with its own SYSTEM token re-homed to that session,
+and keeps it there: restarted within about a second after a crash, on logon and logoff,
+when the console session changes, when it goes silent, with a 30-second back-off and an
+event after five deaths in a minute. The helper says hello, then reports every 2 s which
+desktop has the input (<code>Default</code> / <code>Winlogon</code>) and the screen size — the proof that a
+process of ours lives on the student's desktop — and exits the moment the pipe closes.
+The service reads the session through WTS every 2 s and is woken early by the service
+control manager's session-change notifications (a <code>WindowsServiceLifetime</code> subclass);
+every change goes to the console as <code>SessionState</code>, now with <code>locked</code>, and the latest one
+is re-sent after every <code>Welcome</code>. The console shows <em>student (locked)</em> on the tile, an
+orange line when the helper is down, and logs logon / logoff / lock / unlock as events.
+<code>FakeAgent</code> publishes the same message so the simulator stays representative. Tests: the
+pipe framing over a real named pipe on the Mac, the session state through the console and
+across a reconnect, and the tile texts in the headless UI test. <strong>To verify on the VM:</strong>
+the <code>session.exe</code> process appears in Task Manager (as SYSTEM, in the user's session) and
+<code>session.helper_ready</code> shows in the events panel; killing it as administrator brings it
+back within 5 s with a <code>session.helper_exited</code> warning; Win+L marks the tile <em>locked</em> and
+unlocking clears it; sign out shows <em>nobody logged on</em> and a new helper appears on the
+logon screen; sign in shows the user again; <code>Get-Content session-&lt;date&gt;.log -Wait</code> shows
+the desktop switching between <code>Default</code> and <code>Winlogon</code>.</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -860,7 +882,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-05 17:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 18:20 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

@@ -544,6 +544,71 @@ library shared by the agent and Setup (a seventh project for a routine that fits
 file of `Shared`); exiting the service when unprovisioned (see 3); using the DPAPI user
 scope (the service is SYSTEM, and the key must survive profile resets).
 
+## D-30 — Supervising the session helper (M2)
+
+Context: `D-06` put a second SYSTEM process into the interactive session for capture, input
+and the overlay. M2 portion 2 has to make that process *exist reliably* — through logon,
+logoff, lock, a crash, an administrator killing it — before M3 puts anything visible in it.
+Every choice below favours the behaviour that needs no one to walk to the PC.
+
+Decisions:
+
+1. **The service's own token, not the user's.** `WTSQueryUserToken` yields the student's
+   token; a helper started with it could be killed from Task Manager and cannot see the
+   secure desktop. Instead the service duplicates its own SYSTEM token, rewrites its
+   session id (`SetTokenInformation(TokenSessionId)`, which needs `SeTcbPrivilege` — SYSTEM
+   has it) and calls `CreateProcessAsUser` on `winsta0\default` with `CREATE_NO_WINDOW`.
+   When `agent.exe --run` is started from a terminal *in* the interactive session, a plain
+   `Process.Start` is used instead, so a developer without SYSTEM can still see the helper
+   connect. `ARCHITECTURE.md` §2 was corrected to say so.
+2. **The helper runs whenever there is a console session** — at the logon screen too, not
+   only after a logon (owner's choice, 2026-09-05). That is where the lock screen and UAC
+   prompts live, which is exactly what §2 gives the helper SYSTEM for; and with auto-logon
+   the distinction hardly exists on a student PC. It is **restarted on logon and logoff**
+   (a fresh process per user session, as `ARCHITECTURE.md` promised), when the console
+   session id changes, when it exits, when it stays silent for 10 s, or when it has not
+   connected 15 s after being started.
+3. **Poll is the truth, notification is the alarm.** The service re-reads the interactive
+   session through WTS every 2 s (`WTSGetActiveConsoleSessionId`, `WTSUserName`,
+   `WTSSessionInfoEx.SessionFlags` for the lock state) and publishes a `SessionState` when
+   anything differs. `SERVICE_CONTROL_SESSIONCHANGE` — obtained by subclassing the hosting
+   package's `WindowsServiceLifetime` with `CanHandleSessionChangeEvent` on — only wakes
+   the poll early and names the `kind`. So the foreground `--run` mode, which gets no SCM
+   notifications, behaves the same a little later, and a notification lost during a
+   restart cannot leave the console with a stale picture. The lock notification is trusted
+   over WTS for the tick it arrives in, because WTS lags it.
+4. **The service is the pipe server, created before any helper, `CurrentUserOnly` on both
+   ends.** One instance for the life of the service, so the name cannot be claimed by
+   anyone else once the service is up; if it is already taken at start (a second agent
+   instance) the service reports `session.pipe_unavailable` and keeps retrying. The
+   helper's `CurrentUserOnly` makes it refuse a server that is not SYSTEM, so a pipe
+   squatted by the student before boot cannot feed it `Input` or `Overlay` commands. The
+   first frame must be a `HelperHello` whose `process_id` is the process the service just
+   started; anything else is dropped.
+5. **Crash policy: fast once, slow when it keeps happening.** One exit → back in 1 s
+   (ROADMAP's "within 5 s" with room for the spawn). Five exits within a minute → an
+   `session.helper_crash_loop` error to the console and a 30-second pause between
+   attempts, so a broken helper build costs a warning row, not a CPU pegged at 100 % on
+   fourteen PCs. Spawn failures count as exits and are reported once per distinct message.
+6. **`SessionState` carries the current state, `kind` the transition.** `user`, `locked`
+   and `helper_alive` are always current, so any single message is enough to draw the
+   tile; the latest one is re-sent by `AgentLink` right after every `Welcome`. The console
+   shows *user (locked)* on the tile, an orange *session helper not running* line when the
+   helper is down, and writes logon / logoff / lock / unlock to the events panel.
+7. **The helper logs to its own rolling file** next to the agent's
+   (`ProgramData\LabControl\logs\session-<date>.log`) and has `session.exe --probe`
+   for a hand check of what a process in the session can see. It is a hidden console
+   process rather than a WinExe so that probe output is visible in a terminal.
+
+Rejected: `WTSRegisterSessionNotification` in the service (needs a window and a message
+loop in a service); polling only (works, but a lock would show up to 2 s late and the
+event's `kind` would have to be guessed); notification only (a lost notification leaves the
+tile wrong until the next change); the helper as the pipe server (the service would have
+to find the right instance, and a helper that died mid-connect leaves a dangling name);
+letting the helper survive logoff (a SYSTEM process does — but the per-user state M5's
+whitelist will keep belongs to one logon); a per-launch shared secret on the command line
+instead of `CurrentUserOnly` (visible to administrators, and unnecessary).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

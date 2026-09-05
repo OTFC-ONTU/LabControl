@@ -18,10 +18,12 @@ internal sealed class AgentService : BackgroundService
 {
     private readonly ILoggerFactory _loggers;
     private readonly ILogger _log;
+    private readonly SessionChangeSource _sessionChanges;
 
-    public AgentService(ILoggerFactory loggers)
+    public AgentService(ILoggerFactory loggers, SessionChangeSource sessionChanges)
     {
         _loggers = loggers;
+        _sessionChanges = sessionChanges;
         _log = loggers.CreateLogger<AgentService>();
     }
 
@@ -39,6 +41,21 @@ internal sealed class AgentService : BackgroundService
             await using var link = behaviour.Link;
 
             behaviour.Start();
+
+            // The helper lives next to agent.exe in app\<version>\ (D-19); the supervisor keeps
+            // one alive in the interactive session and reports that session to the console.
+            var helperPath = Path.Combine(Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory, Defaults.SessionExecutableName);
+            await using var supervisor = new SessionSupervisor(link, _sessionChanges, _loggers.CreateLogger("session"), helperPath);
+            if (File.Exists(helperPath))
+            {
+                supervisor.Start();
+            }
+            else
+            {
+                var message = $"{Defaults.SessionExecutableName} is missing next to the agent ({helperPath}); screens, control and lock will not work on this PC. Reinstall it.";
+                _log.LogError("{Message}", message);
+                link.Report(Event.Types.Severity.Error, "session.helper_missing", message);
+            }
 
             using var listener = new BeaconListener();
             listener.Received += (datagram, _) => link.OfferBeacon(datagram);

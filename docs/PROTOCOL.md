@@ -161,7 +161,7 @@ PC offline after 20 s without one, and HTTP/2 keepalive pings on both sides noti
 pulled cable in the same time.
 
 `AgentMessage` (oneof): `Hello`, `Heartbeat`, `Inventory`, `SessionState`
-(logon/logoff/lock/ unlock, active user), `JobProgress`, `JobResult`, `Event` (error,
+(logon/logoff/lock/unlock, active user, helper alive — see below), `JobProgress`, `JobResult`, `Event` (error,
 warning, info), `Pong`, `ExamState`, `InternetState` (see *Internet policy*), `RevocationState` (every signed revocation entry the
 agent holds — sent right after `Hello`, so a console that was not running when another
 teacher machine revoked something learns of it from the first agent that connects).
@@ -313,9 +313,55 @@ full-screen overlay. Frame drop policy on the agent: always show the latest.
 
 ## Agent ↔ Session helper (named pipe, length-prefixed protobuf)
 
-Same message types (`VideoControl`, `Input`, `Overlay`, `VideoFrame`, `SessionState`)
-re-used; the service is a dumb relay for video/input and the policy owner for
-everything else. The helper never talks to the network.
+Same message types (`VideoControl`, `Input`, `Overlay`, `VideoFrame`) re-used; the service
+is a dumb relay for video/input and the policy owner for everything else. The helper never
+talks to the network (D-06, D-30).
+
+**Transport.** `\\.\pipe\labcontrol-session` (`Defaults.SessionPipeName`), byte mode. The
+**service is the server** and creates the single instance at start, before any helper
+exists, with `CurrentUserOnly` — only SYSTEM can connect, and the helper, also SYSTEM,
+connects with `CurrentUserOnly` too, so it refuses a server that is not SYSTEM (a pipe
+squatted by the student). One frame = a 4-byte little-endian length + one protobuf message,
+at most `SessionPipeMaxMessageBytes` (16 MiB); a frame cut short or over the limit is a
+protocol error and ends the connection. `LabControl.Shared/Session/PipeFraming.cs` is the
+one implementation both sides use.
+
+**Envelopes.**
+
+```
+ServiceMessage { oneof: Ping | VideoControl | Input | Overlay }          service → helper
+HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event } helper → service
+
+HelperHello  { session_id, process_id, version }         first message after connecting
+HelperStatus { input_desktop, screen_width, screen_height, uptime_ms }
+```
+
+**Flow (M2).** The service spawns `session.exe` into the active console session and waits
+for a connection (`HelperConnectTimeout`, 15 s). The helper sends `HelperHello`; the
+service checks `process_id` against the process it started and drops anything else (a stale
+helper from a previous service instance, or an impostor). The service answers with a
+`Ping`; the helper replies with a `HelperStatus` and then sends one every
+`HelperStatusInterval` (2 s) unsolicited. `input_desktop` is what `OpenInputDesktop` names —
+`Default` while the student works, `Winlogon` at the lock screen, the logon screen and a UAC
+prompt. A helper silent for `HelperSilenceTimeout` (10 s) is killed and restarted; an
+`Event` from the helper is relayed to the console unchanged. When the pipe closes the helper
+exits at once; when the helper exits the service respawns it (D-30). `VideoControl`, `Input`
+and `Overlay` are answered with a `session.not_in_this_build` warning until M3/M5.
+
+### `SessionState` (agent → console)
+
+```
+SessionState { kind: UNSPECIFIED | LOGON | LOGOFF | LOCK | UNLOCK, user, session_id,
+               helper_alive, locked }
+```
+
+`kind` says what just happened; `user`, `locked` and `helper_alive` are the **current**
+state, whatever `kind` says, so a single message is always self-sufficient. The agent
+sends one on every change it notices — the service control manager's session-change
+notification wakes it, a 2-second poll of WTS backs that up — and re-sends the latest right
+after every `Welcome`, so a console that (re)connects sees the current state at once. The
+console shows `user`, marks the tile *locked*, warns when `helper_alive` turns false, and
+logs LOGON / LOGOFF / LOCK / UNLOCK as informational events.
 
 ## Versioning
 

@@ -189,6 +189,11 @@ public sealed class UiTests
             Assert.True(await Wait.UntilAsync(() => console.Session.Linked.Count == 8, TimeSpan.FromSeconds(15)));
             console.Session.Vault.Lock();
 
+            // PC-02 is locked with the helper up; PC-03's helper is down (M2 session state).
+            agents[1].Link.PublishSessionState(new SessionState { Kind = SessionState.Types.Kind.Lock, User = "student", SessionId = 1, HelperAlive = true, Locked = true });
+            agents[2].Link.PublishSessionState(new SessionState { User = "student", SessionId = 1, HelperAlive = false });
+            Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[1].AgentId)?.SessionLocked == true && console.Session.FindLinked(agents[2].AgentId)?.HelperAlive == false));
+
             var bootstrap = new ConsoleBootstrap(console.Session.Options, TestLogging.Factory);
 
             // The Func<Task<T>> overload: an async lambda without a value would bind to the
@@ -203,6 +208,10 @@ public sealed class UiTests
 
                 Assert.Equal(8, vm.Machines.Count);
                 Assert.All(vm.Machines, m => Assert.Equal(TileStatus.Online, m.Status));
+                Assert.Equal("student (locked)", vm.Machines.Single(m => m.Number == 2).SessionText);
+                Assert.True(vm.Machines.Single(m => m.Number == 3).HelperDown);
+                Assert.Equal("student", vm.Machines.Single(m => m.Number == 1).SessionText);
+                Assert.False(vm.Machines.Single(m => m.Number == 1).HelperDown);
                 Assert.Contains(vm.Banners, b => b.Key == "backup");
                 Assert.DoesNotContain(vm.Banners, b => b.Key == "unlocked");
 

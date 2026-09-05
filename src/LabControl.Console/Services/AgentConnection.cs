@@ -48,6 +48,21 @@ public sealed class AgentConnection
     /// <summary>Why the link ended, once it has; for the tile tooltip and the event.</summary>
     public string? ClosedBecause { get; private set; }
 
+    /// <summary>The lock screen is up on the PC, from the agent's last <c>SessionState</c> (M2).</summary>
+    public bool SessionLocked { get; private set; }
+
+    /// <summary>
+    /// <c>session.exe</c> is running in the interactive session and talking to the service;
+    /// <c>null</c> until the agent has said either way (an M1-era agent never does).
+    /// </summary>
+    public bool? HelperAlive { get; private set; }
+
+    public void ApplySessionState(SessionState state)
+    {
+        SessionLocked = state.Locked;
+        HelperAlive = state.HelperAlive;
+    }
+
     /// <summary>Below the console's minimum: still linked, tile marked outdated, only the frozen subset used (D-19).</summary>
     public bool IsOutdated => Hello.ProtocolVersion < Defaults.MinimumProtocolVersion;
 

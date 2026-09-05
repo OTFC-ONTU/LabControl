@@ -33,7 +33,8 @@
           <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis" />
           <StackPanel Spacing="1" Margin="0,4,0,0">
             <TextBlock Text="{Binding Hostname}" FontSize="12" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="{Binding LoggedOnUser}" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding SessionText}" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{loc:Localize Tile.HelperDown}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding HelperDown}" />
             <TextBlock Text="{loc:Localize Tile.RenewalDue}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding NeedsRenewal}" />
           </StackPanel>
         </DockPanel>

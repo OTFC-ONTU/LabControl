@@ -64,6 +64,7 @@ public sealed class AgentLink : IAsyncDisposable
 
     private readonly Queue<Event> _pendingEvents = new();
     private ChannelWriter<AgentMessage>? _outgoing;
+    private SessionState? _latestSessionState;
 
     private Task? _loop;
     private CancellationTokenSource? _session;
@@ -192,6 +193,33 @@ public sealed class AgentLink : IAsyncDisposable
 
     /// <summary>Events kept for the next link while there is none; older ones are dropped.</summary>
     public const int MaxPendingEvents = 100;
+
+    /// <summary>
+    /// Tells the console who is in the interactive session, whether it is locked and whether
+    /// the helper is up (M2). Sent at once while linked; the latest state is also re-sent
+    /// right after every <c>Welcome</c>, so a console that (re)connects sees the current
+    /// state without waiting for the next change.
+    /// </summary>
+    public void PublishSessionState(SessionState state)
+    {
+        lock (_gateLock)
+        {
+            _latestSessionState = state;
+            _outgoing?.TryWrite(new AgentMessage { SessionState = state });
+        }
+    }
+
+    /// <summary>The last state given to <see cref="PublishSessionState"/>, for a simulator's display.</summary>
+    public SessionState? LatestSessionState
+    {
+        get
+        {
+            lock (_gateLock)
+            {
+                return _latestSessionState;
+            }
+        }
+    }
 
     /// <summary>Drops the current link, if any; the loop reconnects on the next beacon.</summary>
     public void Disconnect(string reason)
@@ -478,6 +506,11 @@ public sealed class AgentLink : IAsyncDisposable
             lock (_gateLock)
             {
                 _outgoing = outgoing.Writer;
+                if (_latestSessionState is { } sessionState)
+                {
+                    outgoing.Writer.TryWrite(new AgentMessage { SessionState = sessionState });
+                }
+
                 while (_pendingEvents.TryDequeue(out var pending))
                 {
                     outgoing.Writer.TryWrite(new AgentMessage { Event = pending });

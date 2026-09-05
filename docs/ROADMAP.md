@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portion 1 of 4 verified on the VM 2026-09-05) | M1, Windows VM |
+| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portion 1 of 4 verified on the VM 2026-09-05; portion 2 built, awaiting the VM run) | M1, Windows VM |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -332,6 +332,28 @@ Wake-on-LAN from the console and `run_script`; **(4)** the minimal push-and-rest
   linked and reported its inventory (hostname, MAC, version, the interactive user). Two
   more Windows-only lessons landed in the script: PowerShell 5.1 needs a BOM, and the UTM
   shared drive needs its WebDAV size limit raised (`D-29` item 7, README).
+- *Portion 2 (built 2026-09-05, awaiting the VM run).* `LabControl.Agent.Session` is a real
+  helper and the service supervises it (`D-30`). The service owns the named pipe, spawns
+  `session.exe` into the console session with its own SYSTEM token re-homed to that session,
+  and keeps it there: restarted within about a second after a crash, on logon and logoff,
+  when the console session changes, when it goes silent, with a 30-second back-off and an
+  event after five deaths in a minute. The helper says hello, then reports every 2 s which
+  desktop has the input (`Default` / `Winlogon`) and the screen size — the proof that a
+  process of ours lives on the student's desktop — and exits the moment the pipe closes.
+  The service reads the session through WTS every 2 s and is woken early by the service
+  control manager's session-change notifications (a `WindowsServiceLifetime` subclass);
+  every change goes to the console as `SessionState`, now with `locked`, and the latest one
+  is re-sent after every `Welcome`. The console shows *student (locked)* on the tile, an
+  orange line when the helper is down, and logs logon / logoff / lock / unlock as events.
+  `FakeAgent` publishes the same message so the simulator stays representative. Tests: the
+  pipe framing over a real named pipe on the Mac, the session state through the console and
+  across a reconnect, and the tile texts in the headless UI test. **To verify on the VM:**
+  the `session.exe` process appears in Task Manager (as SYSTEM, in the user's session) and
+  `session.helper_ready` shows in the events panel; killing it as administrator brings it
+  back within 5 s with a `session.helper_exited` warning; Win+L marks the tile *locked* and
+  unlocking clears it; sign out shows *nobody logged on* and a new helper appears on the
+  logon screen; sign in shows the user again; `Get-Content session-<date>.log -Wait` shows
+  the desktop switching between `Default` and `Winlogon`.
 
 **Acceptance criteria**
 

@@ -255,8 +255,52 @@ public static class Defaults
     public const string CaCertificateFileName = "ca.crt";
     public const string SetupLogFileName = "setup.log";
 
+    // ------------------------------------------------------------ session helper
+
+    // The service spawns session.exe into the interactive session with a SYSTEM token and
+    // supervises it over a local named pipe (ARCHITECTURE §2, D-06, D-30).
+
     /// <summary>Agent service ↔ session helper. Local only; never reaches the network.</summary>
     public const string SessionPipeName = @"labcontrol-session";
+
+    /// <summary>The helper's rolling log next to the agent's; the date goes where the dash is.</summary>
+    public const string SessionLogFilePattern = "session-.log";
+
+    /// <summary>Prints what the helper sees of its session (desktop, screen) and exits; for a hand check on a PC.</summary>
+    public const string SessionProbeSwitch = "--probe";
+
+    /// <summary>The largest message either side accepts on the pipe; a full-screen JPEG fits many times over.</summary>
+    public const int SessionPipeMaxMessageBytes = 16 * 1024 * 1024;
+
+    /// <summary>The helper reports its <c>HelperStatus</c> this often, whether or not anything changed.</summary>
+    public static readonly TimeSpan HelperStatusInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>A helper that has not spoken for this long is hung: the service kills and restarts it.</summary>
+    public static readonly TimeSpan HelperSilenceTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>A freshly spawned helper must connect to the pipe within this long, or it is killed and tried again.</summary>
+    public static readonly TimeSpan HelperConnectTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>Pause before respawning a helper that exited; keeps "back within 5 s" (ROADMAP M2) with room for the spawn itself.</summary>
+    public static readonly TimeSpan HelperRestartDelay = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// A helper that dies this many times within <see cref="HelperCrashLoopWindow"/> is in a
+    /// crash loop: the service reports it once and waits <see cref="HelperCrashLoopBackoff"/>
+    /// between further attempts instead of spinning.
+    /// </summary>
+    public const int HelperCrashLoopThreshold = 5;
+
+    public static readonly TimeSpan HelperCrashLoopWindow = TimeSpan.FromMinutes(1);
+
+    public static readonly TimeSpan HelperCrashLoopBackoff = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How often the service re-reads the interactive session (which one is active, who is
+    /// in it, locked or not) when Windows has not told it; a session-change notification
+    /// wakes it at once (D-30).
+    /// </summary>
+    public static readonly TimeSpan SessionPollInterval = TimeSpan.FromSeconds(2);
 
     /// <summary>Agent logs are kept for this many days, then rolled off.</summary>
     public const int AgentLogRetentionDays = 7;

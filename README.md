@@ -45,11 +45,13 @@ mutual TLS, enrolment, the link with jobs and renewal, take-over between two tea
 machines, the sealed backup, the console UI and a `FakeAgent` that plays a room of PCs —
 demonstrated live by the owner with two console profiles and 30 fake PCs.
 
-**M2 — the real Windows agent: in progress.** Portion 1 of 4 is built: the service host, the
+**M2 — the real Windows agent: in progress.** Portion 1 of 4 — the service host, the
 DPAPI-protected store, provisioning from the USB payload, real inventory, the side-by-side
-version layout and `scripts/dev-install.ps1`. Next it runs in a Windows VM — see below —
-then the session helper, power and scripts, and push-and-restart follow
-([`docs/ROADMAP.md`](docs/ROADMAP.md)).
+version layout and `scripts/dev-install.ps1` — is verified on the Windows VM. Portion 2 is
+built and awaits its VM run: `session.exe` lives on the student's desktop as SYSTEM,
+supervised by the service over a named pipe, and the console shows who is logged on,
+whether the screen is locked and whether the helper is up. Power and scripts, then
+push-and-restart follow ([`docs/ROADMAP.md`](docs/ROADMAP.md)).
 
 ## Quick start
 ```bash
@@ -118,6 +120,17 @@ get `win-x64`. `tools/publish-all.sh` produces both.
    folder if in doubt — and restarting the `WebClient` service (which the script does once)
    can leave `Z:` unavailable until the VM is rebooted. `dev-install.ps1 -Uninstall`
    removes everything but the PC's identity, `-Uninstall -PurgeData` removes that too.
+6. **Check the session helper** (M2 portion 2). Within a few seconds of the service
+   starting, Task Manager → *Details* shows `session.exe` running as SYSTEM in the user's
+   session (not session 0), and the console's events panel shows *Session helper … is up in
+   session 1 (…, desktop Default)*. Then: end `session.exe` from Task Manager — it is back
+   within 5 s and the console logs a *session.helper_exited* warning; press Win+L — the tile
+   reads *student (locked)* (or your account name) and *screen locked* appears in the
+   events, unlocking clears it; sign out — the tile reads *nobody logged on* and a new
+   helper appears on the logon screen; sign in — the user is back. The helper's own log is
+   `C:\ProgramData\LabControl\logs\session-<date>.log`; `session.exe --probe` from an
+   elevated prompt prints what a process in the session sees. A standard user cannot end
+   `session.exe` and cannot read the logs.
 
 Requires the .NET 10 SDK and nothing else. The `net10.0-windows` projects compile on
 macOS and Linux too (they just cannot run there), so a broken Windows build is caught

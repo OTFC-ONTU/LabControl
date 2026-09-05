@@ -71,6 +71,13 @@ internal static class Program
             builder.Logging.ClearProviders();
             builder.Logging.AddSerilog(Log.Logger, dispose: false);
             builder.Services.AddWindowsService(options => options.ServiceName = Defaults.ServiceName);
+            builder.Services.AddSingleton<SessionChangeSource>();
+            if (asService)
+            {
+                // Replaces the stock lifetime with one that also receives logon/logoff/lock/unlock.
+                builder.Services.AddSingleton<IHostLifetime, SessionChangeLifetime>();
+            }
+
             builder.Services.AddHostedService<AgentService>();
 
             using var host = builder.Build();

@@ -171,10 +171,11 @@ message SessionState {
     LOCK             = 3;
     UNLOCK           = 4;
   }
-  Kind   kind         = 1;
-  string user         = 2;
+  Kind   kind         = 1;  // what just happened; UNSPECIFIED for a plain status refresh
+  string user         = 2;  // the account in the interactive session, empty at the logon screen
   uint32 session_id   = 3;
-  bool   helper_alive = 4;
+  bool   helper_alive = 4;  // session.exe is running in that session and talking to the service
+  bool   locked       = 5;  // the current state, whatever `kind` says (M2)
 }
 
 message Event {
@@ -432,4 +433,46 @@ message FileAck {
   bool   ok           = 2;
   int64  bytes_stored = 3;
   string message      = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Agent service <-> session helper, over the local named pipe (PROTOCOL.md, "Agent <->
+// Session helper"). Length-prefixed protobuf; the same VideoControl / Input / Overlay /
+// VideoFrame / SessionState types as the network, wrapped so each side reads one type.
+// The helper never talks to the network (D-06).
+// ---------------------------------------------------------------------------
+
+// Service -> helper.
+message ServiceMessage {
+  oneof payload {
+    Ping         ping          = 1;  // the helper answers with a HelperStatus
+    VideoControl video_control = 2;  // M3
+    Input        input         = 3;  // M3
+    Overlay      overlay       = 4;  // M5
+  }
+}
+
+// Helper -> service.
+message HelperMessage {
+  oneof payload {
+    HelperHello  hello        = 1;  // first message after connecting
+    HelperStatus status       = 2;  // every HelperStatusInterval and on every Ping
+    VideoFrame   video_frame  = 3;  // M3
+    Event        event        = 4;  // relayed to the console as-is
+  }
+}
+
+message HelperHello {
+  uint32 session_id = 1;  // the session the helper found itself in
+  uint32 process_id = 2;
+  string version    = 3;
+}
+
+// What only a process inside the session can see. In M2 it is the whole point of the
+// helper: it proves the plumbing works and tells the console which desktop is up.
+message HelperStatus {
+  string input_desktop  = 1;  // "Default", "Winlogon" (lock screen, logon screen, UAC), "Screen-saver"
+  int32  screen_width   = 2;  // the primary display, in pixels
+  int32  screen_height  = 3;
+  int64  uptime_ms      = 4;  // how long this helper instance has been running
 }

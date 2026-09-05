@@ -39,6 +39,10 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         Link = new AgentLink(store, this, log, options);
         Link.Linked += (_, name) => Console = name;
         Link.Unlinked += _ => Console = null;
+
+        // A real PC's supervisor publishes this at start and on every change (M2); the
+        // simulator pretends the helper is up and the student is at the desk.
+        PublishSession(SessionState.Types.Kind.Unspecified);
     }
 
     public AgentLink Link { get; }
@@ -148,7 +152,12 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
             case Job.Types.Kind.Logoff:
                 LoggedOnUser = null;
-                _ = Task.Delay(TimeSpan.FromSeconds(5), CancellationToken.None).ContinueWith(_ => LoggedOnUser = Defaults.StudentAccountName, TaskScheduler.Default);
+                PublishSession(SessionState.Types.Kind.Logoff);
+                _ = Task.Delay(TimeSpan.FromSeconds(5), CancellationToken.None).ContinueWith(_ =>
+                {
+                    LoggedOnUser = Defaults.StudentAccountName;
+                    PublishSession(SessionState.Types.Kind.Logon);
+                }, TaskScheduler.Default);
                 return Ok(job, "Logged the student off (simulated; auto-logon brings them back in 5 s).");
 
             case Job.Types.Kind.RunScript:
@@ -173,6 +182,15 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     private static JobResult Ok(Job job, string message) => new() { JobId = job.Id, Ok = true, ExitCode = 0, Message = message };
 
+    private void PublishSession(SessionState.Types.Kind kind) => Link.PublishSessionState(new SessionState
+    {
+        Kind = kind,
+        User = LoggedOnUser ?? string.Empty,
+        SessionId = 1,
+        HelperAlive = true,
+        Locked = false,
+    });
+
     /// <summary>Goes dark for a while, then "boots" and dials again.</summary>
     private async Task PowerCycleAsync(TimeSpan off, string what)
     {
@@ -196,6 +214,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
         PoweredOn = true;
         LoggedOnUser = Defaults.StudentAccountName;
+        PublishSession(SessionState.Types.Kind.Unspecified);
         _log.LogInformation("{Pc}: booted", Name);
     }
 

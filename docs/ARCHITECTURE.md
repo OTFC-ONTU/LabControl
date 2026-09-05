@@ -28,7 +28,7 @@ Assumptions to verify on site before M1 (put results in DECISIONS.md D-10):
 |---|---|---|---|
 | **Console** (`LabControl.Console`) | teacher machine (macOS/Windows/Linux) | the teacher | Avalonia UI + embedded gRPC server (Kestrel). Holds the lab key, issues certificates, and is the source of truth for `lab.json`, the package catalog and the scripts. Replaceable — see §3.6. |
 | **Agent** (`LabControl.Agent`) | each student PC | Windows service, `LocalSystem` | Outbound gRPC client to the console. Privileged operations: power, run scripts, install packages, file transfer, profile reset, self-update. Supervises the Session helper. |
-| **Session helper** (`LabControl.Agent.Session`) | each student PC | spawned by the Agent into the active interactive session (SYSTEM token duplicated into that session via `WTSQueryUserToken`/`CreateProcessAsUser`) | Screen capture (DXGI), input injection (`SendInput`), full-screen overlay window for lock/broadcast. Talks to the Agent over a local named pipe. Restarted automatically on logon/logoff/crash. |
+| **Session helper** (`LabControl.Agent.Session`) | each student PC | spawned by the Agent into the active interactive session (the service's own SYSTEM token duplicated, its session id rewritten to the console session, `CreateProcessAsUser` on `winsta0\default` — D-30) | Screen capture (DXGI), input injection (`SendInput`), full-screen overlay window for lock/broadcast. Talks to the Agent over a local named pipe. Restarted automatically on logon/logoff/crash. |
 | **Setup** (`LabControl.Setup`) | each student PC, once | elevated (admin) | The USB installer. See INSTALLER.md. |
 | **FakeAgent** (`LabControl.FakeAgent`) | dev machine | user | Simulates N agents (synthetic screens, power state, fake command results) so the console can be built on macOS. |
 
@@ -36,6 +36,14 @@ Why two processes on the PC: a session-0 service cannot see the interactive desk
 (no screen, no input). The classic pattern is service + per-session helper. Keeping the
 helper as SYSTEM (not as `student`) lets it capture the UAC secure desktop and the
 lock screen, and prevents the student from killing it from Task Manager.
+
+The helper runs whenever there is a console session at all — at the logon screen, at the
+lock screen, with a student at the desk — and is restarted into the current session on
+logon and logoff, within a few seconds after a crash, and slowly (with an event to the
+console) when it keeps dying. The service owns the named pipe and is the only party the
+helper will talk to; the helper reports which desktop has the input (`Default` versus
+`Winlogon`) and the screen size, and exits as soon as the pipe closes. Supervision details
+and the reasons behind them are `D-30`; the wire format is in PROTOCOL.md.
 
 ## 3. Trust model and connection
 

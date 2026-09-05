@@ -290,11 +290,14 @@ mutual TLS, enrolment, the <code>Link</code> stream with jobs and renewal, take-
 machines, the sealed backup, <code>FakeAgent</code> and the console UI — see the M1 <em>Progress</em> and
 <em>Live run</em> paragraphs in <code>docs/ROADMAP.md</code> and <code>D-24</code>…<code>D-28</code>.</p>
 <p><strong>M2 is in progress, built in four portions</strong> (ROADMAP M2, <em>How it is being built</em>), each
-run on the owner's Windows VM before the next. Portion 1 is built: <code>LabControl.Agent</code> is a
-real service host with a DPAPI-protected store, <code>agent.exe --install</code> provisioning from the
-USB payload, real inventory (CsWin32 + registry), the <code>app\&lt;version&gt;</code> layout and
-<code>scripts/dev-install.ps1</code> (<code>D-29</code>). Jobs answer <em>not in this build</em> until portion 3.
-<code>Agent.Session</code> and <code>Setup</code> are still skeletons (portion 2 and M4).</p>
+run on the owner's Windows VM before the next. Portion 1 is verified on the VM: <code>LabControl.Agent</code>
+is a real service host with a DPAPI-protected store, <code>agent.exe --install</code> provisioning from
+the USB payload, real inventory (CsWin32 + registry), the <code>app\&lt;version&gt;</code> layout and
+<code>scripts/dev-install.ps1</code> (<code>D-29</code>). Portion 2 is built and awaits its VM run: <code>Agent.Session</code>
+is a real helper supervised by the service over the named pipe (<code>SessionSupervisor</code>,
+<code>SessionLauncher</code>, <code>PipeFraming</code>; <code>D-30</code>), and <code>SessionState</code> now carries <code>locked</code> and
+<code>helper_alive</code> to the tile. Jobs answer <em>not in this build</em> until portion 3. <code>Setup</code> is still
+a skeleton (M4).</p>
 <p>The console's non-UI core lives in <code>src/LabControl.Console/Services</code> (<code>LabSession</code>,
 <code>ConsoleBootstrap</code>, <code>LabKeyVault</code>) and <code>Server/</code>; the agent side shared by <code>FakeAgent</code> and
 the real agent is <code>src/LabControl.Shared/Link/AgentLink.cs</code>, and the install-time routines
@@ -305,7 +308,7 @@ shared by the agent, the simulator and Setup are <code>src/LabControl.Shared/Set
 (<code>tests/&lt;project&gt;/bin/Debug/net10.0/&lt;project&gt;</code>).</p>
 
 </article>
-<footer>Generated 2026-09-05 17:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 18:20 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

@@ -38,7 +38,23 @@ public sealed partial class MachineTileViewModel : ObservableObject
     public partial string Hostname { get; set; } = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SessionText))]
     public partial string LoggedOnUser { get; set; } = string.Empty;
+
+    /// <summary>The lock screen is up, from the agent's last <c>SessionState</c> (M2).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SessionText))]
+    public partial bool SessionLocked { get; set; }
+
+    /// <summary>The agent says its session helper is not running — screens and control will not work there.</summary>
+    [ObservableProperty]
+    public partial bool HelperDown { get; set; }
+
+    /// <summary>"student", "student (locked)", "nobody logged on" — the tile's session line.</summary>
+    public string SessionText =>
+        LoggedOnUser.Length == 0
+            ? (Status is TileStatus.Online or TileStatus.Outdated ? Strings.Get("Tile.NobodyLoggedOn") : string.Empty)
+            : SessionLocked ? Strings.Format("Tile.UserLocked", LoggedOnUser) : LoggedOnUser;
 
     [ObservableProperty]
     public partial string AgentVersion { get; set; } = string.Empty;
@@ -53,7 +69,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
     public partial string LastSeen { get; set; } = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusText), nameof(IsOnline))]
+    [NotifyPropertyChangedFor(nameof(StatusText), nameof(IsOnline), nameof(SessionText))]
     public partial TileStatus Status { get; set; }
 
     /// <summary>Which console holds the PC when it is not this one, for the tooltip.</summary>
@@ -102,6 +118,9 @@ public sealed partial class MachineTileViewModel : ObservableObject
         CertificateSerial = machine.CertificateSerial;
         NeedsRenewal = machine.CertificateNotAfterUnix > 0 &&
                        DateTimeOffset.FromUnixTimeSeconds(machine.CertificateNotAfterUnix) - now < Defaults.CertificateRenewalLeadTime;
+
+        SessionLocked = connection?.SessionLocked ?? false;
+        HelperDown = connection?.HelperAlive == false;
 
         if (connection is not null)
         {

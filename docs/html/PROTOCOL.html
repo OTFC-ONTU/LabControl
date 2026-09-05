@@ -339,7 +339,7 @@ carrying the entries the agent was missing. Heartbeats go every 5 s; the console
 PC offline after 20 s without one, and HTTP/2 keepalive pings on both sides notice a
 pulled cable in the same time.</p>
 <p><code>AgentMessage</code> (oneof): <code>Hello</code>, <code>Heartbeat</code>, <code>Inventory</code>, <code>SessionState</code>
-(logon/logoff/lock/ unlock, active user), <code>JobProgress</code>, <code>JobResult</code>, <code>Event</code> (error,
+(logon/logoff/lock/unlock, active user, helper alive — see below), <code>JobProgress</code>, <code>JobResult</code>, <code>Event</code> (error,
 warning, info), <code>Pong</code>, <code>ExamState</code>, <code>InternetState</code> (see <em>Internet policy</em>), <code>RevocationState</code> (every signed revocation entry the
 agent holds — sent right after <code>Hello</code>, so a console that was not running when another
 teacher machine revoked something learns of it from the first agent that connects).</p>
@@ -484,9 +484,46 @@ privilege; the helper does not).</p>
 up to 30 unicast streams at ~1–2 Mbit/s are fine on a switched LAN). Helper renders in the
 full-screen overlay. Frame drop policy on the agent: always show the latest.</p>
 <h2 id="agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)<a class="anchor" href="#agent-session-helper-named-pipe-length-prefixed-protobuf" aria-label="Link to this section">#</a></h2>
-<p>Same message types (<code>VideoControl</code>, <code>Input</code>, <code>Overlay</code>, <code>VideoFrame</code>, <code>SessionState</code>)
-re-used; the service is a dumb relay for video/input and the policy owner for
-everything else. The helper never talks to the network.</p>
+<p>Same message types (<code>VideoControl</code>, <code>Input</code>, <code>Overlay</code>, <code>VideoFrame</code>) re-used; the service
+is a dumb relay for video/input and the policy owner for everything else. The helper never
+talks to the network (D-06, D-30).</p>
+<p><strong>Transport.</strong> <code>\\.\pipe\labcontrol-session</code> (<code>Defaults.SessionPipeName</code>), byte mode. The
+<strong>service is the server</strong> and creates the single instance at start, before any helper
+exists, with <code>CurrentUserOnly</code> — only SYSTEM can connect, and the helper, also SYSTEM,
+connects with <code>CurrentUserOnly</code> too, so it refuses a server that is not SYSTEM (a pipe
+squatted by the student). One frame = a 4-byte little-endian length + one protobuf message,
+at most <code>SessionPipeMaxMessageBytes</code> (16 MiB); a frame cut short or over the limit is a
+protocol error and ends the connection. <code>LabControl.Shared/Session/PipeFraming.cs</code> is the
+one implementation both sides use.</p>
+<p><strong>Envelopes.</strong></p>
+<pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay }          service → helper
+HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event } helper → service
+
+HelperHello  { session_id, process_id, version }         first message after connecting
+HelperStatus { input_desktop, screen_width, screen_height, uptime_ms }
+</code></pre>
+<p><strong>Flow (M2).</strong> The service spawns <code>session.exe</code> into the active console session and waits
+for a connection (<code>HelperConnectTimeout</code>, 15 s). The helper sends <code>HelperHello</code>; the
+service checks <code>process_id</code> against the process it started and drops anything else (a stale
+helper from a previous service instance, or an impostor). The service answers with a
+<code>Ping</code>; the helper replies with a <code>HelperStatus</code> and then sends one every
+<code>HelperStatusInterval</code> (2 s) unsolicited. <code>input_desktop</code> is what <code>OpenInputDesktop</code> names —
+<code>Default</code> while the student works, <code>Winlogon</code> at the lock screen, the logon screen and a UAC
+prompt. A helper silent for <code>HelperSilenceTimeout</code> (10 s) is killed and restarted; an
+<code>Event</code> from the helper is relayed to the console unchanged. When the pipe closes the helper
+exits at once; when the helper exits the service respawns it (D-30). <code>VideoControl</code>, <code>Input</code>
+and <code>Overlay</code> are answered with a <code>session.not_in_this_build</code> warning until M3/M5.</p>
+<h3 id="sessionstate-agent-console"><code>SessionState</code> (agent → console)<a class="anchor" href="#sessionstate-agent-console" aria-label="Link to this section">#</a></h3>
+<pre><code>SessionState { kind: UNSPECIFIED | LOGON | LOGOFF | LOCK | UNLOCK, user, session_id,
+               helper_alive, locked }
+</code></pre>
+<p><code>kind</code> says what just happened; <code>user</code>, <code>locked</code> and <code>helper_alive</code> are the <strong>current</strong>
+state, whatever <code>kind</code> says, so a single message is always self-sufficient. The agent
+sends one on every change it notices — the service control manager's session-change
+notification wakes it, a 2-second poll of WTS backs that up — and re-sends the latest right
+after every <code>Welcome</code>, so a console that (re)connects sees the current state at once. The
+console shows <code>user</code>, marks the tile <em>locked</em>, warns when <code>helper_alive</code> turns false, and
+logs LOGON / LOGOFF / LOCK / UNLOCK as informational events.</p>
 <h2 id="versioning">Versioning<a class="anchor" href="#versioning" aria-label="Link to this section">#</a></h2>
 <p><code>Hello</code> also carries <code>lab_id</code> and the agent's certificate serial, so a console that has
 been migrated to a new machine (<code>docs/ARCHITECTURE.md</code> §3.6) recognises the PCs it
@@ -574,9 +611,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-05 17:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 18:20 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#updateagent-and-the-self_update-job">UpdateAgent and the self_update job</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#updateagent-and-the-self_update-job">UpdateAgent and the self_update job</a></li></ul></nav>
 </div>
 </body>
 </html>

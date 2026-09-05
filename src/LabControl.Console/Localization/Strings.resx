@@ -39,6 +39,9 @@
   <data name="Tile.Now" xml:space="preserve"><value>now</value></data>
   <data name="Tile.Never" xml:space="preserve"><value>never</value></data>
   <data name="Tile.RenewalDue" xml:space="preserve"><value>certificate needs renewing</value></data>
+  <data name="Tile.UserLocked" xml:space="preserve"><value>{0} (locked)</value></data>
+  <data name="Tile.NobodyLoggedOn" xml:space="preserve"><value>nobody logged on</value></data>
+  <data name="Tile.HelperDown" xml:space="preserve"><value>session helper not running</value></data>
   <data name="Tile.AgentVersionFormat" xml:space="preserve"><value>agent {0}</value></data>
   <data name="Tile.SerialFormat" xml:space="preserve"><value>certificate {0}</value></data>
   <data name="Tile.LastSeenFormat" xml:space="preserve"><value>last seen {0}</value></data>

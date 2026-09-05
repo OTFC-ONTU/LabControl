@@ -639,7 +639,32 @@ public sealed class LabSession : IAsyncDisposable
                 break;
 
             case AgentMessage.PayloadOneofCase.SessionState:
-                connection.Machine.LoggedOnUser = message.SessionState.Kind is SessionState.Types.Kind.Logoff ? null : message.SessionState.User;
+                var state = message.SessionState;
+                var previousHelper = connection.HelperAlive;
+                connection.Machine.LoggedOnUser = state.Kind is SessionState.Types.Kind.Logoff || state.User.Length == 0 ? null : state.User;
+                connection.ApplySessionState(state);
+
+                switch (state.Kind)
+                {
+                    case SessionState.Types.Kind.Logon:
+                        Events.Info("session.logon", $"{who}: {state.User} logged on.", connection.AgentId, connection.Number);
+                        break;
+                    case SessionState.Types.Kind.Logoff:
+                        Events.Info("session.logoff", $"{who}: logged off.", connection.AgentId, connection.Number);
+                        break;
+                    case SessionState.Types.Kind.Lock:
+                        Events.Info("session.lock", $"{who}: screen locked.", connection.AgentId, connection.Number);
+                        break;
+                    case SessionState.Types.Kind.Unlock:
+                        Events.Info("session.unlock", $"{who}: screen unlocked.", connection.AgentId, connection.Number);
+                        break;
+                }
+
+                if (previousHelper is true && !state.HelperAlive)
+                {
+                    Events.Warning("session.helper_down", $"{who}: the session helper is not running; screens, control and lock are unavailable there until it is back.", connection.AgentId, connection.Number);
+                }
+
                 MachinesChanged?.Invoke();
                 break;
 

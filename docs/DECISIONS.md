@@ -599,6 +599,11 @@ Decisions:
    (`ProgramData\LabControl\logs\session-<date>.log`) and has `session.exe --probe`
    for a hand check of what a process in the session can see. It is a hidden console
    process rather than a WinExe so that probe output is visible in a terminal.
+8. **Only Serilog logs in the service.** `AddWindowsService` quietly registers the Windows
+   Event Log provider; at OS shutdown the Event Log service can stop before the agent, and
+   the first log call after that threw *RPC server is unavailable* through the whole loop
+   (VM run, 2026-09-05). Providers are now cleared *after* `AddWindowsService`, so the only
+   sink is the rolling file, which needs no other service to be alive.
 
 Rejected: `WTSRegisterSessionNotification` in the service (needs a window and a message
 loop in a service); polling only (works, but a lock would show up to 2 s late and the

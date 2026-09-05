@@ -193,11 +193,11 @@ machines, the sealed backup, the console UI and a <code>FakeAgent</code> that pl
 demonstrated live by the owner with two console profiles and 30 fake PCs.</p>
 <p><strong>M2 — the real Windows agent: in progress.</strong> Portion 1 of 4 — the service host, the
 DPAPI-protected store, provisioning from the USB payload, real inventory, the side-by-side
-version layout and <code>scripts/dev-install.ps1</code> — is verified on the Windows VM. Portion 2 is
-built and awaits its VM run: <code>session.exe</code> lives on the student's desktop as SYSTEM,
-supervised by the service over a named pipe, and the console shows who is logged on,
-whether the screen is locked and whether the helper is up. Power and scripts, then
-push-and-restart follow (<a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>).</p>
+version layout and <code>scripts/dev-install.ps1</code> — and portion 2 — <code>session.exe</code> living on the
+student's desktop as SYSTEM, supervised by the service over a named pipe, with the console
+showing who is logged on, whether the screen is locked and whether the helper is up — are
+verified on the Windows VM. Portion 3 (power jobs, Wake-on-LAN, <code>run_script</code>) is next, then
+push-and-restart (<a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>).</p>
 <h2 id="quick-start">Quick start<a class="anchor" href="#quick-start" aria-label="Link to this section">#</a></h2>
 <pre><code class="language-bash">dotnet build
 dotnet test
@@ -274,7 +274,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-05 18:39 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 18:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

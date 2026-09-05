@@ -171,11 +171,11 @@ machines, the sealed backup, `FakeAgent` and the console UI — see the M1 *Prog
 run on the owner's Windows VM before the next. Portion 1 is verified on the VM: `LabControl.Agent`
 is a real service host with a DPAPI-protected store, `agent.exe --install` provisioning from
 the USB payload, real inventory (CsWin32 + registry), the `app\<version>` layout and
-`scripts/dev-install.ps1` (`D-29`). Portion 2 is built and awaits its VM run: `Agent.Session`
-is a real helper supervised by the service over the named pipe (`SessionSupervisor`,
-`SessionLauncher`, `PipeFraming`; `D-30`), and `SessionState` now carries `locked` and
-`helper_alive` to the tile. Jobs answer *not in this build* until portion 3. `Setup` is still
-a skeleton (M4).
+`scripts/dev-install.ps1` (`D-29`). Portion 2 is verified on the VM too: `Agent.Session` is a
+real helper supervised by the service over the named pipe (`SessionSupervisor`,
+`SessionLauncher`, `PipeFraming`; `D-30`), and `SessionState` carries `locked` and
+`helper_alive` to the tile. **Portion 3 is next**: power jobs, Wake-on-LAN from the console
+and `run_script`; jobs answer *not in this build* until then. `Setup` is still a skeleton (M4).
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

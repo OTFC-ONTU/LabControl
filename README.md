@@ -47,11 +47,11 @@ demonstrated live by the owner with two console profiles and 30 fake PCs.
 
 **M2 — the real Windows agent: in progress.** Portion 1 of 4 — the service host, the
 DPAPI-protected store, provisioning from the USB payload, real inventory, the side-by-side
-version layout and `scripts/dev-install.ps1` — is verified on the Windows VM. Portion 2 is
-built and awaits its VM run: `session.exe` lives on the student's desktop as SYSTEM,
-supervised by the service over a named pipe, and the console shows who is logged on,
-whether the screen is locked and whether the helper is up. Power and scripts, then
-push-and-restart follow ([`docs/ROADMAP.md`](docs/ROADMAP.md)).
+version layout and `scripts/dev-install.ps1` — and portion 2 — `session.exe` living on the
+student's desktop as SYSTEM, supervised by the service over a named pipe, with the console
+showing who is logged on, whether the screen is locked and whether the helper is up — are
+verified on the Windows VM. Portion 3 (power jobs, Wake-on-LAN, `run_script`) is next, then
+push-and-restart ([`docs/ROADMAP.md`](docs/ROADMAP.md)).
 
 ## Quick start
 ```bash

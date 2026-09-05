@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portion 1 of 4 verified on the VM 2026-09-05; portion 2 built, awaiting the VM run) | M1, Windows VM |
+| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portions 1 and 2 of 4 verified on the VM 2026-09-05; portion 3 next) | M1, Windows VM |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |

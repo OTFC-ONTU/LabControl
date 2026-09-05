@@ -217,9 +217,15 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         }
 
         // The SCM knows about a lock before WTS shows it; trust the notification for this tick.
+        // A session nobody is logged on to is "locked" to WTS and the SCM alike; that is the
+        // logon screen, not a student locking the PC, so it is neither reported nor shown.
         if (kind is SessionState.Types.Kind.Lock or SessionState.Types.Kind.Unlock)
         {
-            snapshot = snapshot with { Locked = kind == SessionState.Types.Kind.Lock };
+            snapshot = snapshot with { Locked = snapshot.HasUser ? kind == SessionState.Types.Kind.Lock : null };
+            if (!snapshot.HasUser)
+            {
+                kind = SessionState.Types.Kind.Unspecified;
+            }
         }
 
         var changed = !_published || snapshot != _snapshot;
@@ -246,22 +252,22 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             string? stop = null;
             var crashed = false;
 
-            if (helper.TryGetExitCode(out var exitCode))
+            // Order matters: at logoff Windows ends the helper before this tick sees the
+            // change, so an exit that coincides with a planned restart is the plan, not a crash.
+            var planned = !snapshot.HasSession
+                ? "there is no interactive session"
+                : helper.SessionId != snapshot.SessionId
+                    ? $"the console session moved from {helper.SessionId} to {snapshot.SessionId}"
+                    : restart;
+
+            if (planned is not null)
+            {
+                stop = planned;
+            }
+            else if (helper.TryGetExitCode(out var exitCode))
             {
                 stop = $"session.exe exited with code {exitCode}";
                 crashed = true;
-            }
-            else if (!snapshot.HasSession)
-            {
-                stop = "there is no interactive session";
-            }
-            else if (helper.SessionId != snapshot.SessionId)
-            {
-                stop = $"the console session moved from {helper.SessionId} to {snapshot.SessionId}";
-            }
-            else if (restart is not null)
-            {
-                stop = restart;
             }
             else if (helper.Connected && now - helper.LastHeard > Defaults.HelperSilenceTimeout)
             {

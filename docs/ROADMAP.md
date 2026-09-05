@@ -447,6 +447,15 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   locked) — suppress when nobody is logged on; (e) the console log prints the full Kestrel
   connection-reset stack trace at `INF` on every link drop, and "Error reading message."
   without the PC's name.
+- *Portion 3, second pass (2026-09-06).* The five findings are fixed (`D-32` items 5 and
+  12): both shells now print UTF-8 whatever the PC's locale, the cmd *Who am I* reports the
+  session through `tasklist`, a helper ended by Windows at logon/logoff is a planned
+  restart rather than `session.helper_exited` + `session.helper_down`, an empty session is
+  never *locked*, and the console log no longer carries gRPC's stack for every dropped
+  link. Still to run on the VM: *Who am I* in both shells (Cyrillic intact, a session number
+  from cmd), a logoff/logon with no helper warnings and no `session.lock`, and item 9 with
+  the network cut by a temporary Windows Firewall rule against the console's address
+  instead of `Disable-NetAdapter`, which bugchecks the virtio guest.
 
 **Acceptance criteria**
 

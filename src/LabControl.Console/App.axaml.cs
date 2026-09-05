@@ -56,6 +56,9 @@ public partial class App : Application
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+            // gRPC logs a full Kestrel stack at Information for every link a PC drops;
+            // LabSession already says which PC unlinked and why.
+            .MinimumLevel.Override("Grpc", Serilog.Events.LogEventLevel.Warning)
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(Path.Combine(store.LogsDirectory, "console-.log"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
             .CreateLogger();

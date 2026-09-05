@@ -7,7 +7,6 @@ using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
-using Windows.Win32;
 
 namespace LabControl.Agent;
 
@@ -23,7 +22,12 @@ internal sealed class ScriptRunner
 {
     private readonly AgentLink _link;
     private readonly ILogger _log;
-    private readonly Lazy<Encoding> _oem = new(OemEncoding);
+    /// <summary>
+    /// Both shells are made to print UTF-8 (see <see cref="CommandLine"/>), so output is
+    /// decoded as UTF-8 whatever the PC's locale. The OEM code page was tried first and
+    /// turned an en-US VM's Cyrillic into question marks (D-32 item 5).
+    /// </summary>
+    private static readonly Encoding Output = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false);
 
     public ScriptRunner(AgentLink link, ILogger log)
     {
@@ -97,7 +101,7 @@ internal sealed class ScriptRunner
                 UserProcess started;
                 try
                 {
-                    started = UserProcessLauncher.Start(inSession, executable, arguments, directory, _oem.Value);
+                    started = UserProcessLauncher.Start(inSession, executable, arguments, directory, Output);
                 }
                 catch (Win32Exception ex)
                 {
@@ -111,8 +115,8 @@ internal sealed class ScriptRunner
                 var info = new ProcessStartInfo(executable, arguments)
                 {
                     WorkingDirectory = directory,
-                    StandardOutputEncoding = _oem.Value,
-                    StandardErrorEncoding = _oem.Value,
+                    StandardOutputEncoding = Output,
+                    StandardErrorEncoding = Output,
                 };
 
                 try
@@ -158,11 +162,20 @@ internal sealed class ScriptRunner
         };
     }
 
+    /// <summary>
+    /// The command line that runs the script with UTF-8 output regardless of the PC's locale:
+    /// PowerShell sets its console output encoding before calling the file and passes the
+    /// file's exit code on; cmd.exe switches its code page to 65001 and <c>call</c>s the
+    /// batch (whose own <c>exit /b</c> becomes the process exit code). <c>/s</c> makes cmd
+    /// strip exactly the outer quotes.
+    /// </summary>
     private static (string Executable, string Arguments) CommandLine(ScriptShell shell, string path) => shell switch
     {
-        ScriptShell.Cmd => (Path.Combine(Environment.SystemDirectory, Defaults.CmdExecutable), $"/d /c \"{path}\""),
+        ScriptShell.Cmd => (Path.Combine(Environment.SystemDirectory, Defaults.CmdExecutable),
+                            $"/d /s /c \"chcp 65001 >nul && call \"{path}\"\""),
         _ => (Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", Defaults.PowerShellExecutable),
-              $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{path}\""),
+              "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command " +
+              $"\"[Console]::OutputEncoding = [Text.Encoding]::UTF8; & '{path.Replace("'", "''")}'; exit $LASTEXITCODE\""),
     };
 
     /// <summary>Windows PowerShell 5.1 reads a file with a BOM as UTF-8 and one without as ANSI (D-29 item 7): make sure the BOM is there.</summary>
@@ -172,30 +185,14 @@ internal sealed class ScriptRunner
         return script.AsSpan().StartsWith(preamble) ? script : [.. preamble, .. script];
     }
 
-    /// <summary>cmd.exe reads a batch file in the OEM code page; the console sends UTF-8, so transcode.</summary>
-    private byte[] ForCmd(byte[] script)
+    /// <summary>
+    /// cmd.exe runs the batch after <c>chcp 65001</c>, so the file stays UTF-8 — but without a
+    /// byte-order mark, which cmd.exe would read as garbage in front of the first command.
+    /// </summary>
+    private static byte[] ForCmd(byte[] script)
     {
-        var text = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false).GetString(script);
-        if (text.Length > 0 && text[0] == '﻿')
-        {
-            text = text[1..];
-        }
-
-        return _oem.Value.GetBytes(text);
-    }
-
-    /// <summary>The code page powershell.exe and cmd.exe print in when their output is redirected.</summary>
-    private static Encoding OemEncoding()
-    {
-        try
-        {
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            return Encoding.GetEncoding((int)PInvoke.GetOEMCP());
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
-        {
-            return Encoding.UTF8;
-        }
+        var preamble = Encoding.UTF8.GetPreamble();
+        return script.AsSpan().StartsWith(preamble) ? script[preamble.Length..] : script;
     }
 
     private static JobResult Fail(Job job, string message) => new() { JobId = job.Id, Ok = false, ExitCode = -1, Message = message };

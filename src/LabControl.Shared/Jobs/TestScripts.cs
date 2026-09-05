@@ -92,7 +92,9 @@ public static class TestScripts
             case TestScriptKind.WhoAmI:
                 text.AppendLine("echo user: %USERNAME%");
                 text.AppendLine("for /f \"tokens=*\" %%u in ('whoami') do echo account: %%u");
-                text.AppendLine("echo session: %SESSIONNAME%");
+                // %SESSIONNAME% is unset for anything a service starts; tasklist knows the session.
+                text.AppendLine("echo session name: %SESSIONNAME%");
+                text.AppendLine("for /f \"tokens=2,4 delims=,\" %%a in ('tasklist /fo csv /nh /fi \"imagename eq cmd.exe\"') do echo cmd.exe pid %%~a in session %%~b");
                 text.AppendLine("echo directory: %CD%");
                 text.AppendLine("echo script: %~f0");
                 text.AppendLine("echo cyrillic check: привіт, лабораторіє");

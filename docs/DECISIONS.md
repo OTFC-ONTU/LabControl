@@ -691,11 +691,16 @@ Decisions:
    The job directory is **deleted once the result is sent** (owner's choice): the console's
    `logs/jobs-<day>.jsonl` already keeps the output, and fourteen PCs must not accumulate
    debris.
-5. **Output is decoded in the OEM code page** (`GetOEMCP`), which is what `powershell.exe`
-   and `cmd.exe` print in when redirected. The console sends every script as UTF-8 with a
-   byte-order mark; the agent keeps the BOM for `.ps1` (PowerShell 5.1 otherwise reads ANSI,
-   `D-29` item 7) and transcodes `.cmd` to the OEM code page, because `cmd.exe` reads a batch
-   file in it. stderr lines are prefixed `[stderr] `; output is capped at 10 000 lines.
+5. **Both shells are made to print UTF-8, and output is decoded as UTF-8.** The first
+   version decoded the OEM code page (`GetOEMCP`), which is what the shells print in by
+   default — and on the en-US VM (code page 437) every Cyrillic character came back as `?`.
+   A lab PC's locale must not decide whether a student's name survives, so the agent runs
+   `powershell.exe -Command "[Console]::OutputEncoding = UTF8; & '<file>'; exit $LASTEXITCODE"`
+   and `cmd.exe /d /s /c "chcp 65001 >nul && call "<file>""`. The console sends every script
+   as UTF-8 with a byte-order mark; the agent keeps the BOM for `.ps1` (PowerShell 5.1
+   otherwise reads ANSI, `D-29` item 7) and strips it for `.cmd` (cmd.exe would read it as
+   junk before the first command). stderr lines are prefixed `[stderr] `; output is capped at
+   10 000 lines. *(Amended 2026-09-06 after the VM run.)*
 6. **`timeout_s` is the agent's inactivity timeout; the console's `timeout_seconds` is that
    plus 30 s.** Both are measured from the last line of output, but the console starts its
    clock at delivery, before the agent has even received the job, so with equal values the
@@ -730,6 +735,18 @@ Decisions:
     `PullFile` and hash check, then recognises the constructs the built-in scripts use — a
     printed line, `exit N`, a sleep — with the same inactivity timeout the real agent
     enforces, so the console's jobs panel behaves the same against the simulator and the VM.
+
+12. **A planned helper restart is not a crash, and an empty session is not locked.** Two
+    corrections from the VM run (2026-09-06): at logoff Windows ends `session.exe` before
+    the supervisor's tick sees the session change, and the exit used to be reported as
+    `session.helper_exited` with a `session.helper_down` warning on the console before the
+    expected `session.helper_ready`. The supervisor now checks the planned reasons (no
+    session, session moved, logon/logoff) before the exit code, and the console skips the
+    warning on a `Logon`/`Logoff` state. Likewise WTS and the SCM both call a session with
+    nobody logged on *locked* — that is the logon screen — so the lock flag is unknown
+    unless a user is present, and a lock notification for an empty session is dropped.
+    Cosmetic but visible: the console's log no longer prints gRPC's Kestrel stack at
+    Information for every dropped link (`Grpc` overridden to Warning).
 
 Rejected: `ExitWindowsEx` for log off (wrong session); a countdown dialog before shutdown
 (the class is warned by Lock / Broadcast, and a dialog invites the student to cancel);

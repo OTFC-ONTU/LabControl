@@ -36,7 +36,11 @@ internal static class InteractiveSession
             return new SessionSnapshot(null, string.Empty, null);
         }
 
-        return new SessionSnapshot(id, UserOf(id), LockedState(id));
+        var user = UserOf(id);
+
+        // Only a session with a user can be locked by that user; the logon screen reports
+        // itself locked and must not (D-32 item 12).
+        return new SessionSnapshot(id, user, user.Length == 0 ? null : LockedState(id));
     }
 
     /// <summary>"student", or "DOMAIN\name" when the account is not local; empty at the logon screen.</summary>

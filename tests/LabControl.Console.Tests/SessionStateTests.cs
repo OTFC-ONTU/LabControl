@@ -34,11 +34,18 @@ public class SessionStateTests
         Assert.True(await Wait.UntilAsync(() => connection.HelperAlive == false));
         Assert.Null(connection.Machine.LoggedOnUser);
         Assert.Contains(console.Session.Events.Recent, e => e.Code == "session.logoff");
-        Assert.Contains(console.Session.Events.Recent, e => e.Code == "session.helper_down");
+
+        // Windows ends the helper at logoff and the service re-spawns it by design: no warning (D-32 item 12).
+        Assert.DoesNotContain(console.Session.Events.Recent, e => e.Code == "session.helper_down");
 
         pc.Link.PublishSessionState(new SessionState { Kind = SessionState.Types.Kind.Logon, User = "student", SessionId = 1, HelperAlive = true, Locked = false });
         Assert.True(await Wait.UntilAsync(() => connection.HelperAlive == true));
         Assert.Contains(console.Session.Events.Recent, e => e.Code == "session.logon" && e.Message.Contains("student", StringComparison.Ordinal));
+
+        // A helper that vanishes with no session change is the case the warning exists for.
+        pc.Link.PublishSessionState(new SessionState { Kind = SessionState.Types.Kind.Unspecified, User = "student", SessionId = 1, HelperAlive = false, Locked = false });
+        Assert.True(await Wait.UntilAsync(() => connection.HelperAlive == false));
+        Assert.Contains(console.Session.Events.Recent, e => e.Code == "session.helper_down");
     }
 
     [Fact]

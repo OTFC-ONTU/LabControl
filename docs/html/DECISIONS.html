@@ -757,69 +757,97 @@ off, run a script — and the first file transfer. Each raised a small question 
 otherwise be answered differently in the agent, the simulator and the docs.</p>
 <p>Decisions:</p>
 <ol>
-<li><strong>Shutdown and reboot are immediate and forced</strong> (owner's choice, 2026-09-05):
+<li><p><strong>Shutdown and reboot are immediate and forced</strong> (owner's choice, 2026-09-05):
 <code>InitiateSystemShutdownEx</code> with a zero timeout and <code>bForceAppsClosed</code>, so a hung program
 never keeps a PC on. Warning the class is Lock / Broadcast's job in M5, not a system
 dialog. The privilege (<code>SE_SHUTDOWN_NAME</code>) is enabled <em>before</em> the job answers, so a PC
 that cannot shut down says so in the result; the call itself happens
 <code>Defaults.PowerJobDelay</code> (2 s) later, after the <code>JobResult</code> has left, and a failure at
-that point is an event (<code>power.failed</code>) because the result is already gone.</li>
-<li><strong>Log off is <code>WTSLogoffSession</code></strong> on the interactive session, not <code>ExitWindowsEx</code>, which
+that point is an event (<code>power.failed</code>) because the result is already gone.</p>
+</li>
+<li><p><strong>Log off is <code>WTSLogoffSession</code></strong> on the interactive session, not <code>ExitWindowsEx</code>, which
 only ever logs off the caller's own session — session 0 for a service. It is synchronous
-enough to answer with the real outcome.</li>
-<li><strong><code>as: user</code> runs the script as the student, from the service, not through the helper.</strong>
+enough to answer with the real outcome.</p>
+</li>
+<li><p><strong><code>as: user</code> runs the script as the student, from the service, not through the helper.</strong>
 The helper is SYSTEM in the student's session; the point of <code>as: user</code> is the student's
 <em>rights</em> (their profile, their <code>HKCU</code>, their desktop), and that needs the student's token
 either way. The service gets it with <code>WTSQueryUserToken</code>, builds the environment from it,
 starts the interpreter with <code>CreateProcessAsUser</code> on <code>winsta0\default</code> and reads stdout /
 stderr through anonymous pipes the child inherits (<code>UserProcessLauncher</code>). The service
-never impersonates the student for its own work.</li>
-<li><strong>Where the script lands follows who runs it.</strong> As SYSTEM: <code>ProgramData\LabControl\jobs\&lt;id&gt;\</code>,
+never impersonates the student for its own work.</p>
+</li>
+<li><p><strong>Where the script lands follows who runs it.</strong> As SYSTEM: <code>ProgramData\LabControl\jobs\&lt;id&gt;\</code>,
 which <code>Users</code> cannot read (ARCHITECTURE §5). As the student: <code>%PUBLIC%\LabControl\jobs\&lt;id&gt;\</code>,
 because the student must be able to read the file, and the only account that could tamper
 with it there is the student — who is the account it runs as anyway, so nothing is gained.
 The job directory is <strong>deleted once the result is sent</strong> (owner's choice): the console's
 <code>logs/jobs-&lt;day&gt;.jsonl</code> already keeps the output, and fourteen PCs must not accumulate
-debris.</li>
-<li><strong>Output is decoded in the OEM code page</strong> (<code>GetOEMCP</code>), which is what <code>powershell.exe</code>
-and <code>cmd.exe</code> print in when redirected. The console sends every script as UTF-8 with a
-byte-order mark; the agent keeps the BOM for <code>.ps1</code> (PowerShell 5.1 otherwise reads ANSI,
-<code>D-29</code> item 7) and transcodes <code>.cmd</code> to the OEM code page, because <code>cmd.exe</code> reads a batch
-file in it. stderr lines are prefixed <code>[stderr] </code>; output is capped at 10 000 lines.</li>
-<li><strong><code>timeout_s</code> is the agent's inactivity timeout; the console's <code>timeout_seconds</code> is that
+debris.</p>
+</li>
+<li><p><strong>Both shells are made to print UTF-8, and output is decoded as UTF-8.</strong> The first
+version decoded the OEM code page (<code>GetOEMCP</code>), which is what the shells print in by
+default — and on the en-US VM (code page 437) every Cyrillic character came back as <code>?</code>.
+A lab PC's locale must not decide whether a student's name survives, so the agent runs
+<code>powershell.exe -Command &quot;[Console]::OutputEncoding = UTF8; &amp; '&lt;file&gt;'; exit $LASTEXITCODE&quot;</code>
+and <code>cmd.exe /d /s /c &quot;chcp 65001 &gt;nul &amp;&amp; call &quot;&lt;file&gt;&quot;&quot;</code>. The console sends every script
+as UTF-8 with a byte-order mark; the agent keeps the BOM for <code>.ps1</code> (PowerShell 5.1
+otherwise reads ANSI, <code>D-29</code> item 7) and strips it for <code>.cmd</code> (cmd.exe would read it as
+junk before the first command). stderr lines are prefixed <code>[stderr] </code>; output is capped at
+10 000 lines. <em>(Amended 2026-09-06 after the VM run.)</em></p>
+</li>
+<li><p><strong><code>timeout_s</code> is the agent's inactivity timeout; the console's <code>timeout_seconds</code> is that
 plus 30 s.</strong> Both are measured from the last line of output, but the console starts its
 clock at delivery, before the agent has even received the job, so with equal values the
 console could give up a moment before the agent's own <em>killed after N s</em> result arrives.
 The grace makes the agent's verdict the one the teacher sees. <code>Process.Kill(entireProcessTree)</code>
-takes the children; no Job Object is needed for that.</li>
-<li><strong>A job belongs to the PC, not to the link.</strong> <code>AgentLink</code> used to run a job under the
+takes the children; no Job Object is needed for that.</p>
+</li>
+<li><p><strong>A job belongs to the PC, not to the link.</strong> <code>AgentLink</code> used to run a job under the
 stream's cancellation token, so a dropped link cancelled the job, discarded its result and
 left its id marked <em>running</em> in the ledger for ever — the re-sent job was then ignored as a
 duplicate and the console timed out. That never showed in M1 because simulated jobs
 finish in milliseconds. Now a job runs under the agent's lifetime, progress goes to the
 current link or nowhere, the result is queued and flushed after the next <code>Welcome</code>, and the
-ledger answers the re-sent copy. Tested in <code>FileAndScriptTests</code>.</li>
-<li><strong><code>PullFile</code> in its minimal form</strong> (<code>D-31</code>): the reference is the SHA-256, chunks are
+ledger answers the re-sent copy. Tested in <code>FileAndScriptTests</code>.</p>
+</li>
+<li><p><strong><code>PullFile</code> in its minimal form</strong> (<code>D-31</code>): the reference is the SHA-256, chunks are
 64 KiB, <code>offset</code> must be 0 (<code>Unimplemented</code> otherwise), the last chunk carries the hash
 and the total, the agent verifies against both the job's hash and the chunk's, and a
 chunk that does not arrive within 30 s abandons the pull. Offers live in a console-side
 table (<code>FileOffers</code>): text and bytes in memory now, files on disk for M4's packages and
-bundles through the same table. <code>PullFile</code> checks the peer certificate like <code>Link</code> does.</li>
-<li><strong>Wake-on-LAN is bookkeeping in the console, not a job.</strong> A <em>pending wake</em> per PC with a
+bundles through the same table. <code>PullFile</code> checks the peer certificate like <code>Link</code> does.</p>
+</li>
+<li><p><strong>Wake-on-LAN is bookkeeping in the console, not a job.</strong> A <em>pending wake</em> per PC with a
 90 s deadline; <code>wake.sent</code> / <code>wake.woke</code> (with the seconds it took) / <code>wake.failed</code> (naming
 BIOS, Fast Startup, the NIC property and the cable) / <code>wake.no_mac</code> / <code>wake.send_failed</code>
 as events; <em>waking…</em> on the tile until it resolves. Three packets a second apart, to the
 limited broadcast, every subnet's directed broadcast and <code>last_ip</code>, because the MacBook is
-on Wi-Fi and the PCs on the wired side of the same router.</li>
-<li><strong>The development dialog exposes every <code>run_script</code> parameter</strong> and a third built-in
+on Wi-Fi and the PCs on the wired side of the same router.</p>
+</li>
+<li><p><strong>The development dialog exposes every <code>run_script</code> parameter</strong> and a third built-in
 script, <em>who am I</em> (owner's choice, 2026-09-05): without a script that prints the account
 and session, and without choosing <code>cmd</code> and <code>as: user</code>, those branches of the agent could
 not be proved on the VM before M4 builds a view on them. The dialog goes with the library
-in M4 (<code>D-31</code> item 3).</li>
-<li><strong><code>FakeAgent</code> pulls the real file and pretends only the shell.</strong> It runs the genuine
+in M4 (<code>D-31</code> item 3).</p>
+</li>
+<li><p><strong><code>FakeAgent</code> pulls the real file and pretends only the shell.</strong> It runs the genuine
 <code>PullFile</code> and hash check, then recognises the constructs the built-in scripts use — a
 printed line, <code>exit N</code>, a sleep — with the same inactivity timeout the real agent
-enforces, so the console's jobs panel behaves the same against the simulator and the VM.</li>
+enforces, so the console's jobs panel behaves the same against the simulator and the VM.</p>
+</li>
+<li><p><strong>A planned helper restart is not a crash, and an empty session is not locked.</strong> Two
+corrections from the VM run (2026-09-06): at logoff Windows ends <code>session.exe</code> before
+the supervisor's tick sees the session change, and the exit used to be reported as
+<code>session.helper_exited</code> with a <code>session.helper_down</code> warning on the console before the
+expected <code>session.helper_ready</code>. The supervisor now checks the planned reasons (no
+session, session moved, logon/logoff) before the exit code, and the console skips the
+warning on a <code>Logon</code>/<code>Logoff</code> state. Likewise WTS and the SCM both call a session with
+nobody logged on <em>locked</em> — that is the logon screen — so the lock flag is unknown
+unless a user is present, and a lock notification for an empty session is dropped.
+Cosmetic but visible: the console's log no longer prints gRPC's Kestrel stack at
+Information for every dropped link (<code>Grpc</code> overridden to Warning).</p>
+</li>
 </ol>
 <p>Rejected: <code>ExitWindowsEx</code> for log off (wrong session); a countdown dialog before shutdown
 (the class is warned by Lock / Broadcast, and a dialog invites the student to cancel);
@@ -1024,7 +1052,7 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-06 01:19 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-06 01:27 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>

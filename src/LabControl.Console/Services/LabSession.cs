@@ -675,7 +675,9 @@ public sealed class LabSession : IAsyncDisposable
                         break;
                 }
 
-                if (previousHelper is true && !state.HelperAlive)
+                // At logon and logoff Windows ends the helper and the service re-spawns it by
+                // design; only an unexplained loss is worth a warning.
+                if (previousHelper is true && !state.HelperAlive && state.Kind is not (SessionState.Types.Kind.Logon or SessionState.Types.Kind.Logoff))
                 {
                     Events.Warning("session.helper_down", $"{who}: the session helper is not running; screens, control and lock are unavailable there until it is back.", connection.AgentId, connection.Number);
                 }

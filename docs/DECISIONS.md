@@ -614,6 +614,51 @@ letting the helper survive logoff (a SYSTEM process does — but the per-user st
 whitelist will keep belongs to one logon); a per-launch shared secret on the command line
 instead of `CurrentUserOnly` (visible to administrators, and unnecessary).
 
+## D-31 — Scripts: delivered through `PullFile`, kept in the console (M2 portion 3 / M4)
+
+Context: `run_script` (ROADMAP M2) needs two things settled before it is built: how the
+script gets to the PC, and what the teacher sees. The first looked like a small choice
+between putting the text into `Job.args` and using the file channel; the second was first
+sketched as a "pick a `.ps1` from disk" button, which the owner rejected on 2026-09-05: a
+button that makes the teacher open Explorer to find a file and a separate editor to learn
+what it does is not a feature, it is homework.
+
+Decisions:
+
+1. **The script travels as a file through `PullFile`, hash-verified.** The console stores
+   the text under its SHA-256 and the job carries `ref`, `sha256`, `shell`
+   (`powershell|cmd`), `as` (`system|user`) and `timeout_s`; the agent pulls, verifies,
+   writes the file under `ProgramData\LabControl\jobs\<id>\` and runs it. `PullFile` is
+   built in M2 portion 3 in its minimal form (no resume) because M2 portion 4 needs it for
+   the bundle anyway and M4 needs it for packages and materials; one channel for every
+   file, verified the same way, rather than a second "small file" path in `Job.args` that
+   would have stayed in the protocol forever. Resume after a reconnect is added in M4 with
+   the files that are large enough to need it.
+2. **Every `run_script` parameter is in the protocol and the agent from portion 3**, even
+   though the console does not expose them until M4. The M4 view is then only an interface
+   over a finished mechanism; nothing new has to be proven on the agent later.
+3. **Portion 3 gets a development-only console action, not a UI.** *Run test script* sends
+   the built-in acceptance scripts (100 lines then `exit 3`; a script that hangs) to the
+   selected PCs; results show in the existing jobs panel. It is documented as development
+   affordance in the spirit of `D-27` and is replaced by the library in M4.
+4. **The script library is part of the console's data, not files on the teacher's disk
+   (M4).** A script has a name, a one-line description, shell, run-as, timeout and text;
+   the *Scripts* view shows the list and the full text side by side and edits in place, so
+   what a script does is visible where it is run from. The library is `scripts.json`
+   beside `lab.json`, carries a `schema_version` (`D-20`) and is therefore inside the
+   backup: it moves with the lab to the next teacher machine (`D-13`), which a folder of
+   `.ps1` files on one laptop would not. The repository's `scripts/` directory is the seed
+   imported on first run and nothing more afterwards.
+5. **Plain text editor, no more.** Monospaced multi-line text, no highlighting, no
+   completion, no parameters, no schedule. Scripts here are ten lines; anything larger is
+   written elsewhere and pasted.
+
+Rejected: the script text in `Job.args` (message-size bound, no attachments, a permanent
+second delivery path); a file picker over `scripts/` (see context); a script library only
+on disk (not in the backup, not visible from the console); building the library in portion
+3 (the agent has to be proven on the VM first — both earlier portions found a Windows-only
+bug there); syntax highlighting and parameters (add when a real script needs them).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

@@ -288,7 +288,11 @@ capture performance, real antivirus behaviour. Note the VM on Apple Silicon is
   "woke / did not wake within 90 s" reported per PC.
 - `run_script`: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File` or `cmd /c`,
   as SYSTEM or in the student session, stdout/stderr streamed as `JobProgress`, exit code
-  in `JobResult`, timeout and kill.
+  in `JobResult`, timeout and kill of the whole process tree. The script reaches the PC as
+  a **file through `PullFile`**, hash-verified (`D-31`) — the same channel packages and the
+  update bundle use in M4, built here in its minimal form (no resume yet). The console side
+  in M2 is deliberately small: one development action that sends the built-in acceptance
+  scripts; the teacher-facing **script library** is M4 (`D-31`).
 - Real inventory: hostname, Windows build, CPU / RAM / disk, uptime, logged-on user.
 - The **side-by-side version layout** from the first install: binaries under
   `C:\Program Files\LabControl\app\<version>\`, `app\current` naming the running
@@ -306,7 +310,12 @@ capture performance, real antivirus behaviour. Note the VM on Apple Silicon is
 before the next starts (owner's choice, 2026-09-05): **(1)** the service host, the real store
 with DPAPI, provisioning from the USB payload, inventory, the side-by-side layout and
 `dev-install.ps1`; **(2)** the session helper and its supervision; **(3)** power jobs,
-Wake-on-LAN from the console and `run_script`; **(4)** the minimal push-and-restart.
+Wake-on-LAN from the console, a minimal `PullFile` and `run_script` on top of it, plus a
+development-only *Run test script* action in the console for the acceptance criteria;
+**(4)** the minimal push-and-restart. Portion 3 stays about the agent: the script library
+the teacher will actually use is M4, because both earlier portions found a Windows-only bug
+the Mac could not show, and the agent must be proven on the VM before more console UI is
+built on it (owner's decision, 2026-09-05, `D-31`).
 
 **Progress.**
 
@@ -467,6 +476,14 @@ never walk again — including when the teacher machine is replaced.
   self-contained publish, plus the one-time macOS quarantine removal (`D-15`), in the
   README.
 - Job fan-out across the whole lab in parallel, with a per-PC log bundle in `logs/`.
+- **The script library** (`D-31`): scripts live *inside the console*, not as files on the
+  teacher's disk. A *Scripts* view with a list on the left (name, one-line description) and
+  the script itself on the right — name, description, PowerShell / cmd, run as SYSTEM / in
+  the student session, timeout, and the text in a plain monospaced editor. *Run on selected
+  PCs* and *Save*; unsaved text can be run once. Stored in `scripts.json` next to
+  `lab.json` (with a `schema_version`, `D-20`), so the library is in the backup and moves
+  with the lab; the repository's `scripts/` directory is the **seed** imported on first run.
+  Results go to the existing jobs panel. No syntax highlighting, no parameters, no schedule.
 
 **Acceptance criteria**
 
@@ -501,6 +518,8 @@ never walk again — including when the teacher machine is replaced.
   refusal appears in the console as an event.
 - An agent still running the version from before the protocol changed connects, is shown
   as outdated, and is brought current with one *Update* click.
+- A new script typed into the *Scripts* view, saved and run on all PCs shows its output per
+  PC; after restoring the backup on another teacher machine the same script is there.
 
 **Not in scope.** Broadcast, lock, exam mode, the package catalog.
 

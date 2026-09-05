@@ -446,7 +446,11 @@ nothing visible — it proves the session plumbing and reports session state.</l
 &quot;woke / did not wake within 90 s&quot; reported per PC.</li>
 <li><code>run_script</code>: <code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File</code> or <code>cmd /c</code>,
 as SYSTEM or in the student session, stdout/stderr streamed as <code>JobProgress</code>, exit code
-in <code>JobResult</code>, timeout and kill.</li>
+in <code>JobResult</code>, timeout and kill of the whole process tree. The script reaches the PC as
+a <strong>file through <code>PullFile</code></strong>, hash-verified (<code>D-31</code>) — the same channel packages and the
+update bundle use in M4, built here in its minimal form (no resume yet). The console side
+in M2 is deliberately small: one development action that sends the built-in acceptance
+scripts; the teacher-facing <strong>script library</strong> is M4 (<code>D-31</code>).</li>
 <li>Real inventory: hostname, Windows build, CPU / RAM / disk, uptime, logged-on user.</li>
 <li>The <strong>side-by-side version layout</strong> from the first install: binaries under
 <code>C:\Program Files\LabControl\app\&lt;version&gt;\</code>, <code>app\current</code> naming the running
@@ -464,7 +468,12 @@ deployed by hand before the real installer exists in M4.</li>
 before the next starts (owner's choice, 2026-09-05): <strong>(1)</strong> the service host, the real store
 with DPAPI, provisioning from the USB payload, inventory, the side-by-side layout and
 <code>dev-install.ps1</code>; <strong>(2)</strong> the session helper and its supervision; <strong>(3)</strong> power jobs,
-Wake-on-LAN from the console and <code>run_script</code>; <strong>(4)</strong> the minimal push-and-restart.</p>
+Wake-on-LAN from the console, a minimal <code>PullFile</code> and <code>run_script</code> on top of it, plus a
+development-only <em>Run test script</em> action in the console for the acceptance criteria;
+<strong>(4)</strong> the minimal push-and-restart. Portion 3 stays about the agent: the script library
+the teacher will actually use is M4, because both earlier portions found a Windows-only bug
+the Mac could not show, and the agent must be proven on the VM before more console UI is
+built on it (owner's decision, 2026-09-05, <code>D-31</code>).</p>
 <p><strong>Progress.</strong></p>
 <ul>
 <li><em>Portion 1 (built 2026-09-05, awaiting the VM run).</em> <code>LabControl.Agent</code> is a real
@@ -614,6 +623,14 @@ rollout with per-PC state (<code>stable</code> / <code>on_probation</code> / <co
 self-contained publish, plus the one-time macOS quarantine removal (<code>D-15</code>), in the
 README.</li>
 <li>Job fan-out across the whole lab in parallel, with a per-PC log bundle in <code>logs/</code>.</li>
+<li><strong>The script library</strong> (<code>D-31</code>): scripts live <em>inside the console</em>, not as files on the
+teacher's disk. A <em>Scripts</em> view with a list on the left (name, one-line description) and
+the script itself on the right — name, description, PowerShell / cmd, run as SYSTEM / in
+the student session, timeout, and the text in a plain monospaced editor. <em>Run on selected
+PCs</em> and <em>Save</em>; unsaved text can be run once. Stored in <code>scripts.json</code> next to
+<code>lab.json</code> (with a <code>schema_version</code>, <code>D-20</code>), so the library is in the backup and moves
+with the lab; the repository's <code>scripts/</code> directory is the <strong>seed</strong> imported on first run.
+Results go to the existing jobs panel. No syntax highlighting, no parameters, no schedule.</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -648,6 +665,8 @@ same outcome, via the probation deadline instead of the crash counter.</li>
 refusal appears in the console as an event.</li>
 <li>An agent still running the version from before the protocol changed connects, is shown
 as outdated, and is brought current with one <em>Update</em> click.</li>
+<li>A new script typed into the <em>Scripts</em> view, saved and run on all PCs shows its output per
+PC; after restoring the backup on another teacher machine the same script is there.</li>
 </ul>
 <p><strong>Not in scope.</strong> Broadcast, lock, exam mode, the package catalog.</p>
 <p><strong>Rough size.</strong> Large.</p>
@@ -894,7 +913,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-05 22:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 23:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

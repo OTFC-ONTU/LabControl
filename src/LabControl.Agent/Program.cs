@@ -68,9 +68,13 @@ internal static class Program
                 DisableDefaults = true,
             });
 
+            builder.Services.AddWindowsService(options => options.ServiceName = Defaults.ServiceName);
+
+            // After AddWindowsService, which registers the Windows Event Log provider: at OS
+            // shutdown that provider throws once the Event Log service is gone, and the throw
+            // would escape the agent loop (seen on the VM, ROADMAP M2 portion 2). Serilog only.
             builder.Logging.ClearProviders();
             builder.Logging.AddSerilog(Log.Logger, dispose: false);
-            builder.Services.AddWindowsService(options => options.ServiceName = Defaults.ServiceName);
             builder.Services.AddSingleton<SessionChangeSource>();
             if (asService)
             {

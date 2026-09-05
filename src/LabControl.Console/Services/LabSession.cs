@@ -665,6 +665,9 @@ public sealed class LabSession : IAsyncDisposable
                     Events.Warning("session.helper_down", $"{who}: the session helper is not running; screens, control and lock are unavailable there until it is back.", connection.AgentId, connection.Number);
                 }
 
+                // The logged-on user is part of the persisted record, so a restarted console
+                // does not show yesterday's student until the next change.
+                SaveLabSoon();
                 MachinesChanged?.Invoke();
                 break;
 

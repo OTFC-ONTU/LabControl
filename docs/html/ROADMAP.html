@@ -489,7 +489,7 @@ the Mac could not see (<code>D-29</code> item 6). Fixed, republished, and <code>
 linked and reported its inventory (hostname, MAC, version, the interactive user). Two
 more Windows-only lessons landed in the script: PowerShell 5.1 needs a BOM, and the UTM
 shared drive needs its WebDAV size limit raised (<code>D-29</code> item 7, README).</li>
-<li><em>Portion 2 (built 2026-09-05, awaiting the VM run).</em> <code>LabControl.Agent.Session</code> is a real
+<li><em>Portion 2 (built 2026-09-05).</em> <code>LabControl.Agent.Session</code> is a real
 helper and the service supervises it (<code>D-30</code>). The service owns the named pipe, spawns
 <code>session.exe</code> into the console session with its own SYSTEM token re-homed to that session,
 and keeps it there: restarted within about a second after a crash, on logon and logoff,
@@ -511,6 +511,17 @@ back within 5 s with a <code>session.helper_exited</code> warning; Win+L marks t
 unlocking clears it; sign out shows <em>nobody logged on</em> and a new helper appears on the
 logon screen; sign in shows the user again; <code>Get-Content session-&lt;date&gt;.log -Wait</code> shows
 the desktop switching between <code>Default</code> and <code>Winlogon</code>.</li>
+<li><em>Portion 2 on the VM (2026-09-05).</em> All five checks passed on Windows 11 ARM64:
+<code>session.exe</code> runs as SYSTEM in the user's session and the console logs
+<code>session.helper_ready</code>; ended from Task Manager it was back in two seconds with
+<code>session.helper_exited</code> in between; Win+L produced <code>session.lock</code> and the unlock
+<code>session.unlock</code>; signing out produced <code>session.logoff</code> and a new helper on the logon
+screen (<code>session 2, desktop Winlogon</code>), signing in <code>session.logon</code> and a helper on
+<code>Default</code>; the helper's log shows every <code>Default</code> ↔ <code>Winlogon</code> change. Two things the run
+surfaced and fixed: at OS shutdown the Windows Event Log provider that
+<code>AddWindowsService</code> registers threw through the agent loop (now only Serilog is left),
+and the console did not persist the logged-on user on a session change (it does now).
+The shutdown fix is not yet re-verified on the VM.</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -882,7 +893,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-05 18:20 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 18:39 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

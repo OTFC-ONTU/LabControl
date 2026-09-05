@@ -332,7 +332,7 @@ Wake-on-LAN from the console and `run_script`; **(4)** the minimal push-and-rest
   linked and reported its inventory (hostname, MAC, version, the interactive user). Two
   more Windows-only lessons landed in the script: PowerShell 5.1 needs a BOM, and the UTM
   shared drive needs its WebDAV size limit raised (`D-29` item 7, README).
-- *Portion 2 (built 2026-09-05, awaiting the VM run).* `LabControl.Agent.Session` is a real
+- *Portion 2 (built 2026-09-05).* `LabControl.Agent.Session` is a real
   helper and the service supervises it (`D-30`). The service owns the named pipe, spawns
   `session.exe` into the console session with its own SYSTEM token re-homed to that session,
   and keeps it there: restarted within about a second after a crash, on logon and logoff,
@@ -354,6 +354,17 @@ Wake-on-LAN from the console and `run_script`; **(4)** the minimal push-and-rest
   unlocking clears it; sign out shows *nobody logged on* and a new helper appears on the
   logon screen; sign in shows the user again; `Get-Content session-<date>.log -Wait` shows
   the desktop switching between `Default` and `Winlogon`.
+- *Portion 2 on the VM (2026-09-05).* All five checks passed on Windows 11 ARM64:
+  `session.exe` runs as SYSTEM in the user's session and the console logs
+  `session.helper_ready`; ended from Task Manager it was back in two seconds with
+  `session.helper_exited` in between; Win+L produced `session.lock` and the unlock
+  `session.unlock`; signing out produced `session.logoff` and a new helper on the logon
+  screen (`session 2, desktop Winlogon`), signing in `session.logon` and a helper on
+  `Default`; the helper's log shows every `Default` ↔ `Winlogon` change. Two things the run
+  surfaced and fixed: at OS shutdown the Windows Event Log provider that
+  `AddWindowsService` registers threw through the agent loop (now only Serilog is left),
+  and the console did not persist the logged-on user on a session change (it does now).
+  The shutdown fix is not yet re-verified on the VM.
 
 **Acceptance criteria**
 

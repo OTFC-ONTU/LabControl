@@ -187,13 +187,15 @@ generated. After editing any <code>.md</code>:</p>
 </code></pre>
 <h2 id="status">Status<a class="anchor" href="#status" aria-label="Link to this section">#</a></h2>
 <p><strong>M0 — skeleton and toolchain: done (2026-09-04).</strong></p>
-<p><strong>M1 — lab identity, link and presence: built, awaiting the live demonstration.</strong> The
-trust model, the beacon, mutual TLS, enrolment, the link with jobs and renewal, take-over
-between two teacher machines, the sealed backup, the console UI and a <code>FakeAgent</code> that
-plays a room of PCs are all in place and green under <code>dotnet test</code> (137 tests, including
-real UDP and TLS on the loopback and headless renders of every window). The remaining step
-is the owner running the M1 acceptance list by hand — see
-<a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>.</p>
+<p><strong>M1 — lab identity, link and presence: done (2026-09-05).</strong> The trust model, the beacon,
+mutual TLS, enrolment, the link with jobs and renewal, take-over between two teacher
+machines, the sealed backup, the console UI and a <code>FakeAgent</code> that plays a room of PCs —
+demonstrated live by the owner with two console profiles and 30 fake PCs.</p>
+<p><strong>M2 — the real Windows agent: in progress.</strong> Portion 1 of 4 is built: the service host, the
+DPAPI-protected store, provisioning from the USB payload, real inventory, the side-by-side
+version layout and <code>scripts/dev-install.ps1</code>. Next it runs in a Windows VM — see below —
+then the session helper, power and scripts, and push-and-restart follow
+(<a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>).</p>
 <h2 id="quick-start">Quick start<a class="anchor" href="#quick-start" aria-label="Link to this section">#</a></h2>
 <pre><code class="language-bash">dotnet build
 dotnet test
@@ -214,14 +216,52 @@ dotnet run --project src/LabControl.Console -- --data ~/labB --port 47810   # im
 since only an enrolment can present a code; <code>--console 127.0.0.1</code> pins the console on a
 machine with no network. Screenshots of the UI from the headless tests:
 <code>LABCONTROL_UI_SHOTS=/tmp/shots dotnet test --project tests/LabControl.Console.Tests</code>.</p>
+<h2 id="testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM<a class="anchor" href="#testing-the-agent-in-a-windows-vm" aria-label="Link to this section">#</a></h2>
+<p>The agent is Windows-only and cannot run on the Mac, so M2 is tested in a VM on the
+MacBook (fast, revertible) and on <code>PC-00</code> in the lab (real NIC, real antivirus). On Apple
+Silicon the VM is <strong>Windows 11 ARM</strong>, so the agent is published as <code>win-arm64</code>; the lab PCs
+get <code>win-x64</code>. <code>tools/publish-all.sh</code> produces both.</p>
+<ol>
+<li><p><strong>Install a VM.</strong> <a href="https://mac.getutm.app">UTM</a> is free: <em>Create a New Virtual
+Machine → Virtualize → Windows</em>, tick <em>Install Windows 10 or higher</em> and let UTM
+download the Windows 11 ARM installer; 4 GB RAM and 64 GB disk are plenty. Install the
+SPICE guest tools when prompted (shared folders, clipboard). Take a snapshot once Windows
+is on the desktop — every destructive test starts from it.</p>
+</li>
+<li><p><strong>Network.</strong> Leave UTM's <em>Shared Network</em>; the Mac is reachable from the VM at the
+gateway address of the <code>vmnet</code> bridge (usually <code>192.168.64.1</code>). UDP broadcasts from the Mac
+do reach the VM on that bridge, but if the PC stays <em>searching</em>, pin the console with
+<code>-ConsoleHost 192.168.64.1</code> — that is what <code>console_host</code> in <code>agent.json</code> is for.</p>
+</li>
+<li><p><strong>Publish and share.</strong> <code>tools/publish-all.sh</code>, then expose <code>artifacts/win-arm64</code> and the
+USB payload folder (Settings → <em>Write USB payload…</em>) to the VM: a UTM shared directory
+(mounted as a drive by the SPICE tools), or a network share.</p>
+</li>
+<li><p><strong>Install</strong> from an elevated PowerShell in the VM:</p>
+<pre><code class="language-powershell">Set-ExecutionPolicy -Scope Process Bypass
+\\path\to\scripts\dev-install.ps1 -Build Z:\win-arm64 -Payload Z:\usb -Number 1 -ConsoleHost 192.168.64.1
+</code></pre>
+<p>The script lays out <code>C:\Program Files\LabControl\app\&lt;version&gt;\</code>, locks down
+<code>C:\ProgramData\LabControl\</code>, runs <code>agent.exe --install</code> (keypair under DPAPI, pinned
+<code>ca.crt</code>, one enrollment code from the stick, <code>agent.json</code>), registers the <code>LabControl</code>
+service and starts it. Then open <em>Enrol PCs</em> in the console: the VM enrols and appears
+as <code>PC-01</code> with its real inventory.</p>
+</li>
+<li><p><strong>Watch and iterate.</strong> The log is
+<code>C:\ProgramData\LabControl\logs\agent-&lt;date&gt;.log</code>; <code>agent.exe --run --verbose</code> runs the
+same agent in the foreground. Re-running <code>dev-install.ps1</code> with a new build installs it
+side by side and repoints the service; <code>-Uninstall</code> removes everything but the PC's
+identity, <code>-Uninstall -PurgeData</code> removes that too.</p>
+</li>
+</ol>
 <p>Requires the .NET 10 SDK and nothing else. The <code>net10.0-windows</code> projects compile on
 macOS and Linux too (they just cannot run there), so a broken Windows build is caught
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-05 03:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 12:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>
 </body>
 </html>

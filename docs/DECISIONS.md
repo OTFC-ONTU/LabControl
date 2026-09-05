@@ -492,6 +492,47 @@ that nobody mistakes them for configuration a teacher should touch.
    are built and drawn off screen; with `LABCONTROL_UI_SHOTS=<dir>` they also save PNGs, which
    is how the UI is checked from a terminal.
 
+## D-29 — The agent's install seam: one provisioning routine, a service that never exits (M2)
+
+Context: M2 needs the agent on a real PC before Setup.exe exists (M4), and the agent's
+private key, `agent.json` and the pinned `ca.crt` must be written the same way by the
+development install, by the installer and by the simulator — a difference between them is
+a bug that would only surface on a student PC.
+
+Decisions:
+
+1. **`AgentProvisioning` in `LabControl.Shared` is INSTALLER.md step 4.** It takes an
+   enrollment code the caller already spent on the stick, generates the keypair, pins the
+   authority and writes `agent.json`. `FakeAgent`, `agent.exe --install` and the M4 installer
+   all call it; the only thing that differs is the `KeyProtection` — plain PKCS#8 for the
+   simulator, DPAPI at machine scope for a real PC (`MachineKeyProtection`, entropy bound to
+   the key's purpose). `SetupPayload` moved from `FakeAgent` to `Shared` for the same reason.
+2. **`agent.exe --install --payload <dir> --number N` is the seam.** The installer is a
+   separate executable, and a PowerShell script cannot do DPAPI-at-machine-scope with the
+   same entropy as C#. Making the agent able to provision itself means every installer —
+   `scripts/dev-install.ps1` today, Setup.exe in M4 — delegates the trust material to the
+   one binary that will later read it. It does not need the console to be reachable.
+3. **The service never exits on a bad state.** No `agent.json` yet, an unreadable key, a
+   schema from a newer build: the service logs once, waits `UnprovisionedRetryInterval` and
+   looks again. Exiting would trigger the recovery action (restart ×3, then `--rollback` in
+   M4) and turn an ordinary "Setup wrote the binaries before the identity" into a rollback.
+4. **ACLs are verified by the agent, not only set by the installer.** At every start the
+   agent checks that `Users`, `Authenticated Users`, `Everyone` and `INTERACTIVE` have no
+   read access to `ProgramData\LabControl\` and reports a violation as an event through the
+   link. `AgentLink.Report()` queues events raised while unlinked and flushes them after the
+   next `Welcome`, so a problem found before the first link still reaches the console.
+5. **`dev-install.ps1` does what Setup will, and nothing Setup would not.** Same layout
+   (`app\<version>`, `app\current`), same service configuration (LocalSystem, auto-start,
+   restart ×3 at 10 s), same firewall group and Defender exclusion. It skips the hostname,
+   Wake-on-LAN, power and the `student` account because none of them is needed to test the
+   agent, and it is documented as development-only in the README.
+
+Rejected: provisioning in PowerShell (no `ExportPkcs8PrivateKey` on Windows PowerShell
+5.1, and a second implementation of step 4 to keep in step); a `LabControl.Agent.Core`
+library shared by the agent and Setup (a seventh project for a routine that fits in one
+file of `Shared`); exiting the service when unprovisioned (see 3); using the DPAPI user
+scope (the service is SYSTEM, and the key must survive profile resets).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the
@@ -614,9 +655,9 @@ project cannot notice on its own).
 | Grpc.Net.Client, Grpc.Tools, Google.Protobuf | Shared/Agent | gRPC client + codegen |
 | System.Security.Cryptography.ProtectedData | Shared | Windows DPAPI for the console instance key; the BCL dropped it from the shared framework (D-24) |
 | SkiaSharp | Console, Agent.Session | JPEG encode/decode, scaling |
-| Microsoft.Windows.CsWin32 | Agent, Agent.Session, Setup | Win32 P/Invoke source generator |
+| Microsoft.Windows.CsWin32 | Agent, Agent.Session, Setup | Win32 P/Invoke source generator; names listed in `NativeMethods.txt`, never a hand-written `DllImport` (M2) |
 | Vortice.Direct3D11, Vortice.DXGI | Agent.Session | Desktop Duplication |
-| Microsoft.Extensions.Hosting.WindowsServices | Agent | Windows service hosting |
+| Microsoft.Extensions.Hosting.WindowsServices | Agent | Windows service hosting (M2) |
 | System.Management | Agent, Setup | WMI (profiles, NIC properties) |
 | YamlDotNet | Console | package catalog |
 | Serilog.Extensions.Logging, Serilog.Sinks.Console, Serilog.Sinks.File | all | logging |

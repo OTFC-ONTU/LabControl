@@ -4,6 +4,7 @@ using LabControl.Shared;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
+using LabControl.Shared.Setup;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.FakeAgent;
@@ -230,18 +231,10 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
             ? payload.Document.UsedEnrollmentCodes.FirstOrDefault() ?? payload.TakeCode()
             : payload.TakeCode();
 
-        var config = new AgentConfigDocument
-        {
-            LabId = payload.Document.LabId,
-            AgentId = Guid.NewGuid().ToString("d"),
-            Number = number,
-            Hostname = string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, number),
-            Mac = $"02:00:5E:00:00:{number:X2}",
-            EnrollmentCode = code,
-            ConsoleHost = consoleHost ?? payload.Document.ConsoleHost,
-            ConsolePort = consolePort,
-        };
-
-        return DirectoryAgentStore.Install(directory, config, payload.Authority);
+        // Locally administered MAC (02:…), so a simulated PC can never collide with a real one.
+        return AgentProvisioning.Install(directory, payload, code, number,
+            hostname: AgentProvisioning.NameOf(number),
+            mac: MachineFacts.FormatMac([0x02, 0x00, 0x5E, 0x00, 0x00, (byte)number]),
+            consoleHost, consolePort);
     }
 }

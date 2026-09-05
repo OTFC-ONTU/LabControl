@@ -1,21 +1,123 @@
+using System.Globalization;
 using LabControl.Shared;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.WindowsServices;
+using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Events;
 
 namespace LabControl.Agent;
 
 /// <summary>
-/// The Windows service that runs on every student PC as LocalSystem. M0 is a skeleton:
-/// it proves the project compiles and publishes for win-x64 and win-arm64. The service
-/// host, enrollment, the session helper and the job loop arrive in M2
-/// (docs/ROADMAP.md).
+/// The Windows service that runs on every student PC as LocalSystem (ARCHITECTURE §2).
+/// Started by the service manager it is the agent; started by hand it is either the
+/// provisioning half of the installer (<c>--install</c>, INSTALLER.md step 4) or the
+/// same agent in the foreground with console logging (<c>--run</c>) for development.
 /// </summary>
 internal static class Program
 {
-    private static int Main(string[] args)
+    private static readonly string Usage =
+        $"usage: agent.exe                              run as the '{Defaults.ServiceName}' service (started by Windows)\n" +
+        $"       agent.exe {Defaults.AgentForegroundSwitch}                        run in the foreground with console logging\n" +
+        $"       agent.exe {Defaults.AgentInstallSwitch} --payload <dir> --number N [--console host[:port]] [--force]\n" +
+        "                                             provision this PC from a USB payload (setup.json + ca.crt)\n" +
+        $"       agent.exe {Defaults.AgentVersionSwitch}                    print the version\n" +
+        "  --verbose                                  debug logging";
+
+    public static string Version =>
+        typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+    private static async Task<int> Main(string[] args)
     {
-        Console.WriteLine($"LabControl agent (skeleton) — service '{Defaults.ServiceName}'");
-        Console.WriteLine($"data directory: {Defaults.AgentDataDirectory}");
-        Console.WriteLine($"protocol version: {Defaults.ProtocolVersion}");
-        Console.WriteLine("Not implemented yet: this becomes a Windows service in milestone M2.");
-        return 0;
+        if (args.Contains(Defaults.AgentVersionSwitch, StringComparer.OrdinalIgnoreCase))
+        {
+            Console.WriteLine(Version);
+            return 0;
+        }
+
+        if (args.Contains("--help", StringComparer.OrdinalIgnoreCase) || args.Contains("-h", StringComparer.OrdinalIgnoreCase))
+        {
+            Console.WriteLine(Usage);
+            return 0;
+        }
+
+        var verbose = args.Contains("--verbose", StringComparer.OrdinalIgnoreCase);
+        var asService = WindowsServiceHelpers.IsWindowsService();
+
+        if (args.Contains(Defaults.AgentInstallSwitch, StringComparer.OrdinalIgnoreCase))
+        {
+            using var installLog = ConfigureLogging(interactive: true, verbose);
+            return Provisioner.Run(args, installLog.CreateLogger("install"), Usage);
+        }
+
+        if (!asService && !args.Contains(Defaults.AgentForegroundSwitch, StringComparer.OrdinalIgnoreCase))
+        {
+            Console.WriteLine(Usage);
+            return 2;
+        }
+
+        using var loggers = ConfigureLogging(interactive: !asService, verbose);
+        var log = loggers.CreateLogger("agent");
+
+        try
+        {
+            var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+            {
+                Args = args,
+                DisableDefaults = true,
+            });
+
+            builder.Logging.ClearProviders();
+            builder.Logging.AddSerilog(Log.Logger, dispose: false);
+            builder.Services.AddWindowsService(options => options.ServiceName = Defaults.ServiceName);
+            builder.Services.AddHostedService<AgentService>();
+
+            using var host = builder.Build();
+            log.LogInformation("LabControl agent {Version} starting as {Mode} (protocol {Protocol})",
+                Version, asService ? "a service" : "a foreground process", Defaults.ProtocolVersion);
+            await host.RunAsync();
+            log.LogInformation("LabControl agent stopped.");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            // Nothing escapes Main unlogged: a service that dies silently is a walk to the PC.
+            log.LogCritical(ex, "The agent host failed: {Message}", ex.Message);
+            return 1;
+        }
+        finally
+        {
+            await Log.CloseAndFlushAsync();
+        }
+    }
+
+    /// <summary>
+    /// A rolling file under <c>ProgramData\LabControl\logs\</c>, kept for
+    /// <see cref="Defaults.AgentLogRetentionDays"/> days, plus the console when a person
+    /// is watching. Never the student password, never key material (CLAUDE.md).
+    /// </summary>
+    private static Serilog.Extensions.Logging.SerilogLoggerFactory ConfigureLogging(bool interactive, bool verbose)
+    {
+        var configuration = new LoggerConfiguration()
+            .MinimumLevel.Is(verbose ? LogEventLevel.Debug : LogEventLevel.Information)
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+            .Enrich.FromLogContext()
+            .WriteTo.File(
+                Path.Combine(Defaults.AgentDataDirectory, Defaults.LogsDirectoryName, Defaults.AgentLogFilePattern),
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: Defaults.AgentLogRetentionDays,
+                formatProvider: CultureInfo.InvariantCulture,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}");
+
+        if (interactive)
+        {
+            configuration = configuration.WriteTo.Console(
+                formatProvider: CultureInfo.InvariantCulture,
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+        }
+
+        Log.Logger = configuration.CreateLogger();
+        return new Serilog.Extensions.Logging.SerilogLoggerFactory(Log.Logger, dispose: false);
     }
 }

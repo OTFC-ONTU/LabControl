@@ -169,7 +169,7 @@ implement.</p>
 <tr>
 <td><strong>M2</strong></td>
 <td>Windows agent: service, helper, power, scripts</td>
-<td>not started</td>
+<td><strong>in progress</strong> (portion 1 of 4 built 2026-09-05)</td>
 <td>M1, Windows VM</td>
 </tr>
 <tr>
@@ -459,6 +459,29 @@ M4. This exists because iterating on the agent from M2 onwards is unworkable if 
 build means walking to <code>PC-00</code> with a USB stick.</li>
 <li>A development-only install script (<code>scripts/dev-install.ps1</code>) so the agent can be
 deployed by hand before the real installer exists in M4.</li>
+</ul>
+<p><strong>How it is being built.</strong> In four portions, each committed and then run on the Windows VM
+before the next starts (owner's choice, 2026-09-05): <strong>(1)</strong> the service host, the real store
+with DPAPI, provisioning from the USB payload, inventory, the side-by-side layout and
+<code>dev-install.ps1</code>; <strong>(2)</strong> the session helper and its supervision; <strong>(3)</strong> power jobs,
+Wake-on-LAN from the console and <code>run_script</code>; <strong>(4)</strong> the minimal push-and-restart.</p>
+<p><strong>Progress.</strong></p>
+<ul>
+<li><em>Portion 1 (built 2026-09-05, awaiting the VM run).</em> <code>LabControl.Agent</code> is a real
+service host: <code>Microsoft.Extensions.Hosting.WindowsServices</code>, <code>LocalSystem</code>, a rolling
+7-day log under <code>ProgramData\LabControl\logs\</code>, and a loop that never exits — an
+unprovisioned PC waits and says so (<code>D-29</code>). The PC's private key goes through DPAPI at
+machine scope (<code>MachineKeyProtection</code>); the trust half of INSTALLER.md step 4 is one shared
+routine, <code>AgentProvisioning</code>, used by <code>agent.exe --install</code>, by <code>FakeAgent</code> and, in M4, by
+Setup. Inventory is real: hostname, Windows build from the registry, CPU, RAM, the system
+drive, uptime and the interactive user through <code>WTSQuerySessionInformation</code> (CsWin32).
+The agent checks the ACL on <code>ProgramData\LabControl\</code> at every start and reports a
+wrong one as an event; <code>AgentLink</code> gained <code>Report()</code> for exactly that, with events queued
+across a reconnect. <code>InstallLayout</code> is the <code>app\&lt;version&gt;</code> arithmetic, unit-tested on the
+Mac. <code>scripts/dev-install.ps1</code> lays the PC out as Setup will, provisions, registers the
+service with restart-on-failure, adds the firewall rule and the Defender exclusion.
+Jobs are answered with <em>not in this build</em> until portion 3. Not yet run on Windows: the
+owner is installing a VM (README, <em>Testing the agent in a Windows VM</em>).</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -830,7 +853,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-05 03:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 12:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

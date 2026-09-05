@@ -62,6 +62,9 @@ public sealed class AgentLink : IAsyncDisposable
     private readonly CancellationTokenSource _stopping = new();
     private readonly Lock _gateLock = new();
 
+    private readonly Queue<Event> _pendingEvents = new();
+    private ChannelWriter<AgentMessage>? _outgoing;
+
     private Task? _loop;
     private CancellationTokenSource? _session;
     private string? _pendingEndpoint;
@@ -155,6 +158,40 @@ public sealed class AgentLink : IAsyncDisposable
                 break;
         }
     }
+
+    /// <summary>
+    /// Sends an event the teacher should see — a failed Win32 call, a helper that died, an
+    /// ACL that is wrong. Sent at once while linked; otherwise kept (the last
+    /// <see cref="MaxPendingEvents"/>) and delivered right after the next <c>Welcome</c>, so a
+    /// failure during a reconnect is not lost.
+    /// </summary>
+    public void Report(Event.Types.Severity severity, string code, string message)
+    {
+        var report = new Event
+        {
+            Severity = severity,
+            Code = code,
+            Message = message,
+            AtUnix = _options.Clock().ToUnixTimeSeconds(),
+        };
+
+        lock (_gateLock)
+        {
+            if (_outgoing is { } outgoing && outgoing.TryWrite(new AgentMessage { Event = report }))
+            {
+                return;
+            }
+
+            _pendingEvents.Enqueue(report);
+            while (_pendingEvents.Count > MaxPendingEvents)
+            {
+                _pendingEvents.Dequeue();
+            }
+        }
+    }
+
+    /// <summary>Events kept for the next link while there is none; older ones are dropped.</summary>
+    public const int MaxPendingEvents = 100;
 
     /// <summary>Drops the current link, if any; the loop reconnects on the next beacon.</summary>
     public void Disconnect(string reason)
@@ -438,6 +475,15 @@ public sealed class AgentLink : IAsyncDisposable
             var heartbeats = HeartbeatLoopAsync(outgoing.Writer, token);
             var renewal = RenewalLoopAsync(client, certificate, token);
 
+            lock (_gateLock)
+            {
+                _outgoing = outgoing.Writer;
+                while (_pendingEvents.TryDequeue(out var pending))
+                {
+                    outgoing.Writer.TryWrite(new AgentMessage { Event = pending });
+                }
+            }
+
             try
             {
                 while (await call.ResponseStream.MoveNext(token))
@@ -447,6 +493,11 @@ public sealed class AgentLink : IAsyncDisposable
             }
             finally
             {
+                lock (_gateLock)
+                {
+                    _outgoing = null;
+                }
+
                 outgoing.Writer.TryComplete();
                 await Task.WhenAll(SwallowAsync(writer), SwallowAsync(heartbeats), SwallowAsync(renewal));
             }

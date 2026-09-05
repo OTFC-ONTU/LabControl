@@ -191,6 +191,31 @@ public static class Defaults
     public const string AgentInstallDirectory = @"C:\Program Files\LabControl";
     public const string AgentDataDirectory = @"C:\ProgramData\LabControl";
 
+    public const string AgentExecutableName = "agent.exe";
+    public const string SessionExecutableName = "session.exe";
+
+    /// <summary>The agent's rolling log under <c>&lt;data&gt;\logs\</c>; the date goes where the dash is.</summary>
+    public const string AgentLogFilePattern = "agent-.log";
+
+    /// <summary>
+    /// Command line that makes the agent provision this PC from a USB payload — the trust
+    /// half of INSTALLER.md step 4, shared by the M4 installer and <c>scripts/dev-install.ps1</c>.
+    /// </summary>
+    public const string AgentInstallSwitch = "--install";
+
+    /// <summary>Command line that runs the agent in the foreground with console logging, for development.</summary>
+    public const string AgentForegroundSwitch = "--run";
+
+    /// <summary>Prints the version and exits; the install script names the version directory from it.</summary>
+    public const string AgentVersionSwitch = "--version";
+
+    /// <summary>
+    /// An installed but unprovisioned PC — no <c>agent.json</c> yet — looks again this often
+    /// instead of exiting, because a service that exits is restarted by its recovery action
+    /// and would spin (D-29).
+    /// </summary>
+    public static readonly TimeSpan UnprovisionedRetryInterval = TimeSpan.FromSeconds(30);
+
     // ------------------------------------------------------------ agent self-update
 
     // Versions are installed side by side under <install>\app\<version>\ and the service's

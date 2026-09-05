@@ -72,7 +72,9 @@ makes re-runs safe. `--dry-run` prints the plan only; `--number 7` skips the pro
    so in its log. Issuing the certificate needs the lab key unlocked on the console
    (`D-24`), so after the round with the stick the teacher opens *Enrol PCs* in the console
    and types the passphrase once; a PC that connects before that is told to try again
-   later and does, on its own.
+   later and does, on its own. This step is the shared routine `AgentProvisioning`, also
+   reachable as `agent.exe --install --payload <dir> --number N`, which is how
+   `scripts/dev-install.ps1` provisions a PC before Setup.exe exists (`D-29`).
 5. **Service** — `CreateService("LabControl", LocalSystem, auto-start, delayed=false)`
    with the binary path pointing at `app\<version>\agent.exe`; recovery: restart on
    failure (3×, 10 s) and then `agent.exe --rollback` on the fourth, which is the

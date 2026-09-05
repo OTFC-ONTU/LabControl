@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | not started | M1, Windows VM |
+| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portion 1 of 4 built 2026-09-05) | M1, Windows VM |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -301,6 +301,30 @@ capture performance, real antivirus behaviour. Note the VM on Apple Silicon is
   build means walking to `PC-00` with a USB stick.
 - A development-only install script (`scripts/dev-install.ps1`) so the agent can be
   deployed by hand before the real installer exists in M4.
+
+**How it is being built.** In four portions, each committed and then run on the Windows VM
+before the next starts (owner's choice, 2026-09-05): **(1)** the service host, the real store
+with DPAPI, provisioning from the USB payload, inventory, the side-by-side layout and
+`dev-install.ps1`; **(2)** the session helper and its supervision; **(3)** power jobs,
+Wake-on-LAN from the console and `run_script`; **(4)** the minimal push-and-restart.
+
+**Progress.**
+
+- *Portion 1 (built 2026-09-05, awaiting the VM run).* `LabControl.Agent` is a real
+  service host: `Microsoft.Extensions.Hosting.WindowsServices`, `LocalSystem`, a rolling
+  7-day log under `ProgramData\LabControl\logs\`, and a loop that never exits — an
+  unprovisioned PC waits and says so (`D-29`). The PC's private key goes through DPAPI at
+  machine scope (`MachineKeyProtection`); the trust half of INSTALLER.md step 4 is one shared
+  routine, `AgentProvisioning`, used by `agent.exe --install`, by `FakeAgent` and, in M4, by
+  Setup. Inventory is real: hostname, Windows build from the registry, CPU, RAM, the system
+  drive, uptime and the interactive user through `WTSQuerySessionInformation` (CsWin32).
+  The agent checks the ACL on `ProgramData\LabControl\` at every start and reports a
+  wrong one as an event; `AgentLink` gained `Report()` for exactly that, with events queued
+  across a reconnect. `InstallLayout` is the `app\<version>` arithmetic, unit-tested on the
+  Mac. `scripts/dev-install.ps1` lays the PC out as Setup will, provisions, registers the
+  service with restart-on-failure, adds the firewall rule and the Defender exclusion.
+  Jobs are answered with *not in this build* until portion 3. Not yet run on Windows: the
+  owner is installing a VM (README, *Testing the agent in a Windows VM*).
 
 **Acceptance criteria**
 

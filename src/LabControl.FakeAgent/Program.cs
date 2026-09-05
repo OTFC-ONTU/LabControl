@@ -2,6 +2,7 @@ using System.Globalization;
 using LabControl.Shared;
 using LabControl.Shared.Discovery;
 using LabControl.Shared.Link;
+using LabControl.Shared.Setup;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Extensions.Logging;

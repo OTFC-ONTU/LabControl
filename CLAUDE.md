@@ -165,12 +165,20 @@ criteria, the on-site verification checklist and the open questions for the owne
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, `FakeAgent` and the console UI — see the M1 *Progress* and
-*Live run* paragraphs in `docs/ROADMAP.md` and `D-24`…`D-28`. Next is **M2**: the real
-Windows agent, tested in a Windows VM and on `PC-00`. `Agent`, `Agent.Session` and `Setup`
-are still skeletons; they are M2 and M4.
+*Live run* paragraphs in `docs/ROADMAP.md` and `D-24`…`D-28`.
+
+**M2 is in progress, built in four portions** (ROADMAP M2, *How it is being built*), each
+run on the owner's Windows VM before the next. Portion 1 is built: `LabControl.Agent` is a
+real service host with a DPAPI-protected store, `agent.exe --install` provisioning from the
+USB payload, real inventory (CsWin32 + registry), the `app\<version>` layout and
+`scripts/dev-install.ps1` (`D-29`). Jobs answer *not in this build* until portion 3.
+`Agent.Session` and `Setup` are still skeletons (portion 2 and M4).
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and
-the real agent is `src/LabControl.Shared/Link/AgentLink.cs`. Tests:
+the real agent is `src/LabControl.Shared/Link/AgentLink.cs`, and the install-time routines
+shared by the agent, the simulator and Setup are `src/LabControl.Shared/Setup/`. Tests:
 `tests/LabControl.Shared.Tests` (pure logic) and `tests/LabControl.Console.Tests`
-(in-process console + agents over real TLS/UDP, plus headless UI renders).
+(in-process console + agents over real TLS/UDP, plus headless UI renders). Run them as
+`dotnet test` or, if that reports zero tests, by executing the built test exe directly
+(`tests/<project>/bin/Debug/net10.0/<project>`).

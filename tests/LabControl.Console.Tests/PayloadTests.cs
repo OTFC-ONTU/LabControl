@@ -5,6 +5,7 @@ using LabControl.Shared;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
+using LabControl.Shared.Setup;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.Console.Tests;

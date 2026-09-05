@@ -1,13 +1,12 @@
 using System.Security.Cryptography.X509Certificates;
-using LabControl.Shared;
 using LabControl.Shared.Persistence;
 
-namespace LabControl.FakeAgent;
+namespace LabControl.Shared.Setup;
 
 /// <summary>
-/// The USB payload directory as Setup.exe sees it (INSTALLER.md): <c>setup.json</c> and
-/// <c>ca.crt</c>. Codes taken by a simulated install are removed from the file, exactly
-/// as the real installer marks them, so two runs never hand out the same code.
+/// The USB payload directory as Setup.exe, <c>agent.exe --install</c> and the simulator see it
+/// (INSTALLER.md): <c>setup.json</c> and <c>ca.crt</c>. A code taken by an install is moved
+/// to the stick's used list, so two runs never hand out the same code.
 /// </summary>
 public sealed class SetupPayload
 {

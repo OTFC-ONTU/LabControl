@@ -5,6 +5,7 @@
         x:Class="LabControl.Console.Views.SetupWindow"
         x:DataType="vm:SetupViewModel"
         Title="{loc:Localize Setup.Title}"
+        Icon="avares://LabControl.Console/Assets/labcontrol.ico"
         Width="640" Height="560"
         MinWidth="560" MinHeight="480"
         WindowStartupLocation="CenterScreen">
@@ -81,6 +82,11 @@
           <Button Classes="accent" Content="{loc:Localize Setup.ImportAction}" Command="{Binding ImportCommand}" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
       </StackPanel>
+
+      <!-- Shown on a later launch when the wizard was closed before it finished. -->
+      <Border IsVisible="{Binding IsResumed}" Background="{DynamicResource SystemFillColorCautionBackgroundBrush}" Padding="12,8" CornerRadius="4">
+        <TextBlock Classes="p" Opacity="1" Text="{loc:Localize Setup.ResumeNote}" />
+      </Border>
 
       <!-- Step 3: recovery code -->
       <StackPanel IsVisible="{Binding IsRecoveryCode}" Spacing="10">

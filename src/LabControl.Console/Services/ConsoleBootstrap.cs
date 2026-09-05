@@ -100,6 +100,12 @@ public sealed class ConsoleBootstrap
 
         Store.SaveLab(payload.Lab);
         Store.WriteCatalog(payload.Catalog);
+        if (payload.Enrollment is not null)
+        {
+            // The codes on sticks written by the old machine keep working here (D-28).
+            payload.Enrollment.LabId = lab.LabId;
+            Store.SaveEnrollment(payload.Enrollment);
+        }
 
         var instance = ConsoleInstance.Mint(lab, instanceName, SecretProtector.ForCurrentPlatform());
         instance.Document.BackupExportedAtUnix = backup.ExportedAtUnix;
@@ -162,10 +168,27 @@ public sealed class ConsoleBootstrap
             return BackupStatus.Missing;
         }
 
-        return string.Equals(instance.BackupFingerprint, Store.LabKeyFingerprint(), StringComparison.Ordinal)
-            ? BackupStatus.Current
-            : BackupStatus.Stale;
+        if (!string.Equals(instance.BackupFingerprint, Store.LabKeyFingerprint(), StringComparison.Ordinal))
+        {
+            return BackupStatus.Stale;
+        }
+
+        // A stick written after the last backup holds codes only this machine knows; a
+        // replacement console restored from that backup would refuse every PC installed from
+        // the stick (D-28). So the backup is stale until it is exported again.
+        var codesWrittenSince = Store.LoadEnrollment(instance.LabId).Codes
+            .Any(code => code.IsUsable && code.CreatedAtUnix > instance.BackupExportedAtUnix);
+
+        return codesWrittenSince ? BackupStatus.Stale : BackupStatus.Current;
     }
+
+    /// <summary>
+    /// True when the first-run wizard was closed before its last two steps (ARCHITECTURE §3.7):
+    /// the lab exists on disk, but the recovery code was never acknowledged or no backup was
+    /// ever exported. The next launch resumes the wizard instead of opening the main window.
+    /// </summary>
+    public bool SetupIsUnfinished(InstanceDocument instance) =>
+        !instance.RecoveryCodeAcknowledged || CheckBackup(instance) == BackupStatus.Missing;
 
     /// <summary>Writes the archive and records it as the current backup on this machine. The vault must be unlocked.</summary>
     public bool TryExportBackup(LabSession session, string path, out string error)
@@ -173,7 +196,7 @@ public sealed class ConsoleBootstrap
         var now = session.Now;
         session.SaveLab();
 
-        if (!session.Vault.Use(lab => LabBackup.Serialize(LabBackup.Export(lab, session.Registry.Document, Store.ReadCatalog(), session.Instance.InstanceName, now)), out var json))
+        if (!session.Vault.Use(lab => LabBackup.Serialize(LabBackup.Export(lab, session.Registry.Document, Store.ReadCatalog(), session.Instance.InstanceName, now, session.Enrollment.Document)), out var json))
         {
             error = "The lab key is locked; unlock it to export a backup.";
             return false;

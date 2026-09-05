@@ -27,6 +27,9 @@ public enum EnrollmentOutcome
 
     /// <summary>The signing request is not a valid PKCS#10, or is not signed by its own key.</summary>
     BadRequest = 6,
+
+    /// <summary>The code is from an older USB stick, voided when a newer payload was written (D-28).</summary>
+    VoidedCode = 7,
 }
 
 /// <summary>The result of one enrolment attempt, ready to be turned into a response or an event.</summary>
@@ -69,8 +72,31 @@ public sealed class EnrollmentAuthority
         {
             lock (_gate)
             {
-                return _document.Codes.Count(code => !code.IsBurned);
+                return _document.Codes.Count(code => code.IsUsable);
             }
+        }
+    }
+
+    /// <summary>
+    /// Voids every code that is still unused: called before a new stick is written, so that
+    /// a new stick always replaces the old one and a stick left in a drawer or lost cannot
+    /// enrol anything once a newer one exists (D-28). Returns how many codes were voided.
+    /// </summary>
+    public int Supersede(DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var voided = 0;
+            foreach (var code in _document.Codes)
+            {
+                if (code.IsUsable)
+                {
+                    code.VoidedAtUnix = now.ToUnixTimeSeconds();
+                    voided++;
+                }
+            }
+
+            return voided;
         }
     }
 
@@ -152,7 +178,15 @@ public sealed class EnrollmentAuthority
             if (match is null)
             {
                 return new EnrollmentResult(EnrollmentOutcome.UnknownCode, null,
-                    $"{Describe(request)} presented an enrollment code this lab never issued.");
+                    $"{Describe(request)} presented an enrollment code this console never issued. If the stick was written on " +
+                    "another teacher machine, enrol there, or export its backup and import it here — the codes travel with it.");
+            }
+
+            if (match.IsVoided)
+            {
+                return new EnrollmentResult(EnrollmentOutcome.VoidedCode, null,
+                    $"{Describe(request)} presented a code from an older USB stick ({match.Batch}); it was voided on " +
+                    $"{DateTimeOffset.FromUnixTimeSeconds(match.VoidedAtUnix):yyyy-MM-dd} when a newer payload was written. Install from the current stick.");
             }
 
             if (match.IsBurned)

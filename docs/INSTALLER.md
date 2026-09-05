@@ -20,15 +20,24 @@ Console → Settings → *Write USB payload* writes `ca.crt` and `setup.json` (a
                         student: {name:"student", password:"1"}, naming: "PC-{n:00}",
                         power: {...}, next_number: 1,
                         enrollment_codes: ["...", ...],    // single-use, one per PC + spares
+                        used_enrollment_codes: ["..."],    // moved here by Setup as it spends them
                         written_by, written_at }           // which console, when
    INSTALL.txt        3-line human instructions (in Ukrainian)
 ```
 
 **The stick carries no secret.** `ca.crt` is public by nature and the enrollment codes
 are single-use: whoever finds the stick can, at worst, enrol a bogus machine, which the
-console shows as an unexpected PC and removes with one click. The lab key never leaves
-the teacher machine and its backup (`docs/ARCHITECTURE.md` §3.2). Generate a few more
-codes than there are PCs, so a failed install can be retried.
+console shows as an unexpected PC and removes with one click — removal revokes its
+certificate too (`D-28`). The lab key never leaves the teacher machine and its backup
+(`docs/ARCHITECTURE.md` §3.2). The console writes a few more codes than there are PCs, so
+a failed install can be retried, and **writing a new stick voids the unused codes of every
+earlier one** unless the teacher unticks it (`D-28`): the stick in the drawer stops
+working the moment a newer one exists. Untick it only when PCs were installed from the
+earlier stick and have not yet enrolled — they still hold those codes.
+
+A stick is enrolled by the console that wrote it, or by one that imported that console's
+backup afterwards — the codes travel in the backup and nowhere else (`D-28`). Writing a
+stick therefore marks the backup stale until it is exported again.
 
 `Setup.exe` deletes nothing from the stick except marking the code it used and updating
 `next_number`.

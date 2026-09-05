@@ -25,13 +25,20 @@ public sealed class BackupTests
             Layout = [new LayoutTile { Number = 7, Column = 2, Row = 1 }],
         };
 
-        var exported = LabBackup.Export(lab, machines, new Dictionary<string, string> { ["jdk.yaml"] = "name: jdk" }, "MacBook-2026", now);
+        var enrollment = new EnrollmentDocument
+        {
+            LabId = lab.LabId,
+            Codes = [new EnrollmentCodeRecord { Code = "ABCDEFGHJKMNPQRSTVWX", Batch = "stick-1", CreatedAtUnix = now.ToUnixTimeSeconds() }],
+        };
+
+        var exported = LabBackup.Export(lab, machines, new Dictionary<string, string> { ["jdk.yaml"] = "name: jdk" }, "MacBook-2026", now, enrollment);
         var json = LabBackup.Serialize(exported);
 
         // The file names the lab and its holders in the clear, nothing else.
         Assert.Contains(TestLab.HolderName, json, StringComparison.Ordinal);
         Assert.DoesNotContain("02:00:5E:00:00:07", json, StringComparison.Ordinal);
         Assert.DoesNotContain("jdk", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("ABCDEFGHJKMNPQRSTVWX", json, StringComparison.Ordinal);
 
         var parsed = LabBackup.Parse(json, "test" + Defaults.BackupFileExtension);
         Assert.Equal(Defaults.BackupSchemaVersion, parsed.SchemaVersion);
@@ -46,6 +53,10 @@ public sealed class BackupTests
             Assert.Equal(7, Assert.Single(payload.Lab.Machines).Number);
             Assert.Equal((2, 1), (payload.Lab.Layout[0].Column, payload.Lab.Layout[0].Row));
             Assert.Equal("name: jdk", payload.Catalog["jdk.yaml"]);
+
+            // The outstanding enrollment codes travel too, so a stick written on the old
+            // machine still enrols PCs on the new one (D-28).
+            Assert.Equal("ABCDEFGHJKMNPQRSTVWX", Assert.Single(payload.Enrollment!.Codes).Code);
         }
 
         // With the recovery code.

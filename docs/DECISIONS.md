@@ -394,8 +394,8 @@ this entry records it.
 1. **The backup is sealed under the lab's master key.** One JSON file
    (`<lab name> <date>.lcbak`, `schema_version` first): the `lab-key.lck` document verbatim —
    it is already encrypted under every holder's passphrase and the recovery code — plus
-   `lab.json` and the package catalog serialized and sealed with AES-256-GCM under the same
-   master key. Whoever can open the lab key can open the backup; nobody else can read even
+   `lab.json`, `enrollment.json` (since `D-28`) and the package catalog serialized and
+   sealed with AES-256-GCM under the same master key. Whoever can open the lab key can open the backup; nobody else can read even
    the machine list. Nothing new to remember. Rejected: a separate archive passphrase (one
    more secret to lose, and the lab key inside would still be the real one); a plain zip with
    `lab-key.lck` inside (the MAC addresses and the PC list would be readable by whoever finds
@@ -410,6 +410,52 @@ this entry records it.
    wording was written before renewal existed. Rejected: unlocking for the whole console
    session (every open teacher machine becomes a CA, the exposure `D-13` avoids); unlocking
    per operation (fourteen PCs enrolling one after another would ask fourteen times).
+
+## D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)
+
+Context: two things surfaced in the M1 live run. Every *Write USB payload* added a fresh
+batch of codes while the unused codes of earlier sticks stayed valid, so the list in
+Settings only ever grew and a stick forgotten in a drawer kept its power indefinitely. And
+*Remove from lab* deleted the PC's record but left its certificate valid: the PC came
+straight back through the self-healing list (§3.7), or, if it was off, sat somewhere as a
+credential the teacher could no longer see, let alone revoke.
+
+Decision: the console never leaves a valid credential it cannot show.
+
+1. **A new stick replaces the old one — by default.** Writing a payload voids every
+   still-unused code first (`VoidedAtUnix` on the code record), then generates the new
+   batch. A voided code is refused with `VoidedCode`, naming the stick it came from and the
+   date it was voided, and the refusal is an event. Burned codes are untouched — they are
+   history, not power. Settings shows the numbers before the click ("19 codes = 15 PCs +
+   4 spares; the 34 unused codes written earlier will stop working").
+   The voiding is a ticked checkbox, not a law, because Setup runs offline (`D-14`): a PC
+   installed from stick 1 holds its code until the console is next switched on, and a
+   teacher who writes stick 2 in between must not lose the PCs already installed. The
+   hint says exactly that, and the box is unticked for that one case.
+2. **Removing a PC revokes its certificate.** *Remove from lab* asks for the lab key,
+   revokes the PC's leaf (the entry travels to every agent as in §3.7.3) and only then
+   forgets the record. A PC that never presented a certificate is simply forgotten.
+   *Revoke certificate…* stays as the separate action for a PC that should remain visible
+   as refused (a stolen one).
+3. **Enrollment codes travel in the backup.** `enrollment.json` was per console and not in
+   the archive, so a stick written on teacher machine A enrolled nothing on machine B — and
+   nothing on the machine that replaced a dead A, which is the one case `D-13` exists for.
+   The sealed payload now carries the enrollment document (`D-26` amended), import restores
+   it, and the backup counts as *stale* when a stick was written after the last export, so
+   the console nags until the codes are safe. The refusal for an unknown code says where
+   to look. Codes still do not move between two *live* consoles: a stick is enrolled on the
+   machine that wrote it or on one that imported its backup afterwards. Rejected for now:
+   codes verifiable by the lab key alone (an HMAC under the master key) — any console
+   could then accept any stick, but single-use could no longer be enforced across
+   consoles, and each lost stick would be worth one bogus PC *per console*.
+
+Rejected: expiring codes after N days (a stick written on Friday for a Monday install
+would die over the weekend; time-based rules are exactly the maintenance this project
+avoids); unconditional voiding (breaks the offline install above); a separate "Void
+unused codes" button as the only way (one more thing to remember, and forgetting it is
+the failure mode — the ticked box on the write itself is the reminder); a *Removed PCs*
+list in Settings with a Revoke button (a second place to look for something that should
+not have been left behind).
 
 ## D-27 — Development affordances that ship in the product (M1)
 

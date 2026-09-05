@@ -30,6 +30,14 @@ public sealed class SetupPayloadDocument : ISchemaVersioned
     /// <summary>Single-use, one per PC plus spares (D-14). Setup removes the one it used.</summary>
     public List<string> EnrollmentCodes { get; set; } = [];
 
+    /// <summary>
+    /// Codes the installer already handed to a PC, moved here from <see cref="EnrollmentCodes"/>
+    /// (INSTALLER.md: "marking the code it used"). Nothing reads them back except the
+    /// simulator's burned-code failure, but a stick that says which codes it spent is easier
+    /// to reason about than one that silently shrinks.
+    /// </summary>
+    public List<string> UsedEnrollmentCodes { get; set; } = [];
+
     /// <summary>Which console wrote this stick and when, so a stale stick can be told apart.</summary>
     public string WrittenBy { get; set; } = string.Empty;
 

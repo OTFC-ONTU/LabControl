@@ -154,6 +154,7 @@ dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb   # 
 tools/publish-all.sh                           # self-contained binaries for all RIDs
 tools/build-usb.sh /Volumes/USB               # USB installer payload (needs lab.json from the console)
 tools/docs-build.sh                            # regenerate docs/html/ after ANY .md change
+tools/make-icon.py                             # regenerate the console icon into src/LabControl.Console/Assets
 ```
 
 ## Current status
@@ -161,11 +162,11 @@ tools/docs-build.sh                            # regenerate docs/html/ after ANY
 See `docs/ROADMAP.md` — it holds the milestone table, the per-milestone acceptance
 criteria, the on-site verification checklist and the open questions for the owner.
 
-**M0 is done (2026-09-04).** **M1 is built and tested (2026-09-04)**: the trust model,
-beacon discovery, mutual TLS, enrolment, the `Link` stream with jobs and renewal,
-take-over between teacher machines, the sealed backup, `FakeAgent` and the console UI —
-see the M1 *Progress* paragraph in `docs/ROADMAP.md` and `D-24`…`D-27`. M1 is marked done
-only after the owner has run its acceptance list live. `Agent`, `Agent.Session` and `Setup`
+**M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
+mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher
+machines, the sealed backup, `FakeAgent` and the console UI — see the M1 *Progress* and
+*Live run* paragraphs in `docs/ROADMAP.md` and `D-24`…`D-28`. Next is **M2**: the real
+Windows agent, tested in a Windows VM and on `PC-00`. `Agent`, `Agent.Session` and `Setup`
 are still skeletons; they are M2 and M4.
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,

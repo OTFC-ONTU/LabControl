@@ -117,6 +117,18 @@ internal static class Program
             }
         }
 
+        // A burned code can only be presented at enrolment, so the failure implies a reinstall:
+        // an already enrolled PC would just reconnect with its certificate and prove nothing.
+        foreach (var spec in options.Failures.Values.Where(f => f.Kind == FailureKind.BurnedCode))
+        {
+            var directory = MachineDirectory(options, spec.Number);
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+                log.LogInformation("PC-{Number:00}: state wiped — burned-code means installing again with a code another PC already used", spec.Number);
+            }
+        }
+
         for (var number = 1; number <= options.Count; number++)
         {
             var directory = MachineDirectory(options, number);
@@ -149,8 +161,13 @@ internal static class Program
                         payload.Document.LabName, payload.Document.EnrollmentCodes.Count);
                 }
 
-                store = FakeMachine.Install(directory, number, payload, options.ConsoleHost,
-                    options.ConsolePort, burnedCode: failure?.Kind == FailureKind.BurnedCode);
+                var burned = failure?.Kind == FailureKind.BurnedCode;
+                if (burned && payload.Document.UsedEnrollmentCodes.Count == 0)
+                {
+                    log.LogWarning("PC-{Number:00}: burned-code asked for, but this stick has not spent a code yet; it gets a fresh one and enrols normally", number);
+                }
+
+                store = FakeMachine.Install(directory, number, payload, options.ConsoleHost, options.ConsolePort, burned);
             }
 
             var machine = new FakeMachine(store, failure, machineLog);

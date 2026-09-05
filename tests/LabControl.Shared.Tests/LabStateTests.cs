@@ -51,6 +51,33 @@ public sealed class LabStateTests
     }
 
     [Fact]
+    public void Writing_a_new_stick_voids_the_unused_codes_of_the_old_one()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var lab = TestLab.Create();
+        var authority = new EnrollmentAuthority(new EnrollmentDocument { LabId = lab.LabId });
+
+        var oldStick = authority.Generate(3, "stick-1", now);
+        Assert.True(authority.Redeem(lab, Request(lab.LabId, 1, oldStick[0]), now).Ok);
+
+        // The console writes a second stick: the two unused codes of the first are voided,
+        // the burned one is left as history.
+        Assert.Equal(2, authority.Supersede(now.AddMinutes(1)));
+        var newStick = authority.Generate(2, "stick-2", now.AddMinutes(1));
+        Assert.Equal(2, authority.UnusedCodeCount);
+
+        var stale = authority.Redeem(lab, Request(lab.LabId, 2, oldStick[1]), now.AddMinutes(2));
+        Assert.Equal(EnrollmentOutcome.VoidedCode, stale.Outcome);
+        Assert.Contains("stick-1", stale.Message, StringComparison.Ordinal);
+
+        // The burned code still reports who used it, not that it was voided.
+        Assert.Equal(EnrollmentOutcome.BurnedCode, authority.Redeem(lab, Request(lab.LabId, 2, oldStick[0]), now).Outcome);
+
+        Assert.True(authority.Redeem(lab, Request(lab.LabId, 2, newStick[0]), now.AddMinutes(2)).Ok);
+        Assert.Equal(1, authority.UnusedCodeCount);
+    }
+
+    [Fact]
     public void A_code_this_lab_never_issued_is_refused()
     {
         var now = DateTimeOffset.UtcNow;
@@ -302,6 +329,41 @@ public sealed class LabStateTests
             .Where(t => t.Number == 1)
             .Select(t => (t.Column, t.Row))
             .Single());
+    }
+
+    [Fact]
+    public void New_pcs_never_land_on_a_tile_that_is_already_placed()
+    {
+        using var lab = TestLab.Create();
+        var document = new LabDocument
+        {
+            Machines = Enumerable.Range(1, 14)
+                .Select(n => new MachineRecord { AgentId = $"a{n}", Number = n })
+                .ToList(),
+            // The room was arranged by hand once: fourteen tiles in the default grid.
+            Layout = Enumerable.Range(1, 14)
+                .Select(n => new LayoutTile { Number = n, Column = (n - 1) % Defaults.DefaultTilesPerRow, Row = (n - 1) / Defaults.DefaultTilesPerRow })
+                .ToList(),
+        };
+        var registry = new LabRegistry(document, LabTrustTests.PublicOnly(lab.Authority));
+
+        // Sixteen more PCs enrol; none may cover an existing tile.
+        foreach (var n in Enumerable.Range(15, 16))
+        {
+            document.Machines.Add(new MachineRecord { AgentId = $"a{n}", Number = n });
+        }
+
+        var layout = registry.EffectiveLayout();
+        Assert.Equal(30, layout.Count);
+        Assert.Equal(30, layout.Select(t => (t.Column, t.Row)).Distinct().Count());
+        Assert.Equal((2, 2), layout.Where(t => t.Number == 15).Select(t => (t.Column, t.Row)).Single());
+
+        // A layout that already holds a collision (saved by an older build) is untangled the
+        // same way every time: the lower number keeps its cell.
+        document.Layout.Add(new LayoutTile { Number = 20, Column = 0, Row = 0 });
+        layout = registry.EffectiveLayout();
+        Assert.Equal(30, layout.Select(t => (t.Column, t.Row)).Distinct().Count());
+        Assert.Equal((0, 0), layout.Where(t => t.Number == 1).Select(t => (t.Column, t.Row)).Single());
     }
 
     [Fact]

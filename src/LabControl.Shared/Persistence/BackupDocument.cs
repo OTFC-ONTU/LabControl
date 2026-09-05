@@ -38,4 +38,11 @@ public sealed class BackupPayload
 
     /// <summary>The package catalog files (<c>packages/*.yaml</c>) by relative path. Empty until M6.</summary>
     public Dictionary<string, string> Catalog { get; set; } = [];
+
+    /// <summary>
+    /// <c>enrollment.json</c>: the codes written to USB sticks and what became of them. Carried
+    /// so that a PC installed from a stick written on one teacher machine can still enrol on
+    /// the machine that replaced it (D-28). Null in backups from before this field existed.
+    /// </summary>
+    public EnrollmentDocument? Enrollment { get; set; }
 }

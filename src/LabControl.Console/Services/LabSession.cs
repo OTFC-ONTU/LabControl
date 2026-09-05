@@ -335,6 +335,10 @@ public sealed class LabSession : IAsyncDisposable
                 Events.Warning("enroll.burned_code", $"{result.Message} (from {from})", request.AgentId, request.Number);
                 throw new RpcException(new Status(StatusCode.PermissionDenied, result.Message));
 
+            case EnrollmentOutcome.VoidedCode:
+                Events.Warning("enroll.voided_code", $"{result.Message} (from {from})", request.AgentId, request.Number);
+                throw new RpcException(new Status(StatusCode.PermissionDenied, result.Message));
+
             default:
                 Events.Warning("enroll.refused", $"{result.Message} (from {from})", request.AgentId, request.Number);
                 throw new RpcException(new Status(StatusCode.InvalidArgument, result.Message));
@@ -343,15 +347,19 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>
     /// Writes the USB payload's trust part (INSTALLER.md): <c>ca.crt</c> and <c>setup.json</c>
-    /// with fresh single-use codes — one per PC plus spares. The agent binaries are added by
-    /// <c>tools/build-usb.sh</c> in M4; <c>FakeAgent</c> needs only this.
+    /// with fresh single-use codes — one per PC plus spares. With <paramref name="voidEarlier"/>
+    /// the unused codes of every earlier stick are voided first: a new stick replaces the old
+    /// one (D-28). The teacher switches that off when PCs installed from an earlier stick are
+    /// still waiting to enrol. The agent binaries are added by <c>tools/build-usb.sh</c> in M4;
+    /// <c>FakeAgent</c> needs only this.
     /// </summary>
-    public string WritePayload(string directory, int pcCount)
+    public string WritePayload(string directory, int pcCount, bool voidEarlier = true)
     {
         var now = _clock();
         var target = Path.Combine(directory, Defaults.PayloadDirectoryName);
         Directory.CreateDirectory(target);
 
+        var voided = voidEarlier ? Enrollment.Supersede(now) : 0;
         var codes = Enrollment.Generate(pcCount + Defaults.SpareEnrollmentCodes, $"{Instance.InstanceName} {now:yyyy-MM-dd HH:mm}", now);
         SaveEnrollment();
 
@@ -369,7 +377,9 @@ public sealed class LabSession : IAsyncDisposable
         };
         JsonStore.Save(Path.Combine(target, Defaults.SetupFileName), setup, SetupPayloadDocument.Migrations);
 
-        Events.Info("enroll.payload_written", $"USB payload with {codes.Count} enrollment codes written to {target}.");
+        Events.Info("enroll.payload_written", voided > 0
+            ? $"USB payload with {codes.Count} enrollment codes written to {target}; {voided} unused code(s) from earlier sticks voided."
+            : $"USB payload with {codes.Count} enrollment codes written to {target}.");
         return target;
     }
 

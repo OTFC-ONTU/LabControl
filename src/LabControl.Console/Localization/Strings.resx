@@ -29,6 +29,7 @@
   <data name="Action.SelectAll" xml:space="preserve"><value>Select all</value></data>
   <data name="Action.ClearSelection" xml:space="preserve"><value>Clear selection</value></data>
   <data name="Action.EnrolPcs" xml:space="preserve"><value>Enrol PCs…</value></data>
+  <data name="Lab.SelectionHint" xml:space="preserve"><value>Click a PC to select it. Hold ⌘ (Ctrl on Windows) and click to add or remove PCs one by one, or use Select all. Drag a tile to rearrange the room.</value></data>
   <data name="Lab.Empty" xml:space="preserve"><value>No PCs yet. Write a USB payload in Settings, run the installer (or FakeAgent) on the PCs, then press Enrol PCs and type the passphrase once — the PCs enrol themselves and appear here.</value></data>
   <data name="Tile.Online" xml:space="preserve"><value>online</value></data>
   <data name="Tile.Offline" xml:space="preserve"><value>offline</value></data>
@@ -42,10 +43,14 @@
   <data name="Tile.SerialFormat" xml:space="preserve"><value>certificate {0}</value></data>
   <data name="Tile.LastSeenFormat" xml:space="preserve"><value>last seen {0}</value></data>
   <data name="Machine.Remove" xml:space="preserve"><value>Remove from lab</value></data>
-  <data name="Machine.RemoveConfirm" xml:space="preserve"><value>Remove {0} from this console's list? Its certificate stays valid; if it connects again it will be added back. Revoke the certificate instead if the PC must never connect.</value></data>
+  <data name="Machine.RemoveConfirm" xml:space="preserve"><value>Remove {0} from the lab? Its certificate is revoked at the same time, so it cannot come back on its own. A reinstalled PC enrols again with a code from the current USB stick.</value></data>
+  <data name="Machine.RemoveManyTitle" xml:space="preserve"><value>Remove {0} PCs</value></data>
+  <data name="Machine.RemoveManyConfirm" xml:space="preserve"><value>Remove {0} PCs from the lab ({1})? Their certificates are revoked at the same time, so they cannot come back on their own. Reinstalled PCs enrol again with codes from the current USB stick.</value></data>
+  <data name="Action.RemoveSelected" xml:space="preserve"><value>Remove from lab…</value></data>
   <data name="Machine.Revoke" xml:space="preserve"><value>Revoke certificate…</value></data>
   <data name="Revoke.Action" xml:space="preserve"><value>Revoke</value></data>
   <data name="Revoke.MachineConfirm" xml:space="preserve"><value>Revoke the certificate of {0}? The PC will be refused by every console of this lab from now on and needs Setup.exe --rekey to come back.</value></data>
+  <data name="Revoke.RemovedReason" xml:space="preserve"><value>{0} removed from the lab by the teacher</value></data>
   <data name="Revoke.MachineReason" xml:space="preserve"><value>{0} revoked by the teacher</value></data>
   <data name="Revoke.InstanceConfirm" xml:space="preserve"><value>Revoke the console "{0}"? It will stop working until someone imports the backup on it again. Do this for a stolen or lost machine only — a colleague's console that simply exists does not need revoking.</value></data>
   <data name="Revoke.InstanceReason" xml:space="preserve"><value>console {0} revoked</value></data>
@@ -63,7 +68,9 @@
   <data name="Unlock.ReasonHolders" xml:space="preserve"><value>Adding or removing a key holder needs the lab key.</value></data>
   <data name="Unlock.ReasonRecovery" xml:space="preserve"><value>Printing a new recovery code needs the lab key.</value></data>
   <data name="Unlock.ReasonBackup" xml:space="preserve"><value>Exporting a backup needs the lab key.</value></data>
+  <data name="Unlock.ReasonRemove" xml:space="preserve"><value>Removing a PC revokes its certificate, and that needs the lab key.</value></data>
   <data name="Unlock.ReasonRevoke" xml:space="preserve"><value>Revoking a certificate needs the lab key.</value></data>
+  <data name="Unlock.ReasonResume" xml:space="preserve"><value>Setup was not finished on this computer: the recovery code or the backup is still missing. Unlock the lab key to finish it now.</value></data>
   <data name="Unlock.ReasonRemint" xml:space="preserve"><value>This console's own certificate is about to expire. Unlock the lab key once to renew it; cancel to keep the current one for now.</value></data>
   <data name="Key.Locked" xml:space="preserve"><value>Lab key locked</value></data>
   <data name="Key.UnlockedUntil" xml:space="preserve"><value>Lab key unlocked — locks itself at {0}</value></data>
@@ -107,7 +114,7 @@
   <data name="Backup.Export" xml:space="preserve"><value>Export backup…</value></data>
   <data name="Backup.FileType" xml:space="preserve"><value>LabControl backup</value></data>
   <data name="Backup.Current" xml:space="preserve"><value>Backed up {0} to {1}.</value></data>
-  <data name="Backup.Stale" xml:space="preserve"><value>The lab key changed since the last backup (a holder or the recovery code). Export a new backup.</value></data>
+  <data name="Backup.Stale" xml:space="preserve"><value>The lab changed since the last backup: a key holder, the recovery code, or a USB stick was written. Export a new backup, or a replacement console will not know about it.</value></data>
   <data name="Backup.Missing" xml:space="preserve"><value>No backup has been exported from this console yet.</value></data>
   <data name="Backup.Exported" xml:space="preserve"><value>Backup exported to {0}.</value></data>
   <data name="Backup.Hint" xml:space="preserve"><value>The backup is the one file that moves the lab to another computer. It opens with any holder's passphrase or the recovery code and is useless without them.</value></data>
@@ -117,14 +124,20 @@
   <data name="Banner.Renewal" xml:space="preserve"><value>{0} certificate(s) need renewing — unlock the lab key and the PCs will renew by themselves.</value></data>
   <data name="Banner.UnlockKey" xml:space="preserve"><value>Unlock the lab key…</value></data>
   <data name="Banner.BackupMissing" xml:space="preserve"><value>No backup yet. Without one, losing this computer means reinstalling every PC.</value></data>
-  <data name="Banner.BackupStale" xml:space="preserve"><value>The lab key changed since the last backup. Export a new one.</value></data>
+  <data name="Banner.BackupStale" xml:space="preserve"><value>The lab key or the enrollment codes changed since the last backup. Export a new one.</value></data>
   <data name="Banner.ExportBackup" xml:space="preserve"><value>Export backup…</value></data>
   <data name="Enroll.UnusedFormat" xml:space="preserve"><value>{0} unused enrollment code(s).</value></data>
   <data name="Enroll.PcCount" xml:space="preserve"><value>PCs on this stick:</value></data>
   <data name="Enroll.WritePayload" xml:space="preserve"><value>Write USB payload…</value></data>
   <data name="Enroll.PayloadWritten" xml:space="preserve"><value>USB payload written to {0}. Point FakeAgent --payload (or the installer) at it.</value></data>
-  <data name="Enroll.Hint" xml:space="preserve"><value>Writes ca.crt and setup.json with one single-use code per PC plus spares into a LabControl folder. The stick carries no secret.</value></data>
+  <data name="Enroll.HintFormat" xml:space="preserve"><value>Writes ca.crt and setup.json with {0} single-use codes ({1} PCs + {2} spares) into a LabControl folder. The stick carries no secret.</value></data>
+  <data name="Enroll.VoidEarlier" xml:space="preserve"><value>Void the {0} unused code(s) of earlier sticks — this stick replaces them</value></data>
+  <data name="Enroll.VoidHintOn" xml:space="preserve"><value>The {0} unused code(s) written earlier will stop working. Untick this if PCs were already installed from an earlier stick but have not enrolled yet — otherwise they will have to be reinstalled.</value></data>
+  <data name="Enroll.VoidHintOff" xml:space="preserve"><value>The {0} unused code(s) written earlier stay valid: PCs installed from an earlier stick can still enrol. Void them later by writing another stick with the box ticked.</value></data>
   <data name="Code.UsedBy" xml:space="preserve"><value>used by {0}</value></data>
+  <data name="Enroll.ShowHistory" xml:space="preserve"><value>Show used and voided codes ({0})</value></data>
+  <data name="Code.Voided" xml:space="preserve"><value>voided {0} — replaced by a newer stick</value></data>
+  <data name="Code.UsedByRemoved" xml:space="preserve"><value>used by {0} — since removed from the lab</value></data>
   <data name="Code.Unused" xml:space="preserve"><value>unused</value></data>
   <data name="Jobs.Time" xml:space="preserve"><value>Time</value></data>
   <data name="Jobs.Pc" xml:space="preserve"><value>PC</value></data>
@@ -193,6 +206,7 @@
   <data name="Setup.AcknowledgeFirst" xml:space="preserve"><value>Confirm that you wrote the code down first.</value></data>
   <data name="Setup.BackupHeading" xml:space="preserve"><value>Export a backup</value></data>
   <data name="Setup.BackupBody" xml:space="preserve"><value>The backup is what moves the lab to another computer. Save it somewhere that survives this computer — a USB stick, a cloud folder. The wizard cannot finish without it.</value></data>
+  <data name="Setup.ResumeNote" xml:space="preserve"><value>Setup was closed last time before it finished. The lab already exists; only the steps below are left, and the console opens right after them.</value></data>
   <data name="Setup.DoneHeading" xml:space="preserve"><value>The lab is ready</value></data>
   <data name="Setup.DoneBody" xml:space="preserve"><value>Next: Settings → Write USB payload, install the PCs with it, then press Enrol PCs.</value></data>
   <data name="Setup.OpenConsole" xml:space="preserve"><value>Open the console</value></data>

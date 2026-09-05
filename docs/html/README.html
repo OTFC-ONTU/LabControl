@@ -203,13 +203,15 @@ dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb
 #   in the console: Enrol PCs… → passphrase → the PCs enrol and appear
 tools/publish-all.sh
 tools/docs-build.sh
+tools/make-icon.py                                     # regenerate the console icon (png/ico/icns)
 </code></pre>
 <p>Two console profiles on one machine (the alternation and take-over tests):</p>
 <pre><code class="language-bash">dotnet run --project src/LabControl.Console -- --data ~/labA --port 47800
 dotnet run --project src/LabControl.Console -- --data ~/labB --port 47810   # import the backup from A
 </code></pre>
 <p><code>FakeAgent --fail 7:never --fail 8:late=20 --fail 9:die-mid-job --fail 10:job-error --fail 11:burned-code --fail 12:forged-revocation --fail 13:outdated</code> injects failures;
-<code>--reinstall 7</code> plays a reinstalled PC; <code>--console 127.0.0.1</code> pins the console on a
+<code>--reinstall 7</code> plays a reinstalled PC; <code>burned-code</code> implies a reinstall of that PC,
+since only an enrolment can present a code; <code>--console 127.0.0.1</code> pins the console on a
 machine with no network. Screenshots of the UI from the headless tests:
 <code>LABCONTROL_UI_SHOTS=/tmp/shots dotnet test --project tests/LabControl.Console.Tests</code>.</p>
 <p>Requires the .NET 10 SDK and nothing else. The <code>net10.0-windows</code> projects compile on
@@ -217,7 +219,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-04 22:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 03:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li></ul></nav>
 </div>

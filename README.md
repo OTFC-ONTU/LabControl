@@ -58,6 +58,7 @@ dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb
 #   in the console: Enrol PCs… → passphrase → the PCs enrol and appear
 tools/publish-all.sh
 tools/docs-build.sh
+tools/make-icon.py                                     # regenerate the console icon (png/ico/icns)
 ```
 
 Two console profiles on one machine (the alternation and take-over tests):
@@ -69,7 +70,8 @@ dotnet run --project src/LabControl.Console -- --data ~/labB --port 47810   # im
 
 `FakeAgent --fail 7:never --fail 8:late=20 --fail 9:die-mid-job --fail 10:job-error
 --fail 11:burned-code --fail 12:forged-revocation --fail 13:outdated` injects failures;
-`--reinstall 7` plays a reinstalled PC; `--console 127.0.0.1` pins the console on a
+`--reinstall 7` plays a reinstalled PC; `burned-code` implies a reinstall of that PC,
+since only an enrolment can present a code; `--console 127.0.0.1` pins the console on a
 machine with no network. Screenshots of the UI from the headless tests:
 `LABCONTROL_UI_SHOTS=/tmp/shots dotnet test --project tests/LabControl.Console.Tests`.
 

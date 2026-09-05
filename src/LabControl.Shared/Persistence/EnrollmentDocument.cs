@@ -21,8 +21,19 @@ public sealed class EnrollmentCodeRecord
 
     public int UsedByNumber { get; set; }
 
+    /// <summary>
+    /// Set when a newer USB payload was written: a new stick replaces the old one, so the
+    /// unused codes of every earlier stick stop working (D-28).
+    /// </summary>
+    public long VoidedAtUnix { get; set; }
+
     /// <summary>A burned code is refused and the attempt is reported as an event (D-14).</summary>
     public bool IsBurned => UsedAtUnix != 0;
+
+    public bool IsVoided => VoidedAtUnix != 0;
+
+    /// <summary>Still able to enrol a PC: neither used nor voided.</summary>
+    public bool IsUsable => !IsBurned && !IsVoided;
 }
 
 /// <summary>

@@ -24,9 +24,6 @@ public sealed class SetupPayload
 
     public X509Certificate2 Authority { get; }
 
-    /// <summary>Codes this run already handed out, for the burned-code failure.</summary>
-    public List<string> UsedCodes { get; } = [];
-
     public static SetupPayload Open(string directory)
     {
         var payloadDirectory = Directory.Exists(Path.Combine(directory, Defaults.PayloadDirectoryName))
@@ -55,7 +52,7 @@ public sealed class SetupPayload
 
         var code = Document.EnrollmentCodes[0];
         Document.EnrollmentCodes.RemoveAt(0);
-        UsedCodes.Add(code);
+        Document.UsedEnrollmentCodes.Add(code);
         JsonStore.Save(_path, Document, SetupPayloadDocument.Migrations);
         return code;
     }

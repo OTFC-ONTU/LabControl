@@ -120,7 +120,43 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial int UnusedCodes { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PayloadHint))]
     public partial int PayloadPcCount { get; set; } = Defaults.MaxStudentPcs / 2;
+
+    /// <summary>
+    /// Void the unused codes of earlier sticks when writing this one (D-28). On by default;
+    /// off while PCs installed from the earlier stick are still waiting to enrol.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PayloadHint))]
+    public partial bool VoidEarlierCodes { get; set; } = true;
+
+    /// <summary>Show used and voided codes too. Off by default: the list is for the current stick.</summary>
+    [ObservableProperty]
+    public partial bool ShowCodeHistory { get; set; }
+
+    [ObservableProperty]
+    public partial int HistoryCodes { get; set; }
+
+    partial void OnShowCodeHistoryChanged(bool value) => Refresh();
+
+    /// <summary>What the next <i>Write USB payload</i> will do, in numbers (D-28).</summary>
+    public string PayloadHint
+    {
+        get
+        {
+            var pcs = Math.Clamp(PayloadPcCount, 1, Defaults.MaxStudentPcs);
+            var codes = Strings.Format("Enroll.HintFormat", pcs + Defaults.SpareEnrollmentCodes, pcs, Defaults.SpareEnrollmentCodes);
+            if (UnusedCodes == 0)
+            {
+                return codes;
+            }
+
+            return codes + " " + (VoidEarlierCodes
+                ? Strings.Format("Enroll.VoidHintOn", UnusedCodes)
+                : Strings.Format("Enroll.VoidHintOff", UnusedCodes));
+        }
+    }
 
     [ObservableProperty]
     public partial InstanceRowViewModel? SelectedMachine { get; set; }
@@ -169,17 +205,28 @@ public sealed partial class SettingsViewModel : ObservableObject
         SelectedMachine = OtherMachines.FirstOrDefault(m => m.InstanceId == selected);
 
         Codes.Clear();
+        HistoryCodes = _session.Enrollment.Document.Codes.Count(c => !c.IsUsable);
         foreach (var code in _session.Enrollment.Document.Codes.OrderByDescending(c => c.CreatedAtUnix))
         {
+            if (!code.IsUsable && !ShowCodeHistory)
+            {
+                continue;
+            }
+
             Codes.Add(new CodeRowViewModel(
                 Shared.Identity.Base32Text.Group(code.Code, size: 4),
                 code.Batch,
                 code.IsBurned
-                    ? Strings.Format("Code.UsedBy", string.Format(Strings.Culture, Defaults.MachineNameFormat, code.UsedByNumber))
-                    : Strings.Get("Code.Unused")));
+                    ? Strings.Format(
+                        code.UsedByAgentId is not null && _session.Registry.FindByAgentId(code.UsedByAgentId) is null ? "Code.UsedByRemoved" : "Code.UsedBy",
+                        string.Format(Strings.Culture, Defaults.MachineNameFormat, code.UsedByNumber))
+                    : code.IsVoided
+                        ? Strings.Format("Code.Voided", DateTimeOffset.FromUnixTimeSeconds(code.VoidedAtUnix).ToLocalTime().ToString("d", Strings.Culture))
+                        : Strings.Get("Code.Unused")));
         }
 
         UnusedCodes = _session.Enrollment.UnusedCodeCount;
+        OnPropertyChanged(nameof(PayloadHint));
     }
 
     // ------------------------------------------------------------------ lab key
@@ -359,7 +406,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         var count = Math.Clamp(PayloadPcCount, 1, Defaults.MaxStudentPcs);
         try
         {
-            var target = _session.WritePayload(folder, count);
+            var target = _session.WritePayload(folder, count, VoidEarlierCodes);
             LastMessage = Strings.Format("Enroll.PayloadWritten", target);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

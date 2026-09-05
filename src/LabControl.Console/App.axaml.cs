@@ -35,6 +35,18 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
+    /// <summary>Shows the unlock dialog as the only window and returns whether the vault is now open.</summary>
+    private static async Task<bool> PromptUnlockAsync(IClassicDesktopStyleApplicationLifetime desktop, LabKeyVault vault, string reason)
+    {
+        var prompt = new UnlockDialog(reason);
+        desktop.MainWindow = prompt;
+        prompt.Show();
+        var answer = await prompt.Completion;
+        return answer is not null && (answer.RecoveryCode is not null
+            ? vault.TryUnlock(answer.RecoveryCode)
+            : vault.TryUnlock(answer.Passphrase ?? string.Empty));
+    }
+
     private async Task StartAsync(IClassicDesktopStyleApplicationLifetime desktop)
     {
         var options = Program.Options;
@@ -79,15 +91,7 @@ public partial class App : Application
                 {
                     // ARCHITECTURE §3.8: the console leaf is re-minted from the lab key on its
                     // own machine; the teacher types the passphrase once.
-                    var prompt = new UnlockDialog(Strings.Get("Unlock.ReasonRemint"));
-                    desktop.MainWindow = prompt;
-                    prompt.Show();
-                    var answer = await prompt.Completion;
-                    var unlocked = answer is not null && (answer.RecoveryCode is not null
-                        ? opened.Vault.TryUnlock(answer.RecoveryCode)
-                        : opened.Vault.TryUnlock(answer.Passphrase ?? string.Empty));
-
-                    if (unlocked)
+                    if (await PromptUnlockAsync(desktop, opened.Vault, Strings.Get("Unlock.ReasonRemint")))
                     {
                         var reminted = bootstrap.Remint(opened.Vault, opened.Document);
                         instance.Dispose();
@@ -100,7 +104,35 @@ public partial class App : Application
                     }
                 }
 
-                session = bootstrap.Start(opened, instance);
+                if (bootstrap.SetupIsUnfinished(opened.Document))
+                {
+                    // The wizard was closed before the recovery code was acknowledged or a
+                    // backup exported (ARCHITECTURE §3.7). Both steps need the lab key, and the
+                    // main window stays shut until they are done.
+                    if (!opened.Vault.IsUnlocked
+                        && !await PromptUnlockAsync(desktop, opened.Vault, Strings.Get("Unlock.ReasonResume")))
+                    {
+                        desktop.Shutdown();
+                        return;
+                    }
+
+                    var wizard = new SetupWindow(bootstrap, bootstrap.Start(opened, instance));
+                    desktop.MainWindow = wizard;
+                    wizard.Show();
+
+                    var finished = await wizard.Completion;
+                    if (finished is null)
+                    {
+                        desktop.Shutdown();
+                        return;
+                    }
+
+                    session = finished;
+                }
+                else
+                {
+                    session = bootstrap.Start(opened, instance);
+                }
             }
 
             await session.StartAsync();

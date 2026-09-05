@@ -337,27 +337,40 @@ public sealed class LabRegistry
         {
             var placed = Document.Layout.ToDictionary(tile => tile.Number);
             var tiles = new List<LayoutTile>(Document.Machines.Count);
-            var index = 0;
+            var occupied = new HashSet<(int Column, int Row)>();
+            var unplaced = new List<MachineRecord>();
 
+            // Hand-placed tiles first, by number, so that two records claiming one cell — a
+            // layout saved by an older build could do that — resolve the same way every time:
+            // the lower number keeps the cell, the other is placed like a new PC.
             foreach (var machine in Document.Machines.OrderBy(m => m.Number))
             {
-                if (placed.TryGetValue(machine.Number, out var tile))
+                if (placed.TryGetValue(machine.Number, out var tile) && occupied.Add((tile.Column, tile.Row)))
                 {
                     tiles.Add(tile);
-                    continue;
                 }
-
-                tiles.Add(new LayoutTile
+                else
                 {
-                    Number = machine.Number,
-                    Column = index % Defaults.DefaultTilesPerRow,
-                    Row = index / Defaults.DefaultTilesPerRow,
-                });
-
-                index++;
+                    unplaced.Add(machine);
+                }
             }
 
-            return tiles;
+            // New PCs take the first free cell in reading order, never one that is taken.
+            var index = 0;
+            foreach (var machine in unplaced)
+            {
+                (int Column, int Row) cell;
+                do
+                {
+                    cell = (index % Defaults.DefaultTilesPerRow, index / Defaults.DefaultTilesPerRow);
+                    index++;
+                }
+                while (!occupied.Add(cell));
+
+                tiles.Add(new LayoutTile { Number = machine.Number, Column = cell.Column, Row = cell.Row });
+            }
+
+            return tiles.OrderBy(t => t.Number).ToList();
         }
     }
 

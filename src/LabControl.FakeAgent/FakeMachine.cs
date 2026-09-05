@@ -224,8 +224,10 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     /// </summary>
     public static DirectoryAgentStore Install(string directory, int number, SetupPayload payload, string? consoleHost, int consolePort, bool burnedCode)
     {
+        // A burned code is one the stick already spent on another PC — in this run or an
+        // earlier one, setup.json remembers both. A stick that spent nothing yet cannot fake it.
         var code = burnedCode
-            ? payload.UsedCodes.FirstOrDefault() ?? payload.TakeCode()
+            ? payload.Document.UsedEnrollmentCodes.FirstOrDefault() ?? payload.TakeCode()
             : payload.TakeCode();
 
         var config = new AgentConfigDocument

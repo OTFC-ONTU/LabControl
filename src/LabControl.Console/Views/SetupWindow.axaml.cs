@@ -20,6 +20,13 @@ public partial class SetupWindow : Window
         Closed += (_, _) => _completion.TrySetResult(_viewModel.IsDone ? _viewModel.Session : null);
     }
 
+    /// <summary>Reopens the wizard at the step an earlier launch skipped; <paramref name="resume"/> must hold an unlocked key.</summary>
+    public SetupWindow(ConsoleBootstrap bootstrap, LabSession resume)
+        : this(bootstrap)
+    {
+        _viewModel.Resume(resume);
+    }
+
     public Task<LabSession?> Completion => _completion.Task;
 
     private void OnFinish(object? sender, RoutedEventArgs e)

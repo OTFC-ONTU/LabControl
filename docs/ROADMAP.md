@@ -15,7 +15,7 @@ implement.
 | Milestone | Title | State | Blocked by |
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
-| **M1** | Lab identity, link and presence | **in progress** | M0 |
+| **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | not started | M1, Windows VM |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
@@ -119,7 +119,8 @@ mistake that would later require a walk to every PC to fix.
   (PBKDF2-SHA256 passphrase, ≥ 600 000 iterations) plus one printable recovery code. Add
   and remove holders from the console. All from the .NET BCL, no new dependency.
 - **First-run wizard** that will not finish until a backup has been exported and the
-  recovery code acknowledged, and that re-checks the backup's age on every launch.
+  recovery code acknowledged, resumes at the missing step on the next launch if it was
+  closed early, and re-checks the backup's age on every launch.
 - **Console instance**: leaf certificate minted from the lab key, named, with the private
   key protected by the OS keystore (macOS Keychain / Windows DPAPI / libsecret with an
   encrypted-file fallback).
@@ -138,7 +139,8 @@ mistake that would later require a walk to every PC to fix.
   connected on the agent side.
 - `EnrollmentService`: single-use codes, CSR in, certificate out, code burned, machine
   recorded, duplicate/burned-code attempts reported as events; refused with a retry-later
-  message while the lab key is locked (`D-24`).
+  message while the lab key is locked (`D-24`). Writing a new USB payload voids the unused
+  codes of earlier sticks, and *Remove from lab* revokes the PC's certificate (`D-28`).
 - **Certificate renewal over the link** (`D-25`, ARCHITECTURE §3.8): `AgentService.Renew`,
   the agent asking from 60 days out, the console's *certificates need renewing* banner,
   console instance re-mint at startup when its own leaf is close to expiry.
@@ -176,7 +178,8 @@ Mac, against `FakeAgent`:
 - `FakeAgent` with persistent per-PC state, installation from the console's USB payload
   and failure injection (`D-27`);
 - the console: first-run wizard and import, lab view with draggable tiles, jobs, events,
-  settings, the banners, the 15-minute unlock window and the sealed backup (`D-26`);
+  settings, the banners, the 15-minute unlock window and the sealed backup (`D-26`), which
+  also carries the enrollment codes (`D-28`);
 - the frozen-subset round trip and the backup tests.
 
 The in-process test rig (`tests/LabControl.Console.Tests`) exercises the acceptance list
@@ -186,12 +189,16 @@ number, renewal, revocation carried between consoles, a forged entry, an outdate
 console restart, discovery by beacon, take-over between two consoles, and a forged beacon.
 The headless UI tests render the wizard and the main window and save PNGs.
 
-**What is still owed before M1 is marked done:** the live demonstration on the owner's Mac
-(definition of done, item 3) — the same list run by hand with two console profiles
-(`--data`/`--port`, `D-27`) and `FakeAgent`, including the migration through the recovery
-code and the two-live-consoles banner — and a look at the UI on a real screen, since the
-PNGs are rendered off screen. Nothing in the list is expected to fail; it has simply not
-been watched.
+**Live run (2026-09-05).** The owner ran the acceptance list by hand on the Mac with two
+console profiles and 30 fake PCs. Everything held, and watching it surfaced what tests had
+not: the first-run wizard could be bypassed by closing it (now it resumes on the next
+launch), a saved layout let new tiles land on top of old ones, *Remove from lab* left a
+valid certificate behind, enrollment codes piled up and were tied to the console that wrote
+the stick (`D-28`), and the jobs and events lists painted their state text black on the
+dark theme. All fixed in the same sitting. Not demonstrated live: a renewal refused while
+the key is locked (enrolment and the first renewal happen in the same second against
+`FakeAgent`, so the refusal is covered by `LinkTests` only) and the `schema_version`
+refusal (covered by `PersistenceTests`).
 
 **Acceptance criteria**
 

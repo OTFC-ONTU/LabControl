@@ -147,8 +147,9 @@ was itself a credential.)
 2. Give the instance a name (`MacBook-2026`, `Lab PC`), so logs say which console did
    what.
 3. The console mints itself a new leaf certificate from the lab key, restores the
-   machine list, package catalog and room layout from the same backup, and starts
-   beaconing.
+   machine list, package catalog, room layout and outstanding enrollment codes from the
+   same backup, and starts beaconing. PCs installed from a stick the old machine wrote,
+   but not yet enrolled, enrol here (`D-28`).
 4. Every agent sees the new beacon, validates it against the CA it has pinned since
    installation, and connects. **No student PC is touched.**
 5. Optionally revoke the old instance — only if it is lost or stolen (§3.7.3). If the old
@@ -170,7 +171,7 @@ What the machines share and what each keeps to itself:
 |---|---|---|
 | Lab key, key holders, recovery code | `lab-key.lck` on every teacher machine | imported once from the backup (§3.6 steps 1–3); holders added later travel with the next backup |
 | Console instance (name, leaf certificate, key) | that machine only | never — each machine mints its own, and that is the point |
-| Machine list (`machines[]`) | `lab.json` on each machine | **self-healing**: an agent that connects with a valid lab-issued certificate and is not in this console's list is added from its `Hello` (number, MAC, serial); a console never has to be told about a PC twice. **The PC number is the identity** (`D-25`): a PC that arrives with a number another record holds is that PC reinstalled, and the old record is replaced, with an event saying so |
+| Machine list (`machines[]`) | `lab.json` on each machine | **self-healing**: an agent that connects with a valid lab-issued certificate and is not in this console's list is added from its `Hello` (number, MAC, serial); a console never has to be told about a PC twice. **The PC number is the identity** (`D-25`): a PC that arrives with a number another record holds is that PC reinstalled, and the old record is replaced, with an event saying so. The only way out of the list is *Remove from lab*, which revokes the PC's certificate first (`D-28`) — otherwise the PC would heal itself straight back |
 | Room layout | `lab.json` on each machine | default layout is derived from PC numbers, so an unseen list still looks right; a hand-arranged layout travels only with a backup |
 | Revocation list | `lab.json` on each machine **and** every agent | merged as a set (§3.7.3); a console learns from the first agent that connects what the other console revoked |
 | Package catalog, scripts, cached installers | that machine only | export / import a backup, or copy the `packages/` directory; the console shows *catalog last changed on <instance>* so a stale copy is visible |
@@ -249,7 +250,10 @@ refuses to finish until the backup has actually been exported somewhere and the
 recovery code has been acknowledged, and on every launch it checks that `lab-key.lck`
 still matches the fingerprint recorded at the last export — a holder added or a recovery
 code reprinted on *either* teacher machine changes the file, and a date alone cannot see
-that (`D-25`).
+that (`D-25`). Closing the wizard early does not get around this: the lab is already on
+disk, so the next launch asks for the passphrase and reopens the wizard at the step that
+is missing — a fresh recovery code if the first was never acknowledged (the old one is
+voided), otherwise the backup — and the main window stays shut until it is done.
 
 ### 3.8 Certificate lifetimes and renewal
 
@@ -288,13 +292,13 @@ what keeps §3.6 working a year from now, when the backup being restored was wri
 older build than the console restoring it.
 
 Created on first launch by the setup wizard. **Backup** = `lab-key.lck` + `lab.json` +
-the catalog, exported as one file (`<lab> <date>.lcbak`): the key document as it is —
+`enrollment.json` + the catalog, exported as one file (`<lab> <date>.lcbak`): the key document as it is —
 already encrypted under its holders and the recovery code — and the rest sealed with
 AES-256-GCM under the same master key, so whoever can open the lab key can open the backup
 and nobody else can read even the machine list (`D-26`). It is what makes §3.6 a
 ten-minute operation instead of a walk around the room. The console nags until a backup exists and
 warns when `lab-key.lck` no longer matches the fingerprint taken at the last export or
-when the machine list has grown since (§3.7.3).
+when a USB stick was written since (`D-28`).
 
 ## 5. Data on a student PC
 

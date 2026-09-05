@@ -39,9 +39,16 @@ public sealed class PayloadTests
                 machines.Add(new FakeMachine(store, null, TestLogging.Factory.CreateLogger($"fake PC-{n:00}")));
             }
 
-            // Codes taken by an install are gone from the stick, as Setup.exe marks them.
+            // Codes taken by an install move to the stick's used list, as Setup.exe marks them.
             var rewritten = JsonStore.Load<SetupPayloadDocument>(Path.Combine(target, Defaults.SetupFileName), SetupPayloadDocument.Migrations);
             Assert.Equal(Defaults.SpareEnrollmentCodes, rewritten.EnrollmentCodes.Count);
+            Assert.Equal(2, rewritten.UsedEnrollmentCodes.Count);
+
+            // The burned-code failure takes one of those spent codes, in this run or a later one.
+            var reopened = SetupPayload.Open(stick);
+            using var burned = FakeMachine.Install(Path.Combine(data, "PC-03"), 3, reopened, "127.0.0.1", console.Port, burnedCode: true);
+            Assert.Contains(burned.Config.EnrollmentCode, rewritten.UsedEnrollmentCodes);
+            Assert.Equal(Defaults.SpareEnrollmentCodes, reopened.Document.EnrollmentCodes.Count);
 
             foreach (var machine in machines)
             {

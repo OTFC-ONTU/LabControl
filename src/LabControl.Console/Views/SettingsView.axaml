@@ -110,7 +110,9 @@
         <NumericUpDown Value="{Binding PayloadPcCount}" Minimum="1" Maximum="30" Increment="1" FormatString="0" Width="110" />
         <Button Content="{loc:Localize Enroll.WritePayload}" Command="{Binding WritePayloadCommand}" />
       </StackPanel>
-      <TextBlock Text="{loc:Localize Enroll.Hint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+      <CheckBox IsChecked="{Binding VoidEarlierCodes}" Content="{Binding UnusedCodes, StringFormat={loc:Localize Enroll.VoidEarlier}}" IsVisible="{Binding !!UnusedCodes}" />
+      <TextBlock Text="{Binding PayloadHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+      <CheckBox IsChecked="{Binding ShowCodeHistory}" Content="{Binding HistoryCodes, StringFormat={loc:Localize Enroll.ShowHistory}}" IsVisible="{Binding !!HistoryCodes}" Margin="0,6,0,0" />
       <ItemsControl ItemsSource="{Binding Codes}" Margin="0,6,0,0">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:CodeRowViewModel">

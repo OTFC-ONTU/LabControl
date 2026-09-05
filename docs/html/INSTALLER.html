@@ -151,14 +151,22 @@ breaking it.</p>
                         student: {name:&quot;student&quot;, password:&quot;1&quot;}, naming: &quot;PC-{n:00}&quot;,
                         power: {...}, next_number: 1,
                         enrollment_codes: [&quot;...&quot;, ...],    // single-use, one per PC + spares
+                        used_enrollment_codes: [&quot;...&quot;],    // moved here by Setup as it spends them
                         written_by, written_at }           // which console, when
    INSTALL.txt        3-line human instructions (in Ukrainian)
 </code></pre>
 <p><strong>The stick carries no secret.</strong> <code>ca.crt</code> is public by nature and the enrollment codes
 are single-use: whoever finds the stick can, at worst, enrol a bogus machine, which the
-console shows as an unexpected PC and removes with one click. The lab key never leaves
-the teacher machine and its backup (<code>docs/ARCHITECTURE.md</code> §3.2). Generate a few more
-codes than there are PCs, so a failed install can be retried.</p>
+console shows as an unexpected PC and removes with one click — removal revokes its
+certificate too (<code>D-28</code>). The lab key never leaves the teacher machine and its backup
+(<code>docs/ARCHITECTURE.md</code> §3.2). The console writes a few more codes than there are PCs, so
+a failed install can be retried, and <strong>writing a new stick voids the unused codes of every
+earlier one</strong> unless the teacher unticks it (<code>D-28</code>): the stick in the drawer stops
+working the moment a newer one exists. Untick it only when PCs were installed from the
+earlier stick and have not yet enrolled — they still hold those codes.</p>
+<p>A stick is enrolled by the console that wrote it, or by one that imported that console's
+backup afterwards — the codes travel in the backup and nowhere else (<code>D-28</code>). Writing a
+stick therefore marks the backup stale until it is exported again.</p>
 <p><code>Setup.exe</code> deletes nothing from the stick except marking the code it used and updating
 <code>next_number</code>.</p>
 <h2 id="what-setup.exe-does-in-order">What Setup.exe does, in order<a class="anchor" href="#what-setup.exe-does-in-order" aria-label="Link to this section">#</a></h2>
@@ -283,7 +291,7 @@ reverted between runs.</li>
 </ul>
 
 </article>
-<footer>Generated 2026-09-04 22:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 03:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#building-the-usb-payload-on-the-console">Building the USB payload (on the console)</a></li><li class="lvl2"><a href="#what-setup.exe-does-in-order">What Setup.exe does, in order</a></li><li class="lvl2"><a href="#uninstall-repair">Uninstall / repair</a></li><li class="lvl2"><a href="#things-the-installer-cannot-do">Things the installer cannot do</a></li><li class="lvl2"><a href="#testing-the-installer-without-a-room-full-of-real-pcs">Testing the installer without a room full of real PCs</a></li></ul></nav>
 </div>

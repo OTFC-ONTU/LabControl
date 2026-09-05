@@ -87,6 +87,10 @@ public sealed partial class SetupViewModel : ObservableObject
     [ObservableProperty]
     public partial string BackupPath { get; set; } = string.Empty;
 
+    /// <summary>The wizard was reopened on a later launch to finish the steps that were skipped.</summary>
+    [ObservableProperty]
+    public partial bool IsResumed { get; set; }
+
     // ------------------------------------------------------------------ import
 
     [ObservableProperty]
@@ -182,6 +186,35 @@ public sealed partial class SetupViewModel : ObservableObject
             Passphrase = string.Empty;
             PassphraseAgain = string.Empty;
         }
+    }
+
+    /// <summary>
+    /// Picks the wizard up where an earlier launch abandoned it. The lab key must be unlocked:
+    /// a recovery code that was never acknowledged is gone for good, so a fresh one is
+    /// printed and the old one voided; otherwise only the backup step is left.
+    /// </summary>
+    public void Resume(LabSession session)
+    {
+        Session = session;
+        IsResumed = true;
+        Error = string.Empty;
+
+        if (session.InstanceDocument.RecoveryCodeAcknowledged)
+        {
+            Step = SetupStep.Backup;
+            return;
+        }
+
+        if (!session.Vault.Use(lab => lab.ResetRecoveryCode(), out var code))
+        {
+            throw new InvalidOperationException("The lab key is locked.");
+        }
+
+        session.Vault.Save();
+        session.Events.Warning("key.recovery_reprinted", Strings.Get("Key.RecoveryReprinted"));
+        _recoveryCode = code;
+        RecoveryCodeText = code.ToPrintableString();
+        Step = SetupStep.RecoveryCode;
     }
 
     [RelayCommand]

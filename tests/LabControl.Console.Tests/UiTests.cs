@@ -72,6 +72,10 @@ public sealed class UiTests
             Assert.Equal(SetupStep.Backup, vm.Step);
             await Render(window, "wizard-4-backup");
 
+            // A stick written before the backup: its codes must reach the other console.
+            vm.Session!.WritePayload(TestConsole.TempDirectory(), pcCount: 2);
+            Assert.Equal(BackupStatus.Missing, bootstrap.CheckBackup(vm.Session.InstanceDocument));
+
             // The backup step goes through the file picker; drive the bootstrap the same way.
             Assert.True(bootstrap.TryExportBackup(vm.Session!, backupPath, out var error), error);
             Assert.True(File.Exists(backupPath));
@@ -93,6 +97,80 @@ public sealed class UiTests
         Assert.Equal(session.LabId, imported.LabId);
         Assert.NotEqual(session.Instance.InstanceId, imported.Instance.InstanceId);
         Assert.Equal(BackupStatus.Current, other.CheckBackup(imported.InstanceDocument));
+        Assert.Equal(2 + Shared.Defaults.SpareEnrollmentCodes, imported.Enrollment.UnusedCodeCount);
+
+        // Writing another stick on the new console makes its backup stale until re-exported.
+        // (Timestamps are whole seconds; pretend the export happened a second earlier.)
+        imported.InstanceDocument.BackupExportedAtUnix -= 1;
+        imported.WritePayload(TestConsole.TempDirectory(), pcCount: 1, voidEarlier: false);
+        Assert.Equal(BackupStatus.Stale, other.CheckBackup(imported.InstanceDocument));
+    }
+
+    [Fact]
+    public async Task A_wizard_closed_early_resumes_at_the_missing_step_on_the_next_launch()
+    {
+        var directory = TestConsole.TempDirectory();
+        var backupPath = Path.Combine(TestConsole.TempDirectory(), "lab.lcbak");
+        var options = new ConsoleOptions { DataDirectory = directory, Port = 0, BindAddress = System.Net.IPAddress.Loopback };
+        var bootstrap = new ConsoleBootstrap(options, TestLogging.Factory);
+        const string passphrase = "correct horse battery staple";
+
+        // Launch 1: the lab is created and the window is closed on the recovery-code step.
+        var created = bootstrap.CreateLab("Room 214", "Viacheslav", passphrase, "MacBook", out var firstCode);
+        await created.DisposeAsync();
+        Assert.True(bootstrap.HasLab);
+        Assert.True(bootstrap.SetupIsUnfinished(bootstrap.OpenExisting().Document));
+
+        // Launch 2: the key is unlocked and the wizard reopens with a fresh code, since the
+        // first one was never acknowledged. Closing it again after acknowledging still
+        // leaves the backup owed.
+        var opened = bootstrap.OpenExisting();
+        Assert.True(opened.Vault.TryUnlock(passphrase));
+        var resumed = bootstrap.Start(opened, opened.Instance);
+        // Dispatch has no Func<Task> overload: a lambda that returns nothing would bind to
+        // Action and run as async void, so the wizard windows return the completion result.
+        var abandoned = await Session.Dispatch(async () =>
+        {
+            var window = new SetupWindow(bootstrap, resumed);
+            window.Show();
+            var vm = (SetupViewModel)window.DataContext!;
+            Assert.True(vm.IsResumed);
+            Assert.Equal(SetupStep.RecoveryCode, vm.Step);
+            Assert.NotEqual(firstCode.ToPrintableString(), vm.RecoveryCodeText);
+            await Render(window, "wizard-resume-recovery");
+
+            vm.RecoveryCodeAcknowledged = true;
+            vm.AcknowledgeRecoveryCodeCommand.Execute(null);
+            Assert.Equal(SetupStep.Backup, vm.Step);
+            window.Close();
+            return await window.Completion;
+        }, TestContext.Current.CancellationToken);
+        await resumed.DisposeAsync();
+        Assert.Null(abandoned);
+
+        opened = bootstrap.OpenExisting();
+        Assert.True(opened.Document.RecoveryCodeAcknowledged);
+        Assert.True(bootstrap.SetupIsUnfinished(opened.Document));
+        Assert.False(opened.Vault.TryUnlock(firstCode), "the unacknowledged recovery code must be void");
+
+        // Launch 3: only the backup step is left; after the export the wizard is finished for good.
+        Assert.True(opened.Vault.TryUnlock(passphrase));
+        var last = bootstrap.Start(opened, opened.Instance);
+        var exported = await Session.Dispatch(async () =>
+        {
+            var window = new SetupWindow(bootstrap, last);
+            window.Show();
+            var vm = (SetupViewModel)window.DataContext!;
+            Assert.Equal(SetupStep.Backup, vm.Step);
+            await Render(window, "wizard-resume-backup");
+            var ok = bootstrap.TryExportBackup(vm.Session!, backupPath, out var error);
+            window.Close();
+            return ok ? string.Empty : error;
+        }, TestContext.Current.CancellationToken);
+        Assert.Equal(string.Empty, exported);
+        await last.DisposeAsync();
+
+        Assert.False(bootstrap.SetupIsUnfinished(bootstrap.OpenExisting().Document));
     }
 
     [Fact]

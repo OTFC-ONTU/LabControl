@@ -76,7 +76,7 @@ public sealed partial class MainViewModel : ObservableObject
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(RunScriptCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(RunScriptCommand), nameof(RemoveSelectedCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
@@ -282,19 +282,51 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task RemoveMachineAsync(MachineTileViewModel? tile)
+    private Task RemoveMachineAsync(MachineTileViewModel? tile) =>
+        tile is null ? Task.CompletedTask : RemoveMachinesAsync([tile]);
+
+    /// <summary>Toolbar: remove every selected PC in one go — one confirmation, one passphrase.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private Task RemoveSelectedAsync() => RemoveMachinesAsync(Selected);
+
+    private async Task RemoveMachinesAsync(IReadOnlyList<MachineTileViewModel> tiles)
     {
-        if (tile is null)
+        if (tiles.Count == 0)
         {
             return;
         }
 
-        if (!await _dialogs.ConfirmAsync(tile.Name, Strings.Format("Machine.RemoveConfirm", tile.Name), Strings.Get("Machine.Remove"), destructive: true))
+        var title = tiles.Count == 1 ? tiles[0].Name : Strings.Format("Machine.RemoveManyTitle", tiles.Count);
+        var body = tiles.Count == 1
+            ? Strings.Format("Machine.RemoveConfirm", tiles[0].Name)
+            : Strings.Format("Machine.RemoveManyConfirm", tiles.Count, string.Join(", ", tiles.OrderBy(t => t.Number).Select(t => t.Name)));
+        if (!await _dialogs.ConfirmAsync(title, body, Strings.Get("Machine.Remove"), destructive: true))
         {
             return;
         }
 
-        _session.ForgetMachine(tile.AgentId);
+        // Removing without revoking would leave a valid certificate nobody can see any more
+        // (D-28): the PC would come straight back through the self-healing list, or sit in a
+        // cupboard as a credential. So the certificate goes first, then the record.
+        var toRevoke = tiles
+            .Where(t => t.CertificateSerial.Length > 0 && !_session.Registry.Revocations.IsRevoked(t.CertificateSerial))
+            .ToArray();
+        if (toRevoke.Length > 0 && !await EnsureUnlockedAsync(Strings.Get("Unlock.ReasonRemove")))
+        {
+            return;
+        }
+
+        foreach (var tile in tiles)
+        {
+            if (toRevoke.Contains(tile)
+                && !_session.TryRevoke(tile.CertificateSerial, Strings.Format("Revoke.RemovedReason", tile.Name), out var message))
+            {
+                await _dialogs.ShowMessageAsync(tile.Name, message);
+                return;
+            }
+
+            _session.ForgetMachine(tile.AgentId);
+        }
     }
 
     [RelayCommand]

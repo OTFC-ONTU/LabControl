@@ -16,9 +16,10 @@ public static class LabBackup
 {
     private static string Context(string labId) => $"labcontrol/backup/{labId}";
 
-    public static BackupDocument Export(LabKey lab, LabDocument labDocument, IReadOnlyDictionary<string, string> catalog, string exportedBy, DateTimeOffset now)
+    public static BackupDocument Export(LabKey lab, LabDocument labDocument, IReadOnlyDictionary<string, string> catalog, string exportedBy, DateTimeOffset now,
+        EnrollmentDocument? enrollment = null)
     {
-        var payload = new BackupPayload { Lab = labDocument, Catalog = new Dictionary<string, string>(catalog) };
+        var payload = new BackupPayload { Lab = labDocument, Catalog = new Dictionary<string, string>(catalog), Enrollment = enrollment };
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, JsonStore.Options);
 
         return new BackupDocument

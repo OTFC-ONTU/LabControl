@@ -163,7 +163,7 @@ implement.</p>
 <tr>
 <td><strong>M1</strong></td>
 <td>Lab identity, link and presence</td>
-<td><strong>in progress</strong></td>
+<td><strong>done 2026-09-05</strong></td>
 <td>M0</td>
 </tr>
 <tr>
@@ -285,7 +285,8 @@ AES-256-GCM under a master key stored as one wrapping per <strong>named key hold
 (PBKDF2-SHA256 passphrase, ≥ 600 000 iterations) plus one printable recovery code. Add
 and remove holders from the console. All from the .NET BCL, no new dependency.</li>
 <li><strong>First-run wizard</strong> that will not finish until a backup has been exported and the
-recovery code acknowledged, and that re-checks the backup's age on every launch.</li>
+recovery code acknowledged, resumes at the missing step on the next launch if it was
+closed early, and re-checks the backup's age on every launch.</li>
 <li><strong>Console instance</strong>: leaf certificate minted from the lab key, named, with the private
 key protected by the OS keystore (macOS Keychain / Windows DPAPI / libsecret with an
 encrypted-file fallback).</li>
@@ -304,7 +305,8 @@ signature), verifiable offline; rate-limited dialling and beacon-ignoring-while-
 connected on the agent side.</li>
 <li><code>EnrollmentService</code>: single-use codes, CSR in, certificate out, code burned, machine
 recorded, duplicate/burned-code attempts reported as events; refused with a retry-later
-message while the lab key is locked (<code>D-24</code>).</li>
+message while the lab key is locked (<code>D-24</code>). Writing a new USB payload voids the unused
+codes of earlier sticks, and <em>Remove from lab</em> revokes the PC's certificate (<code>D-28</code>).</li>
 <li><strong>Certificate renewal over the link</strong> (<code>D-25</code>, ARCHITECTURE §3.8): <code>AgentService.Renew</code>,
 the agent asking from 60 days out, the console's <em>certificates need renewing</em> banner,
 console instance re-mint at startup when its own leaf is close to expiry.</li>
@@ -342,7 +344,8 @@ through <code>LabTrust</code>, <code>Enroll</code>/<code>Link</code>/<code>Renew
 <li><code>FakeAgent</code> with persistent per-PC state, installation from the console's USB payload
 and failure injection (<code>D-27</code>);</li>
 <li>the console: first-run wizard and import, lab view with draggable tiles, jobs, events,
-settings, the banners, the 15-minute unlock window and the sealed backup (<code>D-26</code>);</li>
+settings, the banners, the 15-minute unlock window and the sealed backup (<code>D-26</code>), which
+also carries the enrollment codes (<code>D-28</code>);</li>
 <li>the frozen-subset round trip and the backup tests.</li>
 </ul>
 <p>The in-process test rig (<code>tests/LabControl.Console.Tests</code>) exercises the acceptance list
@@ -351,12 +354,16 @@ codes, queued and online-only jobs, the cached result after a reconnect, reinsta
 number, renewal, revocation carried between consoles, a forged entry, an outdated agent,
 console restart, discovery by beacon, take-over between two consoles, and a forged beacon.
 The headless UI tests render the wizard and the main window and save PNGs.</p>
-<p><strong>What is still owed before M1 is marked done:</strong> the live demonstration on the owner's Mac
-(definition of done, item 3) — the same list run by hand with two console profiles
-(<code>--data</code>/<code>--port</code>, <code>D-27</code>) and <code>FakeAgent</code>, including the migration through the recovery
-code and the two-live-consoles banner — and a look at the UI on a real screen, since the
-PNGs are rendered off screen. Nothing in the list is expected to fail; it has simply not
-been watched.</p>
+<p><strong>Live run (2026-09-05).</strong> The owner ran the acceptance list by hand on the Mac with two
+console profiles and 30 fake PCs. Everything held, and watching it surfaced what tests had
+not: the first-run wizard could be bypassed by closing it (now it resumes on the next
+launch), a saved layout let new tiles land on top of old ones, <em>Remove from lab</em> left a
+valid certificate behind, enrollment codes piled up and were tied to the console that wrote
+the stick (<code>D-28</code>), and the jobs and events lists painted their state text black on the
+dark theme. All fixed in the same sitting. Not demonstrated live: a renewal refused while
+the key is locked (enrolment and the first renewal happen in the same second against
+<code>FakeAgent</code>, so the refusal is covered by <code>LinkTests</code> only) and the <code>schema_version</code>
+refusal (covered by <code>PersistenceTests</code>).</p>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
 <li>30 fake agents enrol from a fresh lab and appear online within 5 s of the console
@@ -823,7 +830,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-04 22:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-05 03:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

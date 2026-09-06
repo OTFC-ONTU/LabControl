@@ -169,8 +169,8 @@ implement.</p>
 <tr>
 <td><strong>M2</strong></td>
 <td>Windows agent: service, helper, power, scripts</td>
-<td><strong>in progress</strong> (portions 1–3 of 4 verified on the VM, 2026-09-05…07; portion 4 built 2026-09-07, its VM run next)</td>
-<td>M1, Windows VM</td>
+<td><strong>built; all four portions verified on the VM (2026-09-05…07), <code>PC-00</code> checks pending</strong></td>
+<td></td>
 </tr>
 <tr>
 <td><strong>M3</strong></td>
@@ -700,6 +700,27 @@ and the agent log shows the <code>restart</code> lines. Then push the same build
 <code>win-x64</code> build to see the preflight — on the ARM VM it will pass under emulation, so the
 wrong-architecture refusal is a <code>PC-00</code> check with a <code>win-arm64</code> build.</p>
 </li>
+<li><p><em>Portion 4 on the VM (2026-09-07 01:58–02:03, driven from the console by Claude).</em> After
+the one-time hand install of a portion-4 build (<code>dev-install.cmd</code>, see above), three
+pushes to <code>PC-01</code>, all from the <em>Push agent build…</em> dialog: <strong>(1)</strong> <code>0.1.0+e5437f74</code> from
+<code>artifacts/win-arm64</code> — <em>pulled agent.exe (83.0 MB)</em>, <em>pulled session.exe (80.8 MB)</em>,
+<em>agent.exe 0.1.0 runs on this PC</em>, <em>installed into app\0.1.0+e5437f74; service repointed,
+restarting it now</em>; the link dropped 1.4 s after the push and the new version was linked
+0.9 s later; the re-sent job ended <em>Running 0.1.0+e5437f74 now (was 0.1.0; app\previous
+still names it)</em>; on the VM <code>app\</code> held <code>0.1.0</code> and <code>0.1.0+e5437f74</code>, <code>current</code> /
+<code>previous</code> named them, <code>sc qc</code> pointed into the new directory, <code>update\</code> was empty and the
+agent log had <em>asking for a restart</em> / <em>restart: stopping</em> / <em>starting</em> / <em>The service was
+restarted</em>. <strong>(2)</strong> the same build again — <em>Running … now</em> in 0 s, nothing pulled.
+<strong>(3)</strong> a <code>0.1.1</code> build (<code>dotnet publish -p:Version=0.1.1</code>, because deterministic builds
+of unchanged sources hash identically) — the same four lines, back in 0.9 s as
+<code>0.1.1+72fb359a</code>, <em>Removed older version directory: 0.1.0</em>; afterwards <code>app\</code> held
+exactly <code>0.1.0+e5437f74</code> and <code>0.1.1+72fb359a</code>, <code>agent.exe</code> and <code>session.exe</code> ran from
+the new one. The planned helper restarts around each push produced only
+<code>session.helper_ready</code>, no warnings. Not done: the <code>win-x64</code> push (passes under emulation
+on this VM, so it proves nothing here); the wrong-architecture preflight refusal waits
+for <code>PC-00</code>. Portion 4, and with it the M2 build, is verified on the VM; the <code>PC-00</code>
+checks (Wake-on-LAN, <code>win-x64</code>, antivirus, real capture) remain for the lab.</p>
+</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -1081,7 +1102,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 01:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 02:04 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

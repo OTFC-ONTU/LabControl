@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portions 1–3 of 4 verified on the VM, 2026-09-05…07; portion 4 built 2026-09-07, its VM run next) | M1, Windows VM |
+| **M2** | Windows agent: service, helper, power, scripts | **built; all four portions verified on the VM (2026-09-05…07), `PC-00` checks pending** |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -533,6 +533,26 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   *Running … now*), push a third build (the first version directory is pruned), and push a
   `win-x64` build to see the preflight — on the ARM VM it will pass under emulation, so the
   wrong-architecture refusal is a `PC-00` check with a `win-arm64` build.
+- *Portion 4 on the VM (2026-09-07 01:58–02:03, driven from the console by Claude).* After
+  the one-time hand install of a portion-4 build (`dev-install.cmd`, see above), three
+  pushes to `PC-01`, all from the *Push agent build…* dialog: **(1)** `0.1.0+e5437f74` from
+  `artifacts/win-arm64` — *pulled agent.exe (83.0 MB)*, *pulled session.exe (80.8 MB)*,
+  *agent.exe 0.1.0 runs on this PC*, *installed into app\0.1.0+e5437f74; service repointed,
+  restarting it now*; the link dropped 1.4 s after the push and the new version was linked
+  0.9 s later; the re-sent job ended *Running 0.1.0+e5437f74 now (was 0.1.0; app\previous
+  still names it)*; on the VM `app\` held `0.1.0` and `0.1.0+e5437f74`, `current` /
+  `previous` named them, `sc qc` pointed into the new directory, `update\` was empty and the
+  agent log had *asking for a restart* / *restart: stopping* / *starting* / *The service was
+  restarted*. **(2)** the same build again — *Running … now* in 0 s, nothing pulled.
+  **(3)** a `0.1.1` build (`dotnet publish -p:Version=0.1.1`, because deterministic builds
+  of unchanged sources hash identically) — the same four lines, back in 0.9 s as
+  `0.1.1+72fb359a`, *Removed older version directory: 0.1.0*; afterwards `app\` held
+  exactly `0.1.0+e5437f74` and `0.1.1+72fb359a`, `agent.exe` and `session.exe` ran from
+  the new one. The planned helper restarts around each push produced only
+  `session.helper_ready`, no warnings. Not done: the `win-x64` push (passes under emulation
+  on this VM, so it proves nothing here); the wrong-architecture preflight refusal waits
+  for `PC-00`. Portion 4, and with it the M2 build, is verified on the VM; the `PC-00`
+  checks (Wake-on-LAN, `win-x64`, antivirus, real capture) remain for the lab.
 
 **Acceptance criteria**
 

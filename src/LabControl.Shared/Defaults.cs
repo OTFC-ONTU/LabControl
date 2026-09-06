@@ -301,6 +301,13 @@ public static class Defaults
     public static readonly TimeSpan HelperRestartDelay = TimeSpan.FromSeconds(1);
 
     /// <summary>
+    /// Windows ends the helper a moment before the logoff or session change that caused it
+    /// is visible to the service. An exit is held this long for a planned reason to show
+    /// up before it is called a crash (D-32 item 12).
+    /// </summary>
+    public static readonly TimeSpan HelperExitGrace = TimeSpan.FromSeconds(3);
+
+    /// <summary>
     /// A helper that dies this many times within <see cref="HelperCrashLoopWindow"/> is in a
     /// crash loop: the service reports it once and waits <see cref="HelperCrashLoopBackoff"/>
     /// between further attempts instead of spinning.

@@ -463,6 +463,15 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   from cmd), a logoff/logon with no helper warnings and no `session.lock`, and item 9 with
   the network cut by a temporary Windows Firewall rule against the console's address
   instead of `Disable-NetAdapter`, which bugchecks the virtio guest.
+- *Portion 3, third pass (2026-09-06, late).* The console was launched as a macOS `.app`
+  wrapper so the checks could be driven end to end. PowerShell *Who am I* as the user: Cyrillic
+  intact, session 1. cmd was still garbled — not the code page after all but **LF line
+  endings** (the console writes them on the Mac; cmd's parser eats the start of the next
+  lines), proved with the same batch in LF and CRLF form on the VM; `ScriptText.ForCmd` now
+  writes CRLF. Logon was clean; logoff still showed `helper_exited`/`helper_down` because
+  Windows ends the helper a moment before the logoff notification, so the supervisor now
+  holds an unexplained exit for 3 s (`HelperExitGrace`). No `session.lock` on the logon
+  screen. Re-run pending for cmd *Who am I*, logoff, and the firewall network cut.
 
 **Acceptance criteria**
 

@@ -626,6 +626,16 @@ from cmd), a logoff/logon with no helper warnings and no <code>session.lock</cod
 the network cut by a temporary Windows Firewall rule against the console's address
 instead of <code>Disable-NetAdapter</code>, which bugchecks the virtio guest.</p>
 </li>
+<li><p><em>Portion 3, third pass (2026-09-06, late).</em> The console was launched as a macOS <code>.app</code>
+wrapper so the checks could be driven end to end. PowerShell <em>Who am I</em> as the user: Cyrillic
+intact, session 1. cmd was still garbled — not the code page after all but <strong>LF line
+endings</strong> (the console writes them on the Mac; cmd's parser eats the start of the next
+lines), proved with the same batch in LF and CRLF form on the VM; <code>ScriptText.ForCmd</code> now
+writes CRLF. Logon was clean; logoff still showed <code>helper_exited</code>/<code>helper_down</code> because
+Windows ends the helper a moment before the logoff notification, so the supervisor now
+holds an unexplained exit for 3 s (<code>HelperExitGrace</code>). No <code>session.lock</code> on the logon
+screen. Re-run pending for cmd <em>Who am I</em>, logoff, and the firewall network cut.</p>
+</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -1007,7 +1017,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-06 02:01 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-06 23:52 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

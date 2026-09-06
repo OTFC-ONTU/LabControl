@@ -77,7 +77,7 @@ internal sealed class ScriptRunner
         try
         {
             Directory.CreateDirectory(directory);
-            await File.WriteAllBytesAsync(path, request.Shell == ScriptShell.Cmd ? ForCmd(script) : ForPowerShell(script), token);
+            await File.WriteAllBytesAsync(path, request.Shell == ScriptShell.Cmd ? ScriptText.ForCmd(script) : ScriptText.ForPowerShell(script), token);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -178,22 +178,6 @@ internal sealed class ScriptRunner
               $"\"[Console]::OutputEncoding = [Text.Encoding]::UTF8; & '{path.Replace("'", "''")}'; exit $LASTEXITCODE\""),
     };
 
-    /// <summary>Windows PowerShell 5.1 reads a file with a BOM as UTF-8 and one without as ANSI (D-29 item 7): make sure the BOM is there.</summary>
-    private static byte[] ForPowerShell(byte[] script)
-    {
-        var preamble = Encoding.UTF8.GetPreamble();
-        return script.AsSpan().StartsWith(preamble) ? script : [.. preamble, .. script];
-    }
-
-    /// <summary>
-    /// cmd.exe runs the batch after <c>chcp 65001</c>, so the file stays UTF-8 — but without a
-    /// byte-order mark, which cmd.exe would read as garbage in front of the first command.
-    /// </summary>
-    private static byte[] ForCmd(byte[] script)
-    {
-        var preamble = Encoding.UTF8.GetPreamble();
-        return script.AsSpan().StartsWith(preamble) ? script[preamble.Length..] : script;
-    }
 
     private static JobResult Fail(Job job, string message) => new() { JobId = job.Id, Ok = false, ExitCode = -1, Message = message };
 

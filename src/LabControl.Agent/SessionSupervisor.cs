@@ -266,8 +266,14 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             }
             else if (helper.TryGetExitCode(out var exitCode))
             {
-                stop = $"session.exe exited with code {exitCode}";
-                crashed = true;
+                // Hold the verdict: a logoff notification that arrives within the grace turns
+                // this exit into a planned restart instead of a reported crash.
+                helper.ExitNoticedAt ??= now;
+                if (now - helper.ExitNoticedAt.Value >= Defaults.HelperExitGrace)
+                {
+                    stop = $"session.exe exited with code {exitCode}";
+                    crashed = true;
+                }
             }
             else if (helper.Connected && now - helper.LastHeard > Defaults.HelperSilenceTimeout)
             {
@@ -303,7 +309,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
 
         // ---- tell the console
 
-        var alive = helper is not null && helper.Alive(now);
+        var alive = helper is not null && (helper.Alive(now) || helper.InExitGrace(now));
         if (changed || alive != _helperAlivePublished || kind != SessionState.Types.Kind.Unspecified)
         {
             _link.PublishSessionState(new SessionState
@@ -628,6 +634,12 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         public HelperStatus? Status { get; set; }
 
         public bool Alive(DateTimeOffset now) => Connected && now - LastHeard <= Defaults.HelperSilenceTimeout && !TryGetExitCode(out _);
+
+        /// <summary>When the supervisor first saw the process gone; <c>null</c> while it runs.</summary>
+        public DateTimeOffset? ExitNoticedAt { get; set; }
+
+        /// <summary>Exited, but the verdict is still held for a planned reason to arrive.</summary>
+        public bool InExitGrace(DateTimeOffset now) => ExitNoticedAt is { } at && now - at < Defaults.HelperExitGrace;
 
         public bool TryGetExitCode(out int exitCode)
         {

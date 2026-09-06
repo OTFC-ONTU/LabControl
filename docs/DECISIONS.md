@@ -698,9 +698,13 @@ Decisions:
    `powershell.exe -Command "[Console]::OutputEncoding = UTF8; & '<file>'; exit $LASTEXITCODE"`
    and `cmd.exe /d /s /c "chcp 65001 >nul && call "<file>""`. The console sends every script
    as UTF-8 with a byte-order mark; the agent keeps the BOM for `.ps1` (PowerShell 5.1
-   otherwise reads ANSI, `D-29` item 7) and strips it for `.cmd` (cmd.exe would read it as
-   junk before the first command). stderr lines are prefixed `[stderr] `; output is capped at
-   10 000 lines. *(Amended 2026-09-06 after the VM run.)*
+   otherwise reads ANSI, `D-29` item 7) and, for `.cmd`, strips it (cmd.exe would read it as
+   junk before the first command) **and normalises line endings to CRLF**: the console
+   writes LF on the Mac, and cmd.exe's parser eats the first characters of lines that
+   follow a bare LF (`'AME' is not recognized` for `echo user: %USERNAME%`) — proved on the
+   VM with the same file in both forms. The rules live in `Shared/Jobs/ScriptText` so the
+   Mac tests hold them. stderr lines are prefixed `[stderr] `; output is capped at 10 000
+   lines. *(Amended 2026-09-06 after the VM run.)*
 6. **`timeout_s` is the agent's inactivity timeout; the console's `timeout_seconds` is that
    plus 30 s.** Both are measured from the last line of output, but the console starts its
    clock at delivery, before the agent has even received the job, so with equal values the
@@ -741,8 +745,9 @@ Decisions:
     the supervisor's tick sees the session change, and the exit used to be reported as
     `session.helper_exited` with a `session.helper_down` warning on the console before the
     expected `session.helper_ready`. The supervisor now checks the planned reasons (no
-    session, session moved, logon/logoff) before the exit code, and the console skips the
-    warning on a `Logon`/`Logoff` state. Likewise WTS and the SCM both call a session with
+    session, session moved, logon/logoff) before the exit code, holds an unexplained exit
+    for `HelperExitGrace` (3 s) so the logoff notification that Windows delivers a moment
+    later can claim it, and the console skips the warning on a `Logon`/`Logoff` state. Likewise WTS and the SCM both call a session with
     nobody logged on *locked* — that is the logon screen — so the lock flag is unknown
     unless a user is present, and a lock notification for an empty session is dropped.
     Cosmetic but visible: the console's log no longer prints gRPC's Kestrel stack at

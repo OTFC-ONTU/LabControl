@@ -490,6 +490,18 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   Manager refuses to end `session.exe`, `C:\ProgramData\LabControl` is *access denied*, and
   the tile reads *student*; `dev-install.ps1 -Uninstall -RemoveStudent` removes the
   auto-logon and the account again.
+- *`-Student` on the VM (2026-09-07, driven by Claude through the screen).* `install-p4s.cmd`
+  with `STUDENT=1` over the portion-3 install: the account was created at the first try (no
+  password-policy retry), put in `Users` only, and the auto-logon secret stored. After a
+  reboot the VM signed in as `student` by itself and the tile read *student*. As `student`:
+  *services.msc* shows *LabControl Agent* running with Start / Stop / Pause / Restart greyed
+  out; Task Manager's *End task* on `session.exe` answers *Access denied*; Explorer refuses
+  `C:\ProgramData\LabControl` with *You don't currently have permission*. *Who am I* as the
+  logged-on user printed `user: student`, session 1, the Cyrillic line intact. Not run:
+  `-Uninstall -RemoveStudent` (it also removes the agent; the VM stays installed for
+  portion 4). One thing to know about UTM: after `Restart-Computer` from inside the guest the
+  VM sat on the UEFI *Start boot option* splash until it was powered off and started again —
+  the console's *Reboot* job in portion 3 did not show this, so it is not a LabControl issue.
 
 **Acceptance criteria**
 

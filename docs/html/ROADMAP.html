@@ -655,6 +655,19 @@ Manager refuses to end <code>session.exe</code>, <code>C:\ProgramData\LabControl
 the tile reads <em>student</em>; <code>dev-install.ps1 -Uninstall -RemoveStudent</code> removes the
 auto-logon and the account again.</p>
 </li>
+<li><p><em><code>-Student</code> on the VM (2026-09-07, driven by Claude through the screen).</em> <code>install-p4s.cmd</code>
+with <code>STUDENT=1</code> over the portion-3 install: the account was created at the first try (no
+password-policy retry), put in <code>Users</code> only, and the auto-logon secret stored. After a
+reboot the VM signed in as <code>student</code> by itself and the tile read <em>student</em>. As <code>student</code>:
+<em>services.msc</em> shows <em>LabControl Agent</em> running with Start / Stop / Pause / Restart greyed
+out; Task Manager's <em>End task</em> on <code>session.exe</code> answers <em>Access denied</em>; Explorer refuses
+<code>C:\ProgramData\LabControl</code> with <em>You don't currently have permission</em>. <em>Who am I</em> as the
+logged-on user printed <code>user: student</code>, session 1, the Cyrillic line intact. Not run:
+<code>-Uninstall -RemoveStudent</code> (it also removes the agent; the VM stays installed for
+portion 4). One thing to know about UTM: after <code>Restart-Computer</code> from inside the guest the
+VM sat on the UEFI <em>Start boot option</em> splash until it was powered off and started again —
+the console's <em>Reboot</em> job in portion 3 did not show this, so it is not a LabControl issue.</p>
+</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -1036,7 +1049,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 00:39 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 01:06 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

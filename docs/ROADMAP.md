@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portions 1 and 2 of 4 verified on the VM 2026-09-05; portion 3 built 2026-09-05, awaiting the VM run) | M1, Windows VM |
+| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portions 1–3 of 4 verified on the VM, 2026-09-05…07; portion 4 next) | M1, Windows VM |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -471,7 +471,14 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   writes CRLF. Logon was clean; logoff still showed `helper_exited`/`helper_down` because
   Windows ends the helper a moment before the logoff notification, so the supervisor now
   holds an unexplained exit for 3 s (`HelperExitGrace`). No `session.lock` on the logon
-  screen. Re-run pending for cmd *Who am I*, logoff, and the firewall network cut.
+  screen. Re-run, same night: cmd *Who am I* as the user and as SYSTEM prints the Cyrillic
+  line intact and the session from `tasklist` (2 and 0); a logoff now yields exactly
+  `session.logoff` and `session.helper_ready` on the logon screen, a logon `session.logon`
+  and `session.helper_ready`; and item 9 passed with the cut made by a Windows Firewall
+  rule against the console's address: *Hang* started at 00:01:40, the link was lost at
+  00:02:18 and back at 00:02:38, and *Killed after 120 s* arrived at 00:03:41 over the new
+  link with no `job.timed_out`. Portion 3 is complete on the VM; Wake-on-LAN waits for
+  `PC-00`.
 
 **Acceptance criteria**
 

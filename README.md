@@ -52,8 +52,10 @@ student's desktop as SYSTEM, supervised by the service over a named pipe, with t
 showing who is logged on, whether the screen is locked and whether the helper is up — are
 verified on the Windows VM. Portion 3 — shutdown / reboot / log off, Wake-on-LAN from the
 console, the minimal `PullFile` and `run_script` with streamed output and a kill at the
-timeout, plus a development-only *Run test script…* — is built and awaits its VM run; then
-push-and-restart ([`docs/ROADMAP.md`](docs/ROADMAP.md)).
+timeout, plus a development-only *Run test script…* — is verified on the VM too, down to a
+script surviving a 30-second network cut; only Wake-on-LAN itself waits for the real
+`PC-00`, since the VM has no such thing. Next is push-and-restart, the last portion of M2
+([`docs/ROADMAP.md`](docs/ROADMAP.md)).
 
 ## Quick start
 ```bash

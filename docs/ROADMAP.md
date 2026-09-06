@@ -319,7 +319,7 @@ built on it (owner's decision, 2026-09-05, `D-31`).
 
 **Progress.**
 
-- *Portion 1 (built 2026-09-05, awaiting the VM run).* `LabControl.Agent` is a real
+- *Portion 1 (built 2026-09-05).* `LabControl.Agent` is a real
   service host: `Microsoft.Extensions.Hosting.WindowsServices`, `LocalSystem`, a rolling
   7-day log under `ProgramData\LabControl\logs\`, and a loop that never exits — an
   unprovisioned PC waits and says so (`D-29`). The PC's private key goes through DPAPI at
@@ -376,7 +376,7 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   The shutdown fix was re-verified the same evening: with the agent linked, an OS shutdown
   ends the log with *stopping → unlinked → LabControl agent stopped* and nothing after it.
 
-- *Portion 3 (built 2026-09-05, awaiting the VM run).* Power jobs on the real agent:
+- *Portion 3 (built 2026-09-05).* Power jobs on the real agent:
   shutdown and reboot through `InitiateSystemShutdownEx` with the privilege enabled first,
   immediate and forced, answered 2 s before the call; log off through `WTSLogoffSession`
   (`D-32`). `PullFile` in its minimal form on both sides — the console offers files by their

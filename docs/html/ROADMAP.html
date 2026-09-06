@@ -476,7 +476,7 @@ the Mac could not show, and the agent must be proven on the VM before more conso
 built on it (owner's decision, 2026-09-05, <code>D-31</code>).</p>
 <p><strong>Progress.</strong></p>
 <ul>
-<li><p><em>Portion 1 (built 2026-09-05, awaiting the VM run).</em> <code>LabControl.Agent</code> is a real
+<li><p><em>Portion 1 (built 2026-09-05).</em> <code>LabControl.Agent</code> is a real
 service host: <code>Microsoft.Extensions.Hosting.WindowsServices</code>, <code>LocalSystem</code>, a rolling
 7-day log under <code>ProgramData\LabControl\logs\</code>, and a loop that never exits — an
 unprovisioned PC waits and says so (<code>D-29</code>). The PC's private key goes through DPAPI at
@@ -536,7 +536,7 @@ and the console did not persist the logged-on user on a session change (it does 
 The shutdown fix was re-verified the same evening: with the agent linked, an OS shutdown
 ends the log with <em>stopping → unlinked → LabControl agent stopped</em> and nothing after it.</p>
 </li>
-<li><p><em>Portion 3 (built 2026-09-05, awaiting the VM run).</em> Power jobs on the real agent:
+<li><p><em>Portion 3 (built 2026-09-05).</em> Power jobs on the real agent:
 shutdown and reboot through <code>InitiateSystemShutdownEx</code> with the privilege enabled first,
 immediate and forced, answered 2 s before the call; log off through <code>WTSLogoffSession</code>
 (<code>D-32</code>). <code>PullFile</code> in its minimal form on both sides — the console offers files by their
@@ -1024,7 +1024,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 00:05 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 00:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

@@ -484,7 +484,8 @@ built on it (owner's decision, 2026-09-05, `D-31`).
 - *Before the first `PC-00` visit (2026-09-07).* `dev-install.ps1 -Student` creates the
   `student` account with auto-logon so the criterion "`student` cannot stop the service, kill
   `session.exe` or read `ProgramData`" no longer waits for Setup.exe (`D-29` item 5). Not yet
-  run anywhere: the first run is on `PC-00`. **To check there:** after a reboot the PC logs on
+  run anywhere: first on the VM (`STUDENT=1` in `dev-install.cmd`, from a snapshot), then on
+  `PC-00`. **To check:** after a reboot the PC logs on
   as `student` by itself; as `student`, *services.msc* refuses to stop `LabControl`, Task
   Manager refuses to end `session.exe`, `C:\ProgramData\LabControl` is *access denied*, and
   the tile reads *student*; `dev-install.ps1 -Uninstall -RemoveStudent` removes the

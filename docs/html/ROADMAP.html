@@ -648,7 +648,8 @@ link with no <code>job.timed_out</code>. Portion 3 is complete on the VM; Wake-o
 <li><p><em>Before the first <code>PC-00</code> visit (2026-09-07).</em> <code>dev-install.ps1 -Student</code> creates the
 <code>student</code> account with auto-logon so the criterion &quot;<code>student</code> cannot stop the service, kill
 <code>session.exe</code> or read <code>ProgramData</code>&quot; no longer waits for Setup.exe (<code>D-29</code> item 5). Not yet
-run anywhere: the first run is on <code>PC-00</code>. <strong>To check there:</strong> after a reboot the PC logs on
+run anywhere: first on the VM (<code>STUDENT=1</code> in <code>dev-install.cmd</code>, from a snapshot), then on
+<code>PC-00</code>. <strong>To check:</strong> after a reboot the PC logs on
 as <code>student</code> by itself; as <code>student</code>, <em>services.msc</em> refuses to stop <code>LabControl</code>, Task
 Manager refuses to end <code>session.exe</code>, <code>C:\ProgramData\LabControl</code> is <em>access denied</em>, and
 the tile reads <em>student</em>; <code>dev-install.ps1 -Uninstall -RemoveStudent</code> removes the
@@ -1035,7 +1036,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 00:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 00:39 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

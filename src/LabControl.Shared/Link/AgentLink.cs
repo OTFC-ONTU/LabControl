@@ -706,7 +706,9 @@ public sealed class AgentLink : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-                // The agent is stopping; the console will re-send after the restart.
+                // The agent is stopping; the console will re-send after the restart, and the
+                // re-sent copy must be admitted, not taken for a duplicate of this one (D-33).
+                _ledger.Forget(job.Id);
                 return;
             }
 

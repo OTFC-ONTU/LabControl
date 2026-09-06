@@ -541,7 +541,9 @@ warns when <code>lab-key.lck</code> no longer matches the fingerprint taken at t
 when a USB stick was written since (<code>D-28</code>).</p>
 <h2 id="data-on-a-student-pc">5. Data on a student PC<a class="anchor" href="#data-on-a-student-pc" aria-label="Link to this section">#</a></h2>
 <pre><code>C:\Program Files\LabControl\   app\&lt;version&gt;\  agent.exe, session.exe — one directory per
-                                               installed version, kept side by side (D-19)
+                                               installed version, kept side by side (D-19);
+                                               a pushed build is named 0.1.0+1a2b3c4d — the
+                                               number plus 8 hex digits of its hash (D-33)
                                app\current     names the version the service runs
                                app\previous    names the version to roll back to
                                setup.exe       kept for repair
@@ -781,6 +783,13 @@ the PC itself, with nobody in the room.</li>
 </ol>
 <p>The session helper is a child process and is never locked, so it is simply replaced and
 respawned along with the service.</p>
+<p><strong>What exists since M2</strong> (<code>D-33</code>): steps 2 and 3 without the signature, plus the rule that
+the new version reports the result — the console's development action <em>Push agent build…</em>
+sends a published <code>agent.exe</code> + <code>session.exe</code>; the agent pulls them under their hashes,
+runs the new <code>agent.exe --version</code> once as a preflight, installs side by side, repoints the
+service and has it restarted by <code>agent.exe --restart-service</code> from the outgoing version.
+Steps 4 and 5 — probation, rollback, the scheduled task — are M4; until then a build that
+starts and then crashes leaves the PC offline with the previous version still on disk.</p>
 <h3 id="updating-the-console">7.3 Updating the console<a class="anchor" href="#updating-the-console" aria-label="Link to this section">#</a></h3>
 <p>The console is an interactive application on the teacher's own machine, so its binary is
 replaced the ordinary way: quit, replace the self-contained publish, start. There is no
@@ -896,7 +905,7 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-09-07 01:06 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 01:36 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#three-separate-identities">3.1 Three separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>

@@ -27,6 +27,7 @@
   <data name="Action.Reboot" xml:space="preserve"><value>Reboot</value></data>
   <data name="Action.Logoff" xml:space="preserve"><value>Log off</value></data>
   <data name="Action.RunScript" xml:space="preserve"><value>Run test script…</value></data>
+  <data name="Action.PushBuild" xml:space="preserve"><value>Push agent build…</value></data>
   <data name="Action.SelectAll" xml:space="preserve"><value>Select all</value></data>
   <data name="Action.ClearSelection" xml:space="preserve"><value>Clear selection</value></data>
   <data name="Action.EnrolPcs" xml:space="preserve"><value>Enrol PCs…</value></data>
@@ -191,6 +192,14 @@
   <data name="Script.Timeout" xml:space="preserve"><value>Inactivity timeout, seconds (killed after this long without output)</value></data>
   <data name="Script.BadTimeout" xml:space="preserve"><value>The timeout must be a whole number of seconds greater than zero.</value></data>
   <data name="Script.Run" xml:space="preserve"><value>Run</value></data>
+  <data name="Push.Heading" xml:space="preserve"><value>Push an agent build to {0} PC(s)</value></data>
+  <data name="Push.Hint" xml:space="preserve"><value>Development action: sends a published agent.exe and session.exe to the selected PCs. Each PC installs them side by side in app\&lt;version&gt;, repoints its service and restarts; the new version reports back when it is up. No signature, no probation, no rollback until M4 — push to one PC first.</value></data>
+  <data name="Push.Folder" xml:space="preserve"><value>Build folder (agent.exe + session.exe, or a publish-all.sh artifacts\&lt;rid&gt; folder)</value></data>
+  <data name="Push.Browse" xml:space="preserve"><value>Browse…</value></data>
+  <data name="Push.PickFolder" xml:space="preserve"><value>Choose the folder with the published agent build</value></data>
+  <data name="Push.Version" xml:space="preserve"><value>Version number the build was made with (checked against agent.exe --version on the PC)</value></data>
+  <data name="Push.NothingYet" xml:space="preserve"><value>Choose a folder to see what would be sent.</value></data>
+  <data name="Push.Send" xml:space="preserve"><value>Push</value></data>
   <data name="Setup.Title" xml:space="preserve"><value>LabControl — first run</value></data>
   <data name="Setup.Welcome" xml:space="preserve"><value>Welcome to LabControl</value></data>
   <data name="Setup.WelcomeBody" xml:space="preserve"><value>This computer has no lab yet. Create a new one, or import an existing lab from its backup file to make this computer another console for it.</value></data>

@@ -1,5 +1,6 @@
 using System.Globalization;
 using LabControl.Shared;
+using LabControl.Shared.Setup;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.WindowsServices;
@@ -23,10 +24,20 @@ internal static class Program
         $"       agent.exe {Defaults.AgentInstallSwitch} --payload <dir> --number N [--console host[:port]] [--force]\n" +
         "                                             provision this PC from a USB payload (setup.json + ca.crt)\n" +
         $"       agent.exe {Defaults.AgentVersionSwitch}                    print the version\n" +
+        $"       agent.exe {Defaults.RestartServiceSwitch}            stop the '{Defaults.ServiceName}' service and start it again (used by a push, D-33)\n" +
         "  --verbose                                  debug logging";
 
     public static string Version =>
         typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+    /// <summary>
+    /// What this agent reports in <c>Hello</c>: the name of the version directory it runs
+    /// from when installed (<c>0.1.0+1a2b3c4d</c> for a pushed build, D-33), otherwise the
+    /// assembly version. A pushed <c>self_update</c> names its version the same way, so the
+    /// new version recognises the job that installed it by this string alone.
+    /// </summary>
+    public static string InstalledVersion =>
+        Environment.ProcessPath is { Length: > 0 } path ? InstallLayout.Default.VersionOf(path) ?? Version : Version;
 
     private static async Task<int> Main(string[] args)
     {
@@ -49,6 +60,25 @@ internal static class Program
         {
             using var installLog = ConfigureLogging(interactive: true, verbose);
             return Provisioner.Run(args, installLog.CreateLogger("install"), Usage);
+        }
+
+        if (args.Contains(Defaults.RestartServiceSwitch, StringComparer.OrdinalIgnoreCase))
+        {
+            // Spawned by the outgoing agent after a push (AgentUpdater, D-33); it has no console,
+            // so everything goes to the rolling file log next to the agent's own lines.
+            using var restartLog = ConfigureLogging(interactive: false, verbose);
+            var restartLogger = restartLog.CreateLogger("restart");
+            var failure = ServiceControl.Restart(line => restartLogger.LogInformation("{Line}", line));
+            if (failure is not null)
+            {
+                restartLogger.LogError("The service restart failed: {Failure}", failure);
+                await Log.CloseAndFlushAsync();
+                return 1;
+            }
+
+            restartLogger.LogInformation("The service was restarted.");
+            await Log.CloseAndFlushAsync();
+            return 0;
         }
 
         if (!asService && !args.Contains(Defaults.AgentForegroundSwitch, StringComparer.OrdinalIgnoreCase))
@@ -118,6 +148,9 @@ internal static class Program
                 Path.Combine(Defaults.AgentDataDirectory, Defaults.LogsDirectoryName, Defaults.AgentLogFilePattern),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: Defaults.AgentLogRetentionDays,
+                // `--restart-service` (D-33) writes to the same file while the service still
+                // holds it; without sharing its lines would be dropped silently.
+                shared: true,
                 formatProvider: CultureInfo.InvariantCulture,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}");
 

@@ -3,6 +3,7 @@ using Avalonia.Platform.Storage;
 using LabControl.Console.Localization;
 using LabControl.Console.Services;
 using LabControl.Console.ViewModels;
+using LabControl.Shared.Setup;
 using LabControl.Shared.Identity;
 
 namespace LabControl.Console.Views;
@@ -37,6 +38,9 @@ public sealed class WindowDialogs : IDialogs
 
     public async Task<TestScriptChoice?> RunTestScriptAsync(int pcCount) =>
         await Show(new TestScriptDialog(pcCount));
+
+    public async Task<AgentBuild?> PushAgentBuildAsync(int pcCount) =>
+        await Show(new PushBuildDialog(pcCount));
 
     public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string extension)
     {

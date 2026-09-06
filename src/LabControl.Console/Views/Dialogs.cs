@@ -8,6 +8,9 @@ using LabControl.Console.ViewModels;
 using LabControl.Shared;
 using LabControl.Shared.Identity;
 using LabControl.Shared.Jobs;
+using LabControl.Shared.Setup;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 
 namespace LabControl.Console.Views;
 
@@ -315,5 +318,109 @@ public sealed class TestScriptDialog : DialogWindow<TestScriptChoice>
             Label(Strings.Get("Script.Timeout")), timeout,
             error,
             Buttons(cancel, ok));
+    }
+}
+
+/// <summary>
+/// The development-only <i>Push agent build</i> dialog (ROADMAP M2 portion 4, D-33): a
+/// folder with the published <c>agent.exe</c> and <c>session.exe</c>, and the version number
+/// they were built with. The folder is read and hashed as soon as it is named, so the
+/// teacher sees what would be sent — and its version directory name — before pushing.
+/// </summary>
+public sealed class PushBuildDialog : DialogWindow<AgentBuild>
+{
+    private AgentBuild? _build;
+    private int _generation;
+
+    public PushBuildDialog(int pcCount)
+    {
+        Title = Strings.Get("Action.PushBuild");
+
+        var folder = Field(Strings.Get("Push.Folder"));
+        var browse = new Button { Content = Strings.Get("Push.Browse") };
+        var folderRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        folderRow.Children.Add(folder);
+        folderRow.Children.Add(browse);
+
+        var version = Field(Strings.Get("Push.Version"));
+        version.Text = typeof(PushBuildDialog).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+        var summary = new TextBlock { Text = Strings.Get("Push.NothingYet"), TextWrapping = TextWrapping.Wrap, MaxWidth = 460 };
+
+        var ok = Primary(Strings.Get("Push.Send"));
+        ok.IsEnabled = false;
+        ok.Click += (_, _) =>
+        {
+            if (_build is not null)
+            {
+                Finish(_build);
+            }
+        };
+
+        var cancel = Secondary(Strings.Get("Common.Cancel"));
+        cancel.Click += (_, _) => Finish(null);
+
+        browse.Click += async (_, _) =>
+        {
+            var picked = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = Strings.Get("Push.PickFolder"), AllowMultiple = false });
+            if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } path)
+            {
+                folder.Text = path;
+            }
+        };
+
+        folder.TextChanged += (_, _) => Reload();
+        version.TextChanged += (_, _) => Reload();
+
+        Body(
+            Heading(Strings.Format("Push.Heading", pcCount)),
+            Label(Strings.Get("Push.Hint")),
+            Label(Strings.Get("Push.Folder")), folderRow,
+            Label(Strings.Get("Push.Version")), version,
+            summary,
+            Buttons(cancel, ok));
+
+        // Hashing two large executables takes a moment; it happens off the UI thread and the
+        // latest request wins.
+        void Reload()
+        {
+            var generation = ++_generation;
+            var folderText = folder.Text ?? string.Empty;
+            var versionText = version.Text ?? string.Empty;
+            _build = null;
+            ok.IsEnabled = false;
+
+            if (string.IsNullOrWhiteSpace(folderText))
+            {
+                summary.Text = Strings.Get("Push.NothingYet");
+                summary.Foreground = null;
+                return;
+            }
+
+            _ = Task.Run(() =>
+            {
+                var loaded = AgentBuild.TryLoad(folderText, versionText, out var build, out var error);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (generation != _generation)
+                    {
+                        return;
+                    }
+
+                    if (loaded)
+                    {
+                        _build = build;
+                        summary.Text = build.Describe();
+                        summary.Foreground = null;
+                        ok.IsEnabled = true;
+                    }
+                    else
+                    {
+                        summary.Text = error;
+                        summary.Foreground = Brushes.IndianRed;
+                    }
+                });
+            });
+        }
     }
 }

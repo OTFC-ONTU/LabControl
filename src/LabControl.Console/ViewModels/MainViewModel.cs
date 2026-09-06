@@ -76,7 +76,7 @@ public sealed partial class MainViewModel : ObservableObject
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(RunScriptCommand), nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(RunScriptCommand), nameof(PushBuildCommand), nameof(RemoveSelectedCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
@@ -275,6 +275,23 @@ public sealed partial class MainViewModel : ObservableObject
         if (targets.Length > 0)
         {
             _session.RunTestScript(targets, choice);
+        }
+    }
+
+    /// <summary>Development-only (D-33): a published agent build to the selected PCs, which install it side by side and restart.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task PushBuildAsync()
+    {
+        var build = await _dialogs.PushAgentBuildAsync(SelectedCount);
+        if (build is null)
+        {
+            return;
+        }
+
+        var targets = Selected.Select(t => t.AgentId).ToArray();
+        if (targets.Length > 0)
+        {
+            _session.PushAgentBuild(targets, build);
         }
     }
 

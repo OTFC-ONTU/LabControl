@@ -186,7 +186,11 @@ runs taught three Windows-only lessons worth remembering: cmd.exe needs CRLF lin
 and both shells are forced to UTF-8 (`D-32` item 5), a helper ended by Windows at logoff is
 a planned restart held for `HelperExitGrace` (`D-32` item 12), and `Disable-NetAdapter`
 bugchecks the virtio guest — cut the network with a firewall rule instead. **Portion 4 is
-next**: the minimal push-and-restart. `Setup` is still a skeleton (M4).
+built (2026-09-07) and awaits its VM run**: the minimal push-and-restart (`D-33`) — *Push
+agent build…* in the console, `SelfUpdateRequest` / `AgentBuild` / `UpdateBundle` in Shared,
+`AgentUpdater` + `ServiceControl` (`agent.exe --restart-service`) in the agent; the new
+version answers the re-sent job and `Hello.agent_version` is the `app\<version>` name.
+`Setup` is still a skeleton (M4).
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

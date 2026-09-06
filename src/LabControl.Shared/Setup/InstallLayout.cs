@@ -40,7 +40,7 @@ public sealed class InstallLayout
             .Select(Path.GetFileName)
             .Where(name => name is not null && IsValidVersion(name))
             .Select(name => name!)
-            .OrderByDescending(name => Version.TryParse(name, out var parsed) ? parsed : new Version(0, 0))
+            .OrderByDescending(name => Version.TryParse(BaseVersionOf(name), out var parsed) ? parsed : new Version(0, 0))
             .ThenByDescending(name => name, StringComparer.Ordinal)
             .ToArray();
     }
@@ -82,6 +82,26 @@ public sealed class InstallLayout
 
         var name = Path.GetFileName(directory);
         return IsValidVersion(name) ? name : null;
+    }
+
+    /// <summary>
+    /// The version number without its build metadata: <c>0.2.0</c> for <c>0.2.0+1a2b3c4d</c>
+    /// (a pushed development build, D-33) and unchanged for a plain <c>0.2.0</c>.
+    /// </summary>
+    public static string BaseVersionOf(string version)
+    {
+        var plus = version.IndexOf('+');
+        return plus < 0 ? version : version[..plus];
+    }
+
+    /// <summary>Removes a version directory that is not the running one — a failed or repeated push.</summary>
+    public void RemoveVersion(string version)
+    {
+        var directory = VersionDirectory(version);
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     /// <summary>A version directory name: something like <c>0.2.0</c>, never a path.</summary>

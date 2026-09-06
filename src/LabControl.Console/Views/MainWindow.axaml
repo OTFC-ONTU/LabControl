@@ -59,6 +59,7 @@
         <Button Content="{loc:Localize Action.Reboot}" Command="{Binding RebootCommand}" />
         <Button Content="{loc:Localize Action.Logoff}" Command="{Binding LogoffCommand}" />
         <Button Content="{loc:Localize Action.RunScript}" Command="{Binding RunScriptCommand}" />
+        <Button Content="{loc:Localize Action.PushBuild}" Command="{Binding PushBuildCommand}" />
         <Button Content="{loc:Localize Action.RemoveSelected}" Command="{Binding RemoveSelectedCommand}" />
         <Rectangle Width="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" Margin="4,0" />
         <Button Content="{loc:Localize Action.SelectAll}" Command="{Binding SelectAllCommand}" />

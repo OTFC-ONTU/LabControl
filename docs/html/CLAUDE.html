@@ -308,7 +308,11 @@ runs taught three Windows-only lessons worth remembering: cmd.exe needs CRLF lin
 and both shells are forced to UTF-8 (<code>D-32</code> item 5), a helper ended by Windows at logoff is
 a planned restart held for <code>HelperExitGrace</code> (<code>D-32</code> item 12), and <code>Disable-NetAdapter</code>
 bugchecks the virtio guest — cut the network with a firewall rule instead. <strong>Portion 4 is
-next</strong>: the minimal push-and-restart. <code>Setup</code> is still a skeleton (M4).</p>
+built (2026-09-07) and awaits its VM run</strong>: the minimal push-and-restart (<code>D-33</code>) — <em>Push
+agent build…</em> in the console, <code>SelfUpdateRequest</code> / <code>AgentBuild</code> / <code>UpdateBundle</code> in Shared,
+<code>AgentUpdater</code> + <code>ServiceControl</code> (<code>agent.exe --restart-service</code>) in the agent; the new
+version answers the re-sent job and <code>Hello.agent_version</code> is the <code>app\&lt;version&gt;</code> name.
+<code>Setup</code> is still a skeleton (M4).</p>
 <p>The console's non-UI core lives in <code>src/LabControl.Console/Services</code> (<code>LabSession</code>,
 <code>ConsoleBootstrap</code>, <code>LabKeyVault</code>) and <code>Server/</code>; the agent side shared by <code>FakeAgent</code> and
 the real agent is <code>src/LabControl.Shared/Link/AgentLink.cs</code>, and the install-time routines
@@ -319,7 +323,7 @@ shared by the agent, the simulator and Setup are <code>src/LabControl.Shared/Set
 (<code>tests/&lt;project&gt;/bin/Debug/net10.0/&lt;project&gt;</code>).</p>
 
 </article>
-<footer>Generated 2026-09-07 01:06 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 01:36 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

@@ -871,6 +871,82 @@ read on <code>ProgramData\LabControl</code> for user runs (breaks §5); keeping 
 PC; a <code>-Command</code> wrapper to force UTF-8 output (changes <code>-File</code>'s exit-code semantics for
 no gain over OEM decoding); Job Objects for the tree kill; a per-job <code>wake</code> job kind
 (the PC is off — nothing can run it).</p>
+<h2 id="d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)<a class="anchor" href="#d-33-the-minimal-push-and-restart-m2-portion-4" aria-label="Link to this section">#</a></h2>
+<p>Context: from here on every agent build has to reach the VM and <code>PC-00</code> many times a day,
+and carrying it there on a stick or through <code>dev-install.cmd</code> is exactly the cost the
+project exists to remove. The full update of ARCHITECTURE §7.2 — signed manifest,
+probation, rollback — is M4; portion 4 builds the smallest honest form of its steps 2 and 3.</p>
+<p>Decisions:</p>
+<ol>
+<li><strong>The <code>self_update</code> job carries only <code>version</code>, <code>ref</code> and <code>sha256</code>; the manifest and the
+files travel through <code>PullFile</code>.</strong> The job is in the frozen subset (<code>D-19</code>), so it stays
+three short strings. <code>ref</code>/<code>sha256</code> name a serialized <code>UpdateManifest</code> (version, and per
+file its name, size and SHA-256), offered like a script; each binary is then pulled under
+its own hash. M4 adds a <code>signature</code> argument over the same manifest bytes and nothing
+else changes shape. The <code>UpdateAgent</code> message in the proto is left unused and reserved.</li>
+<li><strong>A pushed build is named <code>&lt;version&gt;+&lt;first 8 hex digits of agent.exe's SHA-256&gt;</code></strong>, for
+example <code>0.1.0+1a2b3c4d</code>. <code>VersionPrefix</code> does not change with every build, two builds of
+<code>0.1.0</code> must land side by side, and a running binary cannot be overwritten; semver build
+metadata is made for this. An installed agent reports the name of the directory it runs
+from as <code>agent_version</code> (<code>Program.InstalledVersion</code>), so the tile says which build a PC
+runs and the new version recognises the job that installed it by a string comparison. The
+console cannot run <code>agent.exe</code> on the Mac to learn the number, so the push dialog asks for
+it (prefilled with the console's own, both come from the same tree) and the agent checks
+it with a <strong>preflight</strong>: the staged <code>agent.exe --version</code> must start — which also proves
+the build is for this CPU, <code>win-arm64</code> versus <code>win-x64</code> — and print the number the bundle
+claims; otherwise nothing is installed and the job says what it printed.</li>
+<li><strong>The outgoing agent never reports the result; the new version answers the re-sent job.</strong>
+PROTOCOL said so from the start and the minimal form keeps it, because a &quot;success&quot; sent
+before the restart is a claim the sender cannot back up. Mechanics: after repointing the
+service the agent asks for the restart and waits for the stop as cancellation of the job;
+<code>AgentLink</code> now <em>forgets</em> a job cancelled that way (<code>JobLedger.Forget</code>), so the copy the
+console re-sends on the next link is admitted instead of being taken for a duplicate; the
+new version sees <code>version</code> equal to its own and answers <em>Running X now (was Y)</em>. The
+console's inactivity timeout on the job is 5 minutes, because the silence between the
+last progress line and the new version's first link is the restart itself. If the stop
+does not arrive within 60 s the outgoing agent puts the service, the markers and the
+directory back and fails the job.</li>
+<li><strong>The restart is done by a separate process running the old executable.</strong> A service
+cannot outlive its own stop to issue the start, so the agent spawns
+<code>agent.exe --restart-service</code> (<code>ControlService</code> stop, wait for <em>stopped</em>, <code>StartService</code>)
+from the version that is already proven on this PC — the new one has so far only proved
+it can print its version. Rejected: exiting with a non-zero code so the recovery action
+restarts the service (burns the daily restart budget and looks like a crash in the log),
+<code>sc.exe</code> or PowerShell from the service (the agent is C# and Win32 only), a separate
+<code>updater.exe</code> (<code>D-19</code> already rejected it).</li>
+<li><strong>Staging under <code>ProgramData\LabControl\update\&lt;version&gt;\</code>, then one move into <code>app\</code>.</strong>
+A pull that fails leaves nothing under <code>app\</code>, and the service manager never sees a
+half-written version directory. <code>app\previous</code> names the version before the last push
+and is not cleared in M2 — acceptance is M4's probation. When the new version answers the
+re-sent job it <strong>prunes</strong> every version directory other than <code>current</code> and <code>previous</code>, so
+a day of pushes does not fill the disk (<code>D-32</code> item 4's rule against debris on fourteen
+PCs); the two directories the acceptance criterion asks for stay.</li>
+<li><strong>Every refusal happens before anything is written</strong> (<code>UpdateBundle</code>, shared with the
+simulator): a manifest whose version is not the job's, a path where a file name should
+be, a bundle without <code>agent.exe</code> or <code>session.exe</code>, a size or hash that does not fit, a
+file that arrives with another size, a preflight that does not start, times out or prints
+another version. The staging directory is removed and the job fails with the reason. An
+agent that is not running from <code>app\&lt;version&gt;\</code> — a build directory, <code>--run</code> from a share
+— refuses the push and says to install first; a foreground <code>--run</code> from inside <code>app\</code>
+installs the files and stops there, since it has no service to repoint.</li>
+<li><strong><code>FakeAgent</code> pulls everything for real and pretends only the install</strong>, then drops the
+link, throws cancellation and comes back claiming the new version — the console's entire
+view of a push, exercised on the Mac and tested in <code>PushBuildTests</code>.</li>
+</ol>
+<p>What this form deliberately lacks (M4): a signature, so the push is only as trustworthy as
+the mutual-TLS link and the console it came from; probation and rollback, so a new build
+that starts and then crashes leaves the PC to its three recovery restarts and then offline,
+with the previous version still on disk and <code>app\previous</code> naming it — repointing back is
+<code>dev-install.cmd</code> with the old build or <code>sc config</code> by hand until M4. One thing to know:
+Windows 11 on ARM runs x64 binaries under emulation, so a <code>win-x64</code> build passes the
+preflight on the VM and runs there slowly; the lab PCs are x64 and cannot run <code>win-arm64</code>,
+which the preflight refuses.</p>
+<p>Rejected: a zip bundle (one pull, but a second format to write and read, and per-file
+hashes are what M4's manifest needs anyway); the manifest as base64 inside <code>args</code> (the job
+is frozen; keep it small and readable in the journal); naming directories by hash alone
+(loses the version number the teacher reads); parsing <code>agent.exe</code>'s PE version resource on
+the Mac (a hand-written <code>VERSIONINFO</code> reader for a value the preflight verifies anyway);
+letting the outgoing agent report success (see item 3).</p>
 <h2 id="d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated<a class="anchor" href="#d-12-documentation-markdown-is-the-source-html-is-generated" aria-label="Link to this section">#</a></h2>
 <p>Context: the owner wants every document available as a readable <code>.html</code> next to the
 <code>.md</code>. Maintaining two hand-written copies guarantees they drift apart, and a drifted
@@ -1067,9 +1143,9 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-07 01:06 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 01:36 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>
 </body>
 </html>

@@ -54,7 +54,10 @@ verified on the Windows VM. Portion 3 — shutdown / reboot / log off, Wake-on-L
 console, the minimal `PullFile` and `run_script` with streamed output and a kill at the
 timeout, plus a development-only *Run test script…* — is verified on the VM too, down to a
 script surviving a 30-second network cut; only Wake-on-LAN itself waits for the real
-`PC-00`, since the VM has no such thing. Next is push-and-restart, the last portion of M2
+`PC-00`, since the VM has no such thing. Portion 4 — the minimal push-and-restart: *Push
+agent build…* in the console sends a published `agent.exe` + `session.exe` to a PC, which
+installs it side by side, repoints its service, restarts and reports back as the new
+version — is built and waits for its VM run, the last step of M2
 ([`docs/ROADMAP.md`](docs/ROADMAP.md)).
 
 ## Quick start
@@ -138,6 +141,14 @@ get `win-x64`. `tools/publish-all.sh` produces both.
    `C:\ProgramData\LabControl\logs\session-<date>.log`; `session.exe --probe` from an
    elevated prompt prints what a process in the session sees. A standard user cannot end
    `session.exe` and cannot read the logs.
+7. **Push the next build from the console** (M2 portion 4) instead of re-running
+   `dev-install.cmd`: publish, select the PC, *Push agent build…*, choose the folder with
+   `agent.exe` and `session.exe` (or `artifacts/win-arm64` straight from `publish-all.sh`)
+   and press *Push*. The Jobs panel shows the files being pulled and the restart; the PC is
+   back within a minute with the tile reading `agent 0.1.0+<build id>` and the job ending
+   *Running … now (was …)*. Both version directories stay under `app\`; older ones are
+   removed. There is no rollback yet (M4): if a pushed build fails to start, install a good
+   one with `dev-install.cmd`.
 
 Requires the .NET 10 SDK and nothing else. The `net10.0-windows` projects compile on
 macOS and Linux too (they just cannot run there), so a broken Windows build is caught

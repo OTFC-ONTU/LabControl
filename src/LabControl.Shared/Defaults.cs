@@ -254,6 +254,43 @@ public static class Defaults
     public const string RollbackSwitch = "--rollback";
 
     /// <summary>
+    /// Command line that stops the <see cref="ServiceName"/> service and starts it again. The
+    /// outgoing agent spawns its own executable with it after a push (D-33): a service cannot
+    /// restart itself, and the service manager starts whatever <c>binPath</c> names by then.
+    /// </summary>
+    public const string RestartServiceSwitch = "--restart-service";
+
+    /// <summary>
+    /// How long a version directory name may carry of the build's SHA-256: a push names its
+    /// directory <c>&lt;version&gt;+&lt;these hex digits&gt;</c> so that two builds with the same
+    /// version number — the normal case while developing — never collide (D-33).
+    /// </summary>
+    public const int BuildIdLength = 8;
+
+    /// <summary>
+    /// A pushed <c>agent.exe</c> is run with <see cref="AgentVersionSwitch"/> before it is
+    /// installed, to prove it runs on this PC at all and says the version the bundle claims;
+    /// it must answer within this long.
+    /// </summary>
+    public static readonly TimeSpan UpdatePreflightTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// After asking for the restart the outgoing agent waits this long to be stopped. If it
+    /// is still running afterwards, the restart did not happen and it puts everything back.
+    /// </summary>
+    public static readonly TimeSpan ServiceRestartWait = TimeSpan.FromSeconds(60);
+
+    /// <summary>How long <see cref="RestartServiceSwitch"/> waits for the service to reach <i>stopped</i> before starting it.</summary>
+    public static readonly TimeSpan ServiceStopTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// The console's inactivity timeout on a <c>self_update</c> job: it has to outlast the pull
+    /// (which reports progress), the preflight, the service restart and the new version's
+    /// first link, because the result comes from the new version (PROTOCOL, <c>self_update</c>).
+    /// </summary>
+    public static readonly TimeSpan SelfUpdateJobTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// A freshly installed version is on trial until it has completed a <c>Hello</c> and held
     /// the link for this long. Until then the scheduled rollback task and the service recovery
     /// action can still undo it.

@@ -457,32 +457,47 @@ every agent whose certificate is valid, compares versions, and:
 Proto files evolve additively (never renumber fields), and a message the receiver does not
 recognise is logged and ignored rather than closing the stream.
 
-### `UpdateAgent` and the `self_update` job
+### `self_update` — pushing a new agent
+
+The agent is updated by a `self_update` job, which is part of the frozen subset and stays
+small on purpose (`D-33`):
+
+| arg | values | meaning |
+|---|---|---|
+| `version` | a version directory name, e.g. `0.1.0+1a2b3c4d` | the directory under `app\` the build lands in; a pushed development build is the version number plus the first 8 hex digits of `agent.exe`'s SHA-256, so two builds of the same number never collide |
+| `ref` | SHA-256, hex | the `PullFile` reference of the serialized `UpdateManifest` |
+| `sha256` | hex | verified on the PC before the manifest is read |
+| `signature` | base64 | **M4**: the lab key's signature over the manifest bytes, verified against the pinned CA certificate — not against the TLS session that carried it (`D-19`) |
 
 ```
-UpdateAgent {
-  string version;             // version being offered
-  string bundle_ref;          // handle for PullFile
-  string sha256;              // over the serialized manifest
-  bytes  manifest;            // serialized UpdateManifest
-  bytes  manifest_signature;  // over `manifest`, by the lab key (D-19)
-}
-
 UpdateManifest {
-  string version;
-  string min_installed_version;   // refuse to apply on anything older
-  repeated UpdateFile files;      // {relative_path, size, sha256}
-  int32  probation_seconds;       // 0 = the default, 600
+  string version;                 // must equal the job's `version`
+  string min_installed_version;   // M4: refuse to apply on anything older
+  repeated UpdateFile files;      // {relative_path, size, sha256} — plain file names, agent.exe and session.exe at least
+  int32  probation_seconds;       // M4: 0 = the default, 600
 }
 ```
 
-The agent verifies `manifest_signature` against the **pinned CA certificate**, not against
-the TLS session, so a bundle is only as trustworthy as the lab key itself. It then pulls
-the files with `PullFile`, checks every SHA-256, and applies the update as
-`docs/ARCHITECTURE.md` §7.2 describes. `JobResult` for a `self_update` is reported by the
-**new** version after its first successful `Hello`, never by the outgoing one — the
-outgoing agent's last act is to restart the service, and a result sent before that would
-be a claim it cannot back up.
+The agent pulls the manifest, checks it against the job (version, file names, sizes,
+hashes, the two required executables — `UpdateBundle`), pulls every file under its own hash
+into `ProgramData\LabControl\update\<version>\`, runs the new `agent.exe --version` once
+to prove it runs on this PC and says the version the bundle claims, moves the directory
+into `app\<version>\`, writes `app\previous` and `app\current`, repoints the service
+(`ChangeServiceConfig`) and has the service restarted (`agent.exe --restart-service`, run by
+the outgoing executable). Progress lines report each pulled file and the restart; any refusal
+happens before anything is written under `app\` and is a failed `JobResult` with the reason.
+`docs/ARCHITECTURE.md` §7.2 describes the full M4 flow with signature, probation and rollback.
+
+`JobResult` for a `self_update` is reported by the **new** version after its first successful
+`Hello`, never by the outgoing one — the outgoing agent's last act is to ask for the restart,
+and a result sent before that would be a claim it cannot back up. Concretely: the outgoing
+agent is stopped mid-job and releases the job id without a result, the console keeps the job
+in flight (its inactivity timeout is 5 minutes) and re-sends it on the next link, and the new
+version answers *Running `<version>` now* because the job's `version` is its own. The same
+rule makes pushing a build that is already running a harmless success. While answering, the
+new version removes every version directory other than `app\current` and `app\previous`.
+
+The `UpdateAgent` message in the proto is reserved for M4 and not used by the M2 form.
 
 `Hello.update_state` tells the console where a PC stands — `STABLE`, `ON_PROBATION` (with
 the deadline) or `ROLLED_BACK` (with the version that failed and the reason in plain

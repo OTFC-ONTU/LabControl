@@ -25,6 +25,11 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     private CancellationTokenSource? _powerCycle;
 
+    /// <summary>What this PC says it runs; a simulated push changes it (D-33).</summary>
+    private string _version = typeof(FakeMachine).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+    private string? _previousVersion;
+
     public FakeMachine(DirectoryAgentStore store, FailureSpec? failure, ILogger log)
     {
         _store = store;
@@ -106,7 +111,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     public void Describe(Hello hello)
     {
-        hello.AgentVersion = typeof(FakeMachine).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        hello.AgentVersion = _version;
         hello.BootTimeUnix = _bootedAt.ToUnixTimeSeconds();
         hello.UpdateState = new UpdateState { Phase = UpdateState.Types.Phase.Stable };
     }
@@ -165,7 +170,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
                 return await RunScriptAsync(job, report, token);
 
             case Job.Types.Kind.SelfUpdate:
-                return Ok(job, "Update accepted (simulated; nothing installed).");
+                return await SelfUpdateAsync(job, report, token);
 
             default:
                 await Task.Delay(TimeSpan.FromMilliseconds(300), token);
@@ -174,6 +179,68 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     }
 
     private static JobResult Ok(Job job, string message) => new() { JobId = job.Id, Ok = true, ExitCode = 0, Message = message };
+
+    /// <summary>
+    /// <c>self_update</c> on a simulated PC (D-33): the manifest and every file are really
+    /// pulled and hash-checked, as the Windows agent does; the install is pretended. Then the
+    /// PC does what a real one does — drops the link and stops the job without a result — and
+    /// comes back claiming the new version, so the re-sent job is answered by "the new
+    /// version". This is the console's whole view of a push, exercised on the Mac.
+    /// </summary>
+    private async Task<JobResult> SelfUpdateAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
+    {
+        if (!SelfUpdateRequest.TryParse(job, out var request, out var error))
+        {
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"This job cannot run: {error}." };
+        }
+
+        if (string.Equals(request.Version, _version, StringComparison.Ordinal))
+        {
+            return Ok(job, _previousVersion is null
+                ? $"Running {_version} now. (simulated)"
+                : $"Running {_version} now (was {_previousVersion}; app\\previous still names it). (simulated)");
+        }
+
+        UpdateManifest manifest;
+        try
+        {
+            using var buffer = new MemoryStream();
+            await Link.PullFileAsync(request.ManifestReference, request.ManifestSha256, buffer, token);
+            if (!UpdateBundle.TryRead(buffer.ToArray(), request, out manifest, out var problem))
+            {
+                return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"The update was refused: {problem}." };
+            }
+
+            var total = manifest.Files.Sum(f => f.Size);
+            long done = 0;
+            foreach (var file in manifest.Files)
+            {
+                var received = await Link.PullFileAsync(file.Sha256, file.Sha256, Stream.Null, token);
+                if (received != file.Size)
+                {
+                    return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"{file.RelativePath} is {received} bytes but the manifest says {file.Size}; nothing was installed." };
+                }
+
+                done += received;
+                await report(new JobProgress { JobId = job.Id, Percent = total > 0 ? (int)(done * 100 / total) : 0, Line = $"pulled {file.RelativePath} ({AgentBuild.Megabytes(received)})" });
+            }
+        }
+        catch (FilePullException ex)
+        {
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = ex.Message + " Nothing was installed." };
+        }
+
+        await report(new JobProgress { JobId = job.Id, Percent = 100, Line = $"installed into app\\{request.Version}; service repointed, restarting it now (simulated)" });
+        _log.LogInformation("{Pc}: restarting as {Version} (simulated)", Name, request.Version);
+
+        _previousVersion = _version;
+        _version = request.Version;
+        Link.Disconnect("restarting after the update (simulated)");
+
+        // No result from the outgoing version: the link forgets the job, and the re-sent copy
+        // is answered above once the "new version" is linked.
+        throw new OperationCanceledException("the agent is restarting (simulated)");
+    }
 
     /// <summary>
     /// <c>run_script</c> on a simulated PC: the file channel is real — the script is pulled

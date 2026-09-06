@@ -312,7 +312,9 @@ when a USB stick was written since (`D-28`).
 
 ```
 C:\Program Files\LabControl\   app\<version>\  agent.exe, session.exe — one directory per
-                                               installed version, kept side by side (D-19)
+                                               installed version, kept side by side (D-19);
+                                               a pushed build is named 0.1.0+1a2b3c4d — the
+                                               number plus 8 hex digits of its hash (D-33)
                                app\current     names the version the service runs
                                app\previous    names the version to roll back to
                                setup.exe       kept for repair
@@ -466,6 +468,14 @@ The console consequently never *refuses* an agent for being old. It marks the ti
 
 The session helper is a child process and is never locked, so it is simply replaced and
 respawned along with the service.
+
+**What exists since M2** (`D-33`): steps 2 and 3 without the signature, plus the rule that
+the new version reports the result — the console's development action *Push agent build…*
+sends a published `agent.exe` + `session.exe`; the agent pulls them under their hashes,
+runs the new `agent.exe --version` once as a preflight, installs side by side, repoints the
+service and has it restarted by `agent.exe --restart-service` from the outgoing version.
+Steps 4 and 5 — probation, rollback, the scheduled task — are M4; until then a build that
+starts and then crashes leaves the PC offline with the previous version still on disk.
 
 ### 7.3 Updating the console
 

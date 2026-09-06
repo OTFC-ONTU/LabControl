@@ -17,6 +17,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
     private readonly ILogger _log;
     private readonly DateTimeOffset _bootedAt = WindowsInventory.BootTime();
     private readonly ScriptRunner _scripts;
+    private readonly AgentUpdater _updater;
 
     public WindowsAgentBehaviour(DirectoryAgentStore store, ILogger log)
     {
@@ -24,6 +25,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         _log = log;
         Link = new AgentLink(store, this, log);
         _scripts = new ScriptRunner(Link, log);
+        _updater = new AgentUpdater(Link, log);
 
         Link.Linked += (_, name) => _log.LogInformation("{Pc}: linked to {Console}", Link.Name, name);
         Link.Unlinked += reason => _log.LogInformation("{Pc}: unlinked — {Reason}", Link.Name, reason);
@@ -48,7 +50,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
 
     public void Describe(Hello hello)
     {
-        hello.AgentVersion = Program.Version;
+        hello.AgentVersion = Program.InstalledVersion;
         hello.BootTimeUnix = _bootedAt.ToUnixTimeSeconds();
         hello.UpdateState = new UpdateState { Phase = UpdateState.Types.Phase.Stable };
     }
@@ -86,15 +88,20 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             case Job.Types.Kind.RunScript:
                 return await _scripts.RunAsync(job, report, token);
 
+            case Job.Types.Kind.SelfUpdate:
+                // The minimal push-and-restart (D-33). On success this never returns: the
+                // service is stopped mid-job and the new version answers the re-sent job.
+                return await _updater.RunAsync(job, report, token);
+
             default:
-                // Packages, profile reset, files and the update land in later portions of M2
-                // and in M4 (ROADMAP). Until then the console hears "not in this build".
+                // Packages, profile reset and files land in M4 (ROADMAP). Until then the
+                // console hears "not in this build".
                 return new JobResult
                 {
                     JobId = job.Id,
                     Ok = false,
                     ExitCode = -1,
-                    Message = $"This agent build ({Program.Version}) does not run {job.Kind} jobs yet.",
+                    Message = $"This agent build ({Program.InstalledVersion}) does not run {job.Kind} jobs yet.",
                 };
         }
     }

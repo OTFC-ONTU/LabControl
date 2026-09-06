@@ -169,7 +169,7 @@ implement.</p>
 <tr>
 <td><strong>M2</strong></td>
 <td>Windows agent: service, helper, power, scripts</td>
-<td><strong>in progress</strong> (portions 1–3 of 4 verified on the VM, 2026-09-05…07; portion 4 next)</td>
+<td><strong>in progress</strong> (portions 1–3 of 4 verified on the VM, 2026-09-05…07; portion 4 built 2026-09-07, its VM run next)</td>
 <td>M1, Windows VM</td>
 </tr>
 <tr>
@@ -668,6 +668,34 @@ portion 4). One thing to know about UTM: after <code>Restart-Computer</code> fro
 VM sat on the UEFI <em>Start boot option</em> splash until it was powered off and started again —
 the console's <em>Reboot</em> job in portion 3 did not show this, so it is not a LabControl issue.</p>
 </li>
+<li><p><em>Portion 4 (built 2026-09-07).</em> The minimal push-and-restart (<code>D-33</code>). The console gained
+the development action <em>Push agent build…</em>: a folder with the published <code>agent.exe</code> and
+<code>session.exe</code> (side by side, or <code>publish-all.sh</code>'s <code>artifacts/&lt;rid&gt;/</code> layout) and the
+version number; the dialog hashes the files and shows the version directory name the PC
+will get, <code>&lt;number&gt;+&lt;8 hex of agent.exe's hash&gt;</code>. <code>LabSession.PushAgentBuild</code> offers the
+two files and an <code>UpdateManifest</code> through <code>PullFile</code> and sends a <code>self_update</code> job with
+<code>version</code>, <code>ref</code>, <code>sha256</code> (<code>SelfUpdateRequest</code>). On the PC <code>AgentUpdater</code> pulls the
+manifest, checks it (<code>UpdateBundle</code>), pulls each file into
+<code>ProgramData\LabControl\update\&lt;version&gt;\</code> with progress, runs the new
+<code>agent.exe --version</code> as a preflight, moves the directory into <code>app\&lt;version&gt;\</code>, writes
+<code>app\previous</code> / <code>app\current</code>, repoints the service (<code>ServiceControl</code>, <code>ChangeServiceConfig</code>)
+and spawns its own <code>agent.exe --restart-service</code>; it never sends a result — the new
+version answers the re-sent job (<em>Running X now (was Y)</em>) and prunes version directories
+older than <code>previous</code>. <code>Hello.agent_version</code> is now the directory name when installed, so
+the tile shows the build. <code>AgentLink</code> forgets a job cancelled by a stop so the re-sent copy
+runs. <code>FakeAgent</code> plays the whole exchange with real pulls. Tests: <code>SelfUpdateTests</code>
+(Shared), <code>PushBuildTests</code> (Console). Not yet run on Windows. <strong>To check on the VM:</strong>
+publish a build (<code>tools/publish-all.sh</code>), push it to the installed <code>PC-01</code> from the console;
+the Jobs panel shows <em>pulled agent.exe</em>, <em>pulled session.exe</em>, the preflight line and
+<em>restarting</em>; the PC goes offline and is back within a minute with the tile reading
+<code>agent 0.1.0+…</code>; the job ends <em>Running 0.1.0+… now (was 0.1.0)</em>; on the VM
+<code>app\</code> holds both directories, <code>app\current</code> and <code>app\previous</code> name them,
+<code>sc qc LabControl</code> points into the new one, <code>ProgramData\LabControl\update\</code> is empty,
+and the agent log shows the <code>restart</code> lines. Then push the same build again (a quick
+<em>Running … now</em>), push a third build (the first version directory is pruned), and push a
+<code>win-x64</code> build to see the preflight — on the ARM VM it will pass under emulation, so the
+wrong-architecture refusal is a <code>PC-00</code> check with a <code>win-arm64</code> build.</p>
+</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -1049,7 +1077,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 01:06 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 01:36 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

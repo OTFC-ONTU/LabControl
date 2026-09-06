@@ -57,6 +57,19 @@ public sealed class JobLedger
         }
     }
 
+    /// <summary>
+    /// The job did not finish and will not: the agent is stopping mid-job (a <c>self_update</c>
+    /// ends this way by design, D-33). Its id is released so the copy the console re-sends
+    /// after the restart is admitted again rather than ignored as a duplicate.
+    /// </summary>
+    public void Forget(string jobId)
+    {
+        lock (_gate)
+        {
+            _running.Remove(jobId);
+        }
+    }
+
     public bool IsRunning(string jobId)
     {
         lock (_gate)

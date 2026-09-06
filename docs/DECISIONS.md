@@ -771,6 +771,86 @@ PC; a `-Command` wrapper to force UTF-8 output (changes `-File`'s exit-code sema
 no gain over OEM decoding); Job Objects for the tree kill; a per-job `wake` job kind
 (the PC is off — nothing can run it).
 
+## D-33 — The minimal push-and-restart (M2 portion 4)
+
+Context: from here on every agent build has to reach the VM and `PC-00` many times a day,
+and carrying it there on a stick or through `dev-install.cmd` is exactly the cost the
+project exists to remove. The full update of ARCHITECTURE §7.2 — signed manifest,
+probation, rollback — is M4; portion 4 builds the smallest honest form of its steps 2 and 3.
+
+Decisions:
+
+1. **The `self_update` job carries only `version`, `ref` and `sha256`; the manifest and the
+   files travel through `PullFile`.** The job is in the frozen subset (`D-19`), so it stays
+   three short strings. `ref`/`sha256` name a serialized `UpdateManifest` (version, and per
+   file its name, size and SHA-256), offered like a script; each binary is then pulled under
+   its own hash. M4 adds a `signature` argument over the same manifest bytes and nothing
+   else changes shape. The `UpdateAgent` message in the proto is left unused and reserved.
+2. **A pushed build is named `<version>+<first 8 hex digits of agent.exe's SHA-256>`**, for
+   example `0.1.0+1a2b3c4d`. `VersionPrefix` does not change with every build, two builds of
+   `0.1.0` must land side by side, and a running binary cannot be overwritten; semver build
+   metadata is made for this. An installed agent reports the name of the directory it runs
+   from as `agent_version` (`Program.InstalledVersion`), so the tile says which build a PC
+   runs and the new version recognises the job that installed it by a string comparison. The
+   console cannot run `agent.exe` on the Mac to learn the number, so the push dialog asks for
+   it (prefilled with the console's own, both come from the same tree) and the agent checks
+   it with a **preflight**: the staged `agent.exe --version` must start — which also proves
+   the build is for this CPU, `win-arm64` versus `win-x64` — and print the number the bundle
+   claims; otherwise nothing is installed and the job says what it printed.
+3. **The outgoing agent never reports the result; the new version answers the re-sent job.**
+   PROTOCOL said so from the start and the minimal form keeps it, because a "success" sent
+   before the restart is a claim the sender cannot back up. Mechanics: after repointing the
+   service the agent asks for the restart and waits for the stop as cancellation of the job;
+   `AgentLink` now *forgets* a job cancelled that way (`JobLedger.Forget`), so the copy the
+   console re-sends on the next link is admitted instead of being taken for a duplicate; the
+   new version sees `version` equal to its own and answers *Running X now (was Y)*. The
+   console's inactivity timeout on the job is 5 minutes, because the silence between the
+   last progress line and the new version's first link is the restart itself. If the stop
+   does not arrive within 60 s the outgoing agent puts the service, the markers and the
+   directory back and fails the job.
+4. **The restart is done by a separate process running the old executable.** A service
+   cannot outlive its own stop to issue the start, so the agent spawns
+   `agent.exe --restart-service` (`ControlService` stop, wait for *stopped*, `StartService`)
+   from the version that is already proven on this PC — the new one has so far only proved
+   it can print its version. Rejected: exiting with a non-zero code so the recovery action
+   restarts the service (burns the daily restart budget and looks like a crash in the log),
+   `sc.exe` or PowerShell from the service (the agent is C# and Win32 only), a separate
+   `updater.exe` (`D-19` already rejected it).
+5. **Staging under `ProgramData\LabControl\update\<version>\`, then one move into `app\`.**
+   A pull that fails leaves nothing under `app\`, and the service manager never sees a
+   half-written version directory. `app\previous` names the version before the last push
+   and is not cleared in M2 — acceptance is M4's probation. When the new version answers the
+   re-sent job it **prunes** every version directory other than `current` and `previous`, so
+   a day of pushes does not fill the disk (`D-32` item 4's rule against debris on fourteen
+   PCs); the two directories the acceptance criterion asks for stay.
+6. **Every refusal happens before anything is written** (`UpdateBundle`, shared with the
+   simulator): a manifest whose version is not the job's, a path where a file name should
+   be, a bundle without `agent.exe` or `session.exe`, a size or hash that does not fit, a
+   file that arrives with another size, a preflight that does not start, times out or prints
+   another version. The staging directory is removed and the job fails with the reason. An
+   agent that is not running from `app\<version>\` — a build directory, `--run` from a share
+   — refuses the push and says to install first; a foreground `--run` from inside `app\`
+   installs the files and stops there, since it has no service to repoint.
+7. **`FakeAgent` pulls everything for real and pretends only the install**, then drops the
+   link, throws cancellation and comes back claiming the new version — the console's entire
+   view of a push, exercised on the Mac and tested in `PushBuildTests`.
+
+What this form deliberately lacks (M4): a signature, so the push is only as trustworthy as
+the mutual-TLS link and the console it came from; probation and rollback, so a new build
+that starts and then crashes leaves the PC to its three recovery restarts and then offline,
+with the previous version still on disk and `app\previous` naming it — repointing back is
+`dev-install.cmd` with the old build or `sc config` by hand until M4. One thing to know:
+Windows 11 on ARM runs x64 binaries under emulation, so a `win-x64` build passes the
+preflight on the VM and runs there slowly; the lab PCs are x64 and cannot run `win-arm64`,
+which the preflight refuses.
+
+Rejected: a zip bundle (one pull, but a second format to write and read, and per-file
+hashes are what M4's manifest needs anyway); the manifest as base64 inside `args` (the job
+is frozen; keep it small and readable in the journal); naming directories by hash alone
+(loses the version number the teacher reads); parsing `agent.exe`'s PE version resource on
+the Mac (a hand-written `VERSIONINFO` reader for a value the preflight verifies anyway);
+letting the outgoing agent report success (see item 3).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

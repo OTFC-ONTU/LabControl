@@ -385,6 +385,9 @@ message RevocationState {
   repeated RevocationEntry entries = 1;
 }
 
+// Reserved for M4's signed rollout. The M2 push-and-restart does not use this message: the
+// self_update Job's args carry `version` and the manifest's PullFile reference and hash, and
+// the manifest below names the files (PROTOCOL "self_update", D-33).
 message UpdateAgent {
   string version    = 1;
   string bundle_ref = 2;  // fetched with PullFile

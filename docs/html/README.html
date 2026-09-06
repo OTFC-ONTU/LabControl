@@ -200,7 +200,10 @@ verified on the Windows VM. Portion 3 — shutdown / reboot / log off, Wake-on-L
 console, the minimal <code>PullFile</code> and <code>run_script</code> with streamed output and a kill at the
 timeout, plus a development-only <em>Run test script…</em> — is verified on the VM too, down to a
 script surviving a 30-second network cut; only Wake-on-LAN itself waits for the real
-<code>PC-00</code>, since the VM has no such thing. Next is push-and-restart, the last portion of M2
+<code>PC-00</code>, since the VM has no such thing. Portion 4 — the minimal push-and-restart: <em>Push
+agent build…</em> in the console sends a published <code>agent.exe</code> + <code>session.exe</code> to a PC, which
+installs it side by side, repoints its service, restarts and reports back as the new
+version — is built and waits for its VM run, the last step of M2
 (<a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>).</p>
 <h2 id="quick-start">Quick start<a class="anchor" href="#quick-start" aria-label="Link to this section">#</a></h2>
 <pre><code class="language-bash">dotnet build
@@ -275,13 +278,21 @@ helper appears on the logon screen; sign in — the user is back. The helper's o
 <code>C:\ProgramData\LabControl\logs\session-&lt;date&gt;.log</code>; <code>session.exe --probe</code> from an
 elevated prompt prints what a process in the session sees. A standard user cannot end
 <code>session.exe</code> and cannot read the logs.</li>
+<li><strong>Push the next build from the console</strong> (M2 portion 4) instead of re-running
+<code>dev-install.cmd</code>: publish, select the PC, <em>Push agent build…</em>, choose the folder with
+<code>agent.exe</code> and <code>session.exe</code> (or <code>artifacts/win-arm64</code> straight from <code>publish-all.sh</code>)
+and press <em>Push</em>. The Jobs panel shows the files being pulled and the restart; the PC is
+back within a minute with the tile reading <code>agent 0.1.0+&lt;build id&gt;</code> and the job ending
+<em>Running … now (was …)</em>. Both version directories stay under <code>app\</code>; older ones are
+removed. There is no rollback yet (M4): if a pushed build fails to start, install a good
+one with <code>dev-install.cmd</code>.</li>
 </ol>
 <p>Requires the .NET 10 SDK and nothing else. The <code>net10.0-windows</code> projects compile on
 macOS and Linux too (they just cannot run there), so a broken Windows build is caught
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-07 01:06 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 01:36 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

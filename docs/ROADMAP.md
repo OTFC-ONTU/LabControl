@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portions 1–3 of 4 verified on the VM, 2026-09-05…07; portion 4 next) | M1, Windows VM |
+| **M2** | Windows agent: service, helper, power, scripts | **in progress** (portions 1–3 of 4 verified on the VM, 2026-09-05…07; portion 4 built 2026-09-07, its VM run next) | M1, Windows VM |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -502,6 +502,33 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   portion 4). One thing to know about UTM: after `Restart-Computer` from inside the guest the
   VM sat on the UEFI *Start boot option* splash until it was powered off and started again —
   the console's *Reboot* job in portion 3 did not show this, so it is not a LabControl issue.
+- *Portion 4 (built 2026-09-07).* The minimal push-and-restart (`D-33`). The console gained
+  the development action *Push agent build…*: a folder with the published `agent.exe` and
+  `session.exe` (side by side, or `publish-all.sh`'s `artifacts/<rid>/` layout) and the
+  version number; the dialog hashes the files and shows the version directory name the PC
+  will get, `<number>+<8 hex of agent.exe's hash>`. `LabSession.PushAgentBuild` offers the
+  two files and an `UpdateManifest` through `PullFile` and sends a `self_update` job with
+  `version`, `ref`, `sha256` (`SelfUpdateRequest`). On the PC `AgentUpdater` pulls the
+  manifest, checks it (`UpdateBundle`), pulls each file into
+  `ProgramData\LabControl\update\<version>\` with progress, runs the new
+  `agent.exe --version` as a preflight, moves the directory into `app\<version>\`, writes
+  `app\previous` / `app\current`, repoints the service (`ServiceControl`, `ChangeServiceConfig`)
+  and spawns its own `agent.exe --restart-service`; it never sends a result — the new
+  version answers the re-sent job (*Running X now (was Y)*) and prunes version directories
+  older than `previous`. `Hello.agent_version` is now the directory name when installed, so
+  the tile shows the build. `AgentLink` forgets a job cancelled by a stop so the re-sent copy
+  runs. `FakeAgent` plays the whole exchange with real pulls. Tests: `SelfUpdateTests`
+  (Shared), `PushBuildTests` (Console). Not yet run on Windows. **To check on the VM:**
+  publish a build (`tools/publish-all.sh`), push it to the installed `PC-01` from the console;
+  the Jobs panel shows *pulled agent.exe*, *pulled session.exe*, the preflight line and
+  *restarting*; the PC goes offline and is back within a minute with the tile reading
+  `agent 0.1.0+…`; the job ends *Running 0.1.0+… now (was 0.1.0)*; on the VM
+  `app\` holds both directories, `app\current` and `app\previous` name them,
+  `sc qc LabControl` points into the new one, `ProgramData\LabControl\update\` is empty,
+  and the agent log shows the `restart` lines. Then push the same build again (a quick
+  *Running … now*), push a third build (the first version directory is pruned), and push a
+  `win-x64` build to see the preflight — on the ARM VM it will pass under emulation, so the
+  wrong-architecture refusal is a `PC-00` check with a `win-arm64` build.
 
 **Acceptance criteria**
 

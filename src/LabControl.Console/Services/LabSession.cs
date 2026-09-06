@@ -8,6 +8,7 @@ using LabControl.Shared.Discovery;
 using LabControl.Shared.Files;
 using LabControl.Shared.Identity;
 using LabControl.Shared.Jobs;
+using LabControl.Shared.Setup;
 using LabControl.Shared.Lab;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Power;
@@ -765,6 +766,25 @@ public sealed class LabSession : IAsyncDisposable
         var offer = Files.OfferText(TestScripts.Text(choice.Kind, choice.Shell), name);
         var request = new RunScriptRequest(offer.Reference, offer.Sha256, choice.Shell, choice.RunAs, choice.Timeout, name);
         return CreateJobs(agentIds, Job.Types.Kind.RunScript, request.ToArgs(), choice.Timeout + Defaults.JobTimeoutGrace);
+    }
+
+    /// <summary>
+    /// The development-only <i>Push agent build</i> action (ROADMAP M2 portion 4, D-33):
+    /// offers the build's files and its manifest through <c>PullFile</c> and sends a
+    /// <c>self_update</c> job per PC. The result comes from the <b>new</b> version after the
+    /// service restart, so the job's inactivity timeout is generous.
+    /// </summary>
+    public IReadOnlyList<JobRecord> PushAgentBuild(IEnumerable<string> agentIds, AgentBuild build)
+    {
+        foreach (var file in build.Files)
+        {
+            Files.OfferFile(file.Path);
+        }
+
+        var manifest = Files.OfferBytes(build.Manifest, $"manifest-{build.Version}");
+        var request = new SelfUpdateRequest(build.Version, manifest.Reference, manifest.Sha256);
+        _log.LogInformation("pushing agent build {Version} from {Folder} ({Bytes} bytes)", build.Version, build.Folder, build.TotalBytes);
+        return CreateJobs(agentIds, Job.Types.Kind.SelfUpdate, request.ToArgs(), Defaults.SelfUpdateJobTimeout);
     }
 
     private void DeliverJobs(AgentConnection connection, bool resendInFlight)

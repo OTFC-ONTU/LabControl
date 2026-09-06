@@ -123,7 +123,10 @@ get `win-x64`. `tools/publish-all.sh` produces both.
    name may be served stale for a while — publish a new build into a differently named
    folder if in doubt — and restarting the `WebClient` service (which the script does once)
    can leave `Z:` unavailable until the VM is rebooted. `dev-install.ps1 -Uninstall`
-   removes everything but the PC's identity, `-Uninstall -PurgeData` removes that too.
+   removes everything but the PC's identity, `-Uninstall -PurgeData` removes that too. On a
+   real PC add `-Student` (or `STUDENT=1` in `dev-install.cmd`) to also create the standard
+   `student` account with auto-logon, the way Setup.exe will; `-Uninstall -RemoveStudent`
+   takes it away again.
 6. **Check the session helper** (M2 portion 2). Within a few seconds of the service
    starting, Task Manager → *Details* shows `session.exe` running as SYSTEM in the user's
    session (not session 0), and the console's events panel shows *Session helper … is up in

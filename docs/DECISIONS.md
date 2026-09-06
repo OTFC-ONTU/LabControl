@@ -524,8 +524,18 @@ Decisions:
 5. **`dev-install.ps1` does what Setup will, and nothing Setup would not.** Same layout
    (`app\<version>`, `app\current`), same service configuration (LocalSystem, auto-start,
    restart ×3 at 10 s), same firewall group and Defender exclusion. It skips the hostname,
-   Wake-on-LAN, power and the `student` account because none of them is needed to test the
-   agent, and it is documented as development-only in the README.
+   Wake-on-LAN and power because none of them is needed to test the agent, and it is
+   documented as development-only in the README. Since 2026-09-07 it also performs
+   INSTALLER.md step 8 on request (`-Student`): the M2 acceptance criterion "`student`
+   cannot stop the service, kill `session.exe` or read `ProgramData\LabControl`" needs the
+   account on `PC-00` before Setup.exe exists, and the VM runs so far were signed in as an
+   administrator. Same shape as Setup: standard user in `Users` only, password never
+   expires, the auto-logon password in the LSA secret `DefaultPassword` (two `advapi32`
+   calls compiled with `Add-Type`, since Windows PowerShell has no cmdlet for it), never in
+   the plain registry; the local password policy relaxed with `secedit` only if "1" is
+   refused. Groups are resolved by SID, not name, so a Ukrainian Windows works. Hiding the
+   administrator from the logon screen is left to Setup: the script cannot know which
+   account the owner uses, and it is not needed for the test.
 
 6. **Never an ephemeral TLS key on Windows.** The first VM run (2026-09-05) enrolled fine
    and then failed every mutual-TLS handshake with SChannel's *the credentials supplied to

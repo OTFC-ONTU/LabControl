@@ -304,7 +304,9 @@ capture performance, real antivirus behaviour. Note the VM on Apple Silicon is
   M4. This exists because iterating on the agent from M2 onwards is unworkable if every
   build means walking to `PC-00` with a USB stick.
 - A development-only install script (`scripts/dev-install.ps1`) so the agent can be
-  deployed by hand before the real installer exists in M4.
+  deployed by hand before the real installer exists in M4. With `-Student` it also creates
+  the `student` account with auto-logon (INSTALLER.md step 8), so the `student` criterion
+  below can be checked on `PC-00` before M4 (`D-29` item 5).
 
 **How it is being built.** In four portions, each committed and then run on the Windows VM
 before the next starts (owner's choice, 2026-09-05): **(1)** the service host, the real store
@@ -479,6 +481,14 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   00:02:18 and back at 00:02:38, and *Killed after 120 s* arrived at 00:03:41 over the new
   link with no `job.timed_out`. Portion 3 is complete on the VM; Wake-on-LAN waits for
   `PC-00`.
+- *Before the first `PC-00` visit (2026-09-07).* `dev-install.ps1 -Student` creates the
+  `student` account with auto-logon so the criterion "`student` cannot stop the service, kill
+  `session.exe` or read `ProgramData`" no longer waits for Setup.exe (`D-29` item 5). Not yet
+  run anywhere: the first run is on `PC-00`. **To check there:** after a reboot the PC logs on
+  as `student` by itself; as `student`, *services.msc* refuses to stop `LabControl`, Task
+  Manager refuses to end `session.exe`, `C:\ProgramData\LabControl` is *access denied*, and
+  the tile reads *student*; `dev-install.ps1 -Uninstall -RemoveStudent` removes the
+  auto-logon and the account again.
 
 **Acceptance criteria**
 

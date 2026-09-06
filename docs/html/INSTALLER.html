@@ -200,7 +200,8 @@ so in its log. Issuing the certificate needs the lab key unlocked on the console
 and types the passphrase once; a PC that connects before that is told to try again
 later and does, on its own. This step is the shared routine <code>AgentProvisioning</code>, also
 reachable as <code>agent.exe --install --payload &lt;dir&gt; --number N</code>, which is how
-<code>scripts/dev-install.ps1</code> provisions a PC before Setup.exe exists (<code>D-29</code>).</li>
+<code>scripts/dev-install.ps1</code> provisions a PC before Setup.exe exists (<code>D-29</code>; with
+<code>-Student</code> the script also performs step 8 below).</li>
 <li><strong>Service</strong> — <code>CreateService(&quot;LabControl&quot;, LocalSystem, auto-start, delayed=false)</code>
 with the binary path pointing at <code>app\&lt;version&gt;\agent.exe</code>; recovery: restart on
 failure (3×, 10 s) and then <code>agent.exe --rollback</code> on the fourth, which is the
@@ -293,7 +294,7 @@ reverted between runs.</li>
 </ul>
 
 </article>
-<footer>Generated 2026-09-07 00:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 00:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#building-the-usb-payload-on-the-console">Building the USB payload (on the console)</a></li><li class="lvl2"><a href="#what-setup.exe-does-in-order">What Setup.exe does, in order</a></li><li class="lvl2"><a href="#uninstall-repair">Uninstall / repair</a></li><li class="lvl2"><a href="#things-the-installer-cannot-do">Things the installer cannot do</a></li><li class="lvl2"><a href="#testing-the-installer-without-a-room-full-of-real-pcs">Testing the installer without a room full of real PCs</a></li></ul></nav>
 </div>

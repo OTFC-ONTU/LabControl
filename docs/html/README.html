@@ -260,7 +260,10 @@ about the shared drive: Windows caches WebDAV files, so a rebuilt file with the 
 name may be served stale for a while — publish a new build into a differently named
 folder if in doubt — and restarting the <code>WebClient</code> service (which the script does once)
 can leave <code>Z:</code> unavailable until the VM is rebooted. <code>dev-install.ps1 -Uninstall</code>
-removes everything but the PC's identity, <code>-Uninstall -PurgeData</code> removes that too.</li>
+removes everything but the PC's identity, <code>-Uninstall -PurgeData</code> removes that too. On a
+real PC add <code>-Student</code> (or <code>STUDENT=1</code> in <code>dev-install.cmd</code>) to also create the standard
+<code>student</code> account with auto-logon, the way Setup.exe will; <code>-Uninstall -RemoveStudent</code>
+takes it away again.</li>
 <li><strong>Check the session helper</strong> (M2 portion 2). Within a few seconds of the service
 starting, Task Manager → <em>Details</em> shows <code>session.exe</code> running as SYSTEM in the user's
 session (not session 0), and the console's events panel shows <em>Session helper … is up in
@@ -278,7 +281,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-07 00:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 00:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

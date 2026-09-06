@@ -74,7 +74,8 @@ makes re-runs safe. `--dry-run` prints the plan only; `--number 7` skips the pro
    and types the passphrase once; a PC that connects before that is told to try again
    later and does, on its own. This step is the shared routine `AgentProvisioning`, also
    reachable as `agent.exe --install --payload <dir> --number N`, which is how
-   `scripts/dev-install.ps1` provisions a PC before Setup.exe exists (`D-29`).
+   `scripts/dev-install.ps1` provisions a PC before Setup.exe exists (`D-29`; with
+   `-Student` the script also performs step 8 below).
 5. **Service** — `CreateService("LabControl", LocalSystem, auto-start, delayed=false)`
    with the binary path pointing at `app\<version>\agent.exe`; recovery: restart on
    failure (3×, 10 s) and then `agent.exe --rollback` on the fourth, which is the

@@ -519,7 +519,11 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   the tile shows the build. `AgentLink` forgets a job cancelled by a stop so the re-sent copy
   runs. `FakeAgent` plays the whole exchange with real pulls. Tests: `SelfUpdateTests`
   (Shared), `PushBuildTests` (Console). Not yet run on Windows. **To check on the VM:**
-  publish a build (`tools/publish-all.sh`), push it to the installed `PC-01` from the console;
+  first install a portion-4 build once by hand (`dev-install.cmd`) — the agent on the PC
+  must already understand `self_update`, and the one from portion 3 answers *does not run
+  SelfUpdate jobs yet* (seen on the first attempt, 2026-09-07 01:44; this is the one
+  bootstrap the push cannot do for itself). Then publish a build (`tools/publish-all.sh`),
+  push it to the installed `PC-01` from the console;
   the Jobs panel shows *pulled agent.exe*, *pulled session.exe*, the preflight line and
   *restarting*; the PC goes offline and is back within a minute with the tile reading
   `agent 0.1.0+…`; the job ends *Running 0.1.0+… now (was 0.1.0)*; on the VM

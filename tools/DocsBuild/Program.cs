@@ -21,7 +21,8 @@ internal static class Program
     private static readonly (string RelativePath, string NavTitle)[] Ordered =
     [
         ("README.md", "Overview"),
-        ("CLAUDE.md", "Project brief"),
+        ("CLAUDE.md", "Claude project brief"),
+        ("AGENTS.md", "Codex instructions"),
         ("docs/ARCHITECTURE.md", "Architecture"),
         ("docs/PROTOCOL.md", "Protocol"),
         ("docs/INSTALLER.md", "Installer"),
@@ -89,6 +90,7 @@ internal static class Program
         while (dir is not null)
         {
             if (File.Exists(Path.Combine(dir.FullName, "CLAUDE.md")) &&
+                File.Exists(Path.Combine(dir.FullName, "AGENTS.md")) &&
                 Directory.Exists(Path.Combine(dir.FullName, "docs")))
             {
                 return dir.FullName;
@@ -98,7 +100,7 @@ internal static class Program
         }
 
         throw new DirectoryNotFoundException(
-            "Could not locate the repository root (a directory containing CLAUDE.md and docs/). " +
+            "Could not locate the repository root (a directory containing CLAUDE.md, AGENTS.md and docs/). " +
             "Pass it as the first argument.");
     }
 

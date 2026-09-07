@@ -9,7 +9,7 @@ PC later)**. It replaces walking from desk to desk to install software, power
 machines on/off, and watch what students are doing.
 
 Owner: Viacheslav (teacher, Odesa Technical Vocational College). Solo project, built
-with Claude Code. The teacher is also the only admin — there is no IT department
+with Claude Code and Codex. The teacher is also the only admin — there is no IT department
 behind this, so **everything must be zero-maintenance and self-explanatory**.
 
 ## Why it exists
@@ -75,6 +75,7 @@ behind this, so **everything must be zero-maintenance and self-explanatory**.
 
 ```
 LabControl/
+├── AGENTS.md                  ← Codex instructions + shared agent-document contract
 ├── CLAUDE.md                  ← this file
 ├── README.md                  ← human overview + quick start
 ├── LabControl.sln             ← classic .sln, not .slnx (D-18)
@@ -119,6 +120,14 @@ Solution file: `LabControl.sln` at the root (create in M0).
 
 ## Conventions for Claude Code
 
+- Read `AGENTS.md` as the companion instructions for Codex. `CLAUDE.md` and
+  `AGENTS.md` are shared project documentation, not private notes for one agent.
+  Whenever project facts, requirements, status, workflows, commands, repository
+  layout or shared conventions change, inspect **both** files and update every
+  applicable section in the same task — regardless of which agent is doing the work.
+  Never leave the other agent with stale or contradictory guidance. Instructions that
+  truly apply to only one agent may stay in one file when they are explicitly labelled
+  as agent-specific.
 - Read `docs/ARCHITECTURE.md` and `docs/PROTOCOL.md` before touching `src/`.
   Any change to a `.proto` file must be reflected in `docs/PROTOCOL.md` in the same commit.
 - **Documentation is part of every change, not a follow-up.** The `.md` files are the
@@ -126,7 +135,7 @@ Solution file: `LabControl.sln` at the root (create in M0).
   `.md` file — or change behaviour that a `.md` file describes — update the Markdown
   **and** run `tools/docs-build.sh` before finishing the task. Never hand-edit anything
   under `docs/html/`. A change that leaves the docs stale, or the HTML out of sync with
-  the Markdown, is not finished.
+  the Markdown — including either agent's applicable instructions — is not finished.
 - Any non-obvious design choice goes into `docs/DECISIONS.md` as a new `D-NN` entry.
 - Code, identifiers, commits, comments: English. UI strings of the console: English first,
   Ukrainian localization is a later milestone (resource files from day one, no hard-coded UI text).

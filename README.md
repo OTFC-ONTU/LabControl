@@ -14,13 +14,16 @@ authority, not the laptop's certificate, so moving the console to another comput
 macOS, Windows or Linux — means importing one encrypted backup file, and no student PC is
 touched. The software is designed for labs of up to 30 PCs, not just the first one's 14.
 
-Built with .NET 10 + Avalonia + gRPC. See [`CLAUDE.md`](CLAUDE.md) for the project
-brief and [`docs/`](docs/) for architecture, protocol, installer and roadmap.
+Built with .NET 10 + Avalonia + gRPC. See [`CLAUDE.md`](CLAUDE.md) for the detailed
+project brief, [`AGENTS.md`](AGENTS.md) for Codex instructions and the shared agent
+documentation contract, and [`docs/`](docs/) for architecture, protocol, installer
+and roadmap.
 
 ## Documentation
 
 | Document | What it answers |
 |---|---|
+| [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md) | Shared project context and working rules for Claude Code and Codex |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | What gets built, in what order, and how each milestone is judged done |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components, processes, data flow, threat model |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | gRPC services, discovery, video encoding, job lifecycle |

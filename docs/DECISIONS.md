@@ -1060,6 +1060,12 @@ Decisions:
    primary output (`D-35` item 9), the window maps pointer positions through the picture's
    drawn bounds, and the helper multiplies by 65535 for `MOUSEEVENTF_ABSOLUTE`. Resolution
    and window size never enter the protocol.
+10. **A character key's `KeyDown` is left unhandled** (found on `PC-10`, 2026-09-07
+   16:20: mouse, shortcuts and Ctrl+Alt+Del worked, no text arrived). Avalonia's macOS
+   backend asks the OS to interpret a key press — which is what produces `TextInput` —
+   only when the `KeyDown` was *not* handled; the window marked every key handled, so no
+   letter ever became text. Only a press the mapper sent as a key (modifier, command key,
+   shortcut) is marked handled, which also keeps ⌥-characters from being typed twice.
 9. **Reasons on the tile come from the PC's own events.** The connection keeps the last
    `capture.<reason>` and `input.<reason>` until `…recovered`, plus `session_id` from
    `SessionState`; the tile prefers the PC's reason (*no user session*, *session helper not

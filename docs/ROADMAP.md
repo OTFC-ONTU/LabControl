@@ -745,6 +745,15 @@ to answer Windows questions (`D-34`).
   key plus a click on the lock screen; then the acceptance numbers: ≥ 15 fps while
   scrolling, latency comfortable enough to type. A helper from before portion 3 says
   nothing when input arrives, so the agent must be pushed first.
+  *First run on `PC-10` with build `0.1.3+4dfdc6f1` (2026-09-07 16:05–16:25):* the push
+  went through first time, the mouse drives the PC, Ctrl+Alt+Del brings the secure screen
+  up (the policy written by the agent on first use), and the single-PC window holds
+  **15–16 fps** while the PC is driven remotely — on the acceptance line, not above it.
+  Text did not arrive at all: the window handled every `KeyDown`, and macOS produces
+  `TextInput` only for unhandled ones (`D-36` item 10, fixed the same hour, console-side
+  only). Fixed on the way: tile tooltips floated above the single-PC window and other
+  applications on macOS (served only while the console window is active now). Still to
+  check: Ukrainian text, ⌘C/⌘V, scrolling, CPU and memory of `session.exe` over an hour.
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

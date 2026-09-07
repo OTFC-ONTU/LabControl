@@ -907,7 +907,16 @@ web page with the trackpad, drag a window; <em>Ctrl+Alt+Del</em> must bring the 
 up (first use writes the policy) and the picture must follow it; Win+L from the toolbar
 key plus a click on the lock screen; then the acceptance numbers: ≥ 15 fps while
 scrolling, latency comfortable enough to type. A helper from before portion 3 says
-nothing when input arrives, so the agent must be pushed first.</li>
+nothing when input arrives, so the agent must be pushed first.
+<em>First run on <code>PC-10</code> with build <code>0.1.3+4dfdc6f1</code> (2026-09-07 16:05–16:25):</em> the push
+went through first time, the mouse drives the PC, Ctrl+Alt+Del brings the secure screen
+up (the policy written by the agent on first use), and the single-PC window holds
+<strong>15–16 fps</strong> while the PC is driven remotely — on the acceptance line, not above it.
+Text did not arrive at all: the window handled every <code>KeyDown</code>, and macOS produces
+<code>TextInput</code> only for unhandled ones (<code>D-36</code> item 10, fixed the same hour, console-side
+only). Fixed on the way: tile tooltips floated above the single-PC window and other
+applications on macOS (served only while the console window is active now). Still to
+check: Ukrainian text, ⌘C/⌘V, scrolling, CPU and memory of <code>session.exe</code> over an hour.</li>
 </ul>
 <p><strong>Not in scope.</strong> Broadcast to students, lock, exam mode, H.264.</p>
 <p><strong>Rough size.</strong> Large.</p>

@@ -199,13 +199,15 @@ once, because a portion-3 agent refuses `self_update`. `Setup` is still a skelet
 `VideoGeometry`, `ScreenImage`, `VideoPacer`, `VideoSettings`, `VideoUplink`), `VideoControl`
 handling and `TryPushVideo` in `AgentLink`, `PushVideo` served by the console into
 `Services/ScreenStore`, the `ScreenView` control on the tile and in `ScreenWindow`, and
-`FakeAgent`'s `FakeScreen`. **Portion 2 is built (2026-09-07), not yet run on the VM** (`D-35`):
+`FakeAgent`'s `FakeScreen`. **Portion 2 is built and verified on `PC-10` (2026-09-07: DXGI picture, back after lock and reboot)** (`D-35`):
 the producer loop is `Shared/Video/ScreenProducer` over an `IScreenSource` (the simulator's
 `FakeScreen` is one; `FakeScreenStreamer` is gone), `session.exe` captures with
 `DxgiScreenSource` (Vortice) or the `GdiScreenSource` fallback (`TileDiff` for its rectangles),
 `DesktopAccess` makes it DPI aware and follows the input desktop, and `SessionSupervisor`
 relays `VideoControl` down the pipe and `VideoFrame` up into the uplink, dropping a refused
-frame with a keyframe request back. Portion 3 (input) is next.
+frame with a keyframe request back. Two `PC-10` lessons: the antivirus holds a freshly run
+`agent.exe` (`D-33` item 9, retry) and a pipe flush deadlocks two read loops (`D-35` item 8,
+never await a write from a read loop). Portion 3 (input) is next.
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

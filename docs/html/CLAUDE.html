@@ -321,13 +321,15 @@ once, because a portion-3 agent refuses <code>self_update</code>. <code>Setup</c
 <code>VideoGeometry</code>, <code>ScreenImage</code>, <code>VideoPacer</code>, <code>VideoSettings</code>, <code>VideoUplink</code>), <code>VideoControl</code>
 handling and <code>TryPushVideo</code> in <code>AgentLink</code>, <code>PushVideo</code> served by the console into
 <code>Services/ScreenStore</code>, the <code>ScreenView</code> control on the tile and in <code>ScreenWindow</code>, and
-<code>FakeAgent</code>'s <code>FakeScreen</code>. <strong>Portion 2 is built (2026-09-07), not yet run on the VM</strong> (<code>D-35</code>):
+<code>FakeAgent</code>'s <code>FakeScreen</code>. <strong>Portion 2 is built and verified on <code>PC-10</code> (2026-09-07: DXGI picture, back after lock and reboot)</strong> (<code>D-35</code>):
 the producer loop is <code>Shared/Video/ScreenProducer</code> over an <code>IScreenSource</code> (the simulator's
 <code>FakeScreen</code> is one; <code>FakeScreenStreamer</code> is gone), <code>session.exe</code> captures with
 <code>DxgiScreenSource</code> (Vortice) or the <code>GdiScreenSource</code> fallback (<code>TileDiff</code> for its rectangles),
 <code>DesktopAccess</code> makes it DPI aware and follows the input desktop, and <code>SessionSupervisor</code>
 relays <code>VideoControl</code> down the pipe and <code>VideoFrame</code> up into the uplink, dropping a refused
-frame with a keyframe request back. Portion 3 (input) is next.</p>
+frame with a keyframe request back. Two <code>PC-10</code> lessons: the antivirus holds a freshly run
+<code>agent.exe</code> (<code>D-33</code> item 9, retry) and a pipe flush deadlocks two read loops (<code>D-35</code> item 8,
+never await a write from a read loop). Portion 3 (input) is next.</p>
 <p>The console's non-UI core lives in <code>src/LabControl.Console/Services</code> (<code>LabSession</code>,
 <code>ConsoleBootstrap</code>, <code>LabKeyVault</code>) and <code>Server/</code>; the agent side shared by <code>FakeAgent</code> and
 the real agent is <code>src/LabControl.Shared/Link/AgentLink.cs</code>, and the install-time routines
@@ -338,7 +340,7 @@ shared by the agent, the simulator and Setup are <code>src/LabControl.Shared/Set
 (<code>tests/&lt;project&gt;/bin/Debug/net10.0/&lt;project&gt;</code>).</p>
 
 </article>
-<footer>Generated 2026-09-07 15:27 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 15:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

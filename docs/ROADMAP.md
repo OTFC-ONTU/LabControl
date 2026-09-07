@@ -17,7 +17,7 @@ implement.
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
-| **M3** | Screens: mosaic, full view, remote control | **in progress — portions 1 and 2 of 3 built (2026-09-07); portion 2 awaits the VM** | M2, `PC-00` |
+| **M3** | Screens: mosaic, full view, remote control | **in progress — portions 1 and 2 of 3 built and portion 2 verified on `PC-10` (2026-09-07); portion 3 next** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
 | **M6** | Software catalog, localization, polish | not started | M5 |
@@ -714,7 +714,12 @@ to answer Windows questions (`D-34`).
   `Hello` and was killed as silent 12 s later, for as long as the console wanted video — a
   pipe-flush deadlock between the service and the helper (`D-35` item 8, fixed the same
   hour). With the console restarted the first real DXGI picture of `PC-10` reached the
-  mosaic (15:24).
+  mosaic (15:24). *Verified on `PC-10` with build `0.1.2+f1caf778` (2026-09-07 15:37–15:45):*
+  DXGI (no `capture.*` event), the picture on the tile, and the picture back by itself
+  after Win+L / unlock and after a reboot — the helper reconnects into a console that
+  already wants video without the old hang. Still to measure on `PC-10`: CPU of
+  `session.exe` in thumbnail mode, fps in the single-PC window while scrolling, memory
+  after an hour; and the GDI fallback on the VM. Owner's word: "все работает".
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

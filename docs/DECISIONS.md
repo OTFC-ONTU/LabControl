@@ -1089,6 +1089,40 @@ low-level hook or `keybd_event` (superseded by `SendInput`); the helper as the s
 (`D-30`, and the secure desktop again); an ack per input message (latency for nothing —
 video is the feedback); a lab-wide input budget (one PC is controlled at a time).
 
+## D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)
+
+Context: with the cap at 24 Mbit/s (`D-36` item 11) scrolling a page in Edge gave 10–17
+fps, text typed, and the owner asked for a quality setting and an *auto* mode — a lever
+between "sharp" and "smooth" the teacher can pull without knowing about bandwidth.
+
+Decisions:
+
+1. **`VideoControl.quality = 0` in full mode means auto**, not "the default". The console's
+   full control carries 0 unless the teacher chose a step; the producer starts at q75,
+   steps down by 10 each time a delta had to wait for the pacer, floors at q40 (below
+   that a page's text is hard to read), and climbs back by 5 after 30 deltas that went
+   out free. Keyframes are big whatever the quality and the delta behind one waits for
+   the keyframe's bytes, so neither votes. An agent older than this reads 0 as q75 —
+   the old default, nothing breaks. Thumbnails have no auto: q50 is cheap already.
+2. **The signal is the pacer's wait, not the frame size.** A big frame that fits the budget
+   is fine; a small frame that had to wait means the link is behind. The pacer already
+   knows, so auto mode is a dozen lines in the producer and no new measurement.
+3. **Three manual steps** — High q75, Medium q60, Low q45 — in a combo box in the
+   single-PC window, remembered per PC in `AgentScreen.RequestedQuality` for the console's
+   lifetime (not persisted: a quality is a lesson-time choice, not lab configuration). A
+   keyframe request re-sends the same quality, otherwise the PC would see a changed control
+   and restart its budget with a keyframe.
+4. **`VideoFrame.quality`** says what each frame was encoded at, so the status line under
+   the picture shows *q55 auto* or *q60* — the teacher sees the lever move. An agent that
+   predates the field sends 0 and the console shows *quality —*.
+5. **This is the second lever `D-36` item 11 named; H.264 stays the third** (`D-11`, M6)
+   and now has its number to beat: q40 at 24 Mbit/s while scrolling.
+
+Rejected: quality by frame size (item 2); a per-lab or persisted quality setting (item 3);
+adapting the frame rate instead of the quality (the pacer already does that; a lower
+rate at q75 is what 3–4 fps looked like); a quality slider (four choices are enough to
+find the one that reads well on the room's Wi-Fi).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

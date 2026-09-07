@@ -176,6 +176,71 @@ public class ScreenProducerTests
     }
 
     [Fact]
+    public async Task Auto_quality_steps_down_while_the_cap_bites_and_climbs_back_when_it_does_not()
+    {
+        // A screen that repaints a big box every tick against a cap that allows about one
+        // such frame a second: the pacer makes every delta wait, so the quality falls to the
+        // floor; then the screen goes quiet-ish (a tiny change), the frames are free, and
+        // after enough of them the quality climbs a step.
+        var screen = new ScriptedScreen(640, 400);
+        screen.Noise();
+        var steps = new List<IReadOnlyList<Rect>> { new[] { Rect(0, 0, 640, 400) } };
+        steps.AddRange(Enumerable.Repeat(new[] { Rect(0, 0, 640, 320) }, 10));
+        screen.Script(steps.ToArray());
+        var frames = new ConcurrentQueue<VideoFrame>();
+        await using var producer = Producer(() => screen, frames);
+
+        var control = Fast(VideoSettings.FullControl());
+        Assert.Equal(Defaults.VideoQualityAuto, control.Quality);
+        control.MaxBitsPerSecond = 2 * 1024 * 1024;
+        producer.Apply(control);
+        await WaitFor(() => frames.Count(f => !f.Keyframe) >= 8);
+        producer.Apply(null);
+
+        var list = frames.ToList();
+        Assert.Equal(Defaults.FullJpegQuality, list[0].Quality); // the keyframe, at the starting quality
+        var deltas = list.Where(f => !f.Keyframe).Select(f => f.Quality).ToList();
+        Assert.Equal(Defaults.FullJpegQuality, deltas[0]);       // the first delta is encoded before any wait was seen
+        Assert.True(deltas.Zip(deltas.Skip(1)).All(pair => pair.Second <= pair.First), string.Join(",", deltas));
+        Assert.True(deltas.Min() >= Defaults.FullJpegQualityMin);
+        Assert.Equal(Defaults.FullJpegQualityMin, deltas[^1]);
+
+        // Manual quality is obeyed as it is, frame after frame.
+        var fixedFrames = new ConcurrentQueue<VideoFrame>();
+        var quiet = new ScriptedScreen(640, 400);
+        quiet.Script([Rect(0, 0, 640, 400)], [Rect(0, 0, 64, 64)], [Rect(0, 0, 64, 64)]);
+        await using var fixedProducer = Producer(() => quiet, fixedFrames);
+        fixedProducer.Apply(Fast(VideoSettings.FullControl(quality: 60)));
+        await WaitFor(() => fixedFrames.Count >= 3);
+        fixedProducer.Apply(null);
+        Assert.All(fixedFrames, f => Assert.Equal(60, f.Quality));
+    }
+
+    [Fact]
+    public async Task Auto_quality_climbs_back_after_a_run_of_free_frames()
+    {
+        var screen = new ScriptedScreen(640, 400);
+        screen.Noise();
+        var script = new List<IReadOnlyList<Rect>> { new[] { Rect(0, 0, 640, 400) } };
+        script.AddRange(Enumerable.Repeat(new[] { Rect(0, 0, 640, 320) }, 6));            // big: the cap bites, quality falls
+        script.AddRange(Enumerable.Repeat(new[] { Rect(0, 0, 64, 64) }, Defaults.AutoQualityFreeFrames + 12)); // tiny: free frames
+        screen.Script(script.ToArray());
+        var frames = new ConcurrentQueue<VideoFrame>();
+        await using var producer = Producer(() => screen, frames);
+
+        var control = Fast(VideoSettings.FullControl());
+        control.MaxBitsPerSecond = 2 * 1024 * 1024;
+        producer.Apply(control);
+        await WaitFor(() => frames.Count(f => !f.Keyframe) >= Defaults.AutoQualityFreeFrames + 15);
+        producer.Apply(null);
+
+        var deltas = frames.Where(f => !f.Keyframe).Select(f => f.Quality).ToList();
+        var lowest = deltas.Min();
+        Assert.True(lowest < Defaults.FullJpegQuality, string.Join(",", deltas));
+        Assert.True(deltas[^1] > lowest, string.Join(",", deltas));
+    }
+
+    [Fact]
     public void A_raw_buffer_is_scaled_and_encoded_without_a_copy()
     {
         using var bitmap = new SKBitmap(new SKImageInfo(640, 400, JpegCodec.PixelFormat, SKAlphaType.Premul));
@@ -245,6 +310,13 @@ public class ScreenProducerTests
         public int Acquired { get; private set; }
 
         public bool Disposed { get; private set; }
+
+        /// <summary>Random pixels, so a JPEG of the screen is as large as JPEGs get — what a photo or a busy page costs.</summary>
+        public void Noise()
+        {
+            var random = new Random(7);
+            random.NextBytes(_bitmap.GetPixelSpan());
+        }
 
         public void Script(params IReadOnlyList<Rect>[] steps)
         {

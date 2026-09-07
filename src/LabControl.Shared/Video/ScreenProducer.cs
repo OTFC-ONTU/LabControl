@@ -105,12 +105,12 @@ public sealed class ScreenProducer : IAsyncDisposable
             {
                 _running = new CancellationTokenSource();
                 _loop = Task.Run(() => LoopAsync(_running.Token));
-                _log.LogInformation("{Pc}: streaming {Mode} at {Fps} fps, q{Quality}, ≤ {Kbit} kbit/s",
-                    _name, settings.Mode, settings.FramesPerSecond, settings.Quality, settings.MaxBitsPerSecond / 1024);
+                _log.LogInformation("{Pc}: streaming {Mode} at {Fps} fps, {Quality}, ≤ {Kbit} kbit/s",
+                    _name, settings.Mode, settings.FramesPerSecond, settings.IsAdaptive ? "auto quality" : $"q{settings.Quality}", settings.MaxBitsPerSecond / 1024);
             }
             else
             {
-                _log.LogInformation("{Pc}: video now {Mode} at {Fps} fps, q{Quality}", _name, settings.Mode, settings.FramesPerSecond, settings.Quality);
+                _log.LogInformation("{Pc}: video now {Mode} at {Fps} fps, {Quality}", _name, settings.Mode, settings.FramesPerSecond, settings.IsAdaptive ? "auto quality" : $"q{settings.Quality}");
             }
         }
     }
@@ -158,6 +158,8 @@ public sealed class ScreenProducer : IAsyncDisposable
                     // A new control: a new budget, and a keyframe so the console starts clean.
                     state.SettingsVersion = version;
                     state.Pacer = new VideoPacer(settings.MaxBitsPerSecond, _time.GetUtcNow());
+                    state.Quality = Defaults.FullJpegQuality;
+                    state.FreeFrames = 0;
                 }
 
                 if (source is null)
@@ -241,6 +243,15 @@ public sealed class ScreenProducer : IAsyncDisposable
                         }
 
                         var wait = state.Pacer!.Account(video.Jpeg.Length, now);
+                        if (settings.IsAdaptive && !isKeyframe && !state.AfterKeyframe)
+                        {
+                            // The delta right behind a keyframe waits for the keyframe's bytes,
+                            // not its own: it does not vote either.
+                            Adapt(state, wait > TimeSpan.Zero);
+                        }
+
+                        state.AfterKeyframe = isKeyframe;
+
                         if (wait > TimeSpan.Zero)
                         {
                             await Task.Delay(wait, _time, token);
@@ -412,10 +423,12 @@ public sealed class ScreenProducer : IAsyncDisposable
                 Keyframe = true,
                 Codec = Defaults.VideoCodecJpeg,
                 Jpeg = ByteString.CopyFrom(JpegCodec.EncodeScaled(frame.Pixels, width, height, frame.RowBytes, thumbWidth, thumbHeight, settings.Quality)),
+                Quality = settings.Quality,
             };
         }
 
         var keyframe = keyframeWanted || _time.GetUtcNow() - state.LastKeyframe >= Defaults.KeyframeInterval;
+        var quality = state.QualityFor(settings);
         if (keyframe)
         {
             isKeyframe = true;
@@ -427,7 +440,8 @@ public sealed class ScreenProducer : IAsyncDisposable
                 Mode = VideoMode.Full,
                 Keyframe = true,
                 Codec = Defaults.VideoCodecJpeg,
-                Jpeg = ByteString.CopyFrom(JpegCodec.Encode(frame.Pixels, width, height, frame.RowBytes, whole, settings.Quality)),
+                Jpeg = ByteString.CopyFrom(JpegCodec.Encode(frame.Pixels, width, height, frame.RowBytes, whole, quality)),
+                Quality = quality,
             };
             full.Dirty.Add(whole);
             return full;
@@ -446,15 +460,63 @@ public sealed class ScreenProducer : IAsyncDisposable
             Mode = VideoMode.Full,
             Keyframe = false,
             Codec = Defaults.VideoCodecJpeg,
-            Jpeg = ByteString.CopyFrom(JpegCodec.Encode(frame.Pixels, width, height, frame.RowBytes, box, settings.Quality)),
+            Jpeg = ByteString.CopyFrom(JpegCodec.Encode(frame.Pixels, width, height, frame.RowBytes, box, quality)),
+            Quality = quality,
         };
         delta.Dirty.AddRange(state.Pending);
         return delta;
     }
 
+    /// <summary>
+    /// Auto quality (D-37): a frame that had to wait for the cap costs one step of quality,
+    /// a run of frames that did not earns one back — so a scrolling page drops towards
+    /// <see cref="Defaults.FullJpegQualityMin"/> and a still desktop climbs back to
+    /// <see cref="Defaults.FullJpegQuality"/>. Keyframes are big by nature and do not vote.
+    /// </summary>
+    private void Adapt(LoopState state, bool waited)
+    {
+        if (waited)
+        {
+            state.FreeFrames = 0;
+            var lowered = Math.Max(Defaults.FullJpegQualityMin, state.Quality - Defaults.AutoQualityStepDown);
+            if (lowered != state.Quality)
+            {
+                state.Quality = lowered;
+                _log.LogDebug("{Pc}: auto quality down to q{Quality}", _name, lowered);
+            }
+
+            return;
+        }
+
+        if (++state.FreeFrames < Defaults.AutoQualityFreeFrames)
+        {
+            return;
+        }
+
+        state.FreeFrames = 0;
+        var raised = Math.Min(Defaults.FullJpegQuality, state.Quality + Defaults.AutoQualityStepUp);
+        if (raised != state.Quality)
+        {
+            state.Quality = raised;
+            _log.LogDebug("{Pc}: auto quality up to q{Quality}", _name, raised);
+        }
+    }
+
     /// <summary>What one run of the loop carries between ticks.</summary>
     private sealed class LoopState
     {
+        /// <summary>The quality auto mode is at right now; a manual control ignores it.</summary>
+        public int Quality { get; set; } = Defaults.FullJpegQuality;
+
+        /// <summary>Frames in a row that did not wait for the cap (auto mode).</summary>
+        public int FreeFrames { get; set; }
+
+        /// <summary>The last frame sent was a keyframe, so the next one's wait is the keyframe's doing.</summary>
+        public bool AfterKeyframe { get; set; }
+
+        /// <summary>What to encode the next full-mode frame at.</summary>
+        public int QualityFor(VideoSettings settings) => settings.IsAdaptive ? Quality : settings.Quality;
+
         public List<Rect> Pending { get; } = [];
 
         public int Width { get; set; }

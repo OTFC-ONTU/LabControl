@@ -17,7 +17,7 @@ implement.
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
-| **M3** | Screens: mosaic, full view, remote control | **in progress — all three portions built; portion 2 verified on `PC-10` (2026-09-07), portion 3 (input) built the same day and awaiting its `PC-10` run** | M2, `PC-00` |
+| **M3** | Screens: mosaic, full view, remote control | **in progress — all three portions built and run on `PC-10` (2026-09-07): capture, control, text and Ctrl+Alt+Del work, scrolling reaches the fps line; the quality selector (`D-37`, build 0.1.4) awaits its run** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
 | **M6** | Software catalog, localization, polish | not started | M5 |
@@ -761,6 +761,16 @@ to answer Windows questions (`D-34`).
   quality (q75 → q60 halves the bytes) and after that H.264 (`D-11`, M6 — these are
   the numbers it asked for). Still to check: Ukrainian text, ⌘C/⌘V, CPU and memory of
   `session.exe` over an hour.
+  *Second run (2026-09-07 16:45):* text types, and scrolling Edge under the 24 Mbit/s cap
+  is **10–17 fps, about 13 on average** — the acceptance line for scrolling is reached on
+  Wi-Fi. Owner's request, done the same evening: a **quality selector** in the single-PC
+  window — *Auto / High / Medium / Low* — with *Auto* letting the PC step the JPEG quality
+  down while the cap makes it wait and back up when it does not (`D-37`); the status line
+  shows the quality each frame used. Build **0.1.4** carries the producer side; the
+  console's control says 0 for auto, which a 0.1.3 agent reads as q75, so the console can
+  be updated first. To check on `PC-10` with 0.1.4: fps while scrolling Edge in *Auto* and
+  the *q* the status line settles at; that *Low* is readable; that the mosaic thumbnail
+  keeps moving through the choice.
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

@@ -444,6 +444,26 @@ public static class Defaults
 
     public const int ThumbnailJpegQuality = 50;
     public const int FullJpegQuality = 75;
+
+    /// <summary>
+    /// <c>VideoControl.quality</c> of 0 in full mode: the producer picks the quality itself
+    /// between <see cref="FullJpegQualityMin"/> and <see cref="FullJpegQuality"/> from how
+    /// often the bandwidth cap makes it wait (D-37). An older agent reads 0 as q75.
+    /// </summary>
+    public const int VideoQualityAuto = 0;
+
+    /// <summary>The lowest quality auto mode goes to; below this text in a browser is hard to read.</summary>
+    public const int FullJpegQualityMin = 40;
+
+    /// <summary>Auto mode: one step down each time a frame had to wait for the cap, one step up after this many frames that did not.</summary>
+    public const int AutoQualityStepDown = 10;
+    public const int AutoQualityStepUp = 5;
+    public const int AutoQualityFreeFrames = 30;
+
+    /// <summary>The manual choices the single-PC window offers besides auto (D-37).</summary>
+    public const int FullJpegQualityHigh = 75;
+    public const int FullJpegQualityMedium = 60;
+    public const int FullJpegQualityLow = 45;
     public const double ThumbnailFramesPerSecond = 2;
     public const double FullFramesPerSecond = 20;
 

@@ -183,6 +183,13 @@ public class VideoTests
 
         Assert.Equal(VideoMode.Thumbnail, VideoSettings.From(new VideoControl { Active = true }).Mode);
         Assert.True(VideoSettings.FullControl().RequestKeyframe);
+
+        // Full mode with no quality is auto (D-37); thumbnails never are.
+        var auto = VideoSettings.From(VideoSettings.FullControl());
+        Assert.True(auto.IsAdaptive);
+        Assert.Equal(Defaults.VideoQualityAuto, auto.Quality);
+        Assert.False(VideoSettings.From(VideoSettings.FullControl(quality: 60)).IsAdaptive);
+        Assert.False(thumbnail.IsAdaptive);
         Assert.False(VideoSettings.StopControl().Active);
     }
 

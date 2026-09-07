@@ -29,6 +29,12 @@ public sealed class AgentScreen : IDisposable
     /// <summary>What the console last asked this PC for; <see cref="VideoMode.Unspecified"/> when nothing.</summary>
     public VideoMode RequestedMode { get; internal set; }
 
+    /// <summary>The full-mode quality the teacher chose for this PC; <see cref="Defaults.VideoQualityAuto"/> (0) leaves it to the PC (D-37).</summary>
+    public int RequestedQuality { get; internal set; } = Defaults.VideoQualityAuto;
+
+    /// <summary>The quality the last frame was encoded at, as the PC reported it; 0 from an agent that predates the field.</summary>
+    public int LastQuality { get; private set; }
+
     public long FramesReceived { get; private set; }
 
     public long BytesReceived { get; private set; }
@@ -92,6 +98,7 @@ public sealed class AgentScreen : IDisposable
             FramesReceived++;
             BytesReceived += frame.Jpeg.Length;
             LastFrameAt = now;
+            LastQuality = frame.Quality;
             if (outcome != FrameOutcome.Applied)
             {
                 FramesRejected++;

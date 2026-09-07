@@ -339,16 +339,24 @@ The screen stream (ROADMAP M3, `D-34`). The console is the server for `PushVideo
 everything else; the PC is the producer.
 
 - `VideoFrame { agent_id, seq, at_unix_ms, width, height, mode, repeated Rect dirty, bytes jpeg,
-  keyframe, codec }`. `width`/`height` are always the size of the **screen** the frame comes
+  keyframe, codec, quality }`. `width`/`height` are always the size of the **screen** the frame comes
   from; the JPEG itself may be smaller (a thumbnail, or a full-mode delta). `codec` is
   `"jpeg"` in this build (`Defaults.VideoCodecJpeg`); H.264 is an M6 option behind the same
-  envelope (`D-11`).
+  envelope (`D-11`). `quality` is what this frame was encoded at (0 from an agent older
+  than `D-37`), so the console can show it.
 - **Control.** The console sends `VideoControl { active, mode, frames_per_second, quality,
   request_keyframe, max_bits_per_second }` on the `Link` stream: a thumbnail control to every
   PC right after `Welcome`, a full control when the teacher opens a PC's screen, a thumbnail
   control again when that window closes, and `request_keyframe` whenever it holds nothing a
-  delta could patch. Zero fields mean "the default" (`VideoSettings.From`). The PC remembers
-  the latest control; the link ending counts as *inactive* (the producer stops by itself).
+  delta could patch. Zero fields mean "the default" (`VideoSettings.From`) — except
+  `quality` in full mode, where 0 means **auto** (`D-37`): the producer starts at q75 and
+  steps down by 10 (to a floor of q40) each time a delta had to wait for the bandwidth cap,
+  and back up by 5 after 30 deltas that did not; keyframes and the delta right behind one do
+  not vote. The single-PC window offers *Auto / High (q75) / Medium (q60) / Low (q45)*, sends
+  the choice in every full control including keyframe requests (a changed control restarts
+  the PC's budget), and remembers it per PC for the console's lifetime. An agent older than
+  `D-37` reads 0 as q75. The PC remembers the latest control; the link ending counts as
+  *inactive* (the producer stops by itself).
 - **Transport.** `PushVideo (stream VideoFrame) returns (VideoAck)` is a client-streaming call
   the PC opens on its first frame after a control made video active and closes when video
   is switched off or the link ends; `VideoAck.last_seq` acknowledges the stream. It is its own

@@ -561,7 +561,7 @@ public sealed class LabSession : IAsyncDisposable
         if (!connection.IsOutdated)
         {
             var screen = Screens.Get(hello.AgentId);
-            var wanted = screen.RequestedMode == VideoMode.Full ? VideoSettings.FullControl() : VideoSettings.ThumbnailControl();
+            var wanted = screen.RequestedMode == VideoMode.Full ? VideoSettings.FullControl(quality: screen.RequestedQuality) : VideoSettings.ThumbnailControl();
             screen.RequestedMode = wanted.Mode;
             connection.RequestedVideo = wanted.Mode;
             connection.TrySend(new ConsoleMessage { VideoControl = wanted });
@@ -898,10 +898,14 @@ public sealed class LabSession : IAsyncDisposable
     /// for the single-PC view (ARCHITECTURE §8). Remembered per PC, so a PC that relinks
     /// while its full view is open comes back in full.
     /// </summary>
-    public void SetScreenMode(string agentId, VideoMode mode)
+    public void SetScreenMode(string agentId, VideoMode mode, int? quality = null)
     {
         var screen = Screens.Get(agentId);
         screen.RequestedMode = mode == VideoMode.Full ? VideoMode.Full : VideoMode.Thumbnail;
+        if (quality is { } chosen)
+        {
+            screen.RequestedQuality = Math.Clamp(chosen, Defaults.VideoQualityAuto, 100);
+        }
 
         var connection = FindLinked(agentId);
         if (connection is null || connection.IsOutdated)
@@ -912,7 +916,9 @@ public sealed class LabSession : IAsyncDisposable
         connection.RequestedVideo = screen.RequestedMode;
         connection.TrySend(new ConsoleMessage
         {
-            VideoControl = screen.RequestedMode == VideoMode.Full ? VideoSettings.FullControl() : VideoSettings.ThumbnailControl(),
+            VideoControl = screen.RequestedMode == VideoMode.Full
+                ? VideoSettings.FullControl(quality: screen.RequestedQuality)
+                : VideoSettings.ThumbnailControl(),
         });
     }
 
@@ -942,7 +948,8 @@ public sealed class LabSession : IAsyncDisposable
             return;
         }
 
-        connection.TrySend(new ConsoleMessage { VideoControl = VideoSettings.FullControl(requestKeyframe: true) });
+        // The same quality as the standing control, or the PC would see a new control and restart its budget.
+        connection.TrySend(new ConsoleMessage { VideoControl = VideoSettings.FullControl(requestKeyframe: true, Screens.Get(agentId).RequestedQuality) });
     }
 
     public async Task ServeFileAsync(X509Certificate2? peer, FileRequest request, IServerStreamWriter<FileChunk> outgoing, CancellationToken token)

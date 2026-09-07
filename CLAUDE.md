@@ -214,7 +214,11 @@ by physical key, ⌘ as Ctrl) behind the *Control* toggle in `ScreenWindow`, the
 relaying input down the pipe and raising Ctrl+Alt+Del itself (`SecureAttention`:
 `SoftwareSASGeneration` + `SendSAS`), the helper's `InputInjector` (`SendInput` on a thread
 attached to the input desktop), the PC's own reasons on the tile (`capture.*`, no session,
-helper down), and `FakeScreen` drawing the teacher's input. Version 0.1.3.
+helper down), and `FakeScreen` drawing the teacher's input. **Run on `PC-10` the same day**:
+mouse, text, Ctrl+Alt+Del work; scrolling Edge reached 10–17 fps once the full-mode cap
+went to 24 Mbit/s (`D-36` items 10–11). The single-PC window then got a quality selector
+with an *Auto* mode the producer drives from the pacer's waits (`D-37`,
+`VideoFrame.quality`). Version 0.1.4.
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

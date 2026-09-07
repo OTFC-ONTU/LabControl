@@ -38,7 +38,15 @@
   <data name="Screen.Title" xml:space="preserve"><value>{0} — screen</value></data>
   <data name="Screen.Waiting" xml:space="preserve"><value>Waiting for the first full picture from {0}…</value></data>
   <data name="Screen.Offline" xml:space="preserve"><value>{0} is offline; this is the last picture it sent.</value></data>
-  <data name="Screen.Stats" xml:space="preserve"><value>{0}×{1} · {2:0.#} fps · {3:0} kbit/s</value></data>
+  <data name="Screen.Stats" xml:space="preserve"><value>{0}×{1} · {2:0.#} fps · {3:0} kbit/s · {4}</value></data>
+  <data name="Screen.QualityLabel" xml:space="preserve"><value>Quality</value></data>
+  <data name="Screen.Quality.Auto" xml:space="preserve"><value>Auto</value></data>
+  <data name="Screen.Quality.High" xml:space="preserve"><value>High</value></data>
+  <data name="Screen.Quality.Medium" xml:space="preserve"><value>Medium</value></data>
+  <data name="Screen.Quality.Low" xml:space="preserve"><value>Low</value></data>
+  <data name="Screen.QualityNow" xml:space="preserve"><value>q{0}</value></data>
+  <data name="Screen.QualityNowAuto" xml:space="preserve"><value>q{0} auto</value></data>
+  <data name="Screen.QualityUnknown" xml:space="preserve"><value>quality —</value></data>
   <data name="Screen.Control" xml:space="preserve"><value>Control</value></data>
   <data name="Screen.ControlHint" xml:space="preserve"><value>While Control is on, your mouse and keyboard go to {0}. ⌘ works as Ctrl.</value></data>
   <data name="Screen.ControlHintWindows" xml:space="preserve"><value>While Control is on, your mouse and keyboard go to {0}.</value></data>

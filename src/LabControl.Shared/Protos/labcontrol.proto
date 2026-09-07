@@ -253,6 +253,7 @@ message VideoFrame {
   bytes     jpeg       = 8;
   bool      keyframe   = 9;
   string    codec      = 10;  // reserved: "jpeg" today, "h264" is an M6 option
+  int32     quality    = 11;  // the JPEG quality this frame was encoded at (D-37: auto mode varies it)
 }
 
 message VideoAck { uint64 last_seq = 1; }

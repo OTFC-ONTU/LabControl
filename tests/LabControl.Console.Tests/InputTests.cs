@@ -1,6 +1,7 @@
 using Avalonia.Input;
 using LabControl.Console.Services;
 using LabControl.Console.ViewModels;
+using LabControl.Shared;
 using LabControl.Shared.Control;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
@@ -133,8 +134,26 @@ public class InputTests
         Assert.Equal(before + 1, window.InputsSent);
         Assert.Empty(window.Mapper.PressedKeys);
 
+        // Quality (D-37): auto by default, a manual choice re-sends the full control, and a
+        // keyframe request keeps the choice; the frames say what they were encoded at.
+        Assert.True(await Wait.UntilAsync(() => machine.Link.VideoControl is { Mode: VideoMode.Full, Quality: Defaults.VideoQualityAuto }));
+        Assert.True(await Wait.UntilAsync(() => console.Session.Screens.Get(machine.AgentId).LastQuality == Defaults.FullJpegQuality, TimeSpan.FromSeconds(10)));
+        window.SelectedQuality = window.QualityOptions.Single(o => o.Quality == Defaults.FullJpegQualityMedium);
+        Assert.True(await Wait.UntilAsync(() => machine.Link.VideoControl is { Mode: VideoMode.Full, Quality: Defaults.FullJpegQualityMedium }));
+        console.Session.RequestKeyframe(machine.AgentId);
+        Assert.True(await Wait.UntilAsync(() => machine.Link.VideoControl is { RequestKeyframe: true, Quality: Defaults.FullJpegQualityMedium }));
+        Assert.True(await Wait.UntilAsync(() => console.Session.Screens.Get(machine.AgentId).LastQuality == Defaults.FullJpegQualityMedium, TimeSpan.FromSeconds(10)));
+        window.Tick();
+        Assert.Contains("q60", window.Status);
+
         window.Close();
         Assert.True(await Wait.UntilAsync(() => machine.Link.VideoControl is { Mode: VideoMode.Thumbnail }));
+
+        // The choice is remembered for the PC: the next window opens with it.
+        var again = new ScreenViewModel(console.Session, tile, posted.Add, macOs: true);
+        again.Open();
+        Assert.Equal(Defaults.FullJpegQualityMedium, again.SelectedQuality!.Quality);
+        again.Close();
     }
 
     [Fact]

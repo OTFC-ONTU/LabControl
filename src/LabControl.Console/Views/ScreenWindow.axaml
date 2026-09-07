@@ -19,6 +19,8 @@
                       IsChecked="{Binding IsControlling, Mode=TwoWay}" IsEnabled="{Binding CanControl}" />
         <Button Content="{loc:Localize Screen.CtrlAltDel}" Command="{Binding SendCtrlAltDelCommand}" />
         <Button Content="{loc:Localize Screen.WindowsKey}" Command="{Binding SendWindowsKeyCommand}" />
+        <TextBlock Text="{loc:Localize Screen.QualityLabel}" VerticalAlignment="Center" Margin="12,0,0,0" />
+        <ComboBox ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding SelectedQuality, Mode=TwoWay}" MinWidth="110" />
         <TextBlock Text="{Binding ControlHint}" VerticalAlignment="Center" FontSize="12" Opacity="0.7" Margin="8,0,0,0" />
       </StackPanel>
     </Border>

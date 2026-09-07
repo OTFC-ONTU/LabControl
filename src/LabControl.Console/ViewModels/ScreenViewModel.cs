@@ -52,6 +52,29 @@ public sealed partial class ScreenViewModel : ObservableObject
 
     public string ControlHint { get; }
 
+    /// <summary>The full-mode quality choices (D-37): auto, then three fixed steps.</summary>
+    public IReadOnlyList<QualityOption> QualityOptions { get; } =
+    [
+        new(Strings.Get("Screen.Quality.Auto"), Defaults.VideoQualityAuto),
+        new(Strings.Get("Screen.Quality.High"), Defaults.FullJpegQualityHigh),
+        new(Strings.Get("Screen.Quality.Medium"), Defaults.FullJpegQualityMedium),
+        new(Strings.Get("Screen.Quality.Low"), Defaults.FullJpegQualityLow),
+    ];
+
+    /// <summary>The choice in the toolbar; changing it re-sends the full control with that quality.</summary>
+    [ObservableProperty]
+    public partial QualityOption? SelectedQuality { get; set; }
+
+    partial void OnSelectedQualityChanged(QualityOption? value)
+    {
+        if (value is not null && _open)
+        {
+            _session.SetScreenMode(AgentId, VideoMode.Full, value.Quality);
+        }
+    }
+
+    private bool _open;
+
     /// <summary>The picture to draw: the full one once it exists, the thumbnail until then.</summary>
     public ScreenImage Image => Screen.Full.HasFrame ? Screen.Full : Screen.Thumbnail;
 
@@ -90,7 +113,9 @@ public sealed partial class ScreenViewModel : ObservableObject
     public void Open()
     {
         _session.Screens.Updated += OnUpdated;
-        _session.SetScreenMode(AgentId, VideoMode.Full);
+        SelectedQuality = QualityOptions.FirstOrDefault(o => o.Quality == Screen.RequestedQuality) ?? QualityOptions[0];
+        _open = true;
+        _session.SetScreenMode(AgentId, VideoMode.Full, SelectedQuality.Quality);
         Tick();
     }
 
@@ -102,6 +127,7 @@ public sealed partial class ScreenViewModel : ObservableObject
     {
         ReleaseAll();
         IsControlling = false;
+        _open = false;
         _session.Screens.Updated -= OnUpdated;
         _session.SetScreenMode(AgentId, VideoMode.Thumbnail);
         Screen.Full.Clear();
@@ -245,10 +271,19 @@ public sealed partial class ScreenViewModel : ObservableObject
         }
         else
         {
-            Status = Strings.Format("Screen.Stats", Screen.Full.ScreenWidth, Screen.Full.ScreenHeight, Screen.FramesPerSecond, Screen.BytesPerSecond * 8 / 1024.0);
+            var quality = Screen.LastQuality == 0
+                ? Strings.Get("Screen.QualityUnknown")
+                : Strings.Format(Screen.RequestedQuality == Defaults.VideoQualityAuto ? "Screen.QualityNowAuto" : "Screen.QualityNow", Screen.LastQuality);
+            Status = Strings.Format("Screen.Stats", Screen.Full.ScreenWidth, Screen.Full.ScreenHeight, Screen.FramesPerSecond, Screen.BytesPerSecond * 8 / 1024.0, quality);
         }
     }
 
     private static string InputReasonText(string reason) =>
         reason is "no_desktop" or "blocked" or "failed" ? Strings.Get("Input." + reason) : reason.Replace('_', ' ');
+}
+
+/// <summary>One entry of the quality selector: its label and the <c>VideoControl.quality</c> it stands for.</summary>
+public sealed record QualityOption(string Label, int Quality)
+{
+    public override string ToString() => Label;
 }

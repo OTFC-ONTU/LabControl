@@ -15,14 +15,18 @@ public sealed record VideoSettings(VideoMode Mode, double FramesPerSecond, int Q
         var fps = control.FramesPerSecond > 0
             ? control.FramesPerSecond
             : mode == VideoMode.Full ? Defaults.FullFramesPerSecond : Defaults.ThumbnailFramesPerSecond;
+        // Full mode: 0 is "auto" and stays 0 — the producer picks (D-37). Thumbnails have no auto.
         var quality = control.Quality > 0
             ? Math.Clamp(control.Quality, 1, 100)
-            : mode == VideoMode.Full ? Defaults.FullJpegQuality : Defaults.ThumbnailJpegQuality;
+            : mode == VideoMode.Full ? Defaults.VideoQualityAuto : Defaults.ThumbnailJpegQuality;
         var bits = control.MaxBitsPerSecond > 0
             ? control.MaxBitsPerSecond
             : mode == VideoMode.Full ? Defaults.FullModeBitsPerSecond : Defaults.ThumbnailModeBitsPerSecond;
         return new VideoSettings(mode, Math.Clamp(fps, 0.1, Defaults.VideoMaxFramesPerSecond), quality, bits);
     }
+
+    /// <summary>Full mode with the quality left to the producer (D-37).</summary>
+    public bool IsAdaptive => Mode == VideoMode.Full && Quality == Defaults.VideoQualityAuto;
 
     /// <summary>The pause between two captures at the configured rate.</summary>
     public TimeSpan FrameInterval => TimeSpan.FromSeconds(1 / FramesPerSecond);
@@ -37,13 +41,13 @@ public sealed record VideoSettings(VideoMode Mode, double FramesPerSecond, int Q
         MaxBitsPerSecond = Defaults.ThumbnailModeBitsPerSecond,
     };
 
-    /// <summary>The full-view control: native resolution, a keyframe first.</summary>
-    public static VideoControl FullControl(bool requestKeyframe = true) => new()
+    /// <summary>The full-view control: native resolution, a keyframe first, the quality auto unless the teacher chose one.</summary>
+    public static VideoControl FullControl(bool requestKeyframe = true, int quality = Defaults.VideoQualityAuto) => new()
     {
         Active = true,
         Mode = VideoMode.Full,
         FramesPerSecond = Defaults.FullFramesPerSecond,
-        Quality = Defaults.FullJpegQuality,
+        Quality = quality,
         MaxBitsPerSecond = Defaults.FullModeBitsPerSecond,
         RequestKeyframe = requestKeyframe,
     };

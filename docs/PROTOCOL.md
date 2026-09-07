@@ -374,7 +374,7 @@ everything else; the PC is the producer.
   `request_keyframe`. A delta the console cannot apply — no picture yet, or the screen
   changed size — is dropped and answered with `request_keyframe`; a delta whose JPEG does not
   match its box, or whose rectangles leave the screen, is dropped as malformed. Target ≤ 20
-  fps, cap `Defaults.FullModeBitsPerSecond` (8 Mbit/s) per PC.
+  fps, cap `Defaults.FullModeBitsPerSecond` (24 Mbit/s since the `PC-10` scroll measurement, `D-36` item 11) per PC.
 - The console keeps two pictures per PC (`ScreenStore`): the thumbnail for the mosaic and
   the full picture for the single-PC view. While a PC is in full mode it sends no
   thumbnails, so the console scales every full keyframe into the thumbnail itself.

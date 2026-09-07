@@ -1066,6 +1066,15 @@ Decisions:
    only when the `KeyDown` was *not* handled; the window marked every key handled, so no
    letter ever became text. Only a press the mapper sent as a key (modifier, command key,
    shortcut) is marked handled, which also keeps ⌥-characters from being typed twice.
+11. **The full-mode cap is 24 Mbit/s, not 8** (measured on `PC-10`, 2026-09-07 16:30).
+   Driving the PC gave 15–16 fps, scrolling a page in Edge 3–4: a scroll dirties nearly
+   the whole screen, so every frame is a 250–350 KB JPEG and 1 MB/s carries three or four
+   a second. The limit was the pacer, not capture or encoding. One full stream at a time
+   at 24 Mbit/s is 3 MB/s on a Wi-Fi console — the `D-10` headroom measurement will say
+   whether it is comfortable; thumbnails keep their 512 kbit/s each. The console sends
+   the cap in every full `VideoControl`, so the number lives in `Defaults` on the console
+   side and needs no agent push. Next levers, in order, if scrolling still misses 15 fps:
+   a lower full-mode quality for large frames, then H.264 (`D-11`, M6).
 9. **Reasons on the tile come from the PC's own events.** The connection keeps the last
    `capture.<reason>` and `input.<reason>` until `…recovered`, plus `session_id` from
    `SessionState`; the tile prefers the PC's reason (*no user session*, *session helper not

@@ -789,7 +789,7 @@ fallback; dirty-rectangle tracking.</li>
 <li>Thumbnail mode: whole screen downscaled to ≤ 320 px wide, JPEG q50 (SkiaSharp), ≤ 2 fps,
 sent only when the screen changed.</li>
 <li>Full mode: native resolution, 64×64 tile grid, only dirty tiles re-encoded at q75,
-keyframe every 5 s or on request, per-agent bandwidth cap (default 8 Mbit/s).</li>
+keyframe every 5 s or on request, per-agent bandwidth cap (default 8 Mbit/s; raised to 24 Mbit/s after the <code>PC-10</code> measurement, <code>D-36</code>).</li>
 <li><code>PushVideo</code> as a separate streaming RPC, so a video stall never delays a <code>shutdown</code>.</li>
 <li>Console: per-agent persistent bitmap, tile blitting, scalable mosaic (1–30 PCs, tiles
 shrink and the grid scrolls), double-click → full-size view with an input-control
@@ -915,8 +915,15 @@ up (the policy written by the agent on first use), and the single-PC window hold
 Text did not arrive at all: the window handled every <code>KeyDown</code>, and macOS produces
 <code>TextInput</code> only for unhandled ones (<code>D-36</code> item 10, fixed the same hour, console-side
 only). Fixed on the way: tile tooltips floated above the single-PC window and other
-applications on macOS (served only while the console window is active now). Still to
-check: Ukrainian text, ⌘C/⌘V, scrolling, CPU and memory of <code>session.exe</code> over an hour.</li>
+applications on macOS (served only while the console window is active now).
+<strong>Scrolling a page in Edge: 3–4 fps</strong> — the 8 Mbit/s full-mode cap, not the capture:
+a scroll dirties nearly the whole 1080p screen and each frame is a 250–350 KB JPEG, and
+1 MB/s is three or four of those. The cap is 24 Mbit/s now (<code>D-36</code> item 11), a
+console-only change since the control carries it. To measure again on <code>PC-10</code>: fps
+while scrolling Edge with the new cap; if it is still under 15 the next lever is the
+quality (q75 → q60 halves the bytes) and after that H.264 (<code>D-11</code>, M6 — these are
+the numbers it asked for). Still to check: Ukrainian text, ⌘C/⌘V, CPU and memory of
+<code>session.exe</code> over an hour.</li>
 </ul>
 <p><strong>Not in scope.</strong> Broadcast to students, lock, exam mode, H.264.</p>
 <p><strong>Rough size.</strong> Large.</p>
@@ -1238,7 +1245,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 16:19 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 16:20 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

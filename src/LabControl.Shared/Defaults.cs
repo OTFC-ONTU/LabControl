@@ -450,8 +450,13 @@ public static class Defaults
     /// <summary>Dirty-rectangle tile size for full-resolution streaming (PROTOCOL "Video").</summary>
     public const int VideoTileSize = 64;
 
-    /// <summary>Per-agent bandwidth cap for full-resolution video.</summary>
-    public const int FullModeBitsPerSecond = 8 * 1024 * 1024;
+    /// <summary>
+    /// Per-agent bandwidth cap for full-resolution video. 8 Mbit/s (1 MB/s) gave 3–4 fps on
+    /// `PC-10` while a browser page scrolled — every frame is a near-whole-screen JPEG of
+    /// 250–350 KB — so the one full stream may take 24 Mbit/s; the console sends this in
+    /// every full <c>VideoControl</c>, so a change here needs no agent push (D-36 item 11).
+    /// </summary>
+    public const int FullModeBitsPerSecond = 24 * 1024 * 1024;
 
     /// <summary>
     /// Per-agent cap for thumbnails; thirty PCs at this ceiling stay well inside the Wi-Fi

@@ -625,7 +625,7 @@ the project exists for.
 - Thumbnail mode: whole screen downscaled to ≤ 320 px wide, JPEG q50 (SkiaSharp), ≤ 2 fps,
   sent only when the screen changed.
 - Full mode: native resolution, 64×64 tile grid, only dirty tiles re-encoded at q75,
-  keyframe every 5 s or on request, per-agent bandwidth cap (default 8 Mbit/s).
+  keyframe every 5 s or on request, per-agent bandwidth cap (default 8 Mbit/s; raised to 24 Mbit/s after the `PC-10` measurement, `D-36`).
 - `PushVideo` as a separate streaming RPC, so a video stall never delays a `shutdown`.
 - Console: per-agent persistent bitmap, tile blitting, scalable mosaic (1–30 PCs, tiles
   shrink and the grid scrolls), double-click → full-size view with an input-control
@@ -752,8 +752,15 @@ to answer Windows questions (`D-34`).
   Text did not arrive at all: the window handled every `KeyDown`, and macOS produces
   `TextInput` only for unhandled ones (`D-36` item 10, fixed the same hour, console-side
   only). Fixed on the way: tile tooltips floated above the single-PC window and other
-  applications on macOS (served only while the console window is active now). Still to
-  check: Ukrainian text, ⌘C/⌘V, scrolling, CPU and memory of `session.exe` over an hour.
+  applications on macOS (served only while the console window is active now).
+  **Scrolling a page in Edge: 3–4 fps** — the 8 Mbit/s full-mode cap, not the capture:
+  a scroll dirties nearly the whole 1080p screen and each frame is a 250–350 KB JPEG, and
+  1 MB/s is three or four of those. The cap is 24 Mbit/s now (`D-36` item 11), a
+  console-only change since the control carries it. To measure again on `PC-10`: fps
+  while scrolling Edge with the new cap; if it is still under 15 the next lever is the
+  quality (q75 → q60 halves the bytes) and after that H.264 (`D-11`, M6 — these are
+  the numbers it asked for). Still to check: Ukrainian text, ⌘C/⌘V, CPU and memory of
+  `session.exe` over an hour.
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

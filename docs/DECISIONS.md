@@ -1124,6 +1124,55 @@ adapting the frame rate instead of the quality (the pacer already does that; a l
 rate at q75 is what 3–4 fps looked like); a quality slider (four choices are enough to
 find the one that reads well on the room's Wi-Fi).
 
+## D-38 — M4 in four portions, and the script library as the first (M4 portion 1)
+
+Context: M4 is the largest milestone and three of its four pieces need Windows —
+`Setup.exe`, the grown-up file channel on the agent, and the signed `self_update` with
+probation and rollback. M2 and M3 both found their Windows-only bugs on the VM, so the
+split has to keep every VM day small. The script library, decided in `D-31` item 4, has
+nothing to prove on Windows: `run_script` was verified in M2 portion 3.
+
+Decisions:
+
+1. **Four portions, console-only first.** (1) The script library; (2) the file channel —
+   resume, `PushFile`, `send_file`, the fan-out and the log bundle; (3) `Setup.exe`, the
+   USB payload and the *Build USB installer* action; (4) the full `self_update`. Portion 2
+   is the last one the simulator can carry most of; portions 3 and 4 are VM days. The
+   ROADMAP's *How it is being built* paragraph names what each portion has to show.
+2. **`scripts.json`, not a `scripts/` directory in the data directory.** The M0 layout
+   reserved `~/.labcontrol/scripts/` for "scripts pushed to PCs". A directory of files is
+   not in the backup unless every file is packed, has no place for the shell, run-as and
+   timeout, and invites editing outside the console. One document beside `lab.json`, with
+   a `schema_version` (`D-20`), goes into `BackupPayload.scripts` like the machine list
+   does; the directory is dropped from `LabStore` and from ARCHITECTURE §4.
+3. **The seed is embedded in the console.** `scripts/library/*.ps1|*.cmd` are compiled
+   into `LabControl.Console` as resources and imported into `scripts.json` on the first
+   run only (`ScriptsDocument.seed_imported_at`). A published console therefore carries its
+   seed without a folder next to the binary, and the repository directory stays the place
+   to edit it. Once imported, the seed is never read again — the teacher's edits and
+   deletions win (`D-31` item 4). The seed files are their own documentation: the first
+   comment line is the description, `# run-as: user` and `# timeout: 300` (or `rem` in a
+   `.cmd`) set the two fields the file name cannot. `scripts/dev-install.*` stay outside
+   `library/`: they are run by hand on the VM, not from the console.
+4. **The record speaks the job's vocabulary.** `ScriptRecord.shell` and `run_as` hold the
+   same strings `run_script` carries (`powershell|cmd`, `system|user`) rather than a
+   second enum serialisation, so the document, the wire and the agent never disagree.
+5. **Unsaved text runs once; drafts are kept, not asked about.** *Run on selected PCs* sends
+   what the editor holds and the status line says *as typed (not saved)*. Switching to
+   another script keeps the unsaved draft in memory and marks the row with a dot; nothing
+   is saved silently and no "discard changes?" dialog interrupts the teacher mid-lesson.
+   Drafts do not survive closing the console — *Save* is the only way to disk.
+6. **The development dialog goes.** *Run test script…* was the placeholder for this view
+   (`D-31` item 3, `D-27`). The three built-in scripts stay in `Shared/Jobs/TestScripts`
+   because the simulator's pretend shell understands them and the tests use them; the
+   teacher who wants them pastes them in.
+
+Rejected: a `scripts/` folder synced through the backup (item 2); reading the seed from
+the repository or from a folder next to the binary at run time (a published console has
+neither); re-importing missing seed scripts on every start (the teacher's deletion would
+never stick); a confirmation on switching scripts with unsaved edits (item 5); parameters,
+highlighting and a schedule (`D-31` item 5).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

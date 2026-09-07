@@ -18,7 +18,7 @@ implement.
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
-| **M4** | Deployment: USB installer, files, self-update | not started | M3 |
+| **M4** | Deployment: USB installer, files, self-update | **in progress — portion 1 (the script library) built on the Mac (2026-09-07), `D-38`** | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
 | **M6** | Software catalog, localization, polish | not started | M5 |
 
@@ -857,6 +857,51 @@ never walk again — including when the teacher machine is replaced.
   as outdated, and is brought current with one *Update* click.
 - A new script typed into the *Scripts* view, saved and run on all PCs shows its output per
   PC; after restoring the backup on another teacher machine the same script is there.
+
+**How it is being built.** In four portions, on the M2/M3 pattern — each committed, then
+run before the next starts (`D-38`): **(1)** the script library, all on the Mac — the
+*Scripts* tab, `scripts.json` beside `lab.json`, the seed imported from the repository's
+`scripts/library/` on the first run, *Run on selected PCs* over the `run_script` the VM
+already proved, the library inside the backup; **(2)** the file channel grown up —
+`PullFile` with resume after a reconnect, `PushFile`, `send_file` into `Materials` with
+*open after delivery* and *Send files…* on the toolbar, the parallel fan-out with the
+per-PC log bundle — console and simulator on the Mac, the agent on the VM; **(3)**
+`Setup.exe` as `docs/INSTALLER.md` specifies it, `tools/build-usb.sh` and the console's
+*Build USB installer* — on the VM, then the fresh-PC criterion on `PC-00`; **(4)** the
+full `self_update` — the signed manifest, probation, the rollback driven from outside the
+agent, the fleet view — on the VM with the deliberately broken release. The order puts the
+console-only work first (nothing new to prove on Windows) and the two Windows-heavy
+portions last, each with its own VM day.
+
+**Progress.**
+
+- *Portion 1 (built 2026-09-07).* The script library (`D-31` items 4–5, `D-38`). The
+  *Scripts* tab sits between *Lab* and *Jobs*: the library on the left (name, one line,
+  shell · run-as · timeout), the selected script on the right — name, description, shell,
+  run-as, the inactivity timeout and the text in a plain monospaced editor — with *New
+  script*, *Delete*, *Save*, *Revert* and *Run on N selected PC(s)*, which sends the
+  editor's text as typed, saved or not, to the PCs selected in the lab view and says so
+  in the status line; unsaved edits are kept per script while the teacher looks at
+  another one (a dot in the list). `Shared/Persistence/ScriptsDocument` is `scripts.json`
+  (`schema_version`, `D-20`), `Shared/Jobs/ScriptSeed` turns a seed file into a record
+  (shell from the extension, description from the first comment line, `run-as:` and
+  `timeout:` header comments), `Console/Services/ScriptLibrary` loads it, imports the
+  seed once and saves on every change, and `LabSession.RunScript` offers the text through
+  `PullFile` and sends the `run_script` jobs exactly as the development dialog did. The
+  seed is `scripts/library/*.ps1|*.cmd`, embedded into the console at build time, so a
+  published console carries it; four scripts to start with (`pc-info`, `list-installed`,
+  `close-browsers`, `clear-temp`). The backup carries the library (`BackupPayload.scripts`;
+  an older backup restores without one and the seed fills in). The jobs panel names the
+  script in the *Job* column. The development-only *Run test script…* dialog is gone
+  (`D-31` item 3); the built-in test scripts stay in `Shared/Jobs/TestScripts` for the
+  simulator and the tests. Tests: seed parsing, the document, the backup with and without a
+  library (`Shared.Tests/ScriptLibraryTests`); the seed imported once and never again,
+  validation on save, the library restored from a backup on another console, a library
+  script run over a real link (`Console.Tests`), and the tab rendered in `UiTests` with a
+  new script run unsaved and then saved. **To run on the VM with the next agent push:**
+  `pc-info` and `list-installed` as SYSTEM, `close-browsers` in the student session with
+  Edge open, `clear-temp` — each with its output in the jobs panel; a script edited and run
+  unsaved; the library present after importing the backup on the Windows desk PC.
 
 **Not in scope.** Broadcast, lock, exam mode, the package catalog.
 

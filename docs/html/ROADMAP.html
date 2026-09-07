@@ -181,7 +181,7 @@ implement.</p>
 <tr>
 <td><strong>M4</strong></td>
 <td>Deployment: USB installer, files, self-update</td>
-<td>not started</td>
+<td><strong>in progress — portion 1 (the script library) built on the Mac (2026-09-07), <code>D-38</code></strong></td>
 <td>M3</td>
 </tr>
 <tr>
@@ -1016,6 +1016,50 @@ as outdated, and is brought current with one <em>Update</em> click.</li>
 <li>A new script typed into the <em>Scripts</em> view, saved and run on all PCs shows its output per
 PC; after restoring the backup on another teacher machine the same script is there.</li>
 </ul>
+<p><strong>How it is being built.</strong> In four portions, on the M2/M3 pattern — each committed, then
+run before the next starts (<code>D-38</code>): <strong>(1)</strong> the script library, all on the Mac — the
+<em>Scripts</em> tab, <code>scripts.json</code> beside <code>lab.json</code>, the seed imported from the repository's
+<code>scripts/library/</code> on the first run, <em>Run on selected PCs</em> over the <code>run_script</code> the VM
+already proved, the library inside the backup; <strong>(2)</strong> the file channel grown up —
+<code>PullFile</code> with resume after a reconnect, <code>PushFile</code>, <code>send_file</code> into <code>Materials</code> with
+<em>open after delivery</em> and <em>Send files…</em> on the toolbar, the parallel fan-out with the
+per-PC log bundle — console and simulator on the Mac, the agent on the VM; <strong>(3)</strong>
+<code>Setup.exe</code> as <code>docs/INSTALLER.md</code> specifies it, <code>tools/build-usb.sh</code> and the console's
+<em>Build USB installer</em> — on the VM, then the fresh-PC criterion on <code>PC-00</code>; <strong>(4)</strong> the
+full <code>self_update</code> — the signed manifest, probation, the rollback driven from outside the
+agent, the fleet view — on the VM with the deliberately broken release. The order puts the
+console-only work first (nothing new to prove on Windows) and the two Windows-heavy
+portions last, each with its own VM day.</p>
+<p><strong>Progress.</strong></p>
+<ul>
+<li><em>Portion 1 (built 2026-09-07).</em> The script library (<code>D-31</code> items 4–5, <code>D-38</code>). The
+<em>Scripts</em> tab sits between <em>Lab</em> and <em>Jobs</em>: the library on the left (name, one line,
+shell · run-as · timeout), the selected script on the right — name, description, shell,
+run-as, the inactivity timeout and the text in a plain monospaced editor — with <em>New
+script</em>, <em>Delete</em>, <em>Save</em>, <em>Revert</em> and <em>Run on N selected PC(s)</em>, which sends the
+editor's text as typed, saved or not, to the PCs selected in the lab view and says so
+in the status line; unsaved edits are kept per script while the teacher looks at
+another one (a dot in the list). <code>Shared/Persistence/ScriptsDocument</code> is <code>scripts.json</code>
+(<code>schema_version</code>, <code>D-20</code>), <code>Shared/Jobs/ScriptSeed</code> turns a seed file into a record
+(shell from the extension, description from the first comment line, <code>run-as:</code> and
+<code>timeout:</code> header comments), <code>Console/Services/ScriptLibrary</code> loads it, imports the
+seed once and saves on every change, and <code>LabSession.RunScript</code> offers the text through
+<code>PullFile</code> and sends the <code>run_script</code> jobs exactly as the development dialog did. The
+seed is <code>scripts/library/*.ps1|*.cmd</code>, embedded into the console at build time, so a
+published console carries it; four scripts to start with (<code>pc-info</code>, <code>list-installed</code>,
+<code>close-browsers</code>, <code>clear-temp</code>). The backup carries the library (<code>BackupPayload.scripts</code>;
+an older backup restores without one and the seed fills in). The jobs panel names the
+script in the <em>Job</em> column. The development-only <em>Run test script…</em> dialog is gone
+(<code>D-31</code> item 3); the built-in test scripts stay in <code>Shared/Jobs/TestScripts</code> for the
+simulator and the tests. Tests: seed parsing, the document, the backup with and without a
+library (<code>Shared.Tests/ScriptLibraryTests</code>); the seed imported once and never again,
+validation on save, the library restored from a backup on another console, a library
+script run over a real link (<code>Console.Tests</code>), and the tab rendered in <code>UiTests</code> with a
+new script run unsaved and then saved. <strong>To run on the VM with the next agent push:</strong>
+<code>pc-info</code> and <code>list-installed</code> as SYSTEM, <code>close-browsers</code> in the student session with
+Edge open, <code>clear-temp</code> — each with its output in the jobs panel; a script edited and run
+unsaved; the library present after importing the backup on the Windows desk PC.</li>
+</ul>
 <p><strong>Not in scope.</strong> Broadcast, lock, exam mode, the package catalog.</p>
 <p><strong>Rough size.</strong> Large.</p>
 <hr />
@@ -1261,7 +1305,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 17:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 21:02 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

@@ -6,13 +6,14 @@ using LabControl.Shared.Files;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Lab;
 using LabControl.Shared.Link;
+using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
 
 namespace LabControl.Console.Tests;
 
 /// <summary>
-/// M2 portion 3 on the console side: the minimal <c>PullFile</c> (D-31), the development
-/// <i>Run test script</i> action, a job that outlives its link (D-32) and Wake-on-LAN's
+/// M2 portion 3 on the console side: the minimal <c>PullFile</c> (D-31), running a script
+/// from the library (M4 portion 1), a job that outlives its link (D-32) and Wake-on-LAN's
 /// bookkeeping. The Windows half — powershell.exe, cmd.exe, the student's token — is proved
 /// on the VM.
 /// </summary>
@@ -69,7 +70,7 @@ public sealed class FileAndScriptTests
     }
 
     [Fact]
-    public async Task The_test_script_action_offers_the_script_and_the_agent_runs_what_it_pulled()
+    public async Task Running_a_script_offers_its_text_and_the_agent_runs_what_it_pulled()
     {
         await using var console = await TestConsole.CreateLabAsync();
         await using var pc = TestAgent.Install(console, 4, console.IssueCodes(1)[0]).Start();
@@ -86,8 +87,16 @@ public sealed class FileAndScriptTests
             return new JobResult { JobId = job.Id, Ok = false, ExitCode = TestScripts.HundredLinesExitCode, Message = $"exit {TestScripts.HundredLinesExitCode}" };
         };
 
-        var choice = new TestScriptChoice(TestScriptKind.HundredLines, ScriptShell.Cmd, ScriptRunAs.User, TimeSpan.FromSeconds(20));
-        var job = console.Session.RunTestScript([pc.AgentId], choice).Single();
+        var script = new ScriptRecord
+        {
+            Id = "t",
+            Name = "test 100 lines",
+            Shell = RunScriptRequest.CmdValue,
+            RunAs = RunScriptRequest.UserValue,
+            TimeoutSeconds = 20,
+            Text = TestScripts.Text(TestScriptKind.HundredLines, ScriptShell.Cmd),
+        };
+        var job = console.Session.RunScript([pc.AgentId], script).Single();
 
         Assert.True(await Wait.UntilAsync(() => job.State == JobState.Failed));
         Assert.Equal(TestScripts.HundredLinesExitCode, job.ExitCode);
@@ -98,6 +107,7 @@ public sealed class FileAndScriptTests
         Assert.Equal("20", job.Args[RunScriptRequest.TimeoutKey]);
         Assert.Equal(20 + (int)Defaults.JobTimeoutGrace.TotalSeconds, job.TimeoutSeconds);
         Assert.True(FileHash.LooksLikeSha256(job.Args[RunScriptRequest.ReferenceKey]));
+        Assert.Equal("test100lines", job.Args[RunScriptRequest.NameKey]);
     }
 
     [Fact]

@@ -184,7 +184,8 @@ What the machines share and what each keeps to itself:
 | Machine list (`machines[]`) | `lab.json` on each machine | **self-healing**: an agent that connects with a valid lab-issued certificate and is not in this console's list is added from its `Hello` (number, MAC, serial); a console never has to be told about a PC twice. **The PC number is the identity** (`D-25`): a PC that arrives with a number another record holds is that PC reinstalled, and the old record is replaced, with an event saying so. The only way out of the list is *Remove from lab*, which revokes the PC's certificate first (`D-28`) — otherwise the PC would heal itself straight back |
 | Room layout | `lab.json` on each machine | default layout is derived from PC numbers, so an unseen list still looks right; a hand-arranged layout travels only with a backup |
 | Revocation list | `lab.json` on each machine **and** every agent | merged as a set (§3.7.3); a console learns from the first agent that connects what the other console revoked |
-| Package catalog, scripts, cached installers | that machine only | export / import a backup, or copy the `packages/` directory; the console shows *catalog last changed on <instance>* so a stale copy is visible |
+| Package catalog, cached installers | that machine only | export / import a backup, or copy the `packages/` directory; the console shows *catalog last changed on <instance>* so a stale copy is visible |
+| Script library (`scripts.json`) | that machine only | inside the backup (`D-38`); seeded from the console's built-in scripts on a first run that has no backup |
 | Logs, job results | that machine only | never |
 
 The rule that follows from the table: **the lab's truth is the lab key plus what the agents
@@ -290,8 +291,10 @@ lab.json          lab_id, room layout, revocation list (signed entries, §3.7.3)
                   instances[] (every teacher machine this lab has seen, §3.7.1), machines[]:
                   {id, number, name, mac, last_ip, last_seen, agent_version, cert, notes}
 enrollment.json   outstanding single-use enrollment codes and which ones were burned
+scripts.json      the script library (D-31, D-38): name, description, shell, run-as,
+                  timeout and text per script; seeded from the console's built-in
+                  scripts/library/ on the first run, inside the backup
 packages/         package catalog: <name>.yaml + cached installer binaries
-scripts/          scripts pushed to PCs
 logs/             per-day console log + per-command result bundles
 ```
 
@@ -510,7 +513,10 @@ than engineered around.
   moving meanwhile.
 - **Jobs panel**: every action becomes a job with per-PC rows (pending / running /
   ok / failed + log). Jobs persist in `logs/`.
-- **Packages** and **Scripts** panels: manage the catalog; "Install on all missing".
+- **Scripts** tab: the library on the left, the selected script edited in place on the
+  right, *Run on selected PCs* sending the editor's text to the lab view's selection (M4,
+  `D-31`, `D-38`).
+- **Packages** panel (M6): manage the catalog; "Install on all missing".
 - **Settings**: lab key (export backup, reprint the recovery code, change the
   passphrase), teacher machines (this one, others seen, *Take over*, revoke behind a
   confirmation — §3.7), enrollment codes,

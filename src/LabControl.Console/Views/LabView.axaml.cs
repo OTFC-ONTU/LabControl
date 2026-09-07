@@ -184,7 +184,6 @@ public partial class LabView : UserControl
         menu.Items.Add(new MenuItem { Header = Strings.Get("Action.Shutdown"), Command = _viewModel.ShutdownCommand });
         menu.Items.Add(new MenuItem { Header = Strings.Get("Action.Reboot"), Command = _viewModel.RebootCommand });
         menu.Items.Add(new MenuItem { Header = Strings.Get("Action.Logoff"), Command = _viewModel.LogoffCommand });
-        menu.Items.Add(new MenuItem { Header = Strings.Get("Action.RunScript"), Command = _viewModel.RunScriptCommand });
         menu.Items.Add(new Separator());
         menu.Items.Add(new MenuItem { Header = Strings.Get("Machine.Remove"), Command = _viewModel.RemoveMachineCommand, CommandParameter = tile });
         menu.Items.Add(new MenuItem { Header = Strings.Get("Machine.Revoke"), Command = _viewModel.RevokeMachineCommand, CommandParameter = tile });

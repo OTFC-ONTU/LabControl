@@ -45,4 +45,7 @@ public sealed class BackupPayload
     /// the machine that replaced it (D-28). Null in backups from before this field existed.
     /// </summary>
     public EnrollmentDocument? Enrollment { get; set; }
+
+    /// <summary><c>scripts.json</c>: the script library (D-31 item 4). Null in backups from before M4.</summary>
+    public ScriptsDocument? Scripts { get; set; }
 }

@@ -36,9 +36,6 @@ public sealed class WindowDialogs : IDialogs
     public async Task<bool> ShowRecoveryCodeAsync(RecoveryCode code) =>
         await Show(new RecoveryCodeDialog(code)) == true;
 
-    public async Task<TestScriptChoice?> RunTestScriptAsync(int pcCount) =>
-        await Show(new TestScriptDialog(pcCount));
-
     public async Task<AgentBuild?> PushAgentBuildAsync(int pcCount) =>
         await Show(new PushBuildDialog(pcCount));
 

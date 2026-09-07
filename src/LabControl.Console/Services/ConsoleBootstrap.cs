@@ -58,7 +58,7 @@ public sealed class ConsoleBootstrap
         var vault = new LabKeyVault(Store, lab.Document);
         vault.Adopt(lab);
 
-        return new LabSession(_options, Store, vault, instance, instance.Document, _loggers);
+        return new LabSession(_options, Store, vault, instance, instance.Document, _loggers, seedScripts: SeedScripts.Embedded());
     }
 
     /// <summary>Reads a backup far enough to show its lab name and holders before asking for a secret.</summary>
@@ -100,6 +100,13 @@ public sealed class ConsoleBootstrap
 
         Store.SaveLab(payload.Lab);
         Store.WriteCatalog(payload.Catalog);
+        if (payload.Scripts is not null)
+        {
+            // The library moves with the lab (D-31 item 4); the seed is imported only when nothing came.
+            payload.Scripts.LabId = lab.LabId;
+            Store.SaveScripts(payload.Scripts);
+        }
+
         if (payload.Enrollment is not null)
         {
             // The codes on sticks written by the old machine keep working here (D-28).
@@ -117,7 +124,7 @@ public sealed class ConsoleBootstrap
         var vault = new LabKeyVault(Store, lab.Document);
         vault.Adopt(lab);
 
-        return new LabSession(_options, Store, vault, instance, instance.Document, _loggers);
+        return new LabSession(_options, Store, vault, instance, instance.Document, _loggers, seedScripts: SeedScripts.Embedded());
     }
 
     // ------------------------------------------------------------------ every later run
@@ -157,7 +164,7 @@ public sealed class ConsoleBootstrap
     }
 
     public LabSession Start(OpenedLab opened, ConsoleInstance instance) =>
-        new(_options, Store, opened.Vault, instance, instance.Document, _loggers);
+        new(_options, Store, opened.Vault, instance, instance.Document, _loggers, seedScripts: SeedScripts.Embedded());
 
     // ------------------------------------------------------------------ backup
 
@@ -196,7 +203,7 @@ public sealed class ConsoleBootstrap
         var now = session.Now;
         session.SaveLab();
 
-        if (!session.Vault.Use(lab => LabBackup.Serialize(LabBackup.Export(lab, session.Registry.Document, Store.ReadCatalog(), session.Instance.InstanceName, now, session.Enrollment.Document)), out var json))
+        if (!session.Vault.Use(lab => LabBackup.Serialize(LabBackup.Export(lab, session.Registry.Document, Store.ReadCatalog(), session.Instance.InstanceName, now, session.Enrollment.Document, session.Scripts.Document)), out var json))
         {
             error = "The lab key is locked; unlock it to export a backup.";
             return false;

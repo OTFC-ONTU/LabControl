@@ -25,7 +25,7 @@ public sealed class LabStore
 
     public string PackagesDirectory => Path.Combine(Directory, Defaults.PackagesDirectoryName);
 
-    public string ScriptsDirectory => Path.Combine(Directory, Defaults.ScriptsDirectoryName);
+    public string ScriptsPath => Path.Combine(Directory, Defaults.ScriptsFileName);
 
     public string LogsDirectory => Path.Combine(Directory, Defaults.LogsDirectoryName);
 
@@ -38,7 +38,6 @@ public sealed class LabStore
     {
         System.IO.Directory.CreateDirectory(Directory);
         System.IO.Directory.CreateDirectory(PackagesDirectory);
-        System.IO.Directory.CreateDirectory(ScriptsDirectory);
         System.IO.Directory.CreateDirectory(LogsDirectory);
     }
 
@@ -66,6 +65,11 @@ public sealed class LabStore
         JsonStore.LoadIfExists<EnrollmentDocument>(EnrollmentPath, EnrollmentDocument.Migrations) ?? new EnrollmentDocument { LabId = labId };
 
     public void SaveEnrollment(EnrollmentDocument document) => JsonStore.Save(EnrollmentPath, document, EnrollmentDocument.Migrations);
+
+    /// <summary>The script library, or null before the first run imported the seed (D-31 item 4).</summary>
+    public ScriptsDocument? LoadScripts() => JsonStore.LoadIfExists<ScriptsDocument>(ScriptsPath, ScriptsDocument.Migrations);
+
+    public void SaveScripts(ScriptsDocument document) => JsonStore.Save(ScriptsPath, document, ScriptsDocument.Migrations);
 
     // ------------------------------------------------------------------ catalog
 

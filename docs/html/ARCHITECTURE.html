@@ -383,9 +383,14 @@ installation on any student PC.</p>
 <td>merged as a set (§3.7.3); a console learns from the first agent that connects what the other console revoked</td>
 </tr>
 <tr>
-<td>Package catalog, scripts, cached installers</td>
+<td>Package catalog, cached installers</td>
 <td>that machine only</td>
 <td>export / import a backup, or copy the <code>packages/</code> directory; the console shows <em>catalog last changed on <instance></em> so a stale copy is visible</td>
+</tr>
+<tr>
+<td>Script library (<code>scripts.json</code>)</td>
+<td>that machine only</td>
+<td>inside the backup (<code>D-38</code>); seeded from the console's built-in scripts on a first run that has no backup</td>
 </tr>
 <tr>
 <td>Logs, job results</td>
@@ -524,8 +529,10 @@ lab.json          lab_id, room layout, revocation list (signed entries, §3.7.3)
                   instances[] (every teacher machine this lab has seen, §3.7.1), machines[]:
                   {id, number, name, mac, last_ip, last_seen, agent_version, cert, notes}
 enrollment.json   outstanding single-use enrollment codes and which ones were burned
+scripts.json      the script library (D-31, D-38): name, description, shell, run-as,
+                  timeout and text per script; seeded from the console's built-in
+                  scripts/library/ on the first run, inside the backup
 packages/         package catalog: &lt;name&gt;.yaml + cached installer binaries
-scripts/          scripts pushed to PCs
 logs/             per-day console log + per-command result bundles
 </code></pre>
 <p>Every one of these files — and the backup archive — carries a <code>schema_version</code> as its
@@ -820,7 +827,10 @@ keys the teacher's keyboard cannot send (<code>D-36</code>). One window per PC; 
 moving meanwhile.</li>
 <li><strong>Jobs panel</strong>: every action becomes a job with per-PC rows (pending / running /
 ok / failed + log). Jobs persist in <code>logs/</code>.</li>
-<li><strong>Packages</strong> and <strong>Scripts</strong> panels: manage the catalog; &quot;Install on all missing&quot;.</li>
+<li><strong>Scripts</strong> tab: the library on the left, the selected script edited in place on the
+right, <em>Run on selected PCs</em> sending the editor's text to the lab view's selection (M4,
+<code>D-31</code>, <code>D-38</code>).</li>
+<li><strong>Packages</strong> panel (M6): manage the catalog; &quot;Install on all missing&quot;.</li>
 <li><strong>Settings</strong>: lab key (export backup, reprint the recovery code, change the
 passphrase), teacher machines (this one, others seen, <em>Take over</em>, revoke behind a
 confirmation — §3.7), enrollment codes,
@@ -911,7 +921,7 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-09-07 17:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 21:02 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#three-separate-identities">3.1 Three separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>

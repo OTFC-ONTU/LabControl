@@ -90,7 +90,7 @@ LabControl/
 ├── tests/                         shared and console test projects
 ├── tools/                         documentation and publish tooling
 ├── packages/                      package catalog and ignored installer cache
-└── scripts/                       scripts distributed to student PCs
+└── scripts/                       library/ = seed of the console's script library (D-38); dev-install.* for the VM
 ```
 
 ## Common commands

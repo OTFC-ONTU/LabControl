@@ -37,6 +37,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         Settings = new SettingsViewModel(session, bootstrap, dialogs, EnsureUnlockedAsync);
         Settings.BackupChanged += RefreshBanners;
+        Scripts = new ScriptsViewModel(session, dialogs, () => Selected.Select(t => t.AgentId).ToArray());
 
         Title = Strings.Format("Main.Title", session.LabName, session.Instance.InstanceName);
 
@@ -60,6 +61,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     public SettingsViewModel Settings { get; }
 
+    /// <summary>The <i>Scripts</i> tab (D-31 item 4); runs on the lab view's selection.</summary>
+    public ScriptsViewModel Scripts { get; }
+
     public string Title { get; }
 
     public ObservableCollection<MachineTileViewModel> Machines { get; } = [];
@@ -80,7 +84,7 @@ public sealed partial class MainViewModel : ObservableObject
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(RunScriptCommand), nameof(PushBuildCommand), nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(RemoveSelectedCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
@@ -309,6 +313,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool HasSelection => SelectedCount > 0;
 
+    partial void OnSelectedCountChanged(int value) => Scripts.SetSelectedPcCount(value);
+
     /// <summary>Wake-on-LAN for the selected PCs that are off; the outcome arrives as events and on the tile (ARCHITECTURE §6).</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private Task WakeAsync() => _session.WakeAsync(Selected.Select(t => t.AgentId).ToArray());
@@ -321,23 +327,6 @@ public sealed partial class MainViewModel : ObservableObject
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void Logoff() => CreateJobs(Job.Types.Kind.Logoff);
-
-    /// <summary>Development-only until M4 (D-31 item 3): one of the built-in test scripts to the selected PCs.</summary>
-    [RelayCommand(CanExecute = nameof(HasSelection))]
-    private async Task RunScriptAsync()
-    {
-        var choice = await _dialogs.RunTestScriptAsync(SelectedCount);
-        if (choice is null)
-        {
-            return;
-        }
-
-        var targets = Selected.Select(t => t.AgentId).ToArray();
-        if (targets.Length > 0)
-        {
-            _session.RunTestScript(targets, choice);
-        }
-    }
 
     /// <summary>Development-only (D-33): a published agent build to the selected PCs, which install it side by side and restart.</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]

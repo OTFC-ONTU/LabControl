@@ -157,6 +157,7 @@ public static class Defaults
     public const int AgentConfigSchemaVersion = 1;
     public const int PackageCatalogSchemaVersion = 1;
     public const int BackupSchemaVersion = 1;
+    public const int ScriptsSchemaVersion = 1;
     public const int SetupPayloadSchemaVersion = 1;
 
     /// <summary>Name of the version field, first in every persisted file.</summary>
@@ -169,7 +170,8 @@ public static class Defaults
     public const string InstanceFileName = "instance.json";
     public const string EnrollmentFileName = "enrollment.json";
     public const string PackagesDirectoryName = "packages";
-    public const string ScriptsDirectoryName = "scripts";
+    /// <summary>The script library (D-31 item 4): beside <c>lab.json</c>, inside the backup.</summary>
+    public const string ScriptsFileName = "scripts.json";
     public const string LogsDirectoryName = "logs";
 
     /// <summary>The encrypted backup archive (ARCHITECTURE §4, D-26): <c>&lt;lab&gt;-&lt;date&gt;.lcbak</c>.</summary>

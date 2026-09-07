@@ -37,9 +37,6 @@ public interface IDialogs
 
     Task<string?> PickFolderAsync(string title);
 
-    /// <summary>The development-only <i>Run test script</i> dialog (D-31 item 3): which built-in script, which shell, as whom, how long.</summary>
-    Task<TestScriptChoice?> RunTestScriptAsync(int pcCount);
-
     /// <summary>The development-only <i>Push agent build</i> dialog (D-33): which folder, which version number; returns the build read from it.</summary>
     Task<AgentBuild?> PushAgentBuildAsync(int pcCount);
 

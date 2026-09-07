@@ -102,7 +102,7 @@ LabControl/
 ├── tools/                     ← build/publish scripts (build-usb.sh, publish-all.sh),
 │                                 docs-build.sh + DocsBuild/ (Markdown → docs/html/)
 ├── packages/                  ← package catalog (*.yaml) + cached installers (git-ignored binaries)
-└── scripts/                   ← reusable PowerShell/cmd scripts pushed to PCs
+└── scripts/                   ← library/ = seed of the console's script library (D-38); dev-install.* for the VM
 ```
 
 Solution file: `LabControl.sln` at the root (create in M0).
@@ -189,8 +189,8 @@ jobs (`PowerControl`), Wake-on-LAN from the console (`Shared/Power/WakeOnLan`, t
 the minimal `PullFile` (`FileOffers` on the console, `AgentLink.PullFileAsync` on the agent)
 and `run_script` on top of it (`ScriptRunner`, `UserProcessLauncher`,
 `Shared/Jobs/ProcessRunner`, the per-shell byte rules in `Shared/Jobs/ScriptText`; `D-31`,
-`D-32`); the teacher-facing script library is M4 and the console has only the development
-*Run test script…* dialog until then. Jobs outlive a dropped link (`D-32` item 7). The VM
+`D-32`); the teacher-facing script library is M4 portion 1 (built, see below) and replaced
+the development *Run test script…* dialog. Jobs outlive a dropped link (`D-32` item 7). The VM
 runs taught three Windows-only lessons worth remembering: cmd.exe needs CRLF line endings
 and both shells are forced to UTF-8 (`D-32` item 5), a helper ended by Windows at logoff is
 a planned restart held for `HelperExitGrace` (`D-32` item 12), and `Disable-NetAdapter`
@@ -230,6 +230,12 @@ with an *Auto* mode the producer drives from the pacer's waits (`D-37`,
 `VideoFrame.quality`). Version 0.1.4, verified on `PC-10`: *Auto* at q40–50, 14–18 fps
 while scrolling. M3's close-out measurements (an hour of streaming, the 30-tile mosaic,
 Ukrainian text) are what remains before M4.
+**M4 is in progress, in four portions** (ROADMAP M4, *How it is being built*; `D-38`).
+**Portion 1 is built (2026-09-07)**, all on the Mac: the *Scripts* tab (`ScriptsViewModel`,
+`ScriptsView`), `Shared/Persistence/ScriptsDocument` (`scripts.json` beside `lab.json`, in
+the backup), `Shared/Jobs/ScriptSeed` and `Console/Services/ScriptLibrary` (the seed from
+`scripts/library/` embedded in the console, imported once), `LabSession.RunScript`. Not yet
+run against a real agent: the four seed scripts wait for the next push to the VM.
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

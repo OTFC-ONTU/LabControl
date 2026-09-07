@@ -24,9 +24,6 @@ public sealed record OtherConsole(string InstanceId, string Name, string Endpoin
 /// <summary>A Wake-on-LAN in progress: the packets went out, the PC has until <see cref="Deadline"/> to link.</summary>
 public sealed record PendingWake(string AgentId, int Number, DateTimeOffset StartedAt, DateTimeOffset Deadline);
 
-/// <summary>What the development-only <i>Run test script</i> action sends (D-31 item 3).</summary>
-public sealed record TestScriptChoice(TestScriptKind Kind, ScriptShell Shell, ScriptRunAs RunAs, TimeSpan Timeout);
-
 /// <summary>
 /// The running lab on this teacher machine: the identity it serves with, the machine list
 /// it caches, the PCs linked to it right now, the jobs in flight, the events, the beacon
@@ -57,7 +54,8 @@ public sealed class LabSession : IAsyncDisposable
         ConsoleInstance instance,
         InstanceDocument instanceDocument,
         ILoggerFactory loggers,
-        Func<DateTimeOffset>? clock = null)
+        Func<DateTimeOffset>? clock = null,
+        IReadOnlyList<SeedScript>? seedScripts = null)
     {
         Options = options;
         Store = store;
@@ -78,6 +76,7 @@ public sealed class LabSession : IAsyncDisposable
         Screens.KeyframeNeeded += screen => RequestKeyframe(screen.AgentId);
         Events = new EventLog(store.LogsDirectory, _clock);
         _journal = new JobJournal(store.LogsDirectory);
+        Scripts = new ScriptLibrary(store, vault.LabId, seedScripts ?? [], _clock, loggers.CreateLogger<ScriptLibrary>());
 
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
@@ -112,6 +111,9 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>Every PC's screen as last seen (M3): thumbnails for the mosaic, the full picture for the single-PC view.</summary>
     public ScreenStore Screens { get; }
+
+    /// <summary>The script library (D-31 item 4), seeded on the first run.</summary>
+    public ScriptLibrary Scripts { get; }
 
     public EventLog Events { get; }
 
@@ -782,17 +784,23 @@ public sealed class LabSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// The development-only <i>Run test script</i> action (D-31 item 3): offers one of the
-    /// built-in scripts through <c>PullFile</c> and sends a <c>run_script</c> job per PC with
-    /// every parameter the protocol has. The console's inactivity timeout is the script's plus
-    /// a grace, so the agent's own "killed" result always arrives first (D-32).
+    /// Runs a library script on the given PCs (D-31): the text is offered through
+    /// <c>PullFile</c> under its hash and a <c>run_script</c> job goes to each PC with the
+    /// script's shell, run-as and timeout. The console's inactivity timeout is the script's
+    /// plus a grace, so the agent's own "killed" result always arrives first (D-32). The
+    /// record need not be saved — unsaved text runs once, as typed.
     /// </summary>
-    public IReadOnlyList<JobRecord> RunTestScript(IEnumerable<string> agentIds, TestScriptChoice choice)
+    public IReadOnlyList<JobRecord> RunScript(IEnumerable<string> agentIds, ScriptRecord script)
     {
-        var name = TestScripts.NameOf(choice.Kind);
-        var offer = Files.OfferText(TestScripts.Text(choice.Kind, choice.Shell), name);
-        var request = new RunScriptRequest(offer.Reference, offer.Sha256, choice.Shell, choice.RunAs, choice.Timeout, name);
-        return CreateJobs(agentIds, Job.Types.Kind.RunScript, request.ToArgs(), choice.Timeout + Defaults.JobTimeoutGrace);
+        var name = RunScriptRequest.SafeName(script.Name);
+        if (name.Length == 0)
+        {
+            name = "script";
+        }
+
+        var offer = Files.OfferText(script.Text, name);
+        var request = new RunScriptRequest(offer.Reference, offer.Sha256, script.ShellKind, script.RunAsKind, script.Timeout, name);
+        return CreateJobs(agentIds, Job.Types.Kind.RunScript, request.ToArgs(), script.Timeout + Defaults.JobTimeoutGrace);
     }
 
     /// <summary>

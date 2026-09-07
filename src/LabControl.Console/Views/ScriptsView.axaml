@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:LabControl.Console.Localization"
+             xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+             x:Class="LabControl.Console.Views.ScriptsView"
+             x:DataType="vm:ScriptsViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.k">
+      <Setter Property="Opacity" Value="0.7" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,8,0" />
+    </Style>
+    <Style Selector="Button.accent">
+      <Setter Property="Background" Value="{DynamicResource SystemAccentColor}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid ColumnDefinitions="280,1,*">
+
+    <!-- The library: name and one line each (D-31 item 4). -->
+    <DockPanel Grid.Column="0" Margin="8,8,0,8">
+      <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+        <Button Content="{loc:Localize Scripts.New}" Command="{Binding NewCommand}" />
+        <Button Content="{loc:Localize Scripts.Delete}" Command="{Binding DeleteCommand}" />
+      </StackPanel>
+      <ListBox ItemsSource="{Binding Scripts}" SelectedItem="{Binding Selected}">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:ScriptRowViewModel">
+            <StackPanel Margin="0,2">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                <TextBlock Text="•" IsVisible="{Binding IsDirty}" Opacity="0.7" />
+              </StackPanel>
+              <TextBlock Text="{Binding Description}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Details}" FontSize="11" Opacity="0.55" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+
+    <Rectangle Grid.Column="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" />
+
+    <!-- The selected script, edited in place (D-31 item 5: a plain text editor, no more). -->
+    <Grid Grid.Column="2" Margin="12,8,12,8" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" IsEnabled="{Binding HasSelection}">
+
+      <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto" Margin="0,0,0,6">
+        <TextBlock Grid.Row="0" Grid.Column="0" Classes="k" Text="{loc:Localize Scripts.Name}" />
+        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name}" Margin="0,0,12,4" />
+        <TextBlock Grid.Row="0" Grid.Column="2" Classes="k" Text="{loc:Localize Scripts.Description}" />
+        <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding Description}" Margin="0,0,0,4" />
+      </Grid>
+
+      <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+        <TextBlock Classes="k" Text="{loc:Localize Scripts.Shell}" />
+        <ComboBox SelectedIndex="{Binding ShellIndex}" MinWidth="130">
+          <ComboBoxItem Content="{loc:Localize Scripts.ShellPowerShell}" />
+          <ComboBoxItem Content="{loc:Localize Scripts.ShellCmd}" />
+        </ComboBox>
+        <TextBlock Classes="k" Text="{loc:Localize Scripts.RunAs}" Margin="12,0,8,0" />
+        <ComboBox SelectedIndex="{Binding RunAsIndex}" MinWidth="170">
+          <ComboBoxItem Content="{loc:Localize Scripts.RunAsSystem}" />
+          <ComboBoxItem Content="{loc:Localize Scripts.RunAsUser}" />
+        </ComboBox>
+        <TextBlock Classes="k" Text="{loc:Localize Scripts.Timeout}" Margin="12,0,8,0" />
+        <TextBox Text="{Binding TimeoutText}" Width="70" />
+        <TextBlock Classes="k" Text="{loc:Localize Scripts.Seconds}" Margin="0" />
+      </StackPanel>
+
+      <TextBlock Grid.Row="2" Text="{loc:Localize Scripts.Text}" FontSize="12" Opacity="0.7" Margin="0,0,0,2" />
+      <TextBox Grid.Row="3" Text="{Binding Text}"
+               AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+               FontFamily="Menlo, Consolas, monospace" FontSize="12"
+               ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+
+      <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+        <Button Classes="accent" Content="{Binding RunLabel}" Command="{Binding RunCommand}" />
+        <Button Content="{loc:Localize Scripts.Save}" Command="{Binding SaveCommand}" />
+        <Button Content="{loc:Localize Scripts.Revert}" Command="{Binding RevertCommand}" />
+        <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Opacity="0.7" />
+      </StackPanel>
+
+      <TextBlock Grid.Row="5" Text="{Binding Error}" Foreground="IndianRed" TextWrapping="Wrap" Margin="0,4,0,0" />
+    </Grid>
+  </Grid>
+
+</UserControl>

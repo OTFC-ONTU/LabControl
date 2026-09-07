@@ -232,7 +232,7 @@ Pinned in <code>Directory.Packages.props</code>; see D-02.</li>
 ├── tools/                     ← build/publish scripts (build-usb.sh, publish-all.sh),
 │                                 docs-build.sh + DocsBuild/ (Markdown → docs/html/)
 ├── packages/                  ← package catalog (*.yaml) + cached installers (git-ignored binaries)
-└── scripts/                   ← reusable PowerShell/cmd scripts pushed to PCs
+└── scripts/                   ← library/ = seed of the console's script library (D-38); dev-install.* for the VM
 </code></pre>
 <p>Solution file: <code>LabControl.sln</code> at the root (create in M0).</p>
 <h2 id="development-environment-realities">Development environment realities<a class="anchor" href="#development-environment-realities" aria-label="Link to this section">#</a></h2>
@@ -311,8 +311,8 @@ jobs (<code>PowerControl</code>), Wake-on-LAN from the console (<code>Shared/Pow
 the minimal <code>PullFile</code> (<code>FileOffers</code> on the console, <code>AgentLink.PullFileAsync</code> on the agent)
 and <code>run_script</code> on top of it (<code>ScriptRunner</code>, <code>UserProcessLauncher</code>,
 <code>Shared/Jobs/ProcessRunner</code>, the per-shell byte rules in <code>Shared/Jobs/ScriptText</code>; <code>D-31</code>,
-<code>D-32</code>); the teacher-facing script library is M4 and the console has only the development
-<em>Run test script…</em> dialog until then. Jobs outlive a dropped link (<code>D-32</code> item 7). The VM
+<code>D-32</code>); the teacher-facing script library is M4 portion 1 (built, see below) and replaced
+the development <em>Run test script…</em> dialog. Jobs outlive a dropped link (<code>D-32</code> item 7). The VM
 runs taught three Windows-only lessons worth remembering: cmd.exe needs CRLF line endings
 and both shells are forced to UTF-8 (<code>D-32</code> item 5), a helper ended by Windows at logoff is
 a planned restart held for <code>HelperExitGrace</code> (<code>D-32</code> item 12), and <code>Disable-NetAdapter</code>
@@ -351,7 +351,13 @@ went to 24 Mbit/s (<code>D-36</code> items 10–11). The single-PC window then g
 with an <em>Auto</em> mode the producer drives from the pacer's waits (<code>D-37</code>,
 <code>VideoFrame.quality</code>). Version 0.1.4, verified on <code>PC-10</code>: <em>Auto</em> at q40–50, 14–18 fps
 while scrolling. M3's close-out measurements (an hour of streaming, the 30-tile mosaic,
-Ukrainian text) are what remains before M4.</p>
+Ukrainian text) are what remains before M4.
+<strong>M4 is in progress, in four portions</strong> (ROADMAP M4, <em>How it is being built</em>; <code>D-38</code>).
+<strong>Portion 1 is built (2026-09-07)</strong>, all on the Mac: the <em>Scripts</em> tab (<code>ScriptsViewModel</code>,
+<code>ScriptsView</code>), <code>Shared/Persistence/ScriptsDocument</code> (<code>scripts.json</code> beside <code>lab.json</code>, in
+the backup), <code>Shared/Jobs/ScriptSeed</code> and <code>Console/Services/ScriptLibrary</code> (the seed from
+<code>scripts/library/</code> embedded in the console, imported once), <code>LabSession.RunScript</code>. Not yet
+run against a real agent: the four seed scripts wait for the next push to the VM.</p>
 <p>The console's non-UI core lives in <code>src/LabControl.Console/Services</code> (<code>LabSession</code>,
 <code>ConsoleBootstrap</code>, <code>LabKeyVault</code>) and <code>Server/</code>; the agent side shared by <code>FakeAgent</code> and
 the real agent is <code>src/LabControl.Shared/Link/AgentLink.cs</code>, and the install-time routines
@@ -362,7 +368,7 @@ shared by the agent, the simulator and Setup are <code>src/LabControl.Shared/Set
 (<code>tests/&lt;project&gt;/bin/Debug/net10.0/&lt;project&gt;</code>).</p>
 
 </article>
-<footer>Generated 2026-09-07 17:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 21:02 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

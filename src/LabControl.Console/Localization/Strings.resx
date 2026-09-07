@@ -13,6 +13,7 @@
   <data name="Main.Status" xml:space="preserve"><value>{0} of {1} PCs online · this console: {2} · port {3} · screens {4:0} kbit/s</value></data>
   <data name="Main.SelectedFormat" xml:space="preserve"><value>{0} selected</value></data>
   <data name="Tab.Lab" xml:space="preserve"><value>Lab</value></data>
+  <data name="Tab.Scripts" xml:space="preserve"><value>Scripts</value></data>
   <data name="Tab.Jobs" xml:space="preserve"><value>Jobs</value></data>
   <data name="Tab.Events" xml:space="preserve"><value>Events</value></data>
   <data name="Tab.Settings" xml:space="preserve"><value>Settings</value></data>
@@ -26,7 +27,6 @@
   <data name="Action.Shutdown" xml:space="preserve"><value>Shut down</value></data>
   <data name="Action.Reboot" xml:space="preserve"><value>Reboot</value></data>
   <data name="Action.Logoff" xml:space="preserve"><value>Log off</value></data>
-  <data name="Action.RunScript" xml:space="preserve"><value>Run test script…</value></data>
   <data name="Action.PushBuild" xml:space="preserve"><value>Push agent build…</value></data>
   <data name="Action.OpenScreen" xml:space="preserve"><value>Open screen</value></data>
   <data name="Action.SelectAll" xml:space="preserve"><value>Select all</value></data>
@@ -182,6 +182,35 @@
   <data name="Code.Voided" xml:space="preserve"><value>voided {0} — replaced by a newer stick</value></data>
   <data name="Code.UsedByRemoved" xml:space="preserve"><value>used by {0} — since removed from the lab</value></data>
   <data name="Code.Unused" xml:space="preserve"><value>unused</value></data>
+  <data name="Scripts.New" xml:space="preserve"><value>New script</value></data>
+  <data name="Scripts.Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Scripts.DeleteConfirm" xml:space="preserve"><value>Delete the script "{0}" from the library? This cannot be undone.</value></data>
+  <data name="Scripts.Name" xml:space="preserve"><value>Name</value></data>
+  <data name="Scripts.Description" xml:space="preserve"><value>What it does</value></data>
+  <data name="Scripts.Shell" xml:space="preserve"><value>Shell</value></data>
+  <data name="Scripts.ShellPowerShell" xml:space="preserve"><value>PowerShell</value></data>
+  <data name="Scripts.ShellCmd" xml:space="preserve"><value>cmd</value></data>
+  <data name="Scripts.RunAs" xml:space="preserve"><value>Run as</value></data>
+  <data name="Scripts.RunAsSystem" xml:space="preserve"><value>SYSTEM (no desktop)</value></data>
+  <data name="Scripts.RunAsUser" xml:space="preserve"><value>the student's session</value></data>
+  <data name="Scripts.Timeout" xml:space="preserve"><value>Kill after</value></data>
+  <data name="Scripts.Seconds" xml:space="preserve"><value>s without output</value></data>
+  <data name="Scripts.TimeoutFormat" xml:space="preserve"><value>{0} s</value></data>
+  <data name="Scripts.Text" xml:space="preserve"><value>Script</value></data>
+  <data name="Scripts.Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Scripts.Revert" xml:space="preserve"><value>Revert</value></data>
+  <data name="Scripts.RunNone" xml:space="preserve"><value>Run — select PCs in the Lab tab first</value></data>
+  <data name="Scripts.RunFormat" xml:space="preserve"><value>Run on {0} selected PC(s)</value></data>
+  <data name="Scripts.Saved" xml:space="preserve"><value>Saved "{0}".</value></data>
+  <data name="Scripts.Ran" xml:space="preserve"><value>"{0}" sent to {1} PC(s) — see the Jobs tab.</value></data>
+  <data name="Scripts.RanUnsaved" xml:space="preserve"><value>"{0}" sent to {1} PC(s) as typed (not saved) — see the Jobs tab.</value></data>
+  <data name="Scripts.NeedName" xml:space="preserve"><value>Give the script a name.</value></data>
+  <data name="Scripts.NeedTimeout" xml:space="preserve"><value>The timeout must be a whole number of seconds greater than zero.</value></data>
+  <data name="Scripts.NeedText" xml:space="preserve"><value>The script is empty.</value></data>
+  <data name="Scripts.NewTemplate" xml:space="preserve"><value># What this script does, in one line.
+Write-Output "hello from $env:COMPUTERNAME"
+exit 0
+</value></data>
   <data name="Jobs.Time" xml:space="preserve"><value>Time</value></data>
   <data name="Jobs.Pc" xml:space="preserve"><value>PC</value></data>
   <data name="Jobs.Kind" xml:space="preserve"><value>Job</value></data>
@@ -214,21 +243,6 @@
   <data name="Severity.Info" xml:space="preserve"><value>info</value></data>
   <data name="Severity.Warning" xml:space="preserve"><value>warning</value></data>
   <data name="Severity.Error" xml:space="preserve"><value>error</value></data>
-  <data name="Script.Heading" xml:space="preserve"><value>Run a test script on {0} PC(s)</value></data>
-  <data name="Script.Hint" xml:space="preserve"><value>Development action until the script library arrives in M4: sends one of the console's built-in scripts. Output streams into the Jobs panel; a script that stays silent longer than the timeout is killed on the PC and reported.</value></data>
-  <data name="Script.Kind" xml:space="preserve"><value>Script</value></data>
-  <data name="Script.Kind.HundredLines" xml:space="preserve"><value>Print 100 lines, then exit with code 3</value></data>
-  <data name="Script.Kind.Hang" xml:space="preserve"><value>Hang for ever (must be killed at the timeout)</value></data>
-  <data name="Script.Kind.WhoAmI" xml:space="preserve"><value>Who am I: account, session, directory (proves run-as)</value></data>
-  <data name="Script.Shell" xml:space="preserve"><value>Shell</value></data>
-  <data name="Script.Shell.PowerShell" xml:space="preserve"><value>Windows PowerShell (powershell.exe -File)</value></data>
-  <data name="Script.Shell.Cmd" xml:space="preserve"><value>Command Prompt (cmd.exe /c)</value></data>
-  <data name="Script.RunAs" xml:space="preserve"><value>Run as</value></data>
-  <data name="Script.RunAs.System" xml:space="preserve"><value>SYSTEM (the service, no desktop)</value></data>
-  <data name="Script.RunAs.User" xml:space="preserve"><value>The logged-on user, in their session</value></data>
-  <data name="Script.Timeout" xml:space="preserve"><value>Inactivity timeout, seconds (killed after this long without output)</value></data>
-  <data name="Script.BadTimeout" xml:space="preserve"><value>The timeout must be a whole number of seconds greater than zero.</value></data>
-  <data name="Script.Run" xml:space="preserve"><value>Run</value></data>
   <data name="Push.Heading" xml:space="preserve"><value>Push an agent build to {0} PC(s)</value></data>
   <data name="Push.Hint" xml:space="preserve"><value>Development action: sends a published agent.exe and session.exe to the selected PCs. Each PC installs them side by side in app\&lt;version&gt;, repoints its service and restarts; the new version reports back when it is up. No signature, no probation, no rollback until M4 — push to one PC first.</value></data>
   <data name="Push.Folder" xml:space="preserve"><value>Build folder (agent.exe + session.exe, or a publish-all.sh artifacts\&lt;rid&gt; folder)</value></data>

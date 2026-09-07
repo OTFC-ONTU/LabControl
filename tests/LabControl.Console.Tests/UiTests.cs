@@ -252,15 +252,36 @@ public sealed class UiTests
 
                 Assert.True(await Wait.UntilAsync(() => vm.Jobs.Count == 2 && vm.Jobs.All(j => j.IsFinished)));
                 var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
-                tabs.SelectedIndex = 1;
+                tabs.SelectedIndex = 2;
                 vm.SelectedJob = vm.Jobs[0];
                 await Render(window, "main-3-jobs");
-                tabs.SelectedIndex = 2;
-                await Render(window, "main-4-events");
                 tabs.SelectedIndex = 3;
+                await Render(window, "main-4-events");
+                tabs.SelectedIndex = 4;
                 await Render(window, "main-5-settings");
-                tabs.SelectedIndex = 0;
                 Assert.All(vm.Jobs, j => Assert.Equal("Reboot", j.Kind));
+
+                // The Scripts tab (M4 portion 1): a new script, edited, run on the selection as typed, then saved.
+                tabs.SelectedIndex = 1;
+                var scripts = vm.Scripts;
+                Assert.Equal(2, scripts.PcCount);
+                scripts.NewCommand.Execute(null);
+                Assert.NotNull(scripts.Selected);
+                Assert.Equal("new-script", scripts.Name);
+                scripts.Name = "say-hello";
+                scripts.Description = "Prints a greeting";
+                scripts.Text = "Write-Output \"hello\"\nexit 0\n";
+                Assert.True(scripts.IsDirty);
+                Assert.True(scripts.RunCommand.CanExecute(null));
+                scripts.RunCommand.Execute(null);
+                await Render(window, "main-6-scripts");
+                Assert.True(await Wait.UntilAsync(() => vm.Jobs.Count == 4 && vm.Jobs.All(j => j.IsFinished)));
+                Assert.Equal(2, vm.Jobs.Count(j => j.Kind == "Run script: say-hello"));
+                Assert.Contains("not saved", scripts.Status, StringComparison.Ordinal);
+                scripts.SaveCommand.Execute(null);
+                Assert.False(scripts.IsDirty);
+                Assert.Equal("say-hello", console.Session.Scripts.Scripts.Single().Name);
+                tabs.SelectedIndex = 0;
 
                 // Drag PC-01 to the cell of PC-06: they swap, and the layout persists.
                 var first = vm.Machines.Single(m => m.Number == 1);

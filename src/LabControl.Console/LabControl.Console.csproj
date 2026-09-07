@@ -18,6 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The seed of the script library (D-31 item 4, D-38): imported into scripts.json on the first run. -->
+    <EmbeddedResource Include="../../scripts/library/*.ps1;../../scripts/library/*.cmd" LogicalName="LabControl.Console.Seed.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />

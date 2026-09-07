@@ -39,6 +39,28 @@
   <data name="Screen.Waiting" xml:space="preserve"><value>Waiting for the first full picture from {0}…</value></data>
   <data name="Screen.Offline" xml:space="preserve"><value>{0} is offline; this is the last picture it sent.</value></data>
   <data name="Screen.Stats" xml:space="preserve"><value>{0}×{1} · {2:0.#} fps · {3:0} kbit/s</value></data>
+  <data name="Screen.Control" xml:space="preserve"><value>Control</value></data>
+  <data name="Screen.ControlHint" xml:space="preserve"><value>While Control is on, your mouse and keyboard go to {0}. ⌘ works as Ctrl.</value></data>
+  <data name="Screen.ControlHintWindows" xml:space="preserve"><value>While Control is on, your mouse and keyboard go to {0}.</value></data>
+  <data name="Screen.CtrlAltDel" xml:space="preserve"><value>Ctrl+Alt+Del</value></data>
+  <data name="Screen.WindowsKey" xml:space="preserve"><value>Win</value></data>
+  <data name="Screen.CannotControl" xml:space="preserve"><value>{0} cannot be controlled right now: {1}</value></data>
+  <data name="Screen.NoHelper" xml:space="preserve"><value>the session helper is not running there</value></data>
+  <data name="Screen.NoSession" xml:space="preserve"><value>nobody is logged on and no logon screen is up</value></data>
+  <data name="Screen.OutdatedAgent" xml:space="preserve"><value>its agent is too old — update it</value></data>
+  <data name="Screen.InputProblem" xml:space="preserve"><value>{0}: your input is not reaching the desktop ({1})</value></data>
+  <data name="Screen.CaptureProblem" xml:space="preserve"><value>{0} cannot capture its screen ({1})</value></data>
+  <data name="Tile.NoSession" xml:space="preserve"><value>no user session</value></data>
+  <data name="Tile.CaptureProblem" xml:space="preserve"><value>cannot capture: {0}</value></data>
+  <data name="Capture.no_desktop" xml:space="preserve"><value>no desktop</value></data>
+  <data name="Capture.access_lost" xml:space="preserve"><value>desktop access lost</value></data>
+  <data name="Capture.no_duplication" xml:space="preserve"><value>duplication unavailable</value></data>
+  <data name="Capture.gdi_failed" xml:space="preserve"><value>GDI capture failed</value></data>
+  <data name="Capture.open_failed" xml:space="preserve"><value>could not open the screen</value></data>
+  <data name="Capture.failed" xml:space="preserve"><value>capture stopped</value></data>
+  <data name="Input.no_desktop" xml:space="preserve"><value>no desktop to inject into</value></data>
+  <data name="Input.blocked" xml:space="preserve"><value>Windows refused the input</value></data>
+  <data name="Input.failed" xml:space="preserve"><value>injection failed</value></data>
   <data name="Lab.Empty" xml:space="preserve"><value>No PCs yet. Write a USB payload in Settings, run the installer (or FakeAgent) on the PCs, then press Enrol PCs and type the passphrase once — the PCs enrol themselves and appear here.</value></data>
   <data name="Tile.Online" xml:space="preserve"><value>online</value></data>
   <data name="Tile.Offline" xml:space="preserve"><value>offline</value></data>

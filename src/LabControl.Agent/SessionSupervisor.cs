@@ -22,8 +22,10 @@ namespace LabControl.Agent;
 /// video (D-35): the console's <c>VideoControl</c> goes down the pipe as it arrives (and
 /// again to every new helper), the helper's <c>VideoFrame</c>s go up into the link's
 /// <c>PushVideo</c> uplink, and a frame the uplink refuses is dropped here with a keyframe
-/// request back to the helper, so nothing the console has not seen is ever lost. Nothing
-/// here may throw out of the loop.
+/// request back to the helper, so nothing the console has not seen is ever lost. Since M3
+/// portion 3 it relays input the same way — every <c>Input</c> from the console goes down
+/// the pipe as it is, except <c>CTRL_ALT_DEL</c>, which only a service can raise
+/// (<see cref="SecureAttention"/>, D-36). Nothing here may throw out of the loop.
 /// </summary>
 internal sealed class SessionSupervisor : IAsyncDisposable
 {
@@ -79,6 +81,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
 
         _changes.Changed += OnSessionChange;
         _link.VideoControlChanged += OnVideoControl;
+        _link.InputReceived += OnInput;
         _loop = Task.Run(() => LoopAsync(_stopping.Token));
     }
 
@@ -91,6 +94,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
 
         _changes.Changed -= OnSessionChange;
         _link.VideoControlChanged -= OnVideoControl;
+        _link.InputReceived -= OnInput;
         _stopping.Cancel();
         Wake();
 
@@ -172,6 +176,44 @@ internal sealed class SessionSupervisor : IAsyncDisposable
 
         helper.KeyframeAsked = false;
         _ = helper.SendAsync(new ServiceMessage { VideoControl = control ?? VideoSettings.StopControl() }, _log);
+    }
+
+    /// <summary>
+    /// From the link, on its thread: input goes down the pipe as it is, fire-and-forget (D-35
+    /// item 8). Ctrl+Alt+Del is the one kind the service acts on itself — <c>SendSAS</c> is a
+    /// service's privilege — and its failure is an event, because the teacher is waiting for
+    /// the secure screen and would otherwise see nothing happen.
+    /// </summary>
+    private void OnInput(Input input)
+    {
+        if (input.Kind == Input.Types.Kind.CtrlAltDel)
+        {
+            _ = Task.Run(() =>
+            {
+                var problem = SecureAttention.Send(_log);
+                if (problem is null)
+                {
+                    _log.LogInformation("sent Ctrl+Alt+Del to the interactive session");
+                }
+                else
+                {
+                    _log.LogWarning("Ctrl+Alt+Del was not sent: {Problem}", problem);
+                    _link.Report(Event.Types.Severity.Warning, "input.sas_failed", $"Ctrl+Alt+Del could not be sent: {problem}");
+                }
+            });
+            return;
+        }
+
+        var helper = _helper;
+        if (helper is not { Connected: true })
+        {
+            // The console knows (helper_alive is false on the tile) and greys the control out;
+            // what slips through the race is dropped, not queued for a helper that is not there.
+            _log.LogDebug("input {Kind} dropped: no session helper is connected", input.Kind);
+            return;
+        }
+
+        _ = helper.SendAsync(new ServiceMessage { Input = input }, _log);
     }
 
     private void Wake()

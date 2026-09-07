@@ -381,8 +381,11 @@ everything else; the PC is the producer.
 - Graceful degradation: a linked PC that has sent nothing for `Defaults.VideoStallTimeout`
   (10 s) is shown with its last picture dimmed and a note; an M2-era agent answers the
   control with `session.not_in_this_build` and simply shows no picture. A PC whose screen
-  cannot be captured says why in a `capture.<reason>` event (M3 portion 2); portion 3 puts
-  that reason on the tile.
+  cannot be captured says why in a `capture.<reason>` event (M3 portion 2), and the console
+  keeps that reason per link until `capture.recovered`: the tile says *cannot capture: …*,
+  *no user session* (`SessionState.session_id` is 0) or *session helper not running* in
+  place of the plain *picture stalled*, and the single-PC window says the same under the
+  picture (portion 3).
 - **Where the frames come from on a real PC** (`D-35`): DXGI Desktop Duplication of the
   primary output in `session.exe`, with Windows' own dirty and move rectangles as `dirty`;
   a GDI `BitBlt` fallback, with rectangles from a tile-by-tile comparison of two captures,
@@ -391,10 +394,40 @@ everything else; the PC is the producer.
 
 ## Input (full-view control)
 
-`Input { kind, x, y (normalized 0..1), button, delta, vk, scan, text, flags }` →
-helper maps to `SendInput`. Teacher hotkeys (⌘/Ctrl+Alt+Del, Win) are translated
-explicitly; a `ctrl_alt_del` request triggers `SendSAS` from the service (it has the
-privilege; the helper does not).
+`Input { kind, x, y (normalized 0..1), button, delta, vk, scan, text, pressed }` on the
+`Link` stream, console → agent, while the single-PC window has *Control* on (M3 portion 3,
+`D-36`). The service relays it down the helper's pipe unchanged; the helper maps it to
+`SendInput` on a thread attached to the input desktop, so a UAC prompt and the lock screen
+can be driven too. The vocabulary lives in `LabControl.Shared/Control/InputMessages.cs`:
+
+| `kind` | fields | meaning |
+|---|---|---|
+| `MOUSE_MOVE` | `x`, `y` | absolute position on the primary display, 0..1 each way, whatever the resolution |
+| `MOUSE_BUTTON` | `button`, `pressed`, `x`, `y` | 1 left, 2 right, 3 middle, 4/5 the X buttons; the helper moves to `x`,`y` first |
+| `MOUSE_WHEEL` | `button`, `delta`, `x`, `y` | `button` 0 vertical / 1 horizontal; `delta` in `WHEEL_DELTA` units (120 per notch, fractions allowed, positive = up / right) |
+| `KEY` | `vk`, `scan`, `pressed` | a Windows virtual-key code plus the set-1 scan code, `0xE0`-prefixed for extended keys (`0xE048` is ↑); the helper sets `KEYEVENTF_EXTENDEDKEY` from the prefix |
+| `TEXT` | `text` | characters as typed, injected as `KEYEVENTF_UNICODE` one UTF-16 unit at a time — layout-independent, so Ukrainian typed on the Mac is Ukrainian on the PC |
+| `CTRL_ALT_DEL` | — | the secure attention sequence; **the service** calls `SendSAS(false)` (a service's privilege — the helper is SYSTEM but not a service), after making sure the `SoftwareSASGeneration` policy allows services |
+
+**What the console sends as what.** Characters travel as `TEXT` — what the teacher's own
+layout and dead keys produced — never as keys. A `KEY` goes out only for modifiers, for
+command keys (Enter, Tab, Backspace, Escape, arrows, Home/End/PgUp/PgDn, Insert/Delete,
+F1–F12, PrintScreen, the menu key) and, while Ctrl, Alt or Win is held, for the character
+key of the shortcut — by *physical* position, so ⌘C on a Ukrainian layout is Ctrl+C on the
+PC. On macOS ⌘ is sent as Ctrl; the Windows key and Ctrl+Alt+Del have buttons of their own
+in the window, since the teacher's keyboard cannot send them. Caps Lock and Num Lock are
+never sent. Mouse moves are held and the latest wins, flushed every
+`Defaults.InputFlushInterval` (16 ms); everything else goes out at once behind the move it
+depends on. When control ends, the window loses focus or closes, every key and button still
+down is released on the PC.
+
+**What the PC answers.** Nothing, normally — input has no acknowledgement. The helper
+reports `input.<reason>` once when injection stops working (`no_desktop`: the input desktop
+cannot be joined; `blocked`: `SendInput` refused; `failed`) and `input.recovered` when it
+works again; the service reports `input.sas_failed` when Ctrl+Alt+Del could not be raised.
+The console shows the reason under the picture. An agent from before portion 3 logs the
+message and ignores it; the console greys *Control* out for an outdated agent, a PC with no
+interactive session and a PC whose helper is down.
 
 ## Broadcast (teacher → students)
 
@@ -437,9 +470,15 @@ helper from a previous service instance, or an impostor). The service answers wi
 `Default` while the student works, `Winlogon` at the lock screen, the logon screen and a UAC
 prompt. A helper silent for `HelperSilenceTimeout` (10 s) is killed and restarted; an
 `Event` from the helper is relayed to the console unchanged. When the pipe closes the helper
-exits at once; when the helper exits the service respawns it (D-30). `Input` and `Overlay`
-are answered with a `session.not_in_this_build` warning until M3 portion 3 (input) and M5
-(overlay).
+exits at once; when the helper exits the service respawns it (D-30). `Overlay` is answered
+with a `session.not_in_this_build` warning until M5.
+
+**Input over the pipe (M3 portion 3, `D-36`).** Every `Input` from the console except
+`CTRL_ALT_DEL` is written down the pipe as it is (fire-and-forget, like the controls); the
+helper queues it (`Defaults.InputQueueLength`, the newest dropped when full) for an input
+thread that joins the input desktop and calls `SendInput`. `CTRL_ALT_DEL` never reaches the
+pipe: the service raises it itself with `SendSAS`. Input to a helper that is not connected
+is dropped, not queued — the console already knows the helper is down.
 
 **Video over the pipe (M3 portion 2, `D-35`).** The service is a relay with one policy of
 its own:

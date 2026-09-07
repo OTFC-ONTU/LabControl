@@ -26,6 +26,8 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     private CancellationTokenSource? _powerCycle;
     private readonly ScreenProducer _screen;
+    private FakeScreen? _desktop;
+    private int _sasCount;
 
     /// <summary>What this PC says it runs; a simulated push changes it (D-33).</summary>
     private string _version = typeof(FakeMachine).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -54,11 +56,12 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         // The producer is the one the session helper runs (D-35); only the source is simulated.
         _screen = new ScreenProducer(
             Link.Name,
-            () => number % 2 == 1 ? new FakeScreen(number, 1920, 1080, idle: number % 3 == 0) : new FakeScreen(number, 1366, 768, idle: number % 3 == 0),
+            () => _desktop = number % 2 == 1 ? new FakeScreen(number, 1920, 1080, idle: number % 3 == 0) : new FakeScreen(number, 1366, 768, idle: number % 3 == 0),
             (frame, _) => ValueTask.FromResult(Link.TryPushVideo(frame)),
             (severity, code, message) => Link.Report(severity, code, message),
             log);
         Link.VideoControlChanged += _screen.Apply;
+        Link.InputReceived += OnInput;
 
         // A real PC's supervisor publishes this at start and on every change (M2); the
         // simulator pretends the helper is up and the student is at the desk.
@@ -81,6 +84,29 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     public string? Console { get; private set; }
 
     public FailureKind Failure => _failure?.Kind ?? FailureKind.None;
+
+    /// <summary>The desktop the producer is drawing right now (M3 portion 3); <c>null</c> while nobody watches.</summary>
+    public FakeScreen? Desktop => _desktop;
+
+    /// <summary>Ctrl+Alt+Del requests "sent" so far — a real service would call <c>SendSAS</c>.</summary>
+    public int SecureAttentionCount => _sasCount;
+
+    /// <summary>
+    /// The teacher's input (D-36): a real agent relays it to the helper; the simulator hands
+    /// it to the desktop it draws, and answers Ctrl+Alt+Del with an event, the way the real
+    /// service answers a failure — so the console's event list shows the request arrived.
+    /// </summary>
+    private void OnInput(Input input)
+    {
+        if (input.Kind == Input.Types.Kind.CtrlAltDel)
+        {
+            Interlocked.Increment(ref _sasCount);
+            Link.Report(Event.Types.Severity.Info, "input.sas", "Ctrl+Alt+Del sent to the interactive session (simulated).");
+            return;
+        }
+
+        _desktop?.Apply(input);
+    }
 
     public string Status =>
         !PoweredOn ? "off"
@@ -416,6 +442,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     {
         _powerCycle?.Cancel();
         Link.VideoControlChanged -= _screen.Apply;
+        Link.InputReceived -= OnInput;
         await _screen.DisposeAsync();
         await Link.DisposeAsync();
         _store.Dispose();

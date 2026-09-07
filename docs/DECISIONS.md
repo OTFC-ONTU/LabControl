@@ -1003,6 +1003,77 @@ too slow for 20 fps at 1080p); DXGI only (the VM cannot test it); one DIB and a 
 for the comparison (an 8 MB copy per frame the alternating pair avoids); `WTSQueryUserToken`
 so the helper runs as the student (cannot attach to the secure desktop, `D-30`).
 
+## D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)
+
+Context: the teacher drives a student's PC from a MacBook (tomorrow a Windows PC) whose
+keyboard layout, modifier keys and wheel units differ from the PC's. The acceptance test
+is typing a sentence with Ukrainian text into Notepad on `PC-00` from the Mac, plus
+enough mouse to help a student. The pieces are the console's window (Avalonia events),
+the link (`Input` on the `Link` stream), the service (a relay, `D-35`) and the helper
+(`SendInput`), with the simulator standing in for the last two on the Mac.
+
+Decisions:
+
+1. **Characters travel as text, never as keys.** The console sends what the platform's
+   `TextInput` produced — the Mac's layout, dead keys, Caps Lock already applied — and the
+   helper injects it with `KEYEVENTF_UNICODE`. So the PC types the same characters
+   whatever layout is active there, and Ukrainian works without switching the student's
+   layout. Sending virtual keys instead would type whatever the PC's layout maps that
+   key to: the acceptance sentence would come out in Latin.
+2. **Keys go by physical position, only when they command or when a shortcut modifier is
+   held.** Enter, Tab, Backspace, arrows, F-keys and friends are keys; under Ctrl, Alt or
+   Win a character key is sent as the key at that position (`PhysicalKey` → the US scan
+   code and its VK), so ⌘C is Ctrl+C whichever layout the Mac has. Avalonia's
+   layout-dependent `Key` is not used; its `PhysicalKey` is what Windows itself uses to
+   resolve shortcuts. The table is `Console/Services/KeyMap.cs`.
+3. **⌘ is Ctrl on the Mac; the Windows key is a button.** A Mac teacher pressing ⌘C means
+   copy; mapping ⌘ to the Windows key would open the Start menu on every shortcut. Both ⌘
+   and Ctrl become Ctrl; the Windows key and Ctrl+Alt+Del — which the Mac's keyboard
+   cannot produce and macOS would intercept — are toolbar buttons. On a Windows console
+   Meta is the Windows key. Caps Lock and Num Lock are never sent: they would toggle the
+   PC's state while the Mac's own state already shaped the text.
+4. **`SendSAS` from the service, with the policy set on first use.** Only a service (or
+   Winlogon) may raise the secure attention sequence, and only when
+   `SoftwareSASGeneration` allows services; `SendInput` cannot fake it by design. The
+   service checks the value before every call and sets it to 1 (services) when nothing
+   allows services yet — a one-time registry write under `HKLM\...\Policies\System` that
+   the M4 installer will do at install time as well, so a PC already in the lab needs no
+   reinstall. `SendSAS` is in the Win32 metadata, so CsWin32 generates it like everything
+   else (`NativeMethods.txt`).
+5. **The helper injects on its own thread, attached to the input desktop.** `SendInput`
+   from a thread on the `Default` desktop does nothing while a UAC prompt or the lock
+   screen (`Winlogon`) has the input; the input thread joins the input desktop before
+   every call, the way the capture thread does (`D-35` item 3), which is the second reason
+   the helper runs as SYSTEM. The pipe's read loop only queues (`InputQueueLength` 1024,
+   newest dropped when full) — it never waits on Windows.
+6. **Mouse moves are held, the latest wins, flushed every 16 ms; everything else goes at
+   once behind the held move.** A pointer sweep at the display's rate stays under ~60
+   messages a second and a click always lands where the pointer last was. No back-pressure
+   from the link is needed: the messages are tens of bytes and the `Link` stream is the
+   control channel anyway.
+7. **Everything held is released when control ends.** The mapper tracks pressed keys and
+   buttons; turning *Control* off, the window losing focus (⌘-Tab away with Shift down)
+   and the window closing all send the ups, so a student never inherits a stuck modifier.
+   The mapper is pure and tested (`InputTests` in `Console.Tests`); the window only feeds
+   it events.
+8. **Absolute coordinates on the primary display, normalised 0..1.** The frame is the
+   primary output (`D-35` item 9), the window maps pointer positions through the picture's
+   drawn bounds, and the helper multiplies by 65535 for `MOUSEEVENTF_ABSOLUTE`. Resolution
+   and window size never enter the protocol.
+9. **Reasons on the tile come from the PC's own events.** The connection keeps the last
+   `capture.<reason>` and `input.<reason>` until `…recovered`, plus `session_id` from
+   `SessionState`; the tile prefers the PC's reason (*no user session*, *session helper not
+   running*, *cannot capture: duplication unavailable*) over the console's own *picture
+   stalled*, and the single-PC window greys *Control* out with the same reason. The
+   simulator answers Ctrl+Alt+Del with an `input.sas` event and draws the teacher's pointer,
+   clicks and text, so the whole path is tested on the Mac.
+
+Rejected: sending every key as a virtual key (item 1); Avalonia's layout-dependent `Key`
+(item 2); ⌘ as the Windows key (item 3); `SendSAS` from the helper (not a service); a
+low-level hook or `keybd_event` (superseded by `SendInput`); the helper as the student
+(`D-30`, and the secure desktop again); an ack per input message (latency for nothing —
+video is the feedback); a lab-wide input budget (one PC is controlled at a time).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

@@ -37,3 +37,13 @@ ROP_CODE
 BITMAPINFO
 BI_COMPRESSION
 DIB_USAGE
+
+// The teacher's mouse and keyboard on the student's desktop (InputInjector, D-36)
+SendInput
+INPUT
+INPUT_TYPE
+MOUSE_EVENT_FLAGS
+KEYBD_EVENT_FLAGS
+VIRTUAL_KEY
+XBUTTON1
+XBUTTON2

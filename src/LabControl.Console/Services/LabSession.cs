@@ -724,6 +724,14 @@ public sealed class LabSession : IAsyncDisposable
                     Event.Types.Severity.Warning => EventSeverity.Warning,
                     _ => EventSeverity.Info,
                 }, reported.Code.Length > 0 ? reported.Code : "agent.event", $"{who}: {reported.Message}", connection.AgentId, connection.Number);
+
+                // A capture or input problem is state the tile and the single-PC window show
+                // (M3 portion 3), not only a line in the log.
+                if (connection.ApplyEvent(reported))
+                {
+                    MachinesChanged?.Invoke();
+                }
+
                 break;
 
             default:
@@ -906,6 +914,23 @@ public sealed class LabSession : IAsyncDisposable
         {
             VideoControl = screen.RequestedMode == VideoMode.Full ? VideoSettings.FullControl() : VideoSettings.ThumbnailControl(),
         });
+    }
+
+    /// <summary>
+    /// The teacher's mouse and keyboard for the PC in the single-PC window (PROTOCOL
+    /// "Input", D-36): queued on the link as it is. <c>false</c> when the PC is not linked
+    /// or too old to know the message — the window greys its control toggle out first, so
+    /// this is the race, not the rule.
+    /// </summary>
+    public bool SendInput(string agentId, Input input)
+    {
+        var connection = FindLinked(agentId);
+        if (connection is null || connection.IsOutdated)
+        {
+            return false;
+        }
+
+        return connection.TrySend(new ConsoleMessage { Input = input });
     }
 
     /// <summary>Asks a PC in full mode for a whole picture: the console has nothing to patch a delta onto.</summary>

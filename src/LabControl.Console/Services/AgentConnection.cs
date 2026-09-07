@@ -60,10 +60,63 @@ public sealed class AgentConnection
     /// <summary>The video mode the console last asked this link for (M3); <see cref="VideoMode.Unspecified"/> when none.</summary>
     public VideoMode RequestedVideo { get; internal set; }
 
+    /// <summary>The interactive session's id from the last <c>SessionState</c>; 0 when there is none (logon screen not up yet, or a headless boot).</summary>
+    public uint SessionId { get; private set; }
+
+    /// <summary>The agent has said there is no interactive session at all — nothing to capture or drive.</summary>
+    public bool NoSession => HelperAlive is not null && SessionId == 0;
+
+    /// <summary>
+    /// Why the PC cannot capture its screen, from the helper's last <c>capture.&lt;reason&gt;</c>
+    /// event (D-35 item 5); <c>null</c> once it reported <c>capture.recovered</c>. The tile
+    /// shows it instead of "picture stalled" (M3 portion 3).
+    /// </summary>
+    public string? CaptureProblem { get; private set; }
+
+    /// <summary>The teacher's input is not reaching the desktop, from the helper's last <c>input.&lt;reason&gt;</c> event.</summary>
+    public string? InputProblem { get; private set; }
+
     public void ApplySessionState(SessionState state)
     {
         SessionLocked = state.Locked;
         HelperAlive = state.HelperAlive;
+        SessionId = state.SessionId;
+    }
+
+    /// <summary>
+    /// Reads the capture and input problems out of the agent's events; returns <c>true</c>
+    /// when something the tile shows changed.
+    /// </summary>
+    public bool ApplyEvent(Event reported)
+    {
+        var code = reported.Code;
+        if (code.StartsWith("capture.", StringComparison.Ordinal))
+        {
+            var reason = code["capture.".Length..];
+            var before = CaptureProblem;
+            CaptureProblem = reason switch
+            {
+                "recovered" => null,
+                "fallback" => CaptureProblem,
+                _ => reason,
+            };
+            return before != CaptureProblem;
+        }
+
+        if (code.StartsWith("input.", StringComparison.Ordinal))
+        {
+            var reason = code["input.".Length..];
+            var before = InputProblem;
+            InputProblem = reason switch
+            {
+                "recovered" => null,
+                "sas" or "sas_failed" => InputProblem, // Ctrl+Alt+Del is the service's, not the injector's
+                _ => reason,
+            };
+            return before != InputProblem;
+        }
+
+        return false;
     }
 
     /// <summary>Below the console's minimum: still linked, tile marked outdated, only the frozen subset used (D-19).</summary>

@@ -17,7 +17,7 @@ implement.
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
-| **M3** | Screens: mosaic, full view, remote control | **in progress — portions 1 and 2 of 3 built and portion 2 verified on `PC-10` (2026-09-07); portion 3 next** | M2, `PC-00` |
+| **M3** | Screens: mosaic, full view, remote control | **in progress — all three portions built; portion 2 verified on `PC-10` (2026-09-07), portion 3 (input) built the same day and awaiting its `PC-10` run** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
 | **M6** | Software catalog, localization, polish | not started | M5 |
@@ -720,6 +720,31 @@ to answer Windows questions (`D-34`).
   already wants video without the old hang. Still to measure on `PC-10`: CPU of
   `session.exe` in thumbnail mode, fps in the single-PC window while scrolling, memory
   after an hour; and the GDI fallback on the VM. Owner's word: "все работает".
+- *Portion 3 (built 2026-09-07, not yet run on a PC).* Input (`D-36`). The single-PC
+  window has a *Control* toggle, *Ctrl+Alt+Del* and *Win* buttons and a status line that
+  says why control is unavailable; `Console/Services/InputMapper` + `KeyMap` turn Avalonia
+  events into `Input` messages — text as text, command keys and shortcuts by physical key,
+  ⌘ as Ctrl on the Mac, wheel fractions carried over, everything released when control
+  ends or the window loses focus; `Shared/Control/InputQueue` holds the latest mouse move
+  for the window's 16 ms flush. `LabSession.SendInput` queues the message on the link;
+  `AgentLink.InputReceived` hands it to the host. The service (`SessionSupervisor`) relays
+  it down the pipe and answers `CTRL_ALT_DEL` itself (`SecureAttention`: the
+  `SoftwareSASGeneration` policy, then `SendSAS`); the helper's `InputInjector` queues it
+  for an input thread that joins the input desktop and calls `SendInput`, reporting
+  `input.<reason>` / `input.recovered`. The tile and the window show the PC's own reason
+  for a missing picture — *no user session*, *session helper not running*, *cannot capture:
+  …* from the `capture.*` events — before the console's *picture stalled*. `FakeAgent`
+  draws the teacher's pointer, a ring per click and the typed text on its desktop, and
+  answers Ctrl+Alt+Del with an `input.sas` event. Tests: the vocabulary and the queue in
+  `Shared.Tests`; the mapper, input over a real link into a `FakeMachine`, Ctrl+Alt+Del,
+  the tile's reasons and an old agent ignoring input in `Console.Tests`. Build version
+  0.1.3. **To verify on `PC-10`**: open the window, switch *Control* on, move and click in
+  Notepad, type a sentence with Ukrainian text, ⌘C / ⌘V, arrows and Backspace, scroll a
+  web page with the trackpad, drag a window; *Ctrl+Alt+Del* must bring the secure screen
+  up (first use writes the policy) and the picture must follow it; Win+L from the toolbar
+  key plus a click on the lock screen; then the acceptance numbers: ≥ 15 fps while
+  scrolling, latency comfortable enough to type. A helper from before portion 3 says
+  nothing when input arrives, so the agent must be pushed first.
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

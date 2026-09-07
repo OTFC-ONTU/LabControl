@@ -1,4 +1,5 @@
 using System.Globalization;
+using LabControl.Shared.Control;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
 using SkiaSharp;
@@ -11,9 +12,11 @@ namespace LabControl.FakeAgent;
 /// that drifts about. Every change knows its own rectangle, so the frames it produces carry
 /// honest dirty rectangles — what DXGI reports on a real PC, without a real PC. It is the
 /// simulator's <see cref="IScreenSource"/>, so the same <see cref="ScreenProducer"/> that
-/// runs in the session helper runs here.
+/// runs in the session helper runs here. Since M3 portion 3 it also shows the teacher's
+/// input (D-36): a pointer that follows the mouse, a ring where a button went down, and a
+/// second editor line that shows what was typed — so remote control can be tried on the Mac.
 /// </summary>
-internal sealed class FakeScreen : IScreenSource
+public sealed class FakeScreen : IScreenSource
 {
     private static readonly SKColor[] Wallpapers =
     [
@@ -40,6 +43,13 @@ internal sealed class FakeScreen : IScreenSource
     private readonly Random _random;
     private readonly List<Rect> _pendingDirty = [];
 
+    private readonly List<Input> _inputs = [];
+    private readonly SKBitmap _underPointer;
+    private SKRect? _pointerRect;
+    private string _teacherText = string.Empty;
+    private bool _teacherTextDirty;
+    private SKRect? _ring;
+
     private string _clock = string.Empty;
     private int _typed;
     private int _sentence;
@@ -65,6 +75,44 @@ internal sealed class FakeScreen : IScreenSource
         _boxDx = width / 240f;
         _boxDy = height / 320f;
         _sentence = number % Sentences.Length;
+        _underPointer = new SKBitmap(new SKImageInfo(PointerSize, PointerSize, JpegCodec.PixelFormat, SKAlphaType.Premul));
+    }
+
+    private const int PointerSize = 24;
+
+    /// <summary>Where the teacher's pointer is, normalised; <c>null</c> until it first moved.</summary>
+    public (double X, double Y)? Pointer { get; private set; }
+
+    /// <summary>What the teacher typed since the last Enter, as it stands on the second editor line.</summary>
+    public string TeacherText
+    {
+        get
+        {
+            lock (this)
+            {
+                return _teacherText;
+            }
+        }
+    }
+
+    /// <summary>Inputs applied so far, by kind — for a status line and the tests.</summary>
+    public int InputsApplied { get; private set; }
+
+    /// <summary>The last button pressed (1 = left…) and the wheel's running total, for the tests.</summary>
+    public int LastButton { get; private set; }
+
+    public int WheelTotal { get; private set; }
+
+    /// <summary>
+    /// From the link's thread: queued, and drawn by the next <see cref="Advance"/> on the
+    /// producer's thread — the bitmap has exactly one writer.
+    /// </summary>
+    public void Apply(Input input)
+    {
+        lock (this)
+        {
+            _inputs.Add(input);
+        }
     }
 
     public int Width { get; }
@@ -137,6 +185,8 @@ internal sealed class FakeScreen : IScreenSource
             dirty.Add(DrawTyping());
             dirty.Add(MoveBox());
         }
+
+        dirty.AddRange(DrawInputs());
 
         var aligned = dirty
             .Where(r => r.Width > 0 && r.Height > 0)
@@ -250,6 +300,143 @@ internal sealed class FakeScreen : IScreenSource
         return ToRect(union);
     }
 
+    // ------------------------------------------------------------------ the teacher's input
+
+    private IEnumerable<Rect> DrawInputs()
+    {
+        List<Input> inputs;
+        lock (this)
+        {
+            if (_inputs.Count == 0)
+            {
+                return [];
+            }
+
+            inputs = [.. _inputs];
+            _inputs.Clear();
+        }
+
+        var dirty = new List<Rect>();
+        foreach (var input in inputs)
+        {
+            InputsApplied++;
+            switch (input.Kind)
+            {
+                case Input.Types.Kind.MouseMove:
+                    dirty.AddRange(MovePointer(input.X, input.Y));
+                    break;
+
+                case Input.Types.Kind.MouseButton:
+                    dirty.AddRange(MovePointer(input.X, input.Y));
+                    if (input.Pressed)
+                    {
+                        LastButton = input.Button;
+                        dirty.AddRange(DrawRing(input.X, input.Y));
+                    }
+
+                    break;
+
+                case Input.Types.Kind.MouseWheel:
+                    dirty.AddRange(MovePointer(input.X, input.Y));
+                    WheelTotal += input.Delta;
+                    break;
+
+                case Input.Types.Kind.Text:
+                    _teacherText += input.Text;
+                    _teacherTextDirty = true;
+                    break;
+
+                case Input.Types.Kind.Key when input.Pressed && input.Vk == InputMessages.VkBack:
+                    if (_teacherText.Length > 0)
+                    {
+                        _teacherText = _teacherText[..^1];
+                        _teacherTextDirty = true;
+                    }
+
+                    break;
+
+                case Input.Types.Kind.Key when input.Pressed && input.Vk == InputMessages.VkReturn:
+                    _teacherText = string.Empty;
+                    _teacherTextDirty = true;
+                    break;
+            }
+        }
+
+        if (_teacherTextDirty)
+        {
+            _teacherTextDirty = false;
+            dirty.Add(DrawTeacherText());
+        }
+
+        return dirty;
+    }
+
+    /// <summary>The wallpaper (or whatever was there) comes back under the old pointer, and the pointer is drawn at the new place.</summary>
+    private IEnumerable<Rect> MovePointer(double x, double y)
+    {
+        Pointer = (x, y);
+        var px = (float)(x * (Width - 1));
+        var py = (float)(y * (Height - 1));
+        var rect = new SKRect(px, py, Math.Min(px + PointerSize, Width), Math.Min(py + PointerSize, Height));
+
+        if (_pointerRect is { } old)
+        {
+            _canvas.DrawBitmap(_underPointer, new SKRect(0, 0, old.Width, old.Height), old);
+            yield return ToRect(old);
+        }
+
+        // Keep what is under the new pointer, then draw the arrow.
+        using (var under = new SKCanvas(_underPointer))
+        {
+            under.Clear();
+            under.DrawBitmap(_bitmap, rect, new SKRect(0, 0, rect.Width, rect.Height));
+        }
+
+        using var path = new SKPath();
+        path.MoveTo(px, py);
+        path.LineTo(px, py + PointerSize * 0.8f);
+        path.LineTo(px + PointerSize * 0.22f, py + PointerSize * 0.6f);
+        path.LineTo(px + PointerSize * 0.55f, py + PointerSize * 0.55f);
+        path.Close();
+        _paint.Color = SKColors.White;
+        _canvas.DrawPath(path, _paint);
+        _paint.Color = SKColors.Black;
+        _paint.Style = SKPaintStyle.Stroke;
+        _paint.StrokeWidth = 1.5f;
+        _canvas.DrawPath(path, _paint);
+        _paint.Style = SKPaintStyle.Fill;
+
+        _pointerRect = rect;
+        yield return ToRect(rect);
+    }
+
+    private IEnumerable<Rect> DrawRing(double x, double y)
+    {
+        var px = (float)(x * (Width - 1));
+        var py = (float)(y * (Height - 1));
+        var radius = Height / 60f;
+        var ring = new SKRect(px - radius - 2, py - radius - 2, px + radius + 2, py + radius + 2);
+
+        _paint.Color = new SKColor(0xFF, 0xB0, 0x00);
+        _paint.Style = SKPaintStyle.Stroke;
+        _paint.StrokeWidth = 3;
+        _canvas.DrawCircle(px, py, radius, _paint);
+        _paint.Style = SKPaintStyle.Fill;
+        _ring = ring;
+        yield return ToRect(ring);
+    }
+
+    private Rect DrawTeacherText()
+    {
+        var editor = EditorRect();
+        var line = new SKRect(editor.Left + 4, editor.Top + _bodyFont.Size * 3.8f, editor.Right - 4, editor.Top + _bodyFont.Size * 5.2f);
+        _paint.Color = new SKColor(0xF4, 0xF4, 0xF4);
+        _canvas.DrawRect(line, _paint);
+        _paint.Color = new SKColor(0x00, 0x50, 0xA0);
+        _canvas.DrawText(_teacherText, line.Left + 4, line.Bottom - _bodyFont.Size * 0.4f, SKTextAlign.Left, _bodyFont, _paint);
+        return ToRect(line);
+    }
+
     private static Rect ToRect(SKRect rect) => new()
     {
         X = (int)Math.Floor(rect.Left),
@@ -262,6 +449,7 @@ internal sealed class FakeScreen : IScreenSource
     {
         _canvas.Dispose();
         _bitmap.Dispose();
+        _underPointer.Dispose();
         _titleFont.Dispose();
         _bodyFont.Dispose();
         _paint.Dispose();

@@ -254,6 +254,13 @@ public sealed class AgentLink : IAsyncDisposable
     /// </summary>
     public event Action<VideoControl?>? VideoControlChanged;
 
+    /// <summary>
+    /// Raised with every <c>Input</c> from the console (PROTOCOL "Input", M3 portion 3), on
+    /// the link's read thread: the handler must hand it on without waiting — a real agent
+    /// writes it down the helper's pipe fire-and-forget, the simulator draws it.
+    /// </summary>
+    public event Action<Input>? InputReceived;
+
     /// <summary>Video frames and bytes sent on the current link, for a simulator's display; zeros without a link.</summary>
     public (long Frames, long Bytes, long Dropped) VideoStats
     {
@@ -721,6 +728,10 @@ public sealed class AgentLink : IAsyncDisposable
                 await ApplyVideoControlAsync(message.VideoControl);
                 break;
 
+            case ConsoleMessage.PayloadOneofCase.Input:
+                DeliverInput(message.Input);
+                break;
+
             default:
                 // A message this build does not know is logged and ignored, never fatal
                 // (PROTOCOL, "Versioning").
@@ -758,6 +769,26 @@ public sealed class AgentLink : IAsyncDisposable
         {
             // A producer's failure to react is its own problem; the link stays up.
             _log.LogWarning(ex, "{Pc}: a video producer failed on a control change: {Message}", Name, ex.Message);
+        }
+    }
+
+    /// <summary>Input is fire-and-forget: a handler's failure is logged, never the link's problem.</summary>
+    private void DeliverInput(Input input)
+    {
+        var handler = InputReceived;
+        if (handler is null)
+        {
+            _log.LogDebug("{Pc}: input {Kind} arrived but nothing here injects input", Name, input.Kind);
+            return;
+        }
+
+        try
+        {
+            handler(input);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "{Pc}: the input handler failed on {Kind}: {Message}", Name, input.Kind, ex.Message);
         }
     }
 

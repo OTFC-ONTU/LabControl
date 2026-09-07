@@ -19,7 +19,9 @@ namespace LabControl.Agent.Session;
 /// Since M3 portion 2 it also captures the screen: the service relays the console's
 /// <c>VideoControl</c> down the pipe, a <see cref="ScreenProducer"/> on a DXGI or GDI
 /// <see cref="IScreenSource"/> answers with <c>VideoFrame</c>s up the pipe, and the service
-/// forwards them to the console (D-35). Input (M3 portion 3) and the overlay (M5) come next.
+/// forwards them to the console (D-35). Since M3 portion 3 the service also relays the
+/// teacher's <c>Input</c> down the pipe and an <see cref="InputInjector"/> turns it into
+/// <c>SendInput</c> (D-36). The overlay (M5) comes next.
 /// </summary>
 internal static class Program
 {
@@ -159,6 +161,9 @@ internal static class Program
             Report,
             loggers.CreateLogger("video"));
 
+        // The teacher's input (D-36): queued for a thread of its own, never handled on the read loop.
+        using var injector = new InputInjector(loggers.CreateLogger("input"), Report);
+
         var statusLoop = Task.Run(async () =>
         {
             var lastDesktop = string.Empty;
@@ -193,8 +198,12 @@ internal static class Program
                         producer.Apply(message.VideoControl);
                         break;
 
+                    case ServiceMessage.PayloadOneofCase.Input:
+                        injector.Offer(message.Input);
+                        break;
+
                     default:
-                        // Input (M3 portion 3) and Overlay (M5) are not here yet; say so once per message.
+                        // Overlay (M5) is not here yet; say so once per message.
                         log.LogWarning("the service sent {What}, which this build does not do yet", message.PayloadCase);
                         await SendAsync(new HelperMessage
                         {

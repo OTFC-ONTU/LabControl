@@ -68,3 +68,6 @@ SERVICE_START
 SERVICE_STOP
 SERVICE_NO_CHANGE
 SERVICE_CONTROL_STOP
+
+// Ctrl+Alt+Del on the student's PC: the secure attention sequence from a service (SecureAttention, D-36)
+SendSAS

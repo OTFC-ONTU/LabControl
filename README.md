@@ -65,8 +65,11 @@ thumbnail and full-mode frame formats, the console's per-PC pictures, live thumb
 tiles, the single-PC window with dirty-rectangle deltas, and `FakeAgent` drawing synthetic
 desktops — is built and tested on the Mac. Portion 2 (2026-09-07) puts real capture into
 `session.exe` — DXGI Desktop Duplication with a GDI fallback, relayed through the service's
-pipe, on the same producer the simulator uses — and awaits its VM run; portion 3 adds mouse
-and keyboard control.
+pipe, on the same producer the simulator uses — and is verified on `PC-10`. Portion 3
+(2026-09-07) adds remote control: a *Control* toggle in the single-PC window sends the
+teacher's mouse and keyboard to the PC (text as Unicode, so Ukrainian typed on the Mac is
+Ukrainian on the PC), with *Ctrl+Alt+Del* raised by the service; it awaits its run on
+`PC-10`.
 
 ## Quick start
 ```bash

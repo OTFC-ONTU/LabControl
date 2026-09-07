@@ -210,8 +210,11 @@ thumbnail and full-mode frame formats, the console's per-PC pictures, live thumb
 tiles, the single-PC window with dirty-rectangle deltas, and <code>FakeAgent</code> drawing synthetic
 desktops — is built and tested on the Mac. Portion 2 (2026-09-07) puts real capture into
 <code>session.exe</code> — DXGI Desktop Duplication with a GDI fallback, relayed through the service's
-pipe, on the same producer the simulator uses — and awaits its VM run; portion 3 adds mouse
-and keyboard control.</p>
+pipe, on the same producer the simulator uses — and is verified on <code>PC-10</code>. Portion 3
+(2026-09-07) adds remote control: a <em>Control</em> toggle in the single-PC window sends the
+teacher's mouse and keyboard to the PC (text as Unicode, so Ukrainian typed on the Mac is
+Ukrainian on the PC), with <em>Ctrl+Alt+Del</em> raised by the service; it awaits its run on
+<code>PC-10</code>.</p>
 <h2 id="quick-start">Quick start<a class="anchor" href="#quick-start" aria-label="Link to this section">#</a></h2>
 <pre><code class="language-bash">dotnet build
 dotnet test
@@ -299,7 +302,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-07 15:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 16:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

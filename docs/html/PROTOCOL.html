@@ -580,8 +580,11 @@ thumbnails, so the console scales every full keyframe into the thumbnail itself.
 <li>Graceful degradation: a linked PC that has sent nothing for <code>Defaults.VideoStallTimeout</code>
 (10 s) is shown with its last picture dimmed and a note; an M2-era agent answers the
 control with <code>session.not_in_this_build</code> and simply shows no picture. A PC whose screen
-cannot be captured says why in a <code>capture.&lt;reason&gt;</code> event (M3 portion 2); portion 3 puts
-that reason on the tile.</li>
+cannot be captured says why in a <code>capture.&lt;reason&gt;</code> event (M3 portion 2), and the console
+keeps that reason per link until <code>capture.recovered</code>: the tile says <em>cannot capture: …</em>,
+<em>no user session</em> (<code>SessionState.session_id</code> is 0) or <em>session helper not running</em> in
+place of the plain <em>picture stalled</em>, and the single-PC window says the same under the
+picture (portion 3).</li>
 <li><strong>Where the frames come from on a real PC</strong> (<code>D-35</code>): DXGI Desktop Duplication of the
 primary output in <code>session.exe</code>, with Windows' own dirty and move rectangles as <code>dirty</code>;
 a GDI <code>BitBlt</code> fallback, with rectangles from a tile-by-tile comparison of two captures,
@@ -589,10 +592,70 @@ where duplication is not offered (basic display adapter, VM without a WDDM 1.2 d
 The helper captures only while a control is active — an idle PC holds no duplication.</li>
 </ul>
 <h2 id="input-full-view-control">Input (full-view control)<a class="anchor" href="#input-full-view-control" aria-label="Link to this section">#</a></h2>
-<p><code>Input { kind, x, y (normalized 0..1), button, delta, vk, scan, text, flags }</code> →
-helper maps to <code>SendInput</code>. Teacher hotkeys (⌘/Ctrl+Alt+Del, Win) are translated
-explicitly; a <code>ctrl_alt_del</code> request triggers <code>SendSAS</code> from the service (it has the
-privilege; the helper does not).</p>
+<p><code>Input { kind, x, y (normalized 0..1), button, delta, vk, scan, text, pressed }</code> on the
+<code>Link</code> stream, console → agent, while the single-PC window has <em>Control</em> on (M3 portion 3,
+<code>D-36</code>). The service relays it down the helper's pipe unchanged; the helper maps it to
+<code>SendInput</code> on a thread attached to the input desktop, so a UAC prompt and the lock screen
+can be driven too. The vocabulary lives in <code>LabControl.Shared/Control/InputMessages.cs</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th><code>kind</code></th>
+<th>fields</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MOUSE_MOVE</code></td>
+<td><code>x</code>, <code>y</code></td>
+<td>absolute position on the primary display, 0..1 each way, whatever the resolution</td>
+</tr>
+<tr>
+<td><code>MOUSE_BUTTON</code></td>
+<td><code>button</code>, <code>pressed</code>, <code>x</code>, <code>y</code></td>
+<td>1 left, 2 right, 3 middle, 4/5 the X buttons; the helper moves to <code>x</code>,<code>y</code> first</td>
+</tr>
+<tr>
+<td><code>MOUSE_WHEEL</code></td>
+<td><code>button</code>, <code>delta</code>, <code>x</code>, <code>y</code></td>
+<td><code>button</code> 0 vertical / 1 horizontal; <code>delta</code> in <code>WHEEL_DELTA</code> units (120 per notch, fractions allowed, positive = up / right)</td>
+</tr>
+<tr>
+<td><code>KEY</code></td>
+<td><code>vk</code>, <code>scan</code>, <code>pressed</code></td>
+<td>a Windows virtual-key code plus the set-1 scan code, <code>0xE0</code>-prefixed for extended keys (<code>0xE048</code> is ↑); the helper sets <code>KEYEVENTF_EXTENDEDKEY</code> from the prefix</td>
+</tr>
+<tr>
+<td><code>TEXT</code></td>
+<td><code>text</code></td>
+<td>characters as typed, injected as <code>KEYEVENTF_UNICODE</code> one UTF-16 unit at a time — layout-independent, so Ukrainian typed on the Mac is Ukrainian on the PC</td>
+</tr>
+<tr>
+<td><code>CTRL_ALT_DEL</code></td>
+<td>—</td>
+<td>the secure attention sequence; <strong>the service</strong> calls <code>SendSAS(false)</code> (a service's privilege — the helper is SYSTEM but not a service), after making sure the <code>SoftwareSASGeneration</code> policy allows services</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>What the console sends as what.</strong> Characters travel as <code>TEXT</code> — what the teacher's own
+layout and dead keys produced — never as keys. A <code>KEY</code> goes out only for modifiers, for
+command keys (Enter, Tab, Backspace, Escape, arrows, Home/End/PgUp/PgDn, Insert/Delete,
+F1–F12, PrintScreen, the menu key) and, while Ctrl, Alt or Win is held, for the character
+key of the shortcut — by <em>physical</em> position, so ⌘C on a Ukrainian layout is Ctrl+C on the
+PC. On macOS ⌘ is sent as Ctrl; the Windows key and Ctrl+Alt+Del have buttons of their own
+in the window, since the teacher's keyboard cannot send them. Caps Lock and Num Lock are
+never sent. Mouse moves are held and the latest wins, flushed every
+<code>Defaults.InputFlushInterval</code> (16 ms); everything else goes out at once behind the move it
+depends on. When control ends, the window loses focus or closes, every key and button still
+down is released on the PC.</p>
+<p><strong>What the PC answers.</strong> Nothing, normally — input has no acknowledgement. The helper
+reports <code>input.&lt;reason&gt;</code> once when injection stops working (<code>no_desktop</code>: the input desktop
+cannot be joined; <code>blocked</code>: <code>SendInput</code> refused; <code>failed</code>) and <code>input.recovered</code> when it
+works again; the service reports <code>input.sas_failed</code> when Ctrl+Alt+Del could not be raised.
+The console shows the reason under the picture. An agent from before portion 3 logs the
+message and ignores it; the console greys <em>Control</em> out for an outdated agent, a PC with no
+interactive session and a PC whose helper is down.</p>
 <h2 id="broadcast-teacher-students">Broadcast (teacher → students)<a class="anchor" href="#broadcast-teacher-students" aria-label="Link to this section">#</a></h2>
 <p>Console captures its own screen into the same <code>VideoFrame</code> format and sends it in
 <code>ConsoleMessage.Broadcast</code> frames to every selected agent (multicast is <em>not</em> used —
@@ -626,9 +689,14 @@ helper from a previous service instance, or an impostor). The service answers wi
 <code>Default</code> while the student works, <code>Winlogon</code> at the lock screen, the logon screen and a UAC
 prompt. A helper silent for <code>HelperSilenceTimeout</code> (10 s) is killed and restarted; an
 <code>Event</code> from the helper is relayed to the console unchanged. When the pipe closes the helper
-exits at once; when the helper exits the service respawns it (D-30). <code>Input</code> and <code>Overlay</code>
-are answered with a <code>session.not_in_this_build</code> warning until M3 portion 3 (input) and M5
-(overlay).</p>
+exits at once; when the helper exits the service respawns it (D-30). <code>Overlay</code> is answered
+with a <code>session.not_in_this_build</code> warning until M5.</p>
+<p><strong>Input over the pipe (M3 portion 3, <code>D-36</code>).</strong> Every <code>Input</code> from the console except
+<code>CTRL_ALT_DEL</code> is written down the pipe as it is (fire-and-forget, like the controls); the
+helper queues it (<code>Defaults.InputQueueLength</code>, the newest dropped when full) for an input
+thread that joins the input desktop and calls <code>SendInput</code>. <code>CTRL_ALT_DEL</code> never reaches the
+pipe: the service raises it itself with <code>SendSAS</code>. Input to a helper that is not connected
+is dropped, not queued — the console already knows the helper is down.</p>
 <p><strong>Video over the pipe (M3 portion 2, <code>D-35</code>).</strong> The service is a relay with one policy of
 its own:</p>
 <ul>
@@ -792,7 +860,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-07 15:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 16:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

@@ -227,6 +227,10 @@ the teacher rather than leaving a PC that silently stops reporting.</li>
 <li><strong>Power &amp; Wake-on-LAN</strong>
 <ul>
 <li><code>powercfg /hibernate off</code>; registry <code>HiberbootEnabled=0</code> (Fast Startup kills WoL).</li>
+<li>Registry <code>HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\SoftwareSASGeneration = 1</code>
+(DWORD), so the service may raise Ctrl+Alt+Del with <code>SendSAS</code> for remote control
+(<code>D-36</code>); a value of 3 is left alone. The agent sets it on first use too, so PCs
+installed before this step exist need no reinstall.</li>
 <li>NIC advanced properties via WMI/<code>Set-NetAdapterAdvancedProperty</code> equivalents:
 <em>Wake on Magic Packet = on</em>, <em>Energy-Efficient Ethernet = off</em>,
 <em>Allow this device to wake the computer</em> = on, <em>Only allow a magic packet</em> = on;
@@ -298,7 +302,7 @@ reverted between runs.</li>
 </ul>
 
 </article>
-<footer>Generated 2026-09-07 15:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 16:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#building-the-usb-payload-on-the-console">Building the USB payload (on the console)</a></li><li class="lvl2"><a href="#what-setup.exe-does-in-order">What Setup.exe does, in order</a></li><li class="lvl2"><a href="#uninstall-repair">Uninstall / repair</a></li><li class="lvl2"><a href="#things-the-installer-cannot-do">Things the installer cannot do</a></li><li class="lvl2"><a href="#testing-the-installer-without-a-room-full-of-real-pcs">Testing the installer without a room full of real PCs</a></li></ul></nav>
 </div>

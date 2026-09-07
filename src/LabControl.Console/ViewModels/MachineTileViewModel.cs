@@ -72,6 +72,14 @@ public sealed partial class MachineTileViewModel : ObservableObject
     [ObservableProperty]
     public partial bool HelperDown { get; set; }
 
+    /// <summary>The agent says there is no interactive session at all (M3 portion 3): nothing to capture or drive.</summary>
+    [ObservableProperty]
+    public partial bool NoSession { get; set; }
+
+    /// <summary>The helper's <c>capture.&lt;reason&gt;</c> code while the screen cannot be captured; empty otherwise.</summary>
+    [ObservableProperty]
+    public partial string CaptureProblem { get; set; } = string.Empty;
+
     /// <summary>"student", "student (locked)", "nobody logged on" — the tile's session line.</summary>
     public string SessionText =>
         LoggedOnUser.Length == 0
@@ -134,17 +142,28 @@ public sealed partial class MachineTileViewModel : ObservableObject
         _ => IsWaking ? Strings.Get("Tile.Waking") : Strings.Get("Tile.Offline"),
     };
 
-    /// <summary>The clock-driven part: whether the picture is live, from the store's timestamps.</summary>
+    /// <summary>
+    /// The clock-driven part: whether the picture is live, from the store's timestamps, and
+    /// the one line that says why there is nothing live (graceful degradation, ROADMAP M3):
+    /// the reason the PC gave — no session, helper down, capture failed — before the plain
+    /// "stalled" the console works out for itself.
+    /// </summary>
     public void RefreshPicture(DateTimeOffset now, bool linked)
     {
         Screen.Trim(now);
         var stalled = Screen.IsStalled(now, linked);
         IsPictureStale = !linked || stalled;
-        PictureNote = !linked || HelperDown
+        PictureNote = !linked
             ? string.Empty
-            : stalled
-                ? Strings.Get(HasPicture ? "Tile.PictureStalled" : "Tile.NoPicture")
-                : string.Empty;
+            : NoSession
+                ? Strings.Get("Tile.NoSession")
+                : HelperDown
+                    ? Strings.Get("Tile.HelperDown")
+                    : CaptureProblem.Length > 0
+                        ? Strings.Format("Tile.CaptureProblem", CaptureReasonText(CaptureProblem))
+                        : stalled
+                            ? Strings.Get(HasPicture ? "Tile.PictureStalled" : "Tile.NoPicture")
+                            : string.Empty;
         if (HasPicture != _hadPicture)
         {
             _hadPicture = HasPicture;
@@ -153,6 +172,12 @@ public sealed partial class MachineTileViewModel : ObservableObject
     }
 
     private bool _hadPicture;
+
+    /// <summary>A known capture reason in words; an unknown one as the code itself, so a new reason is never hidden.</summary>
+    public static string CaptureReasonText(string reason) =>
+        reason is "no_desktop" or "access_lost" or "no_duplication" or "gdi_failed" or "open_failed" or "failed"
+            ? Strings.Get("Capture." + reason)
+            : reason.Replace('_', ' ');
 
     public void Refresh(MachineRecord machine, AgentConnection? connection, string? heldBy, DateTimeOffset now, bool waking = false)
     {
@@ -168,7 +193,9 @@ public sealed partial class MachineTileViewModel : ObservableObject
                        DateTimeOffset.FromUnixTimeSeconds(machine.CertificateNotAfterUnix) - now < Defaults.CertificateRenewalLeadTime;
 
         SessionLocked = connection?.SessionLocked ?? false;
-        HelperDown = connection?.HelperAlive == false;
+        NoSession = connection?.NoSession ?? false;
+        HelperDown = connection?.HelperAlive == false && !NoSession;
+        CaptureProblem = connection?.CaptureProblem ?? string.Empty;
 
         if (connection is not null)
         {

@@ -44,7 +44,6 @@
             </StackPanel>
             <StackPanel Spacing="1" Margin="8,6" VerticalAlignment="Bottom">
               <TextBlock Text="{Binding PictureNote}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding !!PictureNote.Length}" />
-              <TextBlock Text="{loc:Localize Tile.HelperDown}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding HelperDown}" />
               <TextBlock Text="{loc:Localize Tile.RenewalDue}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding NeedsRenewal}" />
             </StackPanel>
           </Panel>

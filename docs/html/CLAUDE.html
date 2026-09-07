@@ -329,7 +329,14 @@ the producer loop is <code>Shared/Video/ScreenProducer</code> over an <code>IScr
 relays <code>VideoControl</code> down the pipe and <code>VideoFrame</code> up into the uplink, dropping a refused
 frame with a keyframe request back. Two <code>PC-10</code> lessons: the antivirus holds a freshly run
 <code>agent.exe</code> (<code>D-33</code> item 9, retry) and a pipe flush deadlocks two read loops (<code>D-35</code> item 8,
-never await a write from a read loop). Portion 3 (input) is next.</p>
+never await a write from a read loop). <strong>Portion 3 is built (2026-09-07), not yet run on a
+PC</strong> (<code>D-36</code>): <code>Input</code> on the link (<code>Shared/Control/InputMessages</code>, <code>InputQueue</code>;
+<code>AgentLink.InputReceived</code>), the console's <code>InputMapper</code> + <code>KeyMap</code> (text as text, shortcuts
+by physical key, ⌘ as Ctrl) behind the <em>Control</em> toggle in <code>ScreenWindow</code>, the service
+relaying input down the pipe and raising Ctrl+Alt+Del itself (<code>SecureAttention</code>:
+<code>SoftwareSASGeneration</code> + <code>SendSAS</code>), the helper's <code>InputInjector</code> (<code>SendInput</code> on a thread
+attached to the input desktop), the PC's own reasons on the tile (<code>capture.*</code>, no session,
+helper down), and <code>FakeScreen</code> drawing the teacher's input. Version 0.1.3.</p>
 <p>The console's non-UI core lives in <code>src/LabControl.Console/Services</code> (<code>LabSession</code>,
 <code>ConsoleBootstrap</code>, <code>LabKeyVault</code>) and <code>Server/</code>; the agent side shared by <code>FakeAgent</code> and
 the real agent is <code>src/LabControl.Shared/Link/AgentLink.cs</code>, and the install-time routines
@@ -340,7 +347,7 @@ shared by the agent, the simulator and Setup are <code>src/LabControl.Shared/Set
 (<code>tests/&lt;project&gt;/bin/Debug/net10.0/&lt;project&gt;</code>).</p>
 
 </article>
-<footer>Generated 2026-09-07 15:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 16:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

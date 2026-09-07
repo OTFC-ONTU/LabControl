@@ -207,7 +207,14 @@ the producer loop is `Shared/Video/ScreenProducer` over an `IScreenSource` (the 
 relays `VideoControl` down the pipe and `VideoFrame` up into the uplink, dropping a refused
 frame with a keyframe request back. Two `PC-10` lessons: the antivirus holds a freshly run
 `agent.exe` (`D-33` item 9, retry) and a pipe flush deadlocks two read loops (`D-35` item 8,
-never await a write from a read loop). Portion 3 (input) is next.
+never await a write from a read loop). **Portion 3 is built (2026-09-07), not yet run on a
+PC** (`D-36`): `Input` on the link (`Shared/Control/InputMessages`, `InputQueue`;
+`AgentLink.InputReceived`), the console's `InputMapper` + `KeyMap` (text as text, shortcuts
+by physical key, ⌘ as Ctrl) behind the *Control* toggle in `ScreenWindow`, the service
+relaying input down the pipe and raising Ctrl+Alt+Del itself (`SecureAttention`:
+`SoftwareSASGeneration` + `SendSAS`), the helper's `InputInjector` (`SendInput` on a thread
+attached to the input desktop), the PC's own reasons on the tile (`capture.*`, no session,
+helper down), and `FakeScreen` drawing the teacher's input. Version 0.1.3.
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

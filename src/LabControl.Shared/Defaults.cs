@@ -495,6 +495,25 @@ public static class Defaults
     /// </summary>
     public static readonly TimeSpan CaptureRetryInterval = TimeSpan.FromSeconds(2);
 
+    // ---------------------------------------------------------------- input (M3 portion 3)
+
+    /// <summary>
+    /// While the teacher controls a PC, held mouse moves are flushed this often — the latest
+    /// position wins, so a sweep across the picture costs ~60 messages a second at most (D-36).
+    /// </summary>
+    public static readonly TimeSpan InputFlushInterval = TimeSpan.FromMilliseconds(16);
+
+    /// <summary>Input messages the helper holds before the newest are dropped; a flood, not a lesson.</summary>
+    public const int InputQueueLength = 1024;
+
+    /// <summary>
+    /// The policy that lets a service raise Ctrl+Alt+Del with <c>SendSAS</c>
+    /// (<c>SoftwareSASGeneration</c>: 1 = services, 3 = services and Ease of Access). The agent
+    /// sets it to 1 the first time it is asked, if nothing allows services already (D-36).
+    /// </summary>
+    public const string SoftwareSasPolicyKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System";
+    public const string SoftwareSasPolicyValue = "SoftwareSASGeneration";
+
     /// <summary>
     /// The longest one capture waits for the screen to change before the producer's loop
     /// looks at its control again; a mode switch or a stop is never delayed by more than this.

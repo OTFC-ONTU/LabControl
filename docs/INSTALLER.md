@@ -100,6 +100,10 @@ makes re-runs safe. `--dry-run` prints the plan only; `--number 7` skips the pro
    the teacher rather than leaving a PC that silently stops reporting.
 7. **Power & Wake-on-LAN**
    - `powercfg /hibernate off`; registry `HiberbootEnabled=0` (Fast Startup kills WoL).
+   - Registry `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\SoftwareSASGeneration = 1`
+     (DWORD), so the service may raise Ctrl+Alt+Del with `SendSAS` for remote control
+     (`D-36`); a value of 3 is left alone. The agent sets it on first use too, so PCs
+     installed before this step exist need no reinstall.
    - NIC advanced properties via WMI/`Set-NetAdapterAdvancedProperty` equivalents:
      *Wake on Magic Packet = on*, *Energy-Efficient Ethernet = off*,
      *Allow this device to wake the computer* = on, *Only allow a magic packet* = on;

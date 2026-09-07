@@ -53,4 +53,6 @@ public partial class MainWindow : Window, IDialogs
     public Task<TestScriptChoice?> RunTestScriptAsync(int pcCount) => _dialogs.RunTestScriptAsync(pcCount);
 
     public Task<LabControl.Shared.Setup.AgentBuild?> PushAgentBuildAsync(int pcCount) => _dialogs.PushAgentBuildAsync(pcCount);
+
+    public void ShowScreen(ScreenViewModel screen) => _dialogs.ShowScreen(screen);
 }

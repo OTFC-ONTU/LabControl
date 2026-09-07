@@ -162,7 +162,9 @@ public partial class LabView : UserControl
             }
         };
 
-        menu.Items.Add(new MenuItem { Header = Strings.Get("Action.Shutdown"), Command = _viewModel!.ShutdownCommand });
+        menu.Items.Add(new MenuItem { Header = Strings.Get("Action.OpenScreen"), Command = _viewModel!.OpenScreenCommand, CommandParameter = tile });
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new MenuItem { Header = Strings.Get("Action.Shutdown"), Command = _viewModel.ShutdownCommand });
         menu.Items.Add(new MenuItem { Header = Strings.Get("Action.Reboot"), Command = _viewModel.RebootCommand });
         menu.Items.Add(new MenuItem { Header = Strings.Get("Action.Logoff"), Command = _viewModel.LogoffCommand });
         menu.Items.Add(new MenuItem { Header = Strings.Get("Action.RunScript"), Command = _viewModel.RunScriptCommand });
@@ -206,6 +208,14 @@ public partial class LabView : UserControl
         var point = e.GetCurrentPoint(control);
         if (!point.Properties.IsLeftButtonPressed)
         {
+            return;
+        }
+
+        if (e.ClickCount == 2)
+        {
+            _pressed = null;
+            _pressedControl = null;
+            _viewModel?.OpenScreenCommand.Execute(tile);
             return;
         }
 

@@ -8,6 +8,7 @@ using Grpc.Core;
 using LabControl.Shared.Identity;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
+using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.Shared.Link;
@@ -67,6 +68,8 @@ public sealed class AgentLink : IAsyncDisposable
     private ChannelWriter<AgentMessage>? _outgoing;
     private AgentService.AgentServiceClient? _client;
     private SessionState? _latestSessionState;
+    private VideoUplink? _video;
+    private VideoControl? _videoControl;
 
     private Task? _loop;
     private CancellationTokenSource? _session;
@@ -226,6 +229,62 @@ public sealed class AgentLink : IAsyncDisposable
                 return _latestSessionState;
             }
         }
+    }
+
+    // ------------------------------------------------------------------ video (M3)
+
+    /// <summary>
+    /// What the console last asked for on this link — <c>null</c> when it asked for nothing
+    /// or there is no link — so a producer that starts late still knows what to do.
+    /// </summary>
+    public VideoControl? VideoControl
+    {
+        get
+        {
+            lock (_gateLock)
+            {
+                return _videoControl;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Raised with every <c>VideoControl</c> from the console, and with <c>null</c> when the
+    /// link ends, so the producer stops. On a thread of the link; return quickly.
+    /// </summary>
+    public event Action<VideoControl?>? VideoControlChanged;
+
+    /// <summary>Video frames and bytes sent on the current link, for a simulator's display; zeros without a link.</summary>
+    public (long Frames, long Bytes, long Dropped) VideoStats
+    {
+        get
+        {
+            lock (_gateLock)
+            {
+                return _video is { } video ? (video.FramesSent, video.BytesSent, video.FramesDropped) : (0, 0, 0);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Offers one frame to the <c>PushVideo</c> stream (PROTOCOL "Video"). Returns <c>false</c>
+    /// when it was not taken — no link, video not active, or the previous frame still on the
+    /// wire — and the producer should keep what the frame carried for the next try.
+    /// </summary>
+    public bool TryPushVideo(VideoFrame frame)
+    {
+        VideoUplink? video;
+        lock (_gateLock)
+        {
+            if (_videoControl is not { Active: true })
+            {
+                return false;
+            }
+
+            video = _video;
+        }
+
+        return video is not null && video.TryOffer(frame, _options.Clock());
     }
 
     /// <summary>Drops the current link, if any; the loop reconnects on the next beacon.</summary>
@@ -510,10 +569,14 @@ public sealed class AgentLink : IAsyncDisposable
             var heartbeats = HeartbeatLoopAsync(outgoing.Writer, token);
             var renewal = RenewalLoopAsync(client, certificate, token);
 
+            var video = new VideoUplink(client, config.AgentId, _log, token,
+                (code, message) => Report(Event.Types.Severity.Warning, code, message));
+
             lock (_gateLock)
             {
                 _outgoing = outgoing.Writer;
                 _client = client;
+                _video = video;
                 if (_latestSessionState is { } sessionState)
                 {
                     outgoing.Writer.TryWrite(new AgentMessage { SessionState = sessionState });
@@ -542,14 +605,24 @@ public sealed class AgentLink : IAsyncDisposable
             }
             finally
             {
+                var hadVideo = false;
                 lock (_gateLock)
                 {
                     _outgoing = null;
                     _client = null;
+                    _video = null;
+                    hadVideo = _videoControl is not null;
+                    _videoControl = null;
                 }
 
                 outgoing.Writer.TryComplete();
-                await Task.WhenAll(SwallowAsync(writer), SwallowAsync(heartbeats), SwallowAsync(renewal));
+                await Task.WhenAll(SwallowAsync(writer), SwallowAsync(heartbeats), SwallowAsync(renewal), SwallowAsync(video.DisposeAsync().AsTask()));
+
+                // The producer must not keep capturing for a console that is gone.
+                if (hadVideo)
+                {
+                    VideoControlChanged?.Invoke(null);
+                }
             }
 
             return true;
@@ -644,11 +717,47 @@ public sealed class AgentLink : IAsyncDisposable
             case ConsoleMessage.PayloadOneofCase.Welcome:
                 break;
 
+            case ConsoleMessage.PayloadOneofCase.VideoControl:
+                await ApplyVideoControlAsync(message.VideoControl);
+                break;
+
             default:
                 // A message this build does not know is logged and ignored, never fatal
                 // (PROTOCOL, "Versioning").
                 _log.LogDebug("{Pc}: ignoring {Kind} — not handled by this agent", Name, message.PayloadCase);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// The console's word on video (PROTOCOL "Video"): remembered, so a producer can read it
+    /// at any time; a stop closes the current call; every change is announced.
+    /// </summary>
+    private async Task ApplyVideoControlAsync(VideoControl control)
+    {
+        VideoUplink? video;
+        lock (_gateLock)
+        {
+            _videoControl = control;
+            video = _video;
+        }
+
+        _log.LogDebug("{Pc}: video {State} {Mode} {Fps} fps q{Quality}{Keyframe}", Name,
+            control.Active ? "on" : "off", control.Mode, control.FramesPerSecond, control.Quality, control.RequestKeyframe ? " keyframe" : string.Empty);
+
+        if (!control.Active && video is not null)
+        {
+            await video.StopAsync();
+        }
+
+        try
+        {
+            VideoControlChanged?.Invoke(control);
+        }
+        catch (Exception ex)
+        {
+            // A producer's failure to react is its own problem; the link stays up.
+            _log.LogWarning(ex, "{Pc}: a video producer failed on a control change: {Message}", Name, ex.Message);
         }
     }
 

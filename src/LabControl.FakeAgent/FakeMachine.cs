@@ -24,6 +24,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     private readonly Random _random = new();
 
     private CancellationTokenSource? _powerCycle;
+    private readonly FakeScreenStreamer _screen;
 
     /// <summary>What this PC says it runs; a simulated push changes it (D-33).</summary>
     private string _version = typeof(FakeMachine).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -45,6 +46,12 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         Link = new AgentLink(store, this, log, options);
         Link.Linked += (_, name) => Console = name;
         Link.Unlinked += _ => Console = null;
+
+        // A simulated desktop (M3): odd numbers are 1080p, even ones 1366×768 like the older
+        // lab PCs; every third PC sits idle so the mosaic shows screens that do not change.
+        var number = store.Config.Number;
+        var screen = number % 2 == 1 ? new FakeScreen(number, 1920, 1080, idle: number % 3 == 0) : new FakeScreen(number, 1366, 768, idle: number % 3 == 0);
+        _screen = new FakeScreenStreamer(Link, screen, log);
 
         // A real PC's supervisor publishes this at start and on every change (M2); the
         // simulator pretends the helper is up and the student is at the desk.
@@ -72,7 +79,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         !PoweredOn ? "off"
         : Link.State switch
         {
-            LinkState.Linked => $"linked to {Console}",
+            LinkState.Linked => _screen.Streaming is { } mode ? $"linked to {Console}, streaming {mode.ToString().ToLowerInvariant()}" : $"linked to {Console}",
             LinkState.Connecting => "connecting",
             LinkState.Searching => Link.IsEnrolled ? "searching" : "waiting to enrol",
             _ => "stopped",
@@ -401,6 +408,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _powerCycle?.Cancel();
+        await _screen.DisposeAsync();
         await Link.DisposeAsync();
         _store.Dispose();
     }

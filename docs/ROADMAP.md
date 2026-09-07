@@ -17,7 +17,7 @@ implement.
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
-| **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
+| **M3** | Screens: mosaic, full view, remote control | **in progress — portion 1 of 3 built (2026-09-07)** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
 | **M6** | Software catalog, localization, polish | not started | M5 |
@@ -648,6 +648,43 @@ the project exists for.
   visible.
 - Switching a PC between thumbnail and full mode repeatedly leaves both working.
 - Total bandwidth for 30 thumbnails stays inside the measured LAN headroom (`D-10`).
+
+**How it is being built.** In three portions, on the pattern M2 set — each committed, then
+run before the next starts: **(1)** everything the Mac can prove — the `PushVideo` channel,
+`VideoControl` on the link, the thumbnail and full-mode frame formats, the console's
+per-PC pictures, the mosaic tile with a live thumbnail, the single-PC window, and `FakeAgent`
+drawing synthetic desktops with honest dirty rectangles; **(2)** real capture in `session.exe`
+— DXGI Desktop Duplication with the GDI fallback, the pipe relay through the service, the
+thumbnail and full producers on the same `VideoUplink` the simulator uses — run on the VM
+and measured on `PC-00`; **(3)** input — `Input` → `SendInput` in the helper, `ctrl_alt_del`
+through `SendSAS` from the service, the control toggle in the window, and the graceful
+reasons on the tile (no session, locked, duplication failed). The split follows the M2
+lesson: the console half is finished against the simulator first, so the VM runs only have
+to answer Windows questions (`D-34`).
+
+**Progress.**
+
+- *Portion 1 (built 2026-09-07).* The wire is real end to end: `LabSession` sends a
+  thumbnail `VideoControl` to every PC after `Welcome`, `AgentLink` remembers the control,
+  announces it to the producer and owns a `VideoUplink` per link session — one
+  `PushVideo` call per activation, a one-deep latest-wins queue, a `video.unsupported`
+  warning against an older console (`Shared/Video/`, `D-34`). The console's
+  `ScreenStore` holds two `ScreenImage`s per PC (thumbnail, full), applies whole frames
+  and dirty-rectangle deltas, asks for a keyframe when a delta has nothing to land on, and
+  scales full keyframes into the thumbnail while the full view is open. The tile draws the
+  thumbnail through the `ScreenView` control with the number, the logged-on user and the
+  status in a strip under it, dims it when the PC is offline or silent for 10 s, and says
+  *no picture yet* / *picture stalled*; a double-click (or *Open screen* in the menu) opens
+  the `ScreenWindow`, which switches the PC to full mode and back on close and shows
+  resolution, fps and kbit/s under the picture; the status bar counts the screens' total
+  kbit/s. `FakeAgent` draws a desktop per PC (1080p or 1366×768, every third one idle):
+  wallpaper with the PC number, a clock, a Notepad window where the student types, a
+  drifting box — each change with its own rectangle, so the full-mode deltas are honest.
+  Tests: geometry, codec, `ScreenImage`, pacer and settings in `Shared.Tests`; in
+  `Console.Tests` the control after `Welcome`, thumbnails and deltas over a real `PushVideo`,
+  the keyframe request, the identity check, a `FakeMachine` streaming both modes by itself,
+  and the main window rendered with seven live thumbnails plus the single-PC window. Next:
+  portion 2 on the VM.
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

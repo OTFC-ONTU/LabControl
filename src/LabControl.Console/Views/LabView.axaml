@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:LabControl.Console.Localization"
              xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+             xmlns:views="clr-namespace:LabControl.Console.Views"
              x:Class="LabControl.Console.Views.LabView"
              x:DataType="vm:MainViewModel">
 
@@ -13,7 +14,7 @@
               Classes.online="{Binding IsOnline}"
               Classes.outdated="{Binding Status, Converter={x:Static vm:TileConverters.IsOutdated}}"
               Classes.held="{Binding Status, Converter={x:Static vm:TileConverters.IsHeld}}"
-              Margin="4" Padding="8" CornerRadius="6" BorderThickness="2">
+              Margin="4" Padding="0" CornerRadius="6" BorderThickness="2" ClipToBounds="True">
         <ToolTip.Tip>
           <StackPanel Spacing="2">
             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
@@ -26,17 +27,27 @@
           </StackPanel>
         </ToolTip.Tip>
         <DockPanel>
-          <DockPanel DockPanel.Dock="Top">
-            <Ellipse DockPanel.Dock="Right" Width="10" Height="10" Classes="dot" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15" />
-          </DockPanel>
-          <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis" />
-          <StackPanel Spacing="1" Margin="0,4,0,0">
-            <TextBlock Text="{Binding Hostname}" FontSize="12" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="{Binding SessionText}" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="{loc:Localize Tile.HelperDown}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding HelperDown}" />
-            <TextBlock Text="{loc:Localize Tile.RenewalDue}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding NeedsRenewal}" />
-          </StackPanel>
+          <!-- The strip under the picture: number, who is logged on, status. -->
+          <Border DockPanel.Dock="Bottom" Padding="6,3" Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}">
+            <DockPanel>
+              <Ellipse DockPanel.Dock="Right" Width="9" Height="9" Classes="dot" VerticalAlignment="Center" Margin="4,0,0,0" />
+              <TextBlock DockPanel.Dock="Left" Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" Margin="0,0,6,0" />
+              <TextBlock Text="{Binding SessionText}" FontSize="11" Opacity="0.8" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
+          <!-- The picture (M3), or the details while there is none. -->
+          <Panel Background="#22000000">
+            <views:ScreenView Image="{Binding Thumbnail}" Frame="{Binding FrameVersion}" IsStale="{Binding IsPictureStale}" IsVisible="{Binding HasPicture}" />
+            <StackPanel Spacing="1" Margin="8,6" IsVisible="{Binding !HasPicture}">
+              <TextBlock Text="{Binding Hostname}" FontSize="12" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding StatusText}" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <StackPanel Spacing="1" Margin="8,6" VerticalAlignment="Bottom">
+              <TextBlock Text="{Binding PictureNote}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding !!PictureNote.Length}" />
+              <TextBlock Text="{loc:Localize Tile.HelperDown}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding HelperDown}" />
+              <TextBlock Text="{loc:Localize Tile.RenewalDue}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding NeedsRenewal}" />
+            </StackPanel>
+          </Panel>
         </DockPanel>
       </Border>
     </DataTemplate>

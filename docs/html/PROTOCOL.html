@@ -536,16 +536,50 @@ then re-applies the mode only if the stored session is still within its limits.<
 <p><code>AgentMessage.ExamState</code> reports what the PC is actually enforcing, so the console shows
 the truth rather than what it last asked for.</p>
 <h2 id="video">Video<a class="anchor" href="#video" aria-label="Link to this section">#</a></h2>
+<p>The screen stream (ROADMAP M3, <code>D-34</code>). The console is the server for <code>PushVideo</code> as for
+everything else; the PC is the producer.</p>
 <ul>
-<li><code>VideoFrame { agent_id, seq, ts, width, height, mode, repeated Rect dirty, bytes jpeg }</code></li>
-<li><strong>thumbnail</strong> mode: whole screen scaled to ≤ 320 px wide, JPEG q50, ≤ 2 fps, sent
-only when the screen changed (DXGI reports dirty rects; if none → skip).</li>
-<li><strong>full</strong> mode: native resolution split into a 64×64 tile grid; only tiles
-intersecting dirty rects are re-encoded (q75) and sent; keyframe (all tiles) every
-5 s or on request. Target ≤ 20 fps, cap bandwidth per agent (default 8 Mbit/s).</li>
-<li>Console decodes with SkiaSharp into a persistent per-agent bitmap and blits tiles.</li>
-<li>H.264 (Media Foundation on the agent, software decode in the console) is a
-ROADMAP M6 option behind the same <code>VideoFrame</code> envelope (<code>codec</code> field reserved).</li>
+<li><code>VideoFrame { agent_id, seq, at_unix_ms, width, height, mode, repeated Rect dirty, bytes jpeg, keyframe, codec }</code>. <code>width</code>/<code>height</code> are always the size of the <strong>screen</strong> the frame comes
+from; the JPEG itself may be smaller (a thumbnail, or a full-mode delta). <code>codec</code> is
+<code>&quot;jpeg&quot;</code> in this build (<code>Defaults.VideoCodecJpeg</code>); H.264 is an M6 option behind the same
+envelope (<code>D-11</code>).</li>
+<li><strong>Control.</strong> The console sends <code>VideoControl { active, mode, frames_per_second, quality, request_keyframe, max_bits_per_second }</code> on the <code>Link</code> stream: a thumbnail control to every
+PC right after <code>Welcome</code>, a full control when the teacher opens a PC's screen, a thumbnail
+control again when that window closes, and <code>request_keyframe</code> whenever it holds nothing a
+delta could patch. Zero fields mean &quot;the default&quot; (<code>VideoSettings.From</code>). The PC remembers
+the latest control; the link ending counts as <em>inactive</em> (the producer stops by itself).</li>
+<li><strong>Transport.</strong> <code>PushVideo (stream VideoFrame) returns (VideoAck)</code> is a client-streaming call
+the PC opens on its first frame after a control made video active and closes when video
+is switched off or the link ends; <code>VideoAck.last_seq</code> acknowledges the stream. It is its own
+HTTP/2 stream on the same connection, so a stalled picture never delays a <code>shutdown</code> on the
+<code>Link</code> stream. The peer certificate says whose frames these are; a frame that names another
+agent ends the call with <code>PermissionDenied</code> (<code>video.identity_mismatch</code>). A frame above
+<code>Defaults.VideoFrameMaxBytes</code> (4 MiB) is dropped.</li>
+<li><strong>Latest wins.</strong> The PC keeps at most one frame queued beyond the one on the wire
+(<code>Defaults.VideoUplinkQueueLength</code>); a frame the queue refuses is <em>held by the producer</em>
+together with the dirty state behind it and offered again on the next tick, so a slow
+console gets fewer, larger deltas rather than a growing backlog on the PC. Each side caps
+bandwidth with a token bucket (<code>VideoPacer</code>): <code>max_bits_per_second</code>, one second of burst.</li>
+<li><strong>thumbnail</strong> mode: the whole screen scaled to <code>Defaults.ThumbnailWidth</code> (320 px) wide,
+aspect kept, never upscaled; JPEG q50; ≤ 2 fps; <strong>sent only when the screen changed</strong>
+(DXGI reports dirty rects; if none, nothing is sent). <code>dirty</code> is empty, <code>keyframe</code> is true.
+Every thumbnail replaces the console's picture of that PC.</li>
+<li><strong>full</strong> mode: native resolution. The screen is a grid of <code>Defaults.VideoTileSize</code> (64 px)
+squares; a change is grown to the tiles it touches, and a frame carries <strong>one JPEG of the
+bounding box of its <code>dirty</code> rectangles</strong> (q75) — the console decodes the box and blits only
+the listed rectangles into its persistent picture, so pixels between two rectangles are
+never touched. A <strong>keyframe</strong> is the whole screen (<code>dirty</code> = one screen-sized rectangle,
+<code>keyframe</code> = true), sent first, every <code>Defaults.KeyframeInterval</code> (5 s) and on
+<code>request_keyframe</code>. A delta the console cannot apply — no picture yet, or the screen
+changed size — is dropped and answered with <code>request_keyframe</code>; a delta whose JPEG does not
+match its box, or whose rectangles leave the screen, is dropped as malformed. Target ≤ 20
+fps, cap <code>Defaults.FullModeBitsPerSecond</code> (8 Mbit/s) per PC.</li>
+<li>The console keeps two pictures per PC (<code>ScreenStore</code>): the thumbnail for the mosaic and
+the full picture for the single-PC view. While a PC is in full mode it sends no
+thumbnails, so the console scales every full keyframe into the thumbnail itself.</li>
+<li>Graceful degradation: a linked PC that has sent nothing for <code>Defaults.VideoStallTimeout</code>
+(10 s) is shown with its last picture dimmed and a note; an M2-era agent answers the
+control with <code>session.not_in_this_build</code> and simply shows no picture.</li>
 </ul>
 <h2 id="input-full-view-control">Input (full-view control)<a class="anchor" href="#input-full-view-control" aria-label="Link to this section">#</a></h2>
 <p><code>Input { kind, x, y (normalized 0..1), button, delta, vk, scan, text, flags }</code> →
@@ -586,7 +620,8 @@ helper from a previous service instance, or an impostor). The service answers wi
 prompt. A helper silent for <code>HelperSilenceTimeout</code> (10 s) is killed and restarted; an
 <code>Event</code> from the helper is relayed to the console unchanged. When the pipe closes the helper
 exits at once; when the helper exits the service respawns it (D-30). <code>VideoControl</code>, <code>Input</code>
-and <code>Overlay</code> are answered with a <code>session.not_in_this_build</code> warning until M3/M5.</p>
+and <code>Overlay</code> are answered with a <code>session.not_in_this_build</code> warning until M3 portion 2
+(capture), portion 3 (input) and M5 (overlay); the console side of video is M3 portion 1.</p>
 <h3 id="sessionstate-agent-console"><code>SessionState</code> (agent → console)<a class="anchor" href="#sessionstate-agent-console" aria-label="Link to this section">#</a></h3>
 <pre><code>SessionState { kind: UNSPECIFIED | LOGON | LOGOFF | LOCK | UNLOCK, user, session_id,
                helper_alive, locked }
@@ -721,7 +756,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-07 14:31 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 14:54 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

@@ -862,6 +862,68 @@ is frozen; keep it small and readable in the journal); naming directories by has
 the Mac (a hand-written `VERSIONINFO` reader for a value the preflight verifies anyway);
 letting the outgoing agent report success (see item 3).
 
+## D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)
+
+Context: M3 is the feature the project exists for, and its two halves live on different
+machines — capture on Windows, decoding and drawing on the Mac. M2 showed that anything
+only a Windows run can prove should meet the VM already finished on the console side. So
+the wire, the frame formats and the console's pictures were built first against a
+simulator that draws desktops with real dirty rectangles; `session.exe` gets the same
+`VideoUplink` in portion 2.
+
+Decisions:
+
+1. **A full-mode frame is one JPEG of the bounding box of its dirty rectangles, not one
+   JPEG per tile.** PROTOCOL's "64×64 tiles" is kept as the *unit of change*: a change is
+   grown to whole tiles, so a moving cursor costs one tile and typing a line costs a strip.
+   Encoding each tile separately would mean dozens of tiny JPEGs (each with its own
+   headers and Huffman tables) per frame and a message per tile; one JPEG of the bounding
+   box is cheaper to encode, cheaper on the wire and one message. The console decodes the
+   box and blits only the listed rectangles, so a box that spans two distant changes does
+   not overwrite what lies between them. A keyframe is the same frame with the screen as
+   its one rectangle.
+2. **`width`/`height` are the screen, the JPEG is whatever the frame carries.** A thumbnail
+   says "this is a 1920×1080 screen" while carrying 320×180 pixels; a delta says the same
+   while carrying a box. The console learns the PC's resolution from every frame and knows
+   a delta for a screen of another size cannot be applied.
+3. **Latest wins, held by the producer.** The uplink queues one frame beyond the one on the
+   wire and refuses the rest; a refused frame stays with the producer *together with its
+   dirty state*, and the next tick sends the union. Dropping a delta would lose pixels the
+   console never sees until the next keyframe; queuing without bound would let a slow Wi-Fi
+   pile megabytes up on the PC and show the teacher a screen from ten seconds ago. Holding
+   makes a congested link degrade to fewer, larger frames of the current picture.
+4. **The console asks; the PC never volunteers video.** A thumbnail control goes to every
+   PC right after `Welcome`, the full control when a window opens, thumbnails again when it
+   closes, and `request_keyframe` when a delta lands on nothing. The link ending is an
+   implicit stop. This keeps the policy — which PCs stream, at what rate, what a second
+   console does — in one place, and an older agent that knows no `VideoControl` just says
+   `session.not_in_this_build` once.
+5. **Two pictures per PC on the console, and the thumbnail keeps moving in full mode.** The
+   mosaic tile and the single-PC window read different `ScreenImage`s; while a PC is in full
+   mode it sends no thumbnails, so the console scales each full keyframe (one per 5 s) into
+   the thumbnail itself. The alternative — the PC sending both streams — doubles the capture
+   work on the student's PC for a picture the teacher is not looking at.
+6. **SkiaSharp moves into `LabControl.Shared`**, pinned to the version Avalonia 12.1.2
+   ships (3.119.4) so the console carries one native Skia. The codec, the geometry, the
+   persistent picture and the pacer are pure code used by three producers (simulator,
+   helper, and the console's own capture for M5's broadcast) and one consumer; the
+   simulator draws with it too. `Shared` therefore allows unsafe code for the two places
+   that hand SkiaSharp a pointer into a buffer they must not copy.
+7. **Per-PC caps, not a lab-wide budget, in this portion.** 512 kbit/s for thumbnails and 8
+   Mbit/s for the one full stream; thirty thumbnails at their ceiling are 15 Mbit/s, inside
+   the headroom `D-10` will measure. A shared budget with fair sharing is a later step if
+   the measurement demands it.
+8. **The UI redraws on a counter, not on the pixels.** `ScreenImage` bumps a version per
+   applied frame on a gRPC thread; the view model bumps an observable counter on the UI
+   thread at most once per burst per PC; the `ScreenView` control copies pixels into its
+   bitmap only when the version moved. Thirty PCs at 2 fps and one at 20 fps are a few
+   dozen UI hops a second, and a tile that is not visible costs nothing.
+
+Rejected: one JPEG per 64×64 tile (item 1); a separate thumbnail stream in full mode (item
+5); H.264 now (`D-11` — the measurements come first); `WriteableBitmap` as the model type
+(ties the store to Avalonia and the UI thread; the tests render headless anyway); dropping
+refused frames on the PC (item 3); letting the PC decide when to stream (item 4).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the
@@ -983,7 +1045,7 @@ project cannot notice on its own).
 | Grpc.AspNetCore | Console | gRPC server |
 | Grpc.Net.Client, Grpc.Tools, Google.Protobuf | Shared/Agent | gRPC client + codegen |
 | System.Security.Cryptography.ProtectedData | Shared | Windows DPAPI for the console instance key; the BCL dropped it from the shared framework (D-24) |
-| SkiaSharp | Console, Agent.Session | JPEG encode/decode, scaling |
+| SkiaSharp, SkiaSharp.NativeAssets.Linux | Shared (so Console, FakeAgent, Agent.Session) | JPEG encode/decode, scaling, the simulator's synthetic desktops (M3, D-34); pinned to the version Avalonia ships |
 | Microsoft.Windows.CsWin32 | Agent, Agent.Session, Setup | Win32 P/Invoke source generator; names listed in `NativeMethods.txt`, never a hand-written `DllImport` (M2) |
 | Vortice.Direct3D11, Vortice.DXGI | Agent.Session | Desktop Duplication |
 | Microsoft.Extensions.Hosting.WindowsServices | Agent | Windows service hosting (M2) |

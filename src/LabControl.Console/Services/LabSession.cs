@@ -13,6 +13,7 @@ using LabControl.Shared.Lab;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Power;
 using LabControl.Shared.Protocol;
+using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.Console.Services;
@@ -73,6 +74,8 @@ public sealed class LabSession : IAsyncDisposable
         Enrollment = new EnrollmentAuthority(store.LoadEnrollment(vault.LabId));
         Jobs = new JobQueue();
         Files = new FileOffers();
+        Screens = new ScreenStore(_clock);
+        Screens.KeyframeNeeded += screen => RequestKeyframe(screen.AgentId);
         Events = new EventLog(store.LogsDirectory, _clock);
         _journal = new JobJournal(store.LogsDirectory);
 
@@ -106,6 +109,9 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>What agents may pull through <c>PullFile</c> (D-31): scripts now, packages and bundles in M4.</summary>
     public FileOffers Files { get; }
+
+    /// <summary>Every PC's screen as last seen (M3): thumbnails for the mosaic, the full picture for the single-PC view.</summary>
+    public ScreenStore Screens { get; }
 
     public EventLog Events { get; }
 
@@ -187,6 +193,7 @@ public sealed class LabSession : IAsyncDisposable
         }
 
         SaveLab();
+        Screens.Dispose();
         Vault.Dispose();
         Instance.Dispose();
         Authority.Dispose();
@@ -548,6 +555,18 @@ public sealed class LabSession : IAsyncDisposable
 
         NoteWoke(hello.AgentId, who, now);
         DeliverJobs(connection, resendInFlight: true);
+
+        // Screens (M3): every linked PC streams a thumbnail; the full view asks for more.
+        // An M2-era agent answers with session.not_in_this_build once and is otherwise unhurt.
+        if (!connection.IsOutdated)
+        {
+            var screen = Screens.Get(hello.AgentId);
+            var wanted = screen.RequestedMode == VideoMode.Full ? VideoSettings.FullControl() : VideoSettings.ThumbnailControl();
+            screen.RequestedMode = wanted.Mode;
+            connection.RequestedVideo = wanted.Mode;
+            connection.TrySend(new ConsoleMessage { VideoControl = wanted });
+        }
+
         AgentLinked?.Invoke(connection);
         MachinesChanged?.Invoke();
 
@@ -820,6 +839,87 @@ public sealed class LabSession : IAsyncDisposable
     /// lab's agent, the reference must be offered, and — in this minimal form — the pull
     /// starts at offset 0. The last chunk carries the hash and the total.
     /// </summary>
+    // ------------------------------------------------------------------ screens (M3)
+
+    /// <summary>
+    /// The agent's <c>PushVideo</c> stream (PROTOCOL "Video"): every frame lands in
+    /// <see cref="Screens"/>. The peer certificate says whose screen it is; a frame that
+    /// claims another agent is dropped and the stream ended.
+    /// </summary>
+    public async Task<VideoAck> ReceiveVideoAsync(X509Certificate2? peer, IAsyncStreamReader<VideoFrame> incoming, CancellationToken token)
+    {
+        var name = RequireAgent(peer);
+        var who = string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, name.Number);
+        ulong last = 0;
+
+        try
+        {
+            while (await incoming.MoveNext(token))
+            {
+                var frame = incoming.Current;
+                if (frame.AgentId.Length > 0 && !string.Equals(frame.AgentId, name.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    Events.Warning("video.identity_mismatch", $"{who} sent a screen frame labelled as agent {frame.AgentId}; the stream was closed.", name.Id, name.Number);
+                    throw new RpcException(new Status(StatusCode.PermissionDenied, "the frame names another agent"));
+                }
+
+                if (frame.Jpeg.Length > Defaults.VideoFrameMaxBytes)
+                {
+                    Events.Warning("video.frame_too_large", $"{who} sent a {frame.Jpeg.Length / 1024} KiB frame, above the {Defaults.VideoFrameMaxBytes / 1024} KiB limit; dropped.", name.Id, name.Number);
+                    continue;
+                }
+
+                last = frame.Seq;
+                var outcome = Screens.Apply(name.Id, frame);
+                if (outcome is FrameOutcome.Undecodable or FrameOutcome.Malformed)
+                {
+                    _log.LogDebug("{Pc}: frame {Seq} {Outcome}", who, frame.Seq, outcome);
+                }
+            }
+        }
+        catch (Exception ex) when (token.IsCancellationRequested || ex is IOException)
+        {
+            // The PC dropped the stream or the link ended; the picture stays as it was.
+        }
+
+        return new VideoAck { LastSeq = last };
+    }
+
+    /// <summary>
+    /// Switches a linked PC between the mosaic thumbnail and the native-resolution stream
+    /// for the single-PC view (ARCHITECTURE §8). Remembered per PC, so a PC that relinks
+    /// while its full view is open comes back in full.
+    /// </summary>
+    public void SetScreenMode(string agentId, VideoMode mode)
+    {
+        var screen = Screens.Get(agentId);
+        screen.RequestedMode = mode == VideoMode.Full ? VideoMode.Full : VideoMode.Thumbnail;
+
+        var connection = FindLinked(agentId);
+        if (connection is null || connection.IsOutdated)
+        {
+            return;
+        }
+
+        connection.RequestedVideo = screen.RequestedMode;
+        connection.TrySend(new ConsoleMessage
+        {
+            VideoControl = screen.RequestedMode == VideoMode.Full ? VideoSettings.FullControl() : VideoSettings.ThumbnailControl(),
+        });
+    }
+
+    /// <summary>Asks a PC in full mode for a whole picture: the console has nothing to patch a delta onto.</summary>
+    public void RequestKeyframe(string agentId)
+    {
+        var connection = FindLinked(agentId);
+        if (connection is null || connection.RequestedVideo != VideoMode.Full)
+        {
+            return;
+        }
+
+        connection.TrySend(new ConsoleMessage { VideoControl = VideoSettings.FullControl(requestKeyframe: true) });
+    }
+
     public async Task ServeFileAsync(X509Certificate2? peer, FileRequest request, IServerStreamWriter<FileChunk> outgoing, CancellationToken token)
     {
         var name = RequireAgent(peer);
@@ -1014,6 +1114,7 @@ public sealed class LabSession : IAsyncDisposable
     public bool ForgetMachine(string agentId)
     {
         FindLinked(agentId)?.Close("the teacher removed this PC from the list");
+        Screens.Remove(agentId);
         var forgotten = Registry.Forget(agentId);
         if (forgotten)
         {

@@ -347,8 +347,8 @@ covered without a second visit.
 
 | Feature | Mechanism |
 |---|---|
-| Screen mosaic | Session helper captures via DXGI Desktop Duplication (GDI `BitBlt` fallback), downscales to tile size (e.g. 320×180), JPEG q≈50, 2 fps per PC → one small stream per PC. |
-| Full view + control | Console requests `quality=full` for one agent: full-resolution dirty-rectangle JPEG tiles up to 15–20 fps; mouse/keyboard events → `SendInput` in the helper. Optional H.264 via Media Foundation later (ROADMAP M6). |
+| Screen mosaic | Session helper captures via DXGI Desktop Duplication (GDI `BitBlt` fallback), downscales to 320 px wide, JPEG q50, ≤ 2 fps per PC and only when the screen changed → one small `PushVideo` stream per PC, asked for by the console right after `Welcome`. The console keeps one persistent picture per PC (`ScreenStore`) and the tile draws it (PROTOCOL "Video", `D-34`). |
+| Full view + control | Double-click a tile: the console sends `VideoControl{full}` to that one PC and gets native-resolution dirty-rectangle JPEG deltas (bounding box per frame, keyframe every 5 s or on request) up to 20 fps under an 8 Mbit/s cap; closing the window goes back to the thumbnail. Mouse/keyboard events → `SendInput` in the helper (M3 portion 3). Optional H.264 via Media Foundation later (ROADMAP M6). |
 | Wake-on-LAN | Console sends magic packet (UDP broadcast `:9`, plus directed to `last_ip`). MAC comes from enrollment. Installer enables WoL on the NIC and disables Fast Startup/hibernation (they break WoL on Windows). |
 | Shutdown / reboot / logoff | Agent: `InitiateSystemShutdownEx` with `SE_SHUTDOWN_NAME`, immediate and forced (the result leaves 2 s before the call, `D-32`); log off with `WTSLogoffSession` on the interactive session — `ExitWindowsEx` would only log off session 0. |
 | Run script | Agent pulls the script through `PullFile` (`D-31`) and runs `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File …` or `cmd.exe /d /c …` as SYSTEM (default) or **as the student in the student's session** (`as: user`: the user's token from `WTSQueryUserToken`, `CreateProcessAsUser` with pipes the service reads — not through the helper, which is SYSTEM). stdout/stderr streamed line by line, exit code in the result, the whole process tree killed after `timeout_s` of silence (`D-32`). |
@@ -503,7 +503,9 @@ than engineered around.
   actions apply to the selection: Wake, Shutdown, Reboot, Log off, Lock, Unlock,
   Broadcast, Exam mode…, Internet… (open / whitelist / blocked, §6.2), Run script…,
   Install package…, Reset profile, Send files… (§6, `D-23`), Collect files.
-- **Single-PC view**: double-click a tile → full-size stream with input control toggle.
+- **Single-PC view**: double-click a tile → its own window with the full-size stream
+  (resolution, frame rate and bandwidth under the picture) and, from M3 portion 3, an
+  input-control toggle. One window per PC; the tile keeps moving meanwhile.
 - **Jobs panel**: every action becomes a job with per-PC rows (pending / running /
   ok / failed + log). Jobs persist in `logs/`.
 - **Packages** and **Scripts** panels: manage the catalog; "Install on all missing".

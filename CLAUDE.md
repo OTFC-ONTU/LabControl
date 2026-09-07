@@ -194,6 +194,14 @@ version answers the re-sent job and `Hello.agent_version` is the `app\<version>`
 build again, a `0.1.1` build that pruned the oldest directory — all ended with the new
 version answering the re-sent job; the first portion-4 agent has to be installed by hand
 once, because a portion-3 agent refuses `self_update`. `Setup` is still a skeleton (M4).
+**M3 is in progress, in three portions** (ROADMAP M3, *How it is being built*; `D-34`).
+**Portion 1 is built (2026-09-07)**, all on the Mac: `Shared/Video/` (`JpegCodec`,
+`VideoGeometry`, `ScreenImage`, `VideoPacer`, `VideoSettings`, `VideoUplink`), `VideoControl`
+handling and `TryPushVideo` in `AgentLink`, `PushVideo` served by the console into
+`Services/ScreenStore`, the `ScreenView` control on the tile and in `ScreenWindow`, and
+`FakeAgent`'s `FakeScreen` + `FakeScreenStreamer`. Portion 2 (DXGI capture in `session.exe`)
+and portion 3 (input) are next; `session.exe` still answers `VideoControl` with
+`session.not_in_this_build`.
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

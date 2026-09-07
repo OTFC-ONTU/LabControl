@@ -57,6 +57,9 @@ public sealed class AgentConnection
     /// </summary>
     public bool? HelperAlive { get; private set; }
 
+    /// <summary>The video mode the console last asked this link for (M3); <see cref="VideoMode.Unspecified"/> when none.</summary>
+    public VideoMode RequestedVideo { get; internal set; }
+
     public void ApplySessionState(SessionState state)
     {
         SessionLocked = state.Locked;

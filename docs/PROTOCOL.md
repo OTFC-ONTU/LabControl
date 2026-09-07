@@ -335,15 +335,52 @@ the truth rather than what it last asked for.
 
 ## Video
 
-- `VideoFrame { agent_id, seq, ts, width, height, mode, repeated Rect dirty, bytes jpeg }`
-- **thumbnail** mode: whole screen scaled to ≤ 320 px wide, JPEG q50, ≤ 2 fps, sent
-  only when the screen changed (DXGI reports dirty rects; if none → skip).
-- **full** mode: native resolution split into a 64×64 tile grid; only tiles
-  intersecting dirty rects are re-encoded (q75) and sent; keyframe (all tiles) every
-  5 s or on request. Target ≤ 20 fps, cap bandwidth per agent (default 8 Mbit/s).
-- Console decodes with SkiaSharp into a persistent per-agent bitmap and blits tiles.
-- H.264 (Media Foundation on the agent, software decode in the console) is a
-  ROADMAP M6 option behind the same `VideoFrame` envelope (`codec` field reserved).
+The screen stream (ROADMAP M3, `D-34`). The console is the server for `PushVideo` as for
+everything else; the PC is the producer.
+
+- `VideoFrame { agent_id, seq, at_unix_ms, width, height, mode, repeated Rect dirty, bytes jpeg,
+  keyframe, codec }`. `width`/`height` are always the size of the **screen** the frame comes
+  from; the JPEG itself may be smaller (a thumbnail, or a full-mode delta). `codec` is
+  `"jpeg"` in this build (`Defaults.VideoCodecJpeg`); H.264 is an M6 option behind the same
+  envelope (`D-11`).
+- **Control.** The console sends `VideoControl { active, mode, frames_per_second, quality,
+  request_keyframe, max_bits_per_second }` on the `Link` stream: a thumbnail control to every
+  PC right after `Welcome`, a full control when the teacher opens a PC's screen, a thumbnail
+  control again when that window closes, and `request_keyframe` whenever it holds nothing a
+  delta could patch. Zero fields mean "the default" (`VideoSettings.From`). The PC remembers
+  the latest control; the link ending counts as *inactive* (the producer stops by itself).
+- **Transport.** `PushVideo (stream VideoFrame) returns (VideoAck)` is a client-streaming call
+  the PC opens on its first frame after a control made video active and closes when video
+  is switched off or the link ends; `VideoAck.last_seq` acknowledges the stream. It is its own
+  HTTP/2 stream on the same connection, so a stalled picture never delays a `shutdown` on the
+  `Link` stream. The peer certificate says whose frames these are; a frame that names another
+  agent ends the call with `PermissionDenied` (`video.identity_mismatch`). A frame above
+  `Defaults.VideoFrameMaxBytes` (4 MiB) is dropped.
+- **Latest wins.** The PC keeps at most one frame queued beyond the one on the wire
+  (`Defaults.VideoUplinkQueueLength`); a frame the queue refuses is *held by the producer*
+  together with the dirty state behind it and offered again on the next tick, so a slow
+  console gets fewer, larger deltas rather than a growing backlog on the PC. Each side caps
+  bandwidth with a token bucket (`VideoPacer`): `max_bits_per_second`, one second of burst.
+- **thumbnail** mode: the whole screen scaled to `Defaults.ThumbnailWidth` (320 px) wide,
+  aspect kept, never upscaled; JPEG q50; ≤ 2 fps; **sent only when the screen changed**
+  (DXGI reports dirty rects; if none, nothing is sent). `dirty` is empty, `keyframe` is true.
+  Every thumbnail replaces the console's picture of that PC.
+- **full** mode: native resolution. The screen is a grid of `Defaults.VideoTileSize` (64 px)
+  squares; a change is grown to the tiles it touches, and a frame carries **one JPEG of the
+  bounding box of its `dirty` rectangles** (q75) — the console decodes the box and blits only
+  the listed rectangles into its persistent picture, so pixels between two rectangles are
+  never touched. A **keyframe** is the whole screen (`dirty` = one screen-sized rectangle,
+  `keyframe` = true), sent first, every `Defaults.KeyframeInterval` (5 s) and on
+  `request_keyframe`. A delta the console cannot apply — no picture yet, or the screen
+  changed size — is dropped and answered with `request_keyframe`; a delta whose JPEG does not
+  match its box, or whose rectangles leave the screen, is dropped as malformed. Target ≤ 20
+  fps, cap `Defaults.FullModeBitsPerSecond` (8 Mbit/s) per PC.
+- The console keeps two pictures per PC (`ScreenStore`): the thumbnail for the mosaic and
+  the full picture for the single-PC view. While a PC is in full mode it sends no
+  thumbnails, so the console scales every full keyframe into the thumbnail itself.
+- Graceful degradation: a linked PC that has sent nothing for `Defaults.VideoStallTimeout`
+  (10 s) is shown with its last picture dimmed and a note; an M2-era agent answers the
+  control with `session.not_in_this_build` and simply shows no picture.
 
 ## Input (full-view control)
 
@@ -394,7 +431,8 @@ helper from a previous service instance, or an impostor). The service answers wi
 prompt. A helper silent for `HelperSilenceTimeout` (10 s) is killed and restarted; an
 `Event` from the helper is relayed to the console unchanged. When the pipe closes the helper
 exits at once; when the helper exits the service respawns it (D-30). `VideoControl`, `Input`
-and `Overlay` are answered with a `session.not_in_this_build` warning until M3/M5.
+and `Overlay` are answered with a `session.not_in_this_build` warning until M3 portion 2
+(capture), portion 3 (input) and M5 (overlay); the console side of video is M3 portion 1.
 
 ### `SessionState` (agent → console)
 

@@ -10,7 +10,7 @@
   <data name="MainWindow.Body" xml:space="preserve"><value></value></data>
   <data name="MainWindow.Status" xml:space="preserve"><value></value></data>
   <data name="Main.Title" xml:space="preserve"><value>{0} — {1} · LabControl</value></data>
-  <data name="Main.Status" xml:space="preserve"><value>{0} of {1} PCs online · this console: {2} · port {3}</value></data>
+  <data name="Main.Status" xml:space="preserve"><value>{0} of {1} PCs online · this console: {2} · port {3} · screens {4:0} kbit/s</value></data>
   <data name="Main.SelectedFormat" xml:space="preserve"><value>{0} selected</value></data>
   <data name="Tab.Lab" xml:space="preserve"><value>Lab</value></data>
   <data name="Tab.Jobs" xml:space="preserve"><value>Jobs</value></data>
@@ -28,10 +28,17 @@
   <data name="Action.Logoff" xml:space="preserve"><value>Log off</value></data>
   <data name="Action.RunScript" xml:space="preserve"><value>Run test script…</value></data>
   <data name="Action.PushBuild" xml:space="preserve"><value>Push agent build…</value></data>
+  <data name="Action.OpenScreen" xml:space="preserve"><value>Open screen</value></data>
   <data name="Action.SelectAll" xml:space="preserve"><value>Select all</value></data>
   <data name="Action.ClearSelection" xml:space="preserve"><value>Clear selection</value></data>
   <data name="Action.EnrolPcs" xml:space="preserve"><value>Enrol PCs…</value></data>
-  <data name="Lab.SelectionHint" xml:space="preserve"><value>Click a PC to select it. Hold ⌘ (Ctrl on Windows) and click to add or remove PCs one by one, or use Select all. Drag a tile to rearrange the room.</value></data>
+  <data name="Lab.SelectionHint" xml:space="preserve"><value>Click a PC to select it. Hold ⌘ (Ctrl on Windows) and click to add or remove PCs one by one, or use Select all. Drag a tile to rearrange the room. Double-click a PC to see its screen full size.</value></data>
+  <data name="Tile.NoPicture" xml:space="preserve"><value>no picture yet</value></data>
+  <data name="Tile.PictureStalled" xml:space="preserve"><value>picture stalled</value></data>
+  <data name="Screen.Title" xml:space="preserve"><value>{0} — screen</value></data>
+  <data name="Screen.Waiting" xml:space="preserve"><value>Waiting for the first full picture from {0}…</value></data>
+  <data name="Screen.Offline" xml:space="preserve"><value>{0} is offline; this is the last picture it sent.</value></data>
+  <data name="Screen.Stats" xml:space="preserve"><value>{0}×{1} · {2:0.#} fps · {3:0} kbit/s</value></data>
   <data name="Lab.Empty" xml:space="preserve"><value>No PCs yet. Write a USB payload in Settings, run the installer (or FakeAgent) on the PCs, then press Enrol PCs and type the passphrase once — the PCs enrol themselves and appear here.</value></data>
   <data name="Tile.Online" xml:space="preserve"><value>online</value></data>
   <data name="Tile.Offline" xml:space="preserve"><value>offline</value></data>

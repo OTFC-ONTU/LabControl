@@ -175,7 +175,7 @@ implement.</p>
 <tr>
 <td><strong>M3</strong></td>
 <td>Screens: mosaic, full view, remote control</td>
-<td>not started</td>
+<td><strong>in progress — portion 1 of 3 built (2026-09-07)</strong></td>
 <td>M2, <code>PC-00</code></td>
 </tr>
 <tr>
@@ -813,6 +813,42 @@ visible.</li>
 <li>Switching a PC between thumbnail and full mode repeatedly leaves both working.</li>
 <li>Total bandwidth for 30 thumbnails stays inside the measured LAN headroom (<code>D-10</code>).</li>
 </ul>
+<p><strong>How it is being built.</strong> In three portions, on the pattern M2 set — each committed, then
+run before the next starts: <strong>(1)</strong> everything the Mac can prove — the <code>PushVideo</code> channel,
+<code>VideoControl</code> on the link, the thumbnail and full-mode frame formats, the console's
+per-PC pictures, the mosaic tile with a live thumbnail, the single-PC window, and <code>FakeAgent</code>
+drawing synthetic desktops with honest dirty rectangles; <strong>(2)</strong> real capture in <code>session.exe</code>
+— DXGI Desktop Duplication with the GDI fallback, the pipe relay through the service, the
+thumbnail and full producers on the same <code>VideoUplink</code> the simulator uses — run on the VM
+and measured on <code>PC-00</code>; <strong>(3)</strong> input — <code>Input</code> → <code>SendInput</code> in the helper, <code>ctrl_alt_del</code>
+through <code>SendSAS</code> from the service, the control toggle in the window, and the graceful
+reasons on the tile (no session, locked, duplication failed). The split follows the M2
+lesson: the console half is finished against the simulator first, so the VM runs only have
+to answer Windows questions (<code>D-34</code>).</p>
+<p><strong>Progress.</strong></p>
+<ul>
+<li><em>Portion 1 (built 2026-09-07).</em> The wire is real end to end: <code>LabSession</code> sends a
+thumbnail <code>VideoControl</code> to every PC after <code>Welcome</code>, <code>AgentLink</code> remembers the control,
+announces it to the producer and owns a <code>VideoUplink</code> per link session — one
+<code>PushVideo</code> call per activation, a one-deep latest-wins queue, a <code>video.unsupported</code>
+warning against an older console (<code>Shared/Video/</code>, <code>D-34</code>). The console's
+<code>ScreenStore</code> holds two <code>ScreenImage</code>s per PC (thumbnail, full), applies whole frames
+and dirty-rectangle deltas, asks for a keyframe when a delta has nothing to land on, and
+scales full keyframes into the thumbnail while the full view is open. The tile draws the
+thumbnail through the <code>ScreenView</code> control with the number, the logged-on user and the
+status in a strip under it, dims it when the PC is offline or silent for 10 s, and says
+<em>no picture yet</em> / <em>picture stalled</em>; a double-click (or <em>Open screen</em> in the menu) opens
+the <code>ScreenWindow</code>, which switches the PC to full mode and back on close and shows
+resolution, fps and kbit/s under the picture; the status bar counts the screens' total
+kbit/s. <code>FakeAgent</code> draws a desktop per PC (1080p or 1366×768, every third one idle):
+wallpaper with the PC number, a clock, a Notepad window where the student types, a
+drifting box — each change with its own rectangle, so the full-mode deltas are honest.
+Tests: geometry, codec, <code>ScreenImage</code>, pacer and settings in <code>Shared.Tests</code>; in
+<code>Console.Tests</code> the control after <code>Welcome</code>, thumbnails and deltas over a real <code>PushVideo</code>,
+the keyframe request, the identity check, a <code>FakeMachine</code> streaming both modes by itself,
+and the main window rendered with seven live thumbnails plus the single-PC window. Next:
+portion 2 on the VM.</li>
+</ul>
 <p><strong>Not in scope.</strong> Broadcast to students, lock, exam mode, H.264.</p>
 <p><strong>Rough size.</strong> Large.</p>
 <hr />
@@ -1133,7 +1169,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 14:31 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 14:54 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

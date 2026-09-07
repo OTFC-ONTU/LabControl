@@ -53,6 +53,10 @@ public sealed class AgentGrpcService : AgentService.AgentServiceBase
     public override Task PullFile(FileRequest request, IServerStreamWriter<FileChunk> responseStream, ServerCallContext context) =>
         _session.ServeFileAsync(context.GetHttpContext().Connection.ClientCertificate, request, responseStream, context.CancellationToken);
 
-    // Video (M3) and uploads (M4/M5) are not here yet; the base class answers Unimplemented,
-    // which an agent of any version treats as "not available on this console".
+    /// <summary>The agent's screen stream (PROTOCOL "Video", M3): one call per activation, frames straight into the screen store.</summary>
+    public override Task<VideoAck> PushVideo(IAsyncStreamReader<VideoFrame> requestStream, ServerCallContext context) =>
+        _session.ReceiveVideoAsync(context.GetHttpContext().Connection.ClientCertificate, requestStream, context.CancellationToken);
+
+    // Uploads (M4/M5) are not here yet; the base class answers Unimplemented, which an agent
+    // of any version treats as "not available on this console".
 }

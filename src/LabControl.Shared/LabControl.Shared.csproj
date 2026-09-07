@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>LabControl.Shared</RootNamespace>
+    <!-- The video codec hands SkiaSharp pointers into pixel buffers it must not copy (M3). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -10,6 +12,10 @@
     <PackageReference Include="Grpc.Net.Client" />
     <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+    <!-- JPEG encode/decode and scaling for the screen stream (M3, D-11); the Windows and
+         macOS natives come with SkiaSharp itself, Linux needs the extra package. -->
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
   </ItemGroup>
 
   <ItemGroup>

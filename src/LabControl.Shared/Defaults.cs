@@ -435,7 +435,41 @@ public static class Defaults
     /// <summary>Per-agent bandwidth cap for full-resolution video.</summary>
     public const int FullModeBitsPerSecond = 8 * 1024 * 1024;
 
+    /// <summary>
+    /// Per-agent cap for thumbnails; thirty PCs at this ceiling stay well inside the Wi-Fi
+    /// headroom the console hangs on (ROADMAP M3, D-10).
+    /// </summary>
+    public const int ThumbnailModeBitsPerSecond = 512 * 1024;
+
     public static readonly TimeSpan KeyframeInterval = TimeSpan.FromSeconds(5);
+
+    /// <summary>The only codec in this build; <c>VideoFrame.codec</c> names it (D-11).</summary>
+    public const string VideoCodecJpeg = "jpeg";
+
+    /// <summary>A producer never runs faster than this whatever the console asks.</summary>
+    public const double VideoMaxFramesPerSecond = 30;
+
+    /// <summary>
+    /// The largest <c>VideoFrame</c> either side accepts: a 1080p keyframe at q75 is well
+    /// under a megabyte, so this only stops a runaway producer (D-34).
+    /// </summary>
+    public const int VideoFrameMaxBytes = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// Frames queued on the PC beyond the one on the wire. Video is latest-wins: a producer
+    /// whose frame is refused keeps its dirty state and tries again, so a slow console never
+    /// piles frames up on the PC (D-34).
+    /// </summary>
+    public const int VideoUplinkQueueLength = 1;
+
+    /// <summary>How long the PC waits for the console's <c>VideoAck</c> after closing a video call.</summary>
+    public static readonly TimeSpan VideoCloseTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// A linked PC that has sent no frame for this long is shown with its last picture
+    /// dimmed and a note, instead of a frozen image that looks live.
+    /// </summary>
+    public static readonly TimeSpan VideoStallTimeout = TimeSpan.FromSeconds(10);
 
     // ---------------------------------------------------------------- exam mode
 

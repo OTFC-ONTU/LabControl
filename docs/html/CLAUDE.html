@@ -315,7 +315,15 @@ version answers the re-sent job and <code>Hello.agent_version</code> is the <cod
 <strong>Portion 4 is verified on the VM too (2026-09-07)</strong>: three pushes — a new build, the same
 build again, a <code>0.1.1</code> build that pruned the oldest directory — all ended with the new
 version answering the re-sent job; the first portion-4 agent has to be installed by hand
-once, because a portion-3 agent refuses <code>self_update</code>. <code>Setup</code> is still a skeleton (M4).</p>
+once, because a portion-3 agent refuses <code>self_update</code>. <code>Setup</code> is still a skeleton (M4).
+<strong>M3 is in progress, in three portions</strong> (ROADMAP M3, <em>How it is being built</em>; <code>D-34</code>).
+<strong>Portion 1 is built (2026-09-07)</strong>, all on the Mac: <code>Shared/Video/</code> (<code>JpegCodec</code>,
+<code>VideoGeometry</code>, <code>ScreenImage</code>, <code>VideoPacer</code>, <code>VideoSettings</code>, <code>VideoUplink</code>), <code>VideoControl</code>
+handling and <code>TryPushVideo</code> in <code>AgentLink</code>, <code>PushVideo</code> served by the console into
+<code>Services/ScreenStore</code>, the <code>ScreenView</code> control on the tile and in <code>ScreenWindow</code>, and
+<code>FakeAgent</code>'s <code>FakeScreen</code> + <code>FakeScreenStreamer</code>. Portion 2 (DXGI capture in <code>session.exe</code>)
+and portion 3 (input) are next; <code>session.exe</code> still answers <code>VideoControl</code> with
+<code>session.not_in_this_build</code>.</p>
 <p>The console's non-UI core lives in <code>src/LabControl.Console/Services</code> (<code>LabSession</code>,
 <code>ConsoleBootstrap</code>, <code>LabKeyVault</code>) and <code>Server/</code>; the agent side shared by <code>FakeAgent</code> and
 the real agent is <code>src/LabControl.Shared/Link/AgentLink.cs</code>, and the install-time routines
@@ -326,7 +334,7 @@ shared by the agent, the simulator and Setup are <code>src/LabControl.Shared/Set
 (<code>tests/&lt;project&gt;/bin/Debug/net10.0/&lt;project&gt;</code>).</p>
 
 </article>
-<footer>Generated 2026-09-07 14:31 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 14:54 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

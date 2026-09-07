@@ -196,6 +196,15 @@ public sealed class UiTests
 
             var bootstrap = new ConsoleBootstrap(console.Session.Options, TestLogging.Factory);
 
+            // Screens (M3): every PC but PC-03 sends a thumbnail once the console asked for one.
+            Assert.True(await Wait.UntilAsync(() => agents.All(a => a.Link.VideoControl is { Active: true })));
+            foreach (var agent in agents.Where(a => a.Number != 3))
+            {
+                Assert.True(agent.Link.TryPushVideo(FakeThumbnail(agent.Number)));
+            }
+
+            Assert.True(await Wait.UntilAsync(() => agents.Count(a => console.Session.Screens.Get(a.AgentId).Thumbnail.HasFrame) == 7));
+
             // The Func<Task<T>> overload: an async lambda without a value would bind to the
             // Action overload and run as async void, hiding every assertion.
             await Session.Dispatch<bool>(async () =>
@@ -205,6 +214,24 @@ public sealed class UiTests
                 window.DataContext = vm;
                 window.Show();
                 await Render(window, "main-1-lab");
+
+                Assert.Equal(7, vm.Machines.Count(m => m.HasPicture));
+                Assert.False(vm.Machines.Single(m => m.Number == 3).HasPicture);
+                Assert.All(vm.Machines.Where(m => m.HasPicture), m => Assert.False(m.IsPictureStale));
+
+                // The single-PC window (what a double-click opens) asks for full mode; closing it goes back.
+                var target = vm.Machines.Single(m => m.Number == 5);
+                var pc5 = agents.Single(a => a.Number == 5);
+                var screenWindow = new ScreenWindow(new ScreenViewModel(console.Session, target, action => Dispatcher.UIThread.Post(action)));
+                screenWindow.Show();
+                Assert.True(await Wait.UntilAsync(() => pc5.Link.VideoControl is { Mode: VideoMode.Full }));
+                Assert.True(pc5.Link.TryPushVideo(FakeFull(5)));
+                Assert.True(await Wait.UntilAsync(() => console.Session.Screens.Get(pc5.AgentId).Full.HasFrame));
+                await Render(screenWindow, "screen-1-full");
+                var screenVm = (ScreenViewModel)screenWindow.DataContext!;
+                Assert.Same(console.Session.Screens.Get(pc5.AgentId).Full, screenVm.Image);
+                screenWindow.Close();
+                Assert.True(await Wait.UntilAsync(() => pc5.Link.VideoControl is { Mode: VideoMode.Thumbnail }));
 
                 Assert.Equal(8, vm.Machines.Count);
                 Assert.All(vm.Machines, m => Assert.Equal(TileStatus.Online, m.Status));
@@ -254,6 +281,36 @@ public sealed class UiTests
                 await agent.DisposeAsync();
             }
         }
+    }
+
+    private static VideoFrame FakeThumbnail(int number)
+    {
+        using var picture = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(320, 180, LabControl.Shared.Video.JpegCodec.PixelFormat, SkiaSharp.SKAlphaType.Premul));
+        picture.Erase(new SkiaSharp.SKColor((byte)(40 * number), (byte)(200 - 20 * number), 120));
+        return new VideoFrame
+        {
+            Mode = VideoMode.Thumbnail,
+            Width = 1920,
+            Height = 1080,
+            Keyframe = true,
+            Jpeg = Google.Protobuf.ByteString.CopyFrom(LabControl.Shared.Video.JpegCodec.Encode(picture, 50)),
+        };
+    }
+
+    private static VideoFrame FakeFull(int number)
+    {
+        using var picture = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(1280, 720, LabControl.Shared.Video.JpegCodec.PixelFormat, SkiaSharp.SKAlphaType.Premul));
+        picture.Erase(new SkiaSharp.SKColor((byte)(40 * number), 60, 200));
+        var frame = new VideoFrame
+        {
+            Mode = VideoMode.Full,
+            Width = 1280,
+            Height = 720,
+            Keyframe = true,
+            Jpeg = Google.Protobuf.ByteString.CopyFrom(LabControl.Shared.Video.JpegCodec.Encode(picture, 75)),
+        };
+        frame.Dirty.Add(LabControl.Shared.Video.VideoGeometry.Whole(1280, 720));
+        return frame;
     }
 
     private static async Task Render(Window window, string name)

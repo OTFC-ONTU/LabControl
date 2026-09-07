@@ -3,6 +3,7 @@ using LabControl.Console.Localization;
 using LabControl.Console.Services;
 using LabControl.Shared;
 using LabControl.Shared.Persistence;
+using LabControl.Shared.Video;
 
 namespace LabControl.Console.ViewModels;
 
@@ -21,13 +22,34 @@ public enum TileStatus
 /// <summary>One PC in the lab view. Refreshed in place from the machine record and the live link.</summary>
 public sealed partial class MachineTileViewModel : ObservableObject
 {
-    public MachineTileViewModel(MachineRecord machine)
+    public MachineTileViewModel(MachineRecord machine, AgentScreen screen)
     {
         AgentId = machine.AgentId;
         Number = machine.Number;
+        Screen = screen;
     }
 
     public string AgentId { get; }
+
+    /// <summary>This PC's pictures (M3); the tile draws the thumbnail.</summary>
+    public AgentScreen Screen { get; }
+
+    public ScreenImage Thumbnail => Screen.Thumbnail;
+
+    /// <summary>Bumped on the UI thread for every thumbnail that arrived; the tile redraws on it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPicture))]
+    public partial long FrameVersion { get; set; }
+
+    public bool HasPicture => Screen.Thumbnail.HasFrame;
+
+    /// <summary>The picture is history: the PC is offline or has stopped sending.</summary>
+    [ObservableProperty]
+    public partial bool IsPictureStale { get; set; }
+
+    /// <summary>"no picture" / "picture stalled" — why a linked tile shows nothing live (graceful degradation, ROADMAP M3).</summary>
+    [ObservableProperty]
+    public partial string PictureNote { get; set; } = string.Empty;
 
     [ObservableProperty]
     public partial int Number { get; set; }
@@ -112,6 +134,26 @@ public sealed partial class MachineTileViewModel : ObservableObject
         _ => IsWaking ? Strings.Get("Tile.Waking") : Strings.Get("Tile.Offline"),
     };
 
+    /// <summary>The clock-driven part: whether the picture is live, from the store's timestamps.</summary>
+    public void RefreshPicture(DateTimeOffset now, bool linked)
+    {
+        Screen.Trim(now);
+        var stalled = Screen.IsStalled(now, linked);
+        IsPictureStale = !linked || stalled;
+        PictureNote = !linked || HelperDown
+            ? string.Empty
+            : stalled
+                ? Strings.Get(HasPicture ? "Tile.PictureStalled" : "Tile.NoPicture")
+                : string.Empty;
+        if (HasPicture != _hadPicture)
+        {
+            _hadPicture = HasPicture;
+            OnPropertyChanged(nameof(HasPicture));
+        }
+    }
+
+    private bool _hadPicture;
+
     public void Refresh(MachineRecord machine, AgentConnection? connection, string? heldBy, DateTimeOffset now, bool waking = false)
     {
         IsWaking = waking && connection is null;
@@ -142,5 +184,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
                 ? Strings.Get("Tile.Never")
                 : DateTimeOffset.FromUnixTimeSeconds(machine.LastSeenUnix).ToLocalTime().ToString("g", Strings.Culture);
         }
+
+        RefreshPicture(now, connection is not null);
     }
 }

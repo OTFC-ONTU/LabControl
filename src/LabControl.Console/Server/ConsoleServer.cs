@@ -39,7 +39,11 @@ public sealed class ConsoleServer : IAsyncDisposable
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton(loggers);
         builder.Services.AddSingleton(session);
-        builder.Services.AddGrpc();
+        builder.Services.AddGrpc(grpc =>
+        {
+            // A video frame is the largest message the console ever receives (D-34).
+            grpc.MaxReceiveMessageSize = Defaults.VideoFrameMaxBytes + 64 * 1024;
+        });
 
         var serverCertificate = TlsCertificate.ForTls(session.Instance.Certificate);
 

@@ -7,6 +7,7 @@ using LabControl.Shared;
 using LabControl.Shared.Lab;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
+using LabControl.Shared.Video;
 
 namespace LabControl.Console.ViewModels;
 
@@ -23,6 +24,8 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly Action<Action> _post;
     private readonly Dictionary<string, MachineTileViewModel> _tiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, JobRowViewModel> _jobs = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ScreenViewModel> _openScreens = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _framesPending = new(StringComparer.OrdinalIgnoreCase);
     private int _refreshPending;
 
     public MainViewModel(LabSession session, ConsoleBootstrap bootstrap, IDialogs dialogs, Action<Action> post)
@@ -47,6 +50,7 @@ public sealed partial class MainViewModel : ObservableObject
         session.Events.Added += record => Post(() => AddEvent(record));
         session.Jobs.Updated += job => Post(() => UpdateJob(job));
         session.Vault.Changed += () => Post(() => { RefreshBanners(); Settings.Refresh(); });
+        session.Screens.Updated += (screen, _) => OnFrame(screen.AgentId);
 
         RefreshMachines();
         RefreshBanners();
@@ -125,7 +129,7 @@ public sealed partial class MainViewModel : ObservableObject
             seen.Add(machine.AgentId);
             if (!_tiles.TryGetValue(machine.AgentId, out var tile))
             {
-                tile = new MachineTileViewModel(machine);
+                tile = new MachineTileViewModel(machine, _session.Screens.Get(machine.AgentId));
                 tile.PropertyChanged += (_, e) =>
                 {
                     if (e.PropertyName == nameof(MachineTileViewModel.IsSelected))
@@ -166,9 +170,65 @@ public sealed partial class MainViewModel : ObservableObject
         SelectedCount = Machines.Count(m => m.IsSelected);
         Reflow();
 
-        var online = _session.Linked.Count;
-        StatusLine = Strings.Format("Main.Status", online, machines.Length, _session.Instance.InstanceName, _session.Port);
+        RefreshStatusLine();
         RefreshBanners();
+    }
+
+    private void RefreshStatusLine()
+    {
+        var online = _session.Linked.Count;
+        var total = _session.Registry.Document.Machines.Count;
+        StatusLine = Strings.Format("Main.Status", online, total, _session.Instance.InstanceName, _session.Port, _session.Screens.TotalBytesPerSecond * 8 / 1024.0);
+    }
+
+    // ------------------------------------------------------------------ screens (M3)
+
+    /// <summary>A frame landed for a PC; one UI hop per PC per burst, whatever the frame rate.</summary>
+    private void OnFrame(string agentId)
+    {
+        bool first;
+        lock (_framesPending)
+        {
+            first = _framesPending.Add(agentId);
+        }
+
+        if (first)
+        {
+            Post(() =>
+            {
+                lock (_framesPending)
+                {
+                    _framesPending.Remove(agentId);
+                }
+
+                if (_tiles.TryGetValue(agentId, out var tile))
+                {
+                    tile.FrameVersion++;
+                    tile.RefreshPicture(_session.Now, _session.IsLinked(agentId));
+                }
+            });
+        }
+    }
+
+    /// <summary>Double-click on a tile (ARCHITECTURE §8): the PC's screen full size, one window per PC.</summary>
+    [RelayCommand]
+    private void OpenScreen(MachineTileViewModel? tile)
+    {
+        if (tile is null)
+        {
+            return;
+        }
+
+        if (_openScreens.TryGetValue(tile.AgentId, out var open))
+        {
+            open.Activate();
+            return;
+        }
+
+        var screen = new ScreenViewModel(_session, tile, _post);
+        _openScreens[tile.AgentId] = screen;
+        screen.Closed += () => _openScreens.Remove(tile.AgentId);
+        _dialogs.ShowScreen(screen);
     }
 
     private void Reflow()
@@ -176,7 +236,8 @@ public sealed partial class MainViewModel : ObservableObject
         var columns = Math.Max(Defaults.DefaultTilesPerRow, Machines.Count == 0 ? 0 : Machines.Max(m => m.Column) + 1);
         var width = Math.Clamp(Math.Floor((_viewportWidth - 16) / columns), 96, 240);
         CellWidth = width;
-        CellHeight = Math.Floor(width * 0.68);
+        // A 16:9 picture plus the strip under it (M3).
+        CellHeight = Math.Floor(width * 9 / 16) + 30;
 
         foreach (var tile in Machines)
         {
@@ -427,9 +488,12 @@ public sealed partial class MainViewModel : ObservableObject
     public void Tick()
     {
         RefreshBanners();
-        foreach (var tile in Machines.Where(t => !t.IsOnline))
+        RefreshStatusLine();
+
+        var now = _session.Now;
+        foreach (var tile in Machines)
         {
-            // Nothing to do per second for offline tiles today; kept for "last seen" ageing.
+            tile.RefreshPicture(now, tile.IsOnline);
         }
     }
 

@@ -42,4 +42,7 @@ public interface IDialogs
 
     /// <summary>The development-only <i>Push agent build</i> dialog (D-33): which folder, which version number; returns the build read from it.</summary>
     Task<AgentBuild?> PushAgentBuildAsync(int pcCount);
+
+    /// <summary>Opens the single-PC screen window (ARCHITECTURE §8, M3); non-modal, the window tells the view model when it closes.</summary>
+    void ShowScreen(ScreenViewModel screen);
 }

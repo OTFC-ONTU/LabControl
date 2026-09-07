@@ -57,8 +57,14 @@ script surviving a 30-second network cut; only Wake-on-LAN itself waits for the 
 `PC-00`, since the VM has no such thing. Portion 4 — the minimal push-and-restart: *Push
 agent build…* in the console sends a published `agent.exe` + `session.exe` to a PC, which
 installs it side by side, repoints its service, restarts and reports back as the new
-version — is built and waits for its VM run, the last step of M2
-([`docs/ROADMAP.md`](docs/ROADMAP.md)).
+version — is verified on the VM and on the first real lab PC (`PC-10`, x64, 2026-09-07);
+only Wake-on-LAN is deferred to M4 with the installer ([`docs/ROADMAP.md`](docs/ROADMAP.md)).
+
+**M3 — screens: in progress.** Portion 1 of 3 (2026-09-07) — the `PushVideo` channel, the
+thumbnail and full-mode frame formats, the console's per-PC pictures, live thumbnails on the
+tiles, the single-PC window with dirty-rectangle deltas, and `FakeAgent` drawing synthetic
+desktops — is built and tested on the Mac. Portion 2 puts real DXGI capture into
+`session.exe`; portion 3 adds mouse and keyboard control.
 
 ## Quick start
 ```bash

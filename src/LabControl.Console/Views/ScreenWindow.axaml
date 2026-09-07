@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+        xmlns:views="clr-namespace:LabControl.Console.Views"
+        x:Class="LabControl.Console.Views.ScreenWindow"
+        x:DataType="vm:ScreenViewModel"
+        Title="{Binding Title}"
+        Icon="avares://LabControl.Console/Assets/labcontrol.ico"
+        Width="1280" Height="780"
+        MinWidth="480" MinHeight="320">
+
+  <DockPanel>
+    <!-- The numbers under the picture: resolution, rate, bandwidth — or why there is no picture. -->
+    <Border DockPanel.Dock="Bottom" Padding="12,6"
+            Background="{DynamicResource SystemControlBackgroundListLowBrush}">
+      <TextBlock Text="{Binding Status}" FontSize="12" Opacity="0.8" />
+    </Border>
+
+    <Panel Background="Black">
+      <views:ScreenView Image="{Binding Image}" Frame="{Binding FrameVersion}" IsStale="{Binding IsStale}" />
+    </Panel>
+  </DockPanel>
+
+</Window>

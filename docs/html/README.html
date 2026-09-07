@@ -203,8 +203,13 @@ script surviving a 30-second network cut; only Wake-on-LAN itself waits for the 
 <code>PC-00</code>, since the VM has no such thing. Portion 4 — the minimal push-and-restart: <em>Push
 agent build…</em> in the console sends a published <code>agent.exe</code> + <code>session.exe</code> to a PC, which
 installs it side by side, repoints its service, restarts and reports back as the new
-version — is built and waits for its VM run, the last step of M2
-(<a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>).</p>
+version — is verified on the VM and on the first real lab PC (<code>PC-10</code>, x64, 2026-09-07);
+only Wake-on-LAN is deferred to M4 with the installer (<a href="docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>).</p>
+<p><strong>M3 — screens: in progress.</strong> Portion 1 of 3 (2026-09-07) — the <code>PushVideo</code> channel, the
+thumbnail and full-mode frame formats, the console's per-PC pictures, live thumbnails on the
+tiles, the single-PC window with dirty-rectangle deltas, and <code>FakeAgent</code> drawing synthetic
+desktops — is built and tested on the Mac. Portion 2 puts real DXGI capture into
+<code>session.exe</code>; portion 3 adds mouse and keyboard control.</p>
 <h2 id="quick-start">Quick start<a class="anchor" href="#quick-start" aria-label="Link to this section">#</a></h2>
 <pre><code class="language-bash">dotnet build
 dotnet test
@@ -292,7 +297,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-07 14:31 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 14:54 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

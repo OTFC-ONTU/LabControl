@@ -868,7 +868,12 @@ basic display adapter has no duplication): <code>capture.fallback</code> once, t
 tile moving when the desktop changes, the single-PC window with deltas, <code>session.exe</code>
 CPU in Task Manager; lock/unlock and a UAC prompt must not stop the picture for more
 than a couple of seconds. <strong>On <code>PC-00</code></strong> (DXGI): <code>capture</code> events absent, ≤ 5 % CPU in
-thumbnail mode, ≥ 15 fps in the window while scrolling. Then portion 3 (input).</li>
+thumbnail mode, ≥ 15 fps in the window while scrolling. Then portion 3 (input).
+<em>First push to <code>PC-10</code> (2026-09-07 15:17):</em> refused twice before the build was seen —
+once by the preflight (the dialog said 0.1.2, the binary still said 0.1.0; the version is
+now 0.1.2 in <code>Directory.Build.props</code>), once by <em>Access to the path 'agent.exe' is denied</em>
+while moving the staged version into <code>app\</code> — the antivirus scanning the new executable;
+the move is retried now (<code>D-33</code> item 9).</li>
 </ul>
 <p><strong>Not in scope.</strong> Broadcast to students, lock, exam mode, H.264.</p>
 <p><strong>Rough size.</strong> Large.</p>
@@ -1190,7 +1195,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 15:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 15:19 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

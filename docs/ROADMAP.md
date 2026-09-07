@@ -706,6 +706,11 @@ to answer Windows questions (`D-34`).
   CPU in Task Manager; lock/unlock and a UAC prompt must not stop the picture for more
   than a couple of seconds. **On `PC-00`** (DXGI): `capture` events absent, ≤ 5 % CPU in
   thumbnail mode, ≥ 15 fps in the window while scrolling. Then portion 3 (input).
+  *First push to `PC-10` (2026-09-07 15:17):* refused twice before the build was seen —
+  once by the preflight (the dialog said 0.1.2, the binary still said 0.1.0; the version is
+  now 0.1.2 in `Directory.Build.props`), once by *Access to the path 'agent.exe' is denied*
+  while moving the staged version into `app\` — the antivirus scanning the new executable;
+  the move is retried now (`D-33` item 9).
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

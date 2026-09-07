@@ -150,7 +150,7 @@ internal sealed class AgentUpdater
         try
         {
             _layout.RemoveVersion(request.Version);
-            MoveDirectory(staging, target);
+            await MoveDirectoryAsync(staging, target, job, report, token);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -314,6 +314,38 @@ internal sealed class AgentUpdater
         }
 
         return removed;
+    }
+
+    /// <summary>
+    /// Moves the staged version into <c>app\</c>. A freshly written 90 MB executable that has
+    /// just been run once is exactly what an antivirus scans, and while it does the file is
+    /// "access denied" — seen on `PC-10` (D-33 item 9). So the move is retried for
+    /// <see cref="Defaults.UpdatePlaceTimeout"/> before it counts as a failure.
+    /// </summary>
+    private async Task MoveDirectoryAsync(string source, string target, Job job, Func<JobProgress, Task> report, CancellationToken token)
+    {
+        var deadline = DateTimeOffset.UtcNow + Defaults.UpdatePlaceTimeout;
+        var waiting = false;
+        while (true)
+        {
+            try
+            {
+                MoveDirectory(source, target);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && DateTimeOffset.UtcNow < deadline)
+            {
+                if (!waiting)
+                {
+                    waiting = true;
+                    _log.LogWarning("{Pc}: cannot place the new version yet ({Message}); retrying for up to {Seconds:0} s", _link.Name, ex.Message, Defaults.UpdatePlaceTimeout.TotalSeconds);
+                    await report(new JobProgress { JobId = job.Id, Percent = 100, Line = $"waiting for the new files to be released ({ex.Message}; an antivirus scan?)" });
+                }
+
+                TryDelete(target);
+                await Task.Delay(Defaults.UpdatePlaceRetryInterval, token);
+            }
+        }
     }
 
     private static void MoveDirectory(string source, string target)

@@ -855,6 +855,15 @@ Windows 11 on ARM runs x64 binaries under emulation, so a `win-x64` build passes
 preflight on the VM and runs there slowly; the lab PCs are x64 and cannot run `win-arm64`,
 which the preflight refuses.
 
+9. **Placing the version is retried for 45 s** (added 2026-09-07 after the first M3 portion-2
+   push to `PC-10`): the move from `update\<version>` into `app\<version>` failed with
+   *Access to the path 'agent.exe' is denied* right after the preflight had run the new
+   90 MB executable once — the antivirus was scanning it. An earlier push had hung at the
+   same step for its whole 300 s timeout. The agent now retries every 2 s for
+   `Defaults.UpdatePlaceTimeout` and reports *waiting for the new files to be released*
+   as a progress line, instead of failing on the first denial. The staged files are
+   never left behind: a final failure still deletes both directories.
+
 Rejected: a zip bundle (one pull, but a second format to write and read, and per-file
 hashes are what M4's manifest needs anyway); the manifest as base64 inside `args` (the job
 is frozen; keep it small and readable in the journal); naming directories by hash alone

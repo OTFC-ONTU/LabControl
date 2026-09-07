@@ -275,6 +275,15 @@ public static class Defaults
     public static readonly TimeSpan UpdatePreflightTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    /// How long the agent keeps trying to move a staged version into <c>app\</c> while an
+    /// antivirus still holds the freshly written executable (D-33 item 9), and the pause
+    /// between attempts.
+    /// </summary>
+    public static readonly TimeSpan UpdatePlaceTimeout = TimeSpan.FromSeconds(45);
+
+    public static readonly TimeSpan UpdatePlaceRetryInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// After asking for the restart the outgoing agent waits this long to be stopped. If it
     /// is still running afterwards, the restart did not happen and it puts everything back.
     /// </summary>

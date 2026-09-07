@@ -175,8 +175,11 @@ public partial class ScreenWindow : Window
             return;
         }
 
-        _viewModel.Send(_viewModel.Mapper.KeyDown(e.PhysicalKey));
-        e.Handled = true;
+        // Only a key that went out as a key is handled: macOS produces TextInput solely for
+        // an unhandled key press, and a character key must reach it to arrive as text.
+        var sent = _viewModel.Mapper.KeyDown(e.PhysicalKey);
+        _viewModel.Send(sent);
+        e.Handled = sent is not null;
     }
 
     private void OnKeyUp(object? sender, KeyEventArgs e)
@@ -186,8 +189,9 @@ public partial class ScreenWindow : Window
             return;
         }
 
-        _viewModel.Send(_viewModel.Mapper.KeyUp(e.PhysicalKey));
-        e.Handled = true;
+        var sent = _viewModel.Mapper.KeyUp(e.PhysicalKey);
+        _viewModel.Send(sent);
+        e.Handled = sent is not null;
     }
 
     private void OnTextInput(object? sender, TextInputEventArgs e)

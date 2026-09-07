@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` (2026-09-07), its checks in progress** |
+| **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07) except Wake-on-LAN and antivirus** |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -574,8 +574,12 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   directory; the VM never showed it because its console address was pinned. Fixed by a
   rule **by port** (UDP 47801) in `dev-install.ps1` and INSTALLER.md step 6 (`D-33` item
   8); on `PC-10` a `fixfw.cmd` from the stick replaced the rule and the tile was back in
-  seconds, as `0.1.0+d82bee07`. Still to check on `PC-10`: the second push (`0.1.1`, the
-  prune), Wake-on-LAN once the BIOS/NIC are set, antivirus (`D-10`), real capture (M3).
+  seconds, as `0.1.0+d82bee07`. The second push, `0.1.1+e8f19850` from a
+  `-p:Version=0.1.1` `win-x64` build, went through with the port rule in place: pulled in
+  4 s, link dropped at 13:56:15 and back as the new version 2.2 s later, `app\` left with
+  exactly `0.1.0+d82bee07` and `0.1.1+e8f19850` (the plain `0.1.0` pruned). The push is
+  verified on real x64 hardware. Still to check on `PC-10`: Wake-on-LAN once the BIOS/NIC
+  are set, antivirus (`D-10`), real capture (M3).
 
 **Acceptance criteria**
 

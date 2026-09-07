@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:LabControl.Console.Localization"
+             xmlns:edit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
              xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
              x:Class="LabControl.Console.Views.ScriptsView"
              x:DataType="vm:ScriptsViewModel">
@@ -25,6 +26,7 @@
         <Button Content="{loc:Localize Scripts.New}" Command="{Binding NewCommand}" />
         <Button Content="{loc:Localize Scripts.Delete}" Command="{Binding DeleteCommand}" />
       </StackPanel>
+      <Button DockPanel.Dock="Top" Content="{loc:Localize Scripts.AddBuiltIns}" Command="{Binding AddBuiltInsCommand}" Margin="0,0,0,8" />
       <ListBox ItemsSource="{Binding Scripts}" SelectedItem="{Binding Selected}">
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:ScriptRowViewModel">
@@ -43,7 +45,7 @@
 
     <Rectangle Grid.Column="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" />
 
-    <!-- The selected script, edited in place (D-31 item 5: a plain text editor, no more). -->
+    <!-- The selected script, with local parse diagnostics (D-39). -->
     <Grid Grid.Column="2" Margin="12,8,12,8" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" IsEnabled="{Binding HasSelection}">
 
       <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto" Margin="0,0,0,6">
@@ -70,10 +72,13 @@
       </StackPanel>
 
       <TextBlock Grid.Row="2" Text="{loc:Localize Scripts.Text}" FontSize="12" Opacity="0.7" Margin="0,0,0,2" />
-      <TextBox Grid.Row="3" Text="{Binding Text}"
-               AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
-               FontFamily="Menlo, Consolas, monospace" FontSize="12"
-               ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+      <Grid Grid.Row="3" RowDefinitions="*,Auto">
+        <edit:TextEditor x:Name="Editor" ShowLineNumbers="True"
+                         FontFamily="Menlo, Consolas, monospace" FontSize="13" />
+        <ScrollViewer Grid.Row="1" MaxHeight="110" Margin="0,6,0,0">
+          <TextBlock Text="{Binding Validation}" TextWrapping="Wrap" FontSize="12" />
+        </ScrollViewer>
+      </Grid>
 
       <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
         <Button Classes="accent" Content="{Binding RunLabel}" Command="{Binding RunCommand}" />

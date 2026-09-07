@@ -84,10 +84,11 @@ public sealed partial class MainViewModel : ObservableObject
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExportBatchLogsCommand))]
     public partial JobRowViewModel? SelectedJob { get; set; }
 
     [ObservableProperty]
@@ -345,6 +346,23 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task SendFilesAsync()
+    {
+        var targets = Selected.Select(t => t.AgentId).ToArray();
+        var answer = await _dialogs.SendFilesAsync(targets.Length);
+        if (answer is null) return;
+        try
+        {
+            var jobs = await Task.Run(() => _session.SendFiles(targets, answer.Paths, answer.Open));
+            StatusLine = Strings.Format("Files.Queued", jobs.Count);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            await _dialogs.ShowMessageAsync(Strings.Get("Action.SendFiles"), Strings.Format("Files.Failed", ex.Message));
+        }
+    }
+
     private void CreateJobs(Job.Types.Kind kind, IReadOnlyDictionary<string, string>? args = null, TimeSpan? timeout = null)
     {
         var targets = Selected.Select(t => t.AgentId).ToArray();
@@ -554,6 +572,35 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     // ------------------------------------------------------------------ jobs and events
+
+    private bool HasJobBatch => !string.IsNullOrEmpty(SelectedJob?.Job.BatchId);
+
+    [RelayCommand(CanExecute = nameof(HasJobBatch))]
+    private async Task ExportBatchLogsAsync()
+    {
+        var batchId = SelectedJob?.Job.BatchId;
+        if (string.IsNullOrEmpty(batchId))
+        {
+            return;
+        }
+
+        var destination = await _dialogs.PickSaveFileAsync(Strings.Get("Jobs.ExportBatch"),
+            batchId + Defaults.JobBatchArchiveExtension, Defaults.JobBatchArchiveExtension);
+        if (destination is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Run(() => _session.BatchLogs.Export(batchId, destination));
+            await _dialogs.ShowMessageAsync(Strings.Get("Jobs.ExportBatch"), Strings.Format("Jobs.BatchExported", destination));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            await _dialogs.ShowMessageAsync(Strings.Get("Jobs.ExportBatch"), Strings.Format("Jobs.BatchExportFailed", ex.Message));
+        }
+    }
 
     private void UpdateJob(JobRecord job)
     {

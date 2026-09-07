@@ -31,7 +31,11 @@
       </ListBox.ItemTemplate>
     </ListBox>
 
-    <TextBlock Grid.Row="2" Text="{loc:Localize Jobs.Output}" Margin="12,8,12,2" FontSize="12" Opacity="0.7" />
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="12,8,12,4">
+      <TextBlock Text="{loc:Localize Jobs.Output}" FontSize="12" Opacity="0.7" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Content="{loc:Localize Jobs.ExportBatch}" Command="{Binding ExportBatchLogsCommand}"
+              ToolTip.Tip="{loc:Localize Jobs.ExportBatchHint}" />
+    </Grid>
     <TextBox Grid.Row="3" Margin="12,0,12,12"
              Text="{Binding SelectedJob.Output, FallbackValue=''}"
              IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"

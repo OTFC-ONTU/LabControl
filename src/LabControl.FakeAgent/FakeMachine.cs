@@ -70,6 +70,8 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     public AgentLink Link { get; }
 
+    public string MaterialsDirectory => Path.Combine(_store.Directory, Defaults.MaterialsFolderName);
+
     public int Number => _store.Config.Number;
 
     public string Name => string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, Number);
@@ -206,6 +208,9 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
                 }, TaskScheduler.Default);
                 return Ok(job, "Logged the student off (simulated; auto-logon brings them back in 5 s).");
 
+            case Job.Types.Kind.SendFile:
+                return await SendFileAsync(job, report, token);
+
             case Job.Types.Kind.RunScript:
                 return await RunScriptAsync(job, report, token);
 
@@ -215,6 +220,49 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
             default:
                 await Task.Delay(TimeSpan.FromMilliseconds(300), token);
                 return Ok(job, $"{job.Kind} done (simulated).");
+        }
+    }
+
+    private async Task<JobResult> SendFileAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
+    {
+        JobResult Fail(string message) => new() { JobId = job.Id, ExitCode = -1, Message = message };
+        if (!SendFileRequest.TryParse(job, out var request, out var error)) return Fail(error);
+        var temporary = Path.Combine(MaterialsDirectory, Guid.NewGuid().ToString("n") + ".partial");
+        try
+        {
+            Directory.CreateDirectory(MaterialsDirectory);
+            var lastReport = DateTimeOffset.MinValue;
+            long received;
+            await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                Defaults.FileChunkBytes, FileOptions.Asynchronous))
+            {
+                received = await Link.PullFileAsync(request.Reference, request.Sha256, stream, token, async bytes =>
+                {
+                    var now = DateTimeOffset.UtcNow;
+                    if (now - lastReport < TimeSpan.FromSeconds(1)) return;
+                    lastReport = now;
+                    await report(new JobProgress { JobId = job.Id, Line = $"Receiving {request.Name}: {bytes} bytes." });
+                });
+                await stream.FlushAsync(token);
+            }
+            token.ThrowIfCancellationRequested();
+            File.Move(temporary, Path.Combine(MaterialsDirectory, request.Name), overwrite: true);
+            await report(new JobProgress { JobId = job.Id, Percent = 100, Line = $"Delivered {request.Name}: {received} verified bytes." });
+            return Ok(job, request.MayOpen
+                ? $"Delivered {request.Name}; opening in the student session (simulated)."
+                : $"Delivered {request.Name}; not opened (simulated PC)." );
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilePullException)
+        {
+            return Fail($"Could not deliver {request.Name}: {ex.Message}");
+        }
+        finally
+        {
+            try { File.Delete(temporary); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Link.Report(Event.Types.Severity.Warning, "files.cleanup_failed", ex.Message);
+            }
         }
     }
 

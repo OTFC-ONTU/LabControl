@@ -7,6 +7,9 @@ namespace LabControl.Console.ViewModels;
 /// <summary>What the teacher typed into the unlock dialog: one of the two, never both.</summary>
 public sealed record UnlockAnswer(string? Passphrase, RecoveryCode? RecoveryCode);
 
+/// <summary>The selected local handouts and the optional opening preference.</summary>
+public sealed record SendFilesAnswer(IReadOnlyList<string> Paths, bool Open);
+
 /// <summary>A new key holder from the add-holder dialog.</summary>
 public sealed record HolderAnswer(string Name, string Passphrase);
 
@@ -34,6 +37,8 @@ public interface IDialogs
     Task<string?> PickSaveFileAsync(string title, string suggestedName, string extension);
 
     Task<string?> PickOpenFileAsync(string title, string extension);
+
+    Task<SendFilesAnswer?> SendFilesAsync(int pcCount);
 
     Task<string?> PickFolderAsync(string title);
 

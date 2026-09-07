@@ -76,6 +76,7 @@ public sealed class LabSession : IAsyncDisposable
         Screens.KeyframeNeeded += screen => RequestKeyframe(screen.AgentId);
         Events = new EventLog(store.LogsDirectory, _clock);
         _journal = new JobJournal(store.LogsDirectory);
+        BatchLogs = new JobBatchLogs(store.LogsDirectory, Jobs, id => Registry.FindByAgentId(id)?.Number ?? 0, _clock);
         Scripts = new ScriptLibrary(store, vault.LabId, seedScripts ?? [], _clock, loggers.CreateLogger<ScriptLibrary>());
 
         Registry.Changed += () => SaveLabSoon();
@@ -106,8 +107,12 @@ public sealed class LabSession : IAsyncDisposable
 
     public JobQueue Jobs { get; }
 
+    public JobBatchLogs BatchLogs { get; }
+
     /// <summary>What agents may pull through <c>PullFile</c> (D-31): scripts now, packages and bundles in M4.</summary>
     public FileOffers Files { get; }
+
+    public FileUploads Uploads { get; } = new();
 
     /// <summary>Every PC's screen as last seen (M3): thumbnails for the mosaic, the full picture for the single-PC view.</summary>
     public ScreenStore Screens { get; }
@@ -768,18 +773,50 @@ public sealed class LabSession : IAsyncDisposable
         var batch = Guid.NewGuid().ToString("d");
         var created = new List<JobRecord>();
 
-        foreach (var agentId in agentIds)
+        foreach (var agentId in agentIds.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var connection = FindLinked(agentId);
             var job = Jobs.Create(agentId, kind, now, connection is not null, args, timeout, delivery, batch);
             created.Add(job);
+        }
 
-            if (connection is not null)
+        TryWriteBatchLogs(batch, register: true);
+        foreach (var job in created)
+        {
+            if (FindLinked(job.AgentId) is { } connection)
             {
                 DeliverJobs(connection, resendInFlight: false);
             }
         }
 
+        return created;
+    }
+
+    /// <summary>One selection of handouts: all names/files validated before any jobs are dispatched.</summary>
+    public IReadOnlyList<JobRecord> SendFiles(IEnumerable<string> agentIds, IEnumerable<string> paths, bool open)
+    {
+        var targets = agentIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var files = paths.ToArray();
+        if (targets.Length == 0 || files.Length == 0) return [];
+        var names = files.Select(Path.GetFileName).ToArray();
+        if (names.Any(n => n is null || !SendFileRequest.IsValidName(n))
+            || names.Distinct(StringComparer.OrdinalIgnoreCase).Count() != names.Length)
+            throw new ArgumentException("Choose files with distinct Windows-compatible names.");
+        var offers = files.Select(Files.OfferFile).ToArray();
+        var batch = Guid.NewGuid().ToString("d");
+        var created = new List<JobRecord>();
+        var now = _clock();
+        for (var i = 0; i < offers.Length; i++)
+        {
+            var offer = offers[i];
+            var request = new SendFileRequest(offer.Reference, offer.Sha256, names[i]!, open);
+            foreach (var target in targets)
+                created.Add(Jobs.Create(target, Job.Types.Kind.SendFile, now, FindLinked(target) is not null,
+                    request.ToArgs(), Defaults.FileChunkTimeout + Defaults.JobTimeoutGrace, JobDelivery.Queued, batch));
+        }
+        TryWriteBatchLogs(batch, register: true);
+        foreach (var target in targets)
+            if (FindLinked(target) is { } connection) DeliverJobs(connection, resendInFlight: false);
         return created;
     }
 
@@ -845,6 +882,26 @@ public sealed class LabSession : IAsyncDisposable
         if (job.IsFinished)
         {
             _journal.Record(job);
+            TryWriteBatchLogs(job.BatchId);
+        }
+    }
+
+    private void TryWriteBatchLogs(string batchId, bool register = false)
+    {
+        try
+        {
+            if (register)
+            {
+                BatchLogs.Register(batchId);
+            }
+            else
+            {
+                BatchLogs.Record(batchId);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Events.Warning("jobs.log_failed", "Could not save the batch job logs: " + ex.Message);
         }
     }
 
@@ -960,6 +1017,12 @@ public sealed class LabSession : IAsyncDisposable
         connection.TrySend(new ConsoleMessage { VideoControl = VideoSettings.FullControl(requestKeyframe: true, Screens.Get(agentId).RequestedQuality) });
     }
 
+    public Task<FileAck> ReceiveFileAsync(X509Certificate2? peer, IAsyncStreamReader<FileChunk> incoming, CancellationToken token) =>
+        Uploads.ReceiveAsync(RequireAgent(peer).Id, incoming, token);
+
+    public Task<FileAck> UploadStatusAsync(X509Certificate2? peer, FileRequest request, CancellationToken token) =>
+        Uploads.StatusAsync(RequireAgent(peer).Id, request.Reference, token);
+
     public async Task ServeFileAsync(X509Certificate2? peer, FileRequest request, IServerStreamWriter<FileChunk> outgoing, CancellationToken token)
     {
         var name = RequireAgent(peer);
@@ -972,25 +1035,30 @@ public sealed class LabSession : IAsyncDisposable
             throw new RpcException(new Status(StatusCode.NotFound, $"this console is not offering '{request.Reference}'"));
         }
 
-        if (request.Offset != 0)
+        if (request.Offset < 0 || request.Offset > offer.Size)
         {
-            throw new RpcException(new Status(StatusCode.Unimplemented, "resuming a pull is not supported by this console; pull again from the start"));
+            throw new RpcException(new Status(StatusCode.OutOfRange, "the requested offset is outside the offered file"));
         }
 
         _log.LogInformation("{Pc} pulls {Name} ({Bytes} bytes, {Reference})", who, offer.Name, offer.Size, offer.Reference);
 
         await using var stream = offer.Open();
+        if (stream.Length != offer.Size)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, "the offered file changed; offer it again"));
+        }
+
+        stream.Position = request.Offset;
         var buffer = new byte[Defaults.FileChunkBytes];
-        long offset = 0;
-        var sent = false;
+        var offset = request.Offset;
 
         while (true)
         {
-            var read = await stream.ReadAsync(buffer, token);
-            var last = read < buffer.Length;
-            if (read == 0 && sent)
+            var read = await stream.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, cancellationToken: token);
+            var last = offset + read == offer.Size;
+            if (offset + read > offer.Size || (read == 0 && !last))
             {
-                break;
+                throw new RpcException(new Status(StatusCode.FailedPrecondition, "the offered file changed during transfer"));
             }
 
             var chunk = new FileChunk
@@ -1008,7 +1076,6 @@ public sealed class LabSession : IAsyncDisposable
             }
 
             await outgoing.WriteAsync(chunk, token);
-            sent = true;
             offset += read;
 
             if (last)

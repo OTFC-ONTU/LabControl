@@ -36,12 +36,16 @@ behind this, so **everything must be zero-maintenance and self-explanatory**.
 2. **Student agent is Windows-only** (10/11 x64). Runs as a Windows service, survives
    reboots, cannot be killed or uninstalled by the student.
 3. **Installer is one-shot from a USB stick**: run once as local admin on each PC,
-   asks at most one question (PC number), does *everything* else itself (service,
+   asks at most one question (PC number) with default options, does *everything* else itself (service,
    firewall, Wake-on-LAN, power settings, `student` user, auto-logon, enrollment).
+   M4 adds a checked-by-default account-creation checkbox: untick it for testing with
+   an existing home-PC account, preserving accounts and sign-in settings. A standalone
+   uninstaller works without the USB or console (`D-40`, `docs/INSTALLER.md`).
    The stick carries **no secret** — only the public CA certificate and single-use
    enrollment codes (D-14).
 4. **`student` account**: standard (non-admin) local user, password `1`, auto-logon at
-   boot, profile can be reset to a clean desktop on command.
+   boot, profile can be reset to a clean desktop on command. This is the default classroom
+   configuration; installations opting out never reset or adopt a personal profile (D-40).
 5. **Live screens**: mosaic of all 14 screens on the teacher's monitor, click a tile
    for full-size view with mouse/keyboard control.
 6. **Power**: Wake-on-LAN, shutdown, reboot, log off — for one PC or all.
@@ -230,12 +234,65 @@ with an *Auto* mode the producer drives from the pacer's waits (`D-37`,
 `VideoFrame.quality`). Version 0.1.4, verified on `PC-10`: *Auto* at q40–50, 14–18 fps
 while scrolling. M3's close-out measurements (an hour of streaming, the 30-tile mosaic,
 Ukrainian text) are what remains before M4.
+**M4 portion 3 planning update (D-40):** optional student creation (checked by default),
+existing-account testing and standalone uninstall with ownership-aware restoration are
+planned; Setup remains a skeleton. **The shared account journal is built (D-45):**
+`InstallationDocument` / `InstallationState` persist the selected mode, installation id,
+pending creation and created SID in `installation.json`. Repair preserves the choice;
+missing legacy history, account collisions and interrupted creation never imply ownership.
+Managed-profile access and confirmed removal require the recorded SID to match. Mac tests
+cover these rules and storage failures. **Windows account preparation is built (D-46):**
+`AccountSetupScope` checks private ownership storage and holds an exclusive file lock;
+`StudentAccountProvisioning` connects the journal to `WindowsStudentAccountSystem`
+(create-new local SAM account, disabled, with immediate SID/creation-marker read-back).
+The component is compiled on the Mac, not run on Windows. Setup’s executable pipeline,
+account activation/Users membership, native sign-in/settings adapters, and standalone
+removal remain pending. No command currently invokes account preparation.
+**The protected settings journal core is built (D-47):** `SetupSettingsJournal` records
+original/applied values before mutation, confirms native read-back, preserves user edits
+and refuses ambiguous interrupted applies. `AccountSetupScope` binds its encrypted
+`setup-settings.json` to this installation using machine-scope DPAPI; temporary files
+contain only ciphertext. Mac tests cover recovery and storage failures; Windows DPAPI
+still needs Windows verification. **The first machine registry adapters are built
+(D-48):** Fast Startup and SoftwareSASGeneration use typed DWORD snapshots and the
+protected journal through `AccountSetupScope`. Existing SAS value 3 is retained;
+unsupported native types and observed concurrent changes are refused. Native execution,
+the remaining setting/sign-in adapters and executable integration are still pending.
+**AC power-plan adapters are built (D-49):** sleep/display/disk timeouts use the protected
+journal with the active scheme GUID and original seconds. Native activation is confirmed
+before completion; interrupted restoration retries activation even after the original
+index is written. A later scheme/value change is preserved as a conflict. Windows
+execution and the executable pipeline remain pending.
 **M4 is in progress, in four portions** (ROADMAP M4, *How it is being built*; `D-38`).
 **Portion 1 is built (2026-09-07)**, all on the Mac: the *Scripts* tab (`ScriptsViewModel`,
 `ScriptsView`), `Shared/Persistence/ScriptsDocument` (`scripts.json` beside `lab.json`, in
 the backup), `Shared/Jobs/ScriptSeed` and `Console/Services/ScriptLibrary` (the seed from
 `scripts/library/` embedded in the console, imported once), `LabSession.RunScript`. Not yet
-run against a real agent: the four seed scripts wait for the next push to the VM.
+run against a real agent: the seed scripts wait for Windows verification.
+The owner-requested editor extension (`D-39`) adds AvaloniaEdit, local PowerShell parse
+diagnostics, a quick runner above the lab mosaic, and 16 additional built-ins: open,
+UAC-open and graceful close for five apps, plus Python discovery. Existing libraries
+can add missing built-ins explicitly without replacing edits. UAC still requires admin
+credentials on a standard student account; no SYSTEM desktop launch was introduced.
+
+**M4 portion 2 has started (2026-09-07, D-41):** `PullFile` resumes a running download
+at completed chunk boundaries across reconnects, keeping the whole-file hash and a
+30-second inactivity budget. Empty files and exact 64 KiB multiples finish correctly.
+Loopback TLS tests cover repeated disconnects and cancellation. **The upload transport is
+also built (D-42):** `FileUploads` grants a specific PC an expected size/hash and staging
+stream; `AgentLink.PushFileAsync` resumes through the additive `GetUploadStatus` RPC.
+Tests cover repeated reconnects, lost completion acknowledgements, corruption and peer
+isolation. Grant callers own staging and cleanup; no upload UI or collection job yet.
+**Per-PC batch logs are built (D-43):** `JobBatchLogs` saves the roster and results under
+`logs/batches/`; *Jobs → Export batch logs…* exports a consistent ZIP snapshot with a
+separate log for each PC, including unfinished jobs. This uses existing `Link` output;
+no diagnostic-upload job was added. Tests cover 30 concurrent PC results, mixed outcomes,
+late results and disk errors. **Handout dispatch and simulator delivery are built (D-44):**
+*Send files…* queues a file/PC job matrix in one batch; FakeAgent downloads into its own
+`Materials`, verifies the hash and replaces a same-named file only on success. Opening is
+simulated and only document/image formats are eligible. The UI states Windows delivery
+is pending; D-40 managed-account ownership must land before any real student profile is
+used. Windows delivery/opening and fleet-scale verification remain pending.
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

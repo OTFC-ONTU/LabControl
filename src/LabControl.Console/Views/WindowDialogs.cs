@@ -39,6 +39,9 @@ public sealed class WindowDialogs : IDialogs
     public async Task<AgentBuild?> PushAgentBuildAsync(int pcCount) =>
         await Show(new PushBuildDialog(pcCount));
 
+    public async Task<SendFilesAnswer?> SendFilesAsync(int pcCount) =>
+        await Show(new SendFilesDialog(pcCount));
+
     public void ShowScreen(ScreenViewModel screen) => new ScreenWindow(screen).Show();
 
     public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string extension)

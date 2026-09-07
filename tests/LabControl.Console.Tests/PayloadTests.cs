@@ -56,7 +56,9 @@ public sealed class PayloadTests
                 machine.Start();
             }
 
-            Assert.True(await Wait.UntilAsync(() => console.Session.Linked.Count == 2, TimeSpan.FromSeconds(15)));
+            // The console registers Hello before the PCs receive Welcome.
+            Assert.True(await Wait.UntilAsync(() => console.Session.Linked.Count == 2
+                && machines.All(m => m.Link.State == LinkState.Linked), TimeSpan.FromSeconds(15)));
             Assert.All(machines, m => Assert.Equal(LinkState.Linked, m.Link.State));
 
             // A simulated reboot: the PC goes dark, the console notices, and it comes back.

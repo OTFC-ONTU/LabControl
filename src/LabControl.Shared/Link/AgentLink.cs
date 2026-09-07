@@ -48,7 +48,7 @@ public sealed class AgentLinkOptions
 /// backoff when any of that ends. Everything it needs from the outside is behind
 /// <see cref="IAgentStore"/> and <see cref="IAgentBehaviour"/>.
 /// </summary>
-public sealed class AgentLink : IAsyncDisposable
+public sealed partial class AgentLink : IAsyncDisposable
 {
     private readonly IAgentStore _store;
     private readonly IAgentBehaviour _behaviour;
@@ -885,25 +885,23 @@ public sealed class AgentLink : IAsyncDisposable
     // ------------------------------------------------------------------ files
 
     /// <summary>
-    /// Pulls a file the console offered (PROTOCOL, <i>Files</i>; D-31) into
-    /// <paramref name="destination"/> and verifies its SHA-256 against
-    /// <paramref name="expectedSha256"/>. The minimal M2 form: no resume — a pull that
-    /// breaks starts again from the beginning. Throws <see cref="FilePullException"/> with
-    /// the reason in plain language; the caller turns that into a failed job result.
+    /// Pulls and hashes an offered file, retaining verified chunk boundaries across link
+    /// reconnects (D-41). The destination remains open and must be discarded on failure.
+    /// Resume lasts only for this call; it does not persist partial files across restarts.
     /// </summary>
-    public async Task<long> PullFileAsync(string reference, string expectedSha256, Stream destination, CancellationToken token)
+    public async Task<long> PullFileAsync(string reference, string expectedSha256, Stream destination, CancellationToken token, Func<long, Task>? progress = null)
     {
-        AgentService.AgentServiceClient? client;
         lock (_gateLock)
         {
-            client = _client;
+            if (_client is null)
+            {
+                throw new FilePullException($"cannot pull '{reference}': this PC is not linked to a console right now");
+            }
         }
 
-        if (client is null)
-        {
-            throw new FilePullException($"cannot pull '{reference}': this PC is not linked to a console right now");
-        }
-
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token, _stopping.Token);
+        using var inactivity = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        inactivity.CancelAfter(Defaults.FileChunkTimeout);
         using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         long received = 0;
         var sawLast = false;
@@ -911,80 +909,99 @@ public sealed class AgentLink : IAsyncDisposable
 
         try
         {
-            using var call = client.PullFile(new FileRequest { Reference = reference, Offset = 0 }, cancellationToken: token);
-            while (true)
+            while (!sawLast)
             {
-                bool more;
-                using (var chunkTimeout = CancellationTokenSource.CreateLinkedTokenSource(token))
+                inactivity.Token.ThrowIfCancellationRequested();
+                AgentService.AgentServiceClient? client;
+                CancellationToken sessionToken;
+                lock (_gateLock)
                 {
-                    chunkTimeout.CancelAfter(Defaults.FileChunkTimeout);
-                    try
-                    {
-                        more = await call.ResponseStream.MoveNext(chunkTimeout.Token);
-                    }
-                    catch (OperationCanceledException) when (!token.IsCancellationRequested)
-                    {
-                        throw new FilePullException($"the console stopped sending '{reference}' after {received} bytes (no chunk for {Defaults.FileChunkTimeout.TotalSeconds:0} s)");
-                    }
-                    catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && !token.IsCancellationRequested)
-                    {
-                        throw new FilePullException($"the console stopped sending '{reference}' after {received} bytes (no chunk for {Defaults.FileChunkTimeout.TotalSeconds:0} s)");
-                    }
+                    client = _client;
+                    sessionToken = _session?.Token ?? new CancellationToken(canceled: true);
                 }
 
-                if (!more)
+                if (client is null || sessionToken.IsCancellationRequested)
                 {
-                    break;
+                    await Task.Delay(Defaults.FileRetryDelay, inactivity.Token);
+                    continue;
                 }
 
-                var chunk = call.ResponseStream.Current;
-                if (chunk.Offset != received)
+                using var attempt = CancellationTokenSource.CreateLinkedTokenSource(inactivity.Token, sessionToken);
+                try
                 {
-                    throw new FilePullException($"the console sent '{reference}' out of order (expected offset {received}, got {chunk.Offset})");
-                }
-
-                var data = chunk.Data.Memory;
-                await destination.WriteAsync(data, token);
-                hasher.AppendData(data.Span);
-                received += data.Length;
-
-                if (chunk.Last)
-                {
-                    sawLast = true;
-                    declaredHash = chunk.Sha256;
-                    if (chunk.TotalBytes > 0 && chunk.TotalBytes != received)
+                    using var call = client.PullFile(new FileRequest { Reference = reference, Offset = received }, cancellationToken: attempt.Token);
+                    while (await call.ResponseStream.MoveNext(attempt.Token))
                     {
-                        throw new FilePullException($"'{reference}' is {chunk.TotalBytes} bytes but only {received} arrived");
-                    }
+                        var chunk = call.ResponseStream.Current;
+                        if (!string.Equals(chunk.Reference, reference, StringComparison.OrdinalIgnoreCase) || chunk.Offset != received)
+                        {
+                            throw new FilePullException($"the console sent '{reference}' with the wrong reference or offset (expected {received}, got {chunk.Offset})");
+                        }
 
-                    break;
+                        var data = chunk.Data.Memory;
+                        if (data.Length > Defaults.FileChunkBytes || (data.Length == 0 && !chunk.Last))
+                        {
+                            throw new FilePullException($"the console sent an invalid chunk for '{reference}'");
+                        }
+
+                        // A link ending must not cancel a local write halfway through a chunk.
+                        // Only a completed write advances the resume offset and incremental hash.
+                        await destination.WriteAsync(data, lifetime.Token);
+                        hasher.AppendData(data.Span);
+                        received += data.Length;
+                        if (data.Length > 0)
+                        {
+                            inactivity.CancelAfter(Defaults.FileChunkTimeout);
+                            if (progress is not null) await progress(received);
+                        }
+
+                        if (chunk.Last)
+                        {
+                            if (chunk.TotalBytes != received || !Files.FileHash.LooksLikeSha256(chunk.Sha256))
+                            {
+                                throw new FilePullException($"the console sent invalid final size or hash for '{reference}' after {received} bytes");
+                            }
+
+                            declaredHash = chunk.Sha256;
+                            sawLast = true;
+                            break;
+                        }
+                    }
+                    // A stream ending without the terminal chunk is also resumable.
+                }
+                catch (RpcException ex) when (ex.StatusCode is StatusCode.Unavailable or StatusCode.Cancelled or StatusCode.DeadlineExceeded)
+                {
+                    // The shared inactivity deadline bounds all attempts, including reconnect waits.
+                }
+                catch (OperationCanceledException) when (sessionToken.IsCancellationRequested && !inactivity.IsCancellationRequested)
+                {
+                }
+                catch (ObjectDisposedException) when (sessionToken.IsCancellationRequested)
+                {
+                    // The channel can be disposed between taking the client snapshot and opening the call.
+                }
+                catch (RpcException ex)
+                {
+                    throw new FilePullException($"pulling '{reference}' failed: {(ex.Status.Detail.Length > 0 ? ex.Status.Detail : ex.StatusCode.ToString())}");
+                }
+
+                if (!sawLast)
+                {
+                    await Task.Delay(Defaults.FileRetryDelay, inactivity.Token);
                 }
             }
         }
-        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        catch (OperationCanceledException) when (!lifetime.IsCancellationRequested)
         {
-            throw new FilePullException($"the console has no file '{reference}' to offer: {ex.Status.Detail}");
-        }
-        catch (RpcException ex) when (!token.IsCancellationRequested)
-        {
-            throw new FilePullException($"pulling '{reference}' failed: {(ex.Status.Detail.Length > 0 ? ex.Status.Detail : ex.StatusCode.ToString())}");
+            throw new FilePullException($"the console stopped sending '{reference}' after {received} bytes (no progress for {Defaults.FileChunkTimeout.TotalSeconds:0} s, including reconnects)");
         }
 
-        if (!sawLast)
-        {
-            throw new FilePullException($"the console closed the stream for '{reference}' after {received} bytes without finishing it");
-        }
-
-        await destination.FlushAsync(token);
+        lifetime.Token.ThrowIfCancellationRequested();
+        await destination.FlushAsync(lifetime.Token);
         var actual = Convert.ToHexStringLower(hasher.GetHashAndReset());
-        if (!Files.FileHash.Matches(expectedSha256, actual))
+        if (!Files.FileHash.Matches(expectedSha256, actual) || !Files.FileHash.Matches(declaredHash!, actual))
         {
-            throw new FilePullException($"'{reference}' failed its hash check: expected {expectedSha256}, got {actual}. The file was not used.");
-        }
-
-        if (declaredHash is { Length: > 0 } && !Files.FileHash.Matches(declaredHash, actual))
-        {
-            throw new FilePullException($"the console's own hash for '{reference}' ({declaredHash}) does not match what it sent ({actual}). The file was not used.");
+            throw new FilePullException($"'{reference}' failed its hash check. The file was not used.");
         }
 
         return received;

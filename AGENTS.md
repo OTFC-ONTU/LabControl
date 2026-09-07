@@ -35,6 +35,14 @@ the documents relevant to the task:
 - Keep the solution buildable with plain `dotnet build` and `dotnet test` on the
   Apple Silicon development machine. Windows-only behavior needs a Windows VM or
   a lab PC for runtime verification.
+- Planned M4 Setup must support opting out of student-account creation (default on)
+  and standalone uninstall. Preserve personal accounts and profiles; repair retains the
+  selected mode and removal uses recorded ownership (`docs/INSTALLER.md`, D-40).
+- The account journal, Windows preparation component (`D-45`, `D-46`), protected
+  settings journal core (`D-47`), two machine DWORD adapters (`D-48`) and AC power-plan
+  adapters with activation confirmation (`D-49`) are built,
+  but the Setup executable pipeline is pending. `AccountSetupScope` owns the private storage/lock; new accounts
+  remain disabled until later setup steps. Never infer ownership for legacy dev installs from the account name.
 - Do not invent features outside `docs/ROADMAP.md`; propose the scope there first.
 
 ## Shared documentation contract for Codex and Claude Code

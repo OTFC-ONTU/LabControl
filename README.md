@@ -5,7 +5,10 @@ Classroom fleet control for a single computer lab: **one teacher console
 live screen mosaic with remote control, Wake-on-LAN / shutdown / reboot, silent
 software installs and scripts on all PCs at once, teacher-screen broadcast, screen lock,
 a composable exam mode, and a **one-shot USB installer** that prepares a PC completely
-(service, firewall, WoL, `student` user with auto-logon) in one run.
+(service, firewall, WoL, `student` user with auto-logon) in one run. Planned for M4:
+account creation is checked by default but can be turned off for testing with an existing
+home-PC account; a standalone uninstaller removes LabControl without the USB or console
+([installer plan](docs/INSTALLER.md), D-40).
 
 Self-hosted, no server, no cloud, no domain, no internet required on the student PCs.
 
@@ -73,6 +76,18 @@ pipe, on the same producer the simulator uses — and is verified on `PC-10`. Po
 teacher's mouse and keyboard to the PC (text as Unicode, so Ukrainian typed on the Mac is
 Ukrainian on the PC), with *Ctrl+Alt+Del* raised by the service; it awaits its run on
 `PC-10`.
+
+**Send files…** prepares a batch of handouts for the selected PCs. This step currently
+works with **FakeAgent**: files are really downloaded and verified into `Materials` under
+each simulated PC's data directory; opening is simulated. Windows delivery is pending
+managed student-account support. Keep the source files available and unchanged until all
+jobs finish. Existing files are replaced only after verification; executables are never
+opened automatically. The Jobs panel shows a separate result for every file on every PC.
+
+In **Jobs**, select any result row and click **Export batch logs…** to save a ZIP
+with results and output for every PC in that group action. Running and offline PCs
+are included with their current status. Automatic batch snapshots also remain in
+`logs/batches/` inside the console's data directory.
 
 ## Quick start
 ```bash

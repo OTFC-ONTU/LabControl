@@ -40,6 +40,23 @@ public sealed class ScriptLibraryTests
     }
 
     [Fact]
+    public void Adding_built_ins_is_explicit_idempotent_and_preserves_edits()
+    {
+        var store = new LabStore(TestConsole.TempDirectory());
+        store.EnsureDirectories();
+        var library = new ScriptLibrary(store, "lab", Seed, () => DateTimeOffset.UtcNow, TestLogging.Factory.CreateLogger("t"));
+        var edited = library.Scripts.Single(s => s.Name == "pc-info");
+        edited.Text = "hostname";
+        Assert.True(library.TrySave(edited, out _));
+        var expanded = Seed.Append(new SeedScript("open-word.ps1", "# Opens Word\nWrite-Output 'test'" )).ToArray();
+        Assert.Equal(1, library.AddBuiltIns(expanded));
+        Assert.Equal(0, library.AddBuiltIns(expanded));
+        Assert.Equal("hostname", library.Find(edited.Id)!.Text);
+        var reopened = new ScriptLibrary(store, "lab", expanded, () => DateTimeOffset.UtcNow, TestLogging.Factory.CreateLogger("t"));
+        Assert.Equal(3, reopened.Scripts.Count);
+    }
+
+    [Fact]
     public void Saving_validates_the_name_the_timeout_and_uniqueness()
     {
         var store = new LabStore(TestConsole.TempDirectory());

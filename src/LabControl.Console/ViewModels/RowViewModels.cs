@@ -18,7 +18,7 @@ public sealed partial class JobRowViewModel : ObservableObject
         Created = DateTimeOffset.FromUnixTimeSeconds(job.CreatedAtUnix).ToLocalTime().ToString("T", Strings.Culture);
         Pc = number > 0 ? string.Format(Strings.Culture, Defaults.MachineNameFormat, number) : job.AgentId;
         Kind = Strings.Get("Job." + job.Kind);
-        if (job.Kind == Shared.Protocol.Job.Types.Kind.RunScript && job.Args.TryGetValue(RunScriptRequest.NameKey, out var script) && script.Length > 0)
+        if ((job.Kind is Shared.Protocol.Job.Types.Kind.RunScript or Shared.Protocol.Job.Types.Kind.SendFile) && job.Args.TryGetValue(RunScriptRequest.NameKey, out var script) && script.Length > 0)
         {
             Kind = $"{Kind}: {script}";
         }

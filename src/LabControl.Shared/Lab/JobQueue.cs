@@ -352,4 +352,18 @@ public sealed class JobQueue
                 .ToArray();
         }
     }
+
+    /// <summary>Copies a whole batch consistently, including output that may still be arriving.</summary>
+    public IReadOnlyList<JobLogSnapshot> SnapshotBatch(string batchId)
+    {
+        lock (_gate)
+        {
+            return _jobs.Values.Where(j => j.BatchId == batchId)
+                .OrderBy(j => j.AgentId, StringComparer.Ordinal).ThenBy(j => j.Id, StringComparer.Ordinal)
+                .Select(j => new JobLogSnapshot(j.Id, j.AgentId, j.Kind, j.State,
+                    j.CreatedAtUnix, j.DeliveredAtUnix, j.CompletedAtUnix,
+                    j.Percent, j.ExitCode, j.Message, j.Output.ToArray()))
+                .ToArray();
+        }
+    }
 }

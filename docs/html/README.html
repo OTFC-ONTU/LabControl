@@ -140,7 +140,10 @@ footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
 live screen mosaic with remote control, Wake-on-LAN / shutdown / reboot, silent
 software installs and scripts on all PCs at once, teacher-screen broadcast, screen lock,
 a composable exam mode, and a <strong>one-shot USB installer</strong> that prepares a PC completely
-(service, firewall, WoL, <code>student</code> user with auto-logon) in one run.</p>
+(service, firewall, WoL, <code>student</code> user with auto-logon) in one run. Planned for M4:
+account creation is checked by default but can be turned off for testing with an existing
+home-PC account; a standalone uninstaller removes LabControl without the USB or console
+(<a href="docs/INSTALLER.md">installer plan</a>, D-40).</p>
 <p>Self-hosted, no server, no cloud, no domain, no internet required on the student PCs.</p>
 <p>The teacher machine is <strong>replaceable</strong>: the lab's identity is a private certificate
 authority, not the laptop's certificate, so moving the console to another computer —
@@ -221,6 +224,16 @@ pipe, on the same producer the simulator uses — and is verified on <code>PC-10
 teacher's mouse and keyboard to the PC (text as Unicode, so Ukrainian typed on the Mac is
 Ukrainian on the PC), with <em>Ctrl+Alt+Del</em> raised by the service; it awaits its run on
 <code>PC-10</code>.</p>
+<p><strong>Send files…</strong> prepares a batch of handouts for the selected PCs. This step currently
+works with <strong>FakeAgent</strong>: files are really downloaded and verified into <code>Materials</code> under
+each simulated PC's data directory; opening is simulated. Windows delivery is pending
+managed student-account support. Keep the source files available and unchanged until all
+jobs finish. Existing files are replaced only after verification; executables are never
+opened automatically. The Jobs panel shows a separate result for every file on every PC.</p>
+<p>In <strong>Jobs</strong>, select any result row and click <strong>Export batch logs…</strong> to save a ZIP
+with results and output for every PC in that group action. Running and offline PCs
+are included with their current status. Automatic batch snapshots also remain in
+<code>logs/batches/</code> inside the console's data directory.</p>
 <h2 id="quick-start">Quick start<a class="anchor" href="#quick-start" aria-label="Link to this section">#</a></h2>
 <pre><code class="language-bash">dotnet build
 dotnet test
@@ -308,7 +321,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-07 21:02 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 23:34 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

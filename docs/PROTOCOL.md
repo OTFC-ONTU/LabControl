@@ -126,6 +126,7 @@ rpc Link(stream AgentMessage) returns (stream ConsoleMessage);   // long-lived, 
 rpc PushVideo(stream VideoFrame) returns (VideoAck);              // opened on demand
 rpc PullFile(FileRequest) returns (stream FileChunk);             // agent downloads from console
 rpc PushFile(stream FileChunk) returns (FileAck);                 // agent uploads results/logs
+rpc GetUploadStatus(FileRequest) returns (FileAck);               // committed upload offset
 ```
 
 The console validates the agent certificate against the lab CA **and** against the
@@ -252,12 +253,60 @@ bundle in M4 — is pulled by the agent with `PullFile(FileRequest{reference, of
 arrives as a stream of `FileChunk`. The console serves only what it has *offered*: the
 reference is the content's SHA-256, chunks are 64 KiB, and the last chunk carries `last`,
 the `sha256` and `total_bytes`. The agent hashes what it receives and compares it with the
-job's `sha256` **and** the last chunk's; either mismatch discards the file. A chunk that
-does not arrive within 30 s abandons the pull. The M2 form is **minimal**: `offset` must
-be 0 and a pull that breaks starts again from the beginning (`Unimplemented` otherwise);
-resume lands in M4 with the files large enough to need it (`D-31`). A reference the
-console is not offering is `NotFound` and an event, and only this lab's agents may pull —
-the peer certificate is checked like on `Link`.
+job's `sha256` **and** the last chunk's; either mismatch discards the file.
+
+**Resume (M4 portion 2, D-41).** The console accepts offsets from zero through the offered
+size, inclusive; outside that range is `OutOfRange`. Chunk offsets are absolute and the
+terminal `total_bytes` is the full size, including any prefix already received. Empty files,
+exact multiples of 64 KiB and a request at EOF all get a terminal chunk with the hash.
+The agent retains its incremental hash and the count of completely written bytes while
+its control link reconnects, then requests that offset using the current authenticated
+client. Transient transport errors and a stream ending before `last` retry within one
+30-second inactivity budget; only new data resets that budget. Cancellation or agent stop
+ends the wait immediately. Bad references, offsets, terminal metadata and hashes fail
+without retry. A changed on-disk offer size is refused; same-size changes are caught by the
+agent's final hash. Callers must discard the destination if the pull fails.
+
+Resume is within a running pull, not across agent restarts. File offers remain local to
+the console process: another teacher machine must independently offer the same content,
+otherwise its `NotFound` fails the pull. An older console still handles offset zero but
+rejects nonzero offsets with `Unimplemented`; that failure is reported, never silently
+appended from zero. Older agents continue to pull at offset zero unchanged. A reference
+the console is not offering is `NotFound` and an event, and only this lab's agents may
+pull — the peer certificate is checked like on `Link`.
+
+### `PushFile` — uploads to the console (M4 portion 2, D-42)
+
+The console explicitly grants an upload to one certificate-proved agent, with an opaque
+reference, an expected size and SHA-256, and an empty destination stream chosen locally.
+The peer never supplies a destination path. Unknown references and another PC's grants
+return `NotFound`; both upload RPCs validate the peer like `Link`.
+
+Before each attempt the agent calls `GetUploadStatus(FileRequest{reference})`; the request's
+`offset` is unused. `FileAck{reference, bytes_stored, ok}` reports completely stored bytes;
+the additive `sha256` field binds the acknowledgement to the grant's expected content. The
+agent checks that hash on every acknowledgement, including an already completed upload.
+`ok` means the whole file passed its expected hash and was flushed. The agent seeks its
+unchanged source to `bytes_stored`, then sends absolute-offset 64 KiB `FileChunk`s through
+`PushFile`. The terminal chunk includes full `total_bytes` and `sha256`, including for an
+empty file or a resume at EOF. Invalid offsets, references, lengths and terminal metadata
+are refused. A content hash mismatch is `DataLoss` and permanently fails the grant.
+
+Only one call touches a destination at a time. A cancelled partial local write is truncated
+back to its last completed boundary. Transport loss or premature EOF retains that prefix
+and its incremental hash. A lost final acknowledgement is recovered by querying status:
+an already completed upload is not written again. The agent retries transient transport
+failures within a 30-second inactivity budget; retransmitting the same prefix does not
+reset it. Caller cancellation and agent shutdown interrupt the retry. Server reads and
+writes also have a 30-second inactivity budget.
+
+This is a transport API, not yet a collect-files or diagnostic-upload action. The per-PC
+job log bundles (D-43) use output already received on `Link`. Its caller owns the
+readable/writable/seekable staging stream, must keep it private until verified completion,
+and must discard it on failure. It disposes the grant before closing the stream. Grants
+and resume state are local to this console process and are not backed up or restored after
+restart or take-over. The additive `GetUploadStatus` RPC and `FileAck.sha256` preserve existing fields;
+an older console answers `Unimplemented`, which is reported as an upload failure.
 
 ### Files: `install_package` and `send_file`
 
@@ -273,6 +322,16 @@ where it lands and what happens next (`D-23`):
 
 `install_package` is the older and more important of the two and its behaviour is fixed;
 `send_file` is one job per file so that a batch reports per file, per PC.
+
+The console dispatch and FakeAgent implementation are built (D-44); Windows delivery is
+pending managed-account ownership (D-40). `SendFileRequest` validates Windows leaf names
+on every OS, refusing paths, alternate streams, device names and trailing spaces/dots;
+Unicode names are preserved. `open` is an optional boolean, default false; only document
+and image extensions listed in D-44 are eligible. Other files, including executables,
+are delivered without opening. FakeAgent saves real verified bytes under its own data
+`Materials` and only simulates opening. It reports received bytes as job progress, and
+replaces an older file only after a successful pull; failures remove the partial file.
+One toolbar selection creates one batch for all file/PC pairs. No wire fields changed.
 
 ## Internet policy
 

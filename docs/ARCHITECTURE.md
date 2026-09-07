@@ -315,6 +315,39 @@ when a USB stick was written since (`D-28`).
 
 ## 5. Data on a student PC
 
+Planned M4 installation mode (`D-40`): creating the managed `student` account is optional
+(default on). With it off, the helper still follows the active Windows session and
+user-session scripts use that user's token. Managed-account operations such as profile
+reset and handout delivery must refuse clearly when no managed account is configured;
+never substitute the home user's profile. Setup persists the choice and an installation
+journal with a schema version, prior settings and ownership in the protected agent data
+directory; sensitive prior sign-in state stays in its designed protected store. Repair
+and updates preserve the mode. A standalone uninstaller shares Setup's removal pipeline,
+restores only owned changes and preserves existing users/files; see INSTALLER.md.
+
+The account portion of this journal is now built in Shared (`D-45`):
+`InstallationDocument` and `InstallationState` store `installation.json` separately from
+trust material. It records the mode, installation id, pending creation and created SID;
+it holds no password or profile path. Matching SID evidence gates account/profile plans.
+The Windows preparation component now connects this journal to local SAM creation
+(`D-46`): `AccountSetupScope` enforces private storage and an exclusive file lock, then
+`StudentAccountProvisioning` records intent before `WindowsStudentAccountSystem` creates
+a disabled account and verifies its SID. It is not yet called by Setup’s executable
+pipeline. The protected original-settings journal core is now built (`D-47`):
+`SetupSettingsJournal` stores original/applied values and operation phases in encrypted
+`setup-settings.json`, bound to the installation id with machine-scope DPAPI by
+`AccountSetupScope`. It restores only confirmed changes whose values still match,
+preserving later edits and ambiguous interrupted applies. The first native registry
+adapter is built (`D-48`): a fixed allowlist of Fast Startup and SoftwareSASGeneration,
+64-bit HKLM, DWORD-only snapshots and an optimistic reread before mutation. Unsupported
+types are preserved by refusal; no account/sign-in keys are included. AC power timeouts
+are also built (`D-49`): snapshots include the active scheme GUID, fixed sleep/display/disk
+settings and original seconds. Optional journal activation confirms the native refresh
+before completion, including interrupted restoration. A changed active scheme is a
+conflict; Setup never follows it by editing another scheme. Other settings/sign-in
+adapters, activation and group configuration remain pending; existing dev installations
+gain no ownership evidence from these components.
+
 ```
 C:\Program Files\LabControl\   app\<version>\  agent.exe, session.exe — one directory per
                                                installed version, kept side by side (D-19);
@@ -345,6 +378,25 @@ running service cannot overwrite its own `.exe`, and because a bad update must b
 reversible without anyone entering the room (`D-19`). The Defender exclusion is set on the
 `C:\Program Files\LabControl\` **parent**, so a version directory created later is
 covered without a second visit.
+
+The shared file client resumes a running `PullFile` after a link reconnect at the last
+fully written chunk, retaining its hash and destination stream (`D-41`). Recovery shares
+the 30-second no-progress timeout with download; partial files do not survive service
+restarts. Each attempt uses the current console client; unavailable offers on a replacement
+console fail clearly. Scripts and updates use this same path without changing their landing.
+
+The M4 upload transport (`D-42`) uses explicit per-PC grants (`FileUploads`) and
+`GetUploadStatus` to resume `PushFile` at committed offsets. The console selects the
+staging stream and expected size/hash; an agent cannot choose a console path. Callers own
+staging/cleanup and expose only verified results. This transport is built; the per-PC
+diagnostic-upload and collected-work consumers remain pending. Fan-out result bundles
+use existing `Link` job output instead (D-43).
+
+The console's *Send files…* action and FakeAgent handout delivery are built (D-44).
+Every selected file/PC pair is one job in a shared batch. FakeAgent writes into `Materials`
+under its own data directory and replaces the named file after successful hash verification.
+Windows delivery and opening await D-40 managed-account ownership; the dialog states this
+limitation. Source files must remain unchanged and available until all jobs complete.
 
 ## 6. Feature → mechanism map
 
@@ -512,10 +564,17 @@ than engineered around.
   keys the teacher's keyboard cannot send (`D-36`). One window per PC; the tile keeps
   moving meanwhile.
 - **Jobs panel**: every action becomes a job with per-PC rows (pending / running /
-  ok / failed + log). Jobs persist in `logs/`.
+  ok / failed + log). Jobs persist in `logs/`. Batch snapshots in
+  `logs/batches/<batch-id>.json` preserve the roster and per-PC output at creation and
+  terminal updates; *Export batch logs…* exports the selected row's entire batch as a
+  ZIP with a manifest and a JSON log per PC (D-43). A running export explicitly includes
+  pending/running PCs and is a snapshot, not a promise that the batch finished.
 - **Scripts** tab: the library on the left, the selected script edited in place on the
   right, *Run on selected PCs* sending the editor's text to the lab view's selection (M4,
-  `D-31`, `D-38`).
+  `D-31`, `D-38`). A quick selector/run button above the lab mosaic shares the same
+  draft and selection. The editor has line numbers, token highlighting and local parse
+  diagnostics (PowerShell; basic checks only for cmd), and blocks parse errors on run.
+  Missing built-in application scripts can be imported explicitly (`D-39`).
 - **Packages** panel (M6): manage the catalog; "Install on all missing".
 - **Settings**: lab key (export backup, reprint the recovery code, change the
   passphrase), teacher machines (this one, others seen, *Take over*, revoke behind a

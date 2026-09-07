@@ -1173,6 +1173,416 @@ neither); re-importing missing seed scripts on every start (the teacher's deleti
 never stick); a confirmation on switching scripts with unsaved edits (item 5); parameters,
 highlighting and a schedule (`D-31` item 5).
 
+## D-39 — Script editor, quick launch and desktop application templates
+
+Context: the owner requested syntax highlighting, validation and opening/closing Word,
+PyCharm, IntelliJ IDEA, Visual Studio and VS Code, and asked whether an administrator
+launch could solve PyCharm's interpreter discovery problem (2026-09-07).
+
+Decisions:
+
+1. **Run from the Lab view.** A script selector and the same run command sit above the
+   mosaic. The Scripts tab remains the library/editor. Both share the selected script
+   and draft; a dirty draft is explicitly labelled in the quick runner. Target selection
+   and job/result handling are unchanged.
+2. **AvaloniaEdit plus the PowerShell parser, on the console only.** AvaloniaEdit supplies
+   editing, undo, scrolling and line numbers; `System.Management.Automation` supplies
+   tokens and parse errors without executing code or creating a runspace. Highlighting
+   and diagnostics refresh after a 250 ms typing pause. Every run reparses synchronously,
+   including quick runs, and refuses parse errors. Saving broken drafts remains possible.
+   The bundled parser is PowerShell 7; known newer operators are rejected for the agent's
+   Windows PowerShell 5.1. The UI explicitly says that full 5.1 compatibility, paths and
+   command availability still require a PC. cmd gets lexical highlighting and only a
+   basic NUL check, explicitly labelled; it has no portable parser. This supersedes the
+   no-highlighting choice in D-31 item 5 and D-38's rejected alternatives.
+3. **Built-ins remain editable, self-contained scripts.** The five apps each get open,
+   open with UAC, and graceful close scripts. Discovery checks App Paths, PATH and common
+   per-machine/per-user/JetBrains Toolbox locations, with an editable override for custom
+   installs. Launch sets the application's directory, uses shell execution and does not
+   wait for the GUI to exit. Close requests target visible windows in the current session,
+   never force-kill: saving work may require attention at the PC. A job reports the
+   request, not that every window has actually disappeared. Elevated applications may
+   refuse a close request from the student account.
+4. **UAC is explicit, not SYSTEM on the desktop.** The admin variants use `Start-Process
+   -Verb RunAs` in the logged-on user's session. Standard students must supply admin
+   credentials on the PC's UAC desktop; credentials are never collected or stored by
+   LabControl. Existing running instances may reuse their original privileges. SYSTEM's
+   profile is different and is not a substitute for the student's interpreter settings.
+   `find-python` lists Python registry/PATH candidates visible to the student without
+   running them, to help diagnose the underlying setup. No agent/protocol change.
+5. **Existing libraries opt in once through Add missing built-in scripts.** This imports
+   only missing seed filenames and skips name collisions, preserving existing edits.
+   Deleted built-ins stay deleted on startup as before; explicitly pressing the button
+   can restore them. Seed import and backups otherwise retain D-38's behavior.
+
+Validation on macOS: solution build, parser/template tests, library persistence tests,
+headless editor input and quick-run jobs over fake-agent links. Application discovery,
+window lifetime after script exit, save prompts, UAC cancellation/credentials and real
+PyCharm interpreter selection still need the Windows VM or a lab PC.
+
+Sources: [AvaloniaEdit setup](https://github.com/AvaloniaUI/AvaloniaEdit/blob/master/README.md),
+[PowerShell ParseInput](https://learn.microsoft.com/en-us/dotnet/api/system.management.automation.language.parser.parseinput),
+[Start-Process](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process?view=powershell-5.1).
+
+## D-40 — Optional student provisioning and standalone removal for home-PC testing
+
+Context: the owner needs to test the real Windows agent on a home PC without creating a
+new user, and to remove it afterwards independently of the USB installer (2026-09-07).
+
+Decision (planned for M4 portion 3):
+
+1. Add *Create student account and enable automatic sign-in*, checked on fresh installs,
+   to the PC-number screen. Off skips all account, password-policy, auto-logon and profile
+   provisioning. The active session supplies capture/control and user-script execution.
+   Repair, update and rekey preserve the persisted choice; no silent account creation.
+2. Preserve existing accounts, including one already named `student`; never adopt it or
+   change its password. Managed-account actions refuse when none is configured, rather
+   than targeting a personal profile. This qualifies the default classroom setup of D-09
+   and the managed-account landing of D-23; default classroom behavior is unchanged.
+3. Ship a separate `Uninstall.exe` entry point and Windows Installed apps registration,
+   backed by the same pipeline as `Setup.exe --uninstall`. It needs no USB, console or
+   running agent and handles partial installs. No separate uninstaller project or runtime
+   is required by this decision.
+4. Record setup-owned changes and prior settings in a protected, schema-versioned journal.
+   Restore only values still matching Setup's changes; preserve later edits and report
+   conflicts. Keep accounts/profiles by default. Explicit account removal requires proof
+   of creation by this installation (SID) and confirmation; never delete existing users.
+   Existing sign-in secrets must never enter plaintext files or logs. Missing ownership
+   records mean conservative cleanup with a clear report, not guessed account deletion.
+5. Show other system changes before installation: the account checkbox alone does not
+   disable hostname, power or firewall configuration. Uninstall reverses installer-owned
+   changes, not arbitrary scripts or software installations requested from the console.
+
+Acceptance: the home-PC install/reboot/control/script/repair/update/uninstall round trip,
+plus default classroom setup, existing-account collision and interrupted installation,
+are required in ROADMAP M4. Details and removal boundaries live in INSTALLER.md.
+
+Rejected: requiring a VM or a new Windows user for every test; only providing a USB-bound
+removal command; deleting any account merely because its name matches `student`;
+restoring guessed system defaults instead of the recorded previous values.
+
+Status: planned only; no installer or agent implementation in this documentation change.
+
+## D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)
+
+Context: scripts and update binaries already use `PullFile`; the next planned file-channel
+step is surviving a reconnect without re-downloading a large file from the beginning.
+
+1. Keep the destination open, its completed byte count and the incremental SHA-256 across
+   RPC attempts. A local chunk write uses the job/agent lifetime, not the link token, so
+   a disconnect cannot cancel it halfway through and invalidate the offset. No seeking
+   or reading back the destination is required. Restart-persistent partial files are not
+   introduced; existing caller cleanup still discards failed transfers.
+2. Resume through the current authenticated client at that byte count. Retry transport
+   unavailability, cancellation of a connection and premature EOF, with a short bounded
+   delay. One 30-second inactivity budget covers RPCs and reconnect waits; only new bytes
+   reset it. Caller cancellation and service stop interrupt recovery immediately.
+3. Validate reference, absolute offset, chunk size, terminal size and both hashes. Protocol
+   and integrity failures are terminal. The server accepts EOF offsets and always emits
+   final metadata, including for zero bytes and exact chunk-size multiples. Size changes
+   to an offered disk file fail; other mutations fail the end-to-end hash check.
+4. Preserve the existing wire fields and offset-zero behavior. An old console's refusal
+   to resume is a clear failure; never append its offset-zero response over an existing
+   prefix. Offers are not replicated between consoles or persisted by this change.
+
+Validation: boundary sizes and suffix requests, invalid offsets, two mid-transfer link
+breaks with an append-only destination over real loopback TLS, and cancellation during
+reconnect. Windows runtime and the fleet-scale file acceptance remain pending.
+
+## D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)
+
+Context: the next file-channel step after D-41 is resumable `PushFile`, the transport
+needed for returning per-PC logs and, later, collected work.
+
+1. The console grants a specific PC an opaque reference, exact size, expected SHA-256
+   and a locally selected staging stream. No network-provided path is opened. The caller
+   controls storage lifetime and discards an unverified destination. Grants implement
+   async disposal so in-flight writes finish before the caller closes its stream.
+2. Add `GetUploadStatus(FileRequest) -> FileAck` rather than overloading empty chunks
+   as queries. It reports committed bytes and verified completion. This resolves both
+   an uncertain mid-stream write and a lost final acknowledgement without retransmitting
+   the whole file. An additive `FileAck.sha256` binds every response to the grant's content,
+   so reusing a completed reference with a different hash cannot report success. Existing
+   fields and the frozen subset retain their meanings.
+3. Serialize calls per grant. Retain the incremental SHA-256 and completed byte count
+   across attempts; truncate a cancelled partial write before accepting a retry. Enforce
+   64 KiB chunks, absolute offsets, expected length and both terminal/expected hashes.
+   A failed hash or storage error closes the grant. Completion includes flushing.
+4. The agent requires a seekable, unchanged source, queries before every attempt, and
+   retries transient transport loss under the shared file inactivity timeout. Repeated
+   sends of the same bytes do not extend that budget. Cancellation stops promptly.
+5. This step is transport only: no collection job, UI, automatic filesystem destination
+   or persisted upload registry. Callers must dispose grants; unfinished state lasts only
+   for that grant in the current console process. A migrated console must issue a new
+   grant, and an older console's `Unimplemented` is a clear failure.
+
+Validation on macOS: loopback TLS round trips, boundary sizes, repeated link loss,
+completion acknowledgement loss, cancellation, peer isolation and malformed/corrupt data.
+Windows runtime and fleet-scale verification remain pending. D-43 subsequently builds
+the fan-out log bundle from existing job output, without an upload consumer.
+
+## D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)
+
+Context: group actions already fan out over independent agent links and share a batch id.
+M4 needs a durable per-PC log bundle that the teacher can inspect and export.
+
+1. Record the complete roster before dispatch, then atomically save a schema-versioned
+   snapshot at creation and on every terminal update in `logs/batches/<batch-id>.json`.
+   Capture PC numbers when the batch is registered, so later inventory changes do not
+   relabel the result. Deduplicate repeated target IDs within one action. Late results
+   replace a timeout in the snapshot, following the existing queue semantics.
+2. Copy status and output under the queue lock; serialize detached copies. Serialize
+   automatic saves under a separate log lock, taking a fresh snapshot inside it so an
+   older callback cannot overwrite a newer result. Disk errors raise `jobs.log_failed`
+   without aborting job delivery or the agent link.
+3. *Jobs → Export batch logs…* captures the selected row's whole batch as it stands now.
+   The ZIP contains a schema-versioned manifest and one schema-versioned JSON per PC,
+   including identity, timestamps, state, exit code, message and captured output. An
+   incomplete batch is explicitly marked incomplete. Write beside the chosen destination
+   and replace only after closing the ZIP; failed exports remove the temporary file.
+4. Use only existing `Link` output. Do not include job argument maps, script source,
+   certificates, enrollment data or other files from either machine. Output intentionally
+   printed by scripts is retained just as in the Jobs panel. This is not a diagnostic
+   upload or collected-work consumer of `PushFile` and adds no RPC or dependency.
+5. Reports are local to the originating console and remain readable after it closes;
+   they are not a persisted execution queue or part of lab backup. On-disk snapshots are
+   from creation/terminal updates, while explicit export captures current progress.
+   UI history reloading and resuming jobs after console restart are outside this step.
+
+Validation: mixed online/offline outcomes over loopback TLS, 30 concurrent PC results,
+Unicode output, late results after timeout, snapshot isolation, schema refusal, export
+cleanup and failed log storage without interrupting delivery. Headless UI covers the
+export action's selection state and layout. Real Windows/fleet acceptance remains pending.
+
+## D-44 — Handout dispatch and simulator delivery before managed Windows profiles
+
+Context: M4 portion 2 has resumable transport and batch logs. D-40 requires recorded
+ownership before delivery may touch a Windows student profile; Setup does not yet record it.
+
+1. Build the console and simulator part now. *Send files…* selects local files and captures
+   the PC selection when opened. Validate all names and hash all sources before dispatch;
+   reject duplicate Windows names, paths, alternate streams, reserved devices and trailing
+   dots/spaces. Preserve Unicode names. Hashing runs off the UI thread. Sources remain
+   on disk, must remain available and unchanged until all queued jobs finish, and are
+   re-read through the existing file offers; no whole-file RAM copy is made. The toolbar
+   wraps at narrow window widths so every action remains reachable.
+2. One click has one batch id, with a job for each file/PC pair. Record the complete roster
+   before dispatch. Names appear in the Jobs rows; the existing per-PC ZIP holds every
+   file job. Offline PCs remain pending under the existing process-local queue semantics.
+3. FakeAgent really pulls and verifies bytes into a random temporary file under its own
+   data directory's `Materials`, then replaces the named file only after verification and
+   closing the stream. Failures discard the temporary file and preserve an older handout.
+   Download progress keeps the job active, using a new optional local pull callback;
+   reconnect and hash rules are unchanged. This simulator landing is not a privileged
+   Windows filesystem implementation and must not be reused as one without profile and
+   reparse-point protection under the student identity.
+4. `open` defaults off. With it on, only `.pdf`, `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`,
+   `.odp`, `.txt`, `.png`, `.jpg`, `.jpeg` are eligible. Executables, scripts, shortcuts
+   and all other formats are delivered without opening. FakeAgent reports the requested
+   opening as simulated and launches nothing on the teacher's computer.
+5. The dialog explicitly states current availability: simulator only. Windows agents still
+   refuse unsupported `send_file`. Managed-account resolution, delivery under that account,
+   default-application opening as that user and Windows/fleet acceptance remain pending.
+   This is a portion-2 slice, not completion of M4 or of Windows handout delivery.
+
+Validation: shared wire/name/open rules, multi-file two-PC TLS delivery, zero-length and
+chunk-boundary files, replacement, corrupt-hash preservation/cleanup, offline roster and
+multi-file batch logs, plus headless dialog/toolbar rendering. Existing reconnect tests
+continue to cover the shared transport. No RPC, dependency or installation setting added.
+
+## D-45 — Persist account mode and creation evidence before Windows Setup integration
+
+Context: D-44 handout delivery is waiting for the D-40 managed-account prerequisite.
+Build and test that prerequisite's state rules on the Mac before adding privileged calls.
+
+1. Keep `installation.json` separate from enrollment/trust and version directories. Its
+   schema-versioned account section records an installation id, the explicit mode, pending
+   creation and the SID returned by successful account creation. No password, sign-in
+   backup, arbitrary setting values or profile paths enter this document.
+2. Only a positively identified fresh install defaults creation on. Repair retains the
+   saved choice. Missing legacy history requires an explicit choice and cannot authorize
+   adoption or removal. Invalid or future documents are refused rather than overwritten.
+3. Persist intent before creating an account; persist the resulting SID before configuring
+   sign-in or enabling managed-profile operations. The completion method also requires a
+   creation begun in this process. After a crash, an existing account without a saved SID
+   remains unowned. Retrying is permitted only after Windows reports the name absent;
+   create-new must still refuse races with another creator. Prefer a reported unresolved
+   account over guessing ownership and risking a personal profile.
+4. Account plans require the current SID to match the saved SID. A deleted or recreated
+   account is a conflict, not permission to recreate/adopt it. Explicit opt-out retains
+   history while disabling account-specific actions. Removal defaults to keep and requires
+   both an explicit request and deletion confirmation, enabled mode and matching SID.
+   These are plans, not authorization to delete a path: Windows must operate by verified
+   identity and protect against reparse points and account changes at execution time.
+5. `InstallationState` uses the existing atomic JSON store. Its Windows caller must hold
+   an exclusive setup lock and establish SYSTEM/Administrators-only directory ACLs first.
+   Lookup errors must propagate, never masquerade as account absence. The Windows adapter,
+   protected prior sign-in store, other setting restoration and executable pipeline remain
+   pending; this slice does not retrofit ownership into dev-script installations.
+
+Validation: shared tests exercise fresh/repair modes, legacy history, account collision,
+SID replacement, interrupted creation, opt-out/in, deletion gates, invalid/future journals
+and a failed intent write. No new dependency, RPC or Windows runtime verification.
+
+## D-46 — Windows account preparation under private storage and an exclusive lock
+
+Context: D-45's journal is the prerequisite for Windows handout delivery, but it needs
+an actual create-new adapter before Setup can record any legitimate account ownership.
+
+1. `AccountSetupScope` is the preparation component used by the future Setup pipeline.
+   Require elevation, reject reparse points in the storage path, create a fresh directory
+   with its final private ACL, and reject existing storage whose owner or ACL is not
+   SYSTEM/Administrators-only. Require the directory to pass private permissions to new
+   files; validate existing journal/temporary/lock files too. Never repair a permissive
+   journal's ACL and then accept its old ownership claims.
+2. Hold `setup.lock` open with `FileShare.None` through intent, native creation and SID
+   recording. Closing the scope releases it, including on failure; leave the empty file
+   in place to avoid racing another opener. This serializes cooperating Setup processes;
+   it is not protection against another administrator changing Windows accounts.
+3. The shared `StudentAccountProvisioning` coordinator preserves D-45's saved mode,
+   skips even lookup with mode off, and writes intent before any create-new call. Native
+   lookup uses local `NetUserGetInfo(23)`; only `NERR_UserNotFound` means absent. Every
+   other native failure propagates to the setup caller with an operation/numeric status,
+   never account passwords or native call arguments in the error.
+4. `NetUserAdd` returns status, not a SID. Create a **disabled** account with a fresh
+   per-call marker in its comment, then immediately read the SID and verify marker and
+   disabled flag. This read-back is allowed only after success; never after already-exists
+   or on repair. The marker is public correlation data, not a secret or persisted proof
+   of ownership. A replacement or uncertain result fails closed; no cleanup deletes a
+   name. Persist the resulting SID, then recheck current identity before reporting success.
+5. Account activation, Users membership/verification, the final description, auto-logon
+   and password-policy fallback wait for the protected settings journal and executable
+   pipeline. A failed preparation can leave a disabled account, explicitly unowned when
+   SID recording failed. Existing accounts remain untouched. No current CLI command runs
+   this component, and Windows behavior is not claimed verified on the Mac.
+
+Validation: Mac coordinator tests cover intent ordering, idempotent repair, opt-out,
+lookup errors, native refusal, a concurrent creator, replacement after creation and
+failed intent/SID writes. Cross-compilation checks the native adapter; VM tests must
+verify local SAM behavior, elevation, ACL inheritance, redirects and concurrent scopes.
+No new package family or protocol field; Setup now references the already pinned CsWin32.
+
+Sources: [NetUserAdd](https://learn.microsoft.com/en-us/windows/win32/api/lmaccess/nf-lmaccess-netuseradd),
+[USER_INFO_23](https://learn.microsoft.com/en-us/windows/win32/api/lmaccess/ns-lmaccess-user_info_23).
+
+## D-47 — Encrypt the settings journal and restore only confirmed, unchanged values
+
+Context: D-46 deliberately leaves the created account disabled until settings can be
+restored safely. D-40 also requires preserving existing sign-in secrets and later edits.
+
+1. Keep a separate `setup-settings.json` with an encrypted inner document carrying its
+   own schema version and installation id. `installation.json` remains account evidence
+   without setting values. `AccountSetupScope` uses existing machine-scope DPAPI with
+   purpose `labcontrol/setup-settings/<installation-id>`; no fallback, new package or
+   secret on USB. Both final and temporary files contain ciphertext only. The scope
+   checks their private ACLs and rejects redirects; it owns all journal operations.
+2. Initialize once before a positively identified fresh setup changes settings. Never
+   recreate missing repair/removal history or infer settings ownership for dev installs.
+   Unknown schema, malformed data, decryption failure or another installation's document
+   prevents native operations. Do not attach decrypted parser details to errors.
+3. Native adapters are supplied by code, not constructed from journal paths/commands.
+   Each names one setting and encodes its type/value canonically; null means absent.
+   Save and flush original/desired values before mutation, reread before writing, verify
+   read-back and then save completion. Already-correct values are left unowned, so a
+   pre-existing exclusion or rule is never removed by this journal.
+4. Repair retains the first original value and refuses a changed desired value or a
+   later user edit. A pending apply may retry only when the original still matches. If
+   the value changed before completion was recorded, equality with the desired value
+   cannot prove who wrote it: report a conflict and preserve it on removal too.
+5. Restore only a confirmed applied value that still matches. Save restoration intent
+   before writing the original; after an interruption, retry from the applied value or
+   record completion when the original is already present. Leave later edits intact.
+   Retain restored records to make repeat removal harmless; a new setup after removal
+   needs a fresh installation or an explicit future migration flow.
+6. This is a component, not a claim that Setup.exe can install/remove a PC yet. The
+   registry/LSA/firewall/power adapters and pipeline remain pending. Adapters must guard
+   native identity and concurrent changes (the Setup lock only serializes Setup), keep
+   values out of errors, and skip account/sign-in operations when account mode is off.
+   Multi-setting sign-in sequencing is a future pipeline responsibility.
+
+Validation: Mac tests use authenticated encryption and a fake setting surface to exercise
+ciphertext-only storage, all write interruption boundaries, absent versus empty values,
+pre-existing settings, repair and user conflicts, failed intent/completion saves, read
+failures and corrupt/future/missing/mismatched history. Windows DPAPI runtime verification
+and the D-40 home-PC round trip remain pending. No protocol change or new dependency.
+
+## D-48 — Start native settings integration with two fixed DWORD policies
+
+Context: D-47 has durable restoration rules but no Windows settings adapter. Add the
+two existing installer step-7 registry policies before the multi-setting sign-in flow.
+
+1. `WindowsMachineRegistryStore` only addresses Fast Startup and SoftwareSASGeneration
+   through a code-defined enum. Paths/names live in `Defaults`; use 64-bit HKLM explicitly
+   for both Windows builds. Journal bytes cannot supply paths or select account settings.
+2. Accept DWORD or absent values only. Encode the DWORD type plus all four little-endian
+   bytes; absence stays null. Unexpected native types fail unchanged rather than being
+   coerced and losing their original representation. Existing system parent keys are
+   required; do not create/delete registry trees or infer their ownership.
+3. Fast Startup requests DWORD 0. SAS requests DWORD 1, preserving an existing DWORD 3.
+   Already-correct settings remain unowned. A later change from an owned 1 to 3 is still
+   a journal conflict; do not broaden ownership merely because 3 is acceptable.
+   `ApplyFromCurrent` validates history before reading Windows or choosing the desired
+   value; missing history never triggers a native read just to choose a policy.
+4. Enumerate value names and check type before reading; a failed read must not masquerade
+   as absence. Recheck the expected value using the same writable key handle immediately
+   before writing/deleting, flush and verify. This is optimistic conflict detection,
+   not atomic isolation from Group Policy or other administrators. Keep that limitation
+   explicit; concurrent Windows configuration is outside the setup lock's protection.
+5. Scope methods expose apply/restore through the encrypted journal. They do not activate
+   accounts, configure sign-in or change agent behavior; no CLI invokes them yet. Native
+   failures contain no values or nested native error details. No new package or protocol.
+
+Validation: Mac tests cover typed snapshots through the encrypted journal, all DWORD bits,
+absence, SAS 3 preservation, idempotent repair, later user changes, the native write guard,
+failed reads and malformed saved snapshots. Native registry/DPAPI behavior still needs
+the Windows snapshot checks in INSTALLER.md; M4 remains in progress.
+Build passed with two existing Avalonia window warnings; all 369 solution tests passed
+on macOS, and self-contained Setup publishes succeeded for win-x64 and win-arm64.
+
+API reference: [RegistryKey.GetValue](https://learn.microsoft.com/en-us/dotnet/api/microsoft.win32.registrykey.getvalue?view=net-10.0).
+
+## D-49 — Bind AC power timeouts to a scheme and confirm native activation
+
+Context: installer step 7 requires AC sleep never, display off after 20 minutes and disk
+idle never. A power setting is more than a DWORD: its scheme identity matters, and writing
+its index does not activate it.
+
+1. `PowerPlanSetting` exposes only three code-defined AC timeout policies. Native GUIDs
+   and desired seconds live in `Defaults`; `WindowsPowerPlanSystem` uses CsWin32 power
+   APIs, without shell commands, localized text parsing or new dependencies. No DC,
+   hibernation, NIC or other scheme settings are included in this slice.
+2. Snapshot the active scheme GUID plus uint32 seconds in a versioned canonical format.
+   Null/invalid snapshots and native failures are errors, never absence/defaults. Journal
+   IDs stay fixed so repair on another active scheme conflicts with the first baseline.
+   Journal data cannot select a new native target: writes require its scheme to match
+   the freshly observed active identity. Never create, delete or switch to an old scheme.
+3. Read the scheme before/after reading its value; reread before mutation, write to the
+   explicit observed GUID and verify read-back. Before activation repeat identity/value
+   checks and verify afterwards. This is optimistic conflict detection, not isolation:
+   an external writer can race the final check/call, and Group Policy may override it.
+4. Add optional `ISetupSettingActivation` to the protected journal. Call it after saved
+   value read-back but before completion is persisted. Confirmed repair also reactivates;
+   an interrupted restore whose original value is already present must activate it before
+   being called restored. Repeated restoration checks the original before activation so
+   later user changes are preserved. Existing adapters keep their previous behavior.
+5. An apply interrupted after writing remains ambiguous under D-47, including an activation
+   failure; do not infer ownership just because the desired index is present. A pending
+   restore may retry activation from the original value. Already-correct unowned settings
+   are neither changed nor activated. The scope exposes the component, but executable
+   integration and Windows runtime verification remain pending.
+
+Validation: Mac tests use separate persisted/effective values to exercise activation
+failure/recovery, repair, changed schemes and values, races around native operations,
+malformed snapshots and original-value restoration. No protocol change. Windows checks
+are listed in INSTALLER.md; M4 remains in progress. Build passed with two existing
+Avalonia warnings, all 392 tests passed on the full rerun (23 new power cases), and
+self-contained Setup publishes passed for win-x64 and win-arm64. The first full run
+also had one existing file-resume TLS failure that did not reproduce on the rerun.
+
+API references: [PowerWriteACValueIndex](https://learn.microsoft.com/en-us/windows/win32/api/powersetting/nf-powersetting-powerwriteacvalueindex),
+[PowerGetActiveScheme](https://learn.microsoft.com/en-us/windows/win32/api/powersetting/nf-powersetting-powergetactivescheme),
+[PowerSetActiveScheme](https://learn.microsoft.com/en-us/windows/win32/api/powersetting/nf-powersetting-powersetactivescheme).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the
@@ -1291,6 +1701,8 @@ project cannot notice on its own).
 |---|---|---|
 | Avalonia, Avalonia.Desktop, Avalonia.Themes.Fluent, Avalonia.Fonts.Inter | Console | UI and a bundled font, so text renders the same on every OS |
 | CommunityToolkit.Mvvm | Console | MVVM source generators |
+| Avalonia.AvaloniaEdit | Console | Script editor with line numbers, undo and token coloring (D-39) |
+| System.Management.Automation | Console | Offline PowerShell syntax parsing/tokenization only; no execution or per-PC runtime (D-39) |
 | Grpc.AspNetCore | Console | gRPC server |
 | Grpc.Net.Client, Grpc.Tools, Google.Protobuf | Shared/Agent | gRPC client + codegen |
 | System.Security.Cryptography.ProtectedData | Shared | Windows DPAPI for the console instance key; the BCL dropped it from the shared framework (D-24) |

@@ -1,0 +1,14 @@
+NetUserAdd
+NetUserGetInfo
+NetApiBufferFree
+USER_INFO_1
+USER_INFO_23
+USER_ACCOUNT_FLAGS
+USER_PRIV
+UF_NORMAL_ACCOUNT
+NERR_UserNotFound
+PowerGetActiveScheme
+PowerReadACValueIndex
+PowerWriteACValueIndex
+PowerSetActiveScheme
+LocalFree

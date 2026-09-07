@@ -55,6 +55,20 @@ public sealed partial class ScriptsViewModel : ObservableObject
     private ScriptRecord? _loaded;
     private bool _loading;
 
+    [ObservableProperty]
+    public partial string Validation { get; set; } = string.Empty;
+
+    public ScriptAnalysis Analysis { get; private set; } = new([], []);
+
+    public void ValidateText()
+    {
+        Analysis = ScriptAnalysis.Analyze(Text, ShellIndex == 1 ? ScriptShell.Cmd : ScriptShell.PowerShell);
+        Validation = Analysis.Errors.Count > 0
+            ? string.Join("\n", Analysis.Errors.Select(e => Strings.Format("Scripts.Diagnostic", e.Line, e.Column, e.Message)))
+            : Strings.Get(ShellIndex == 1 ? "Scripts.CmdValidation" : "Scripts.ValidPowerShell");
+        OnPropertyChanged(nameof(Analysis));
+    }
+
     public ScriptsViewModel(LabSession session, IDialogs dialogs, Func<IReadOnlyList<string>> selectedAgents)
     {
         _session = session;
@@ -225,6 +239,7 @@ public sealed partial class ScriptsViewModel : ObservableObject
         }
 
         RecomputeDirty();
+        ValidateText();
     }
 
     /// <summary>The editor's fields as a record, on top of the stored one's identity and dates.</summary>
@@ -272,7 +287,11 @@ public sealed partial class ScriptsViewModel : ObservableObject
 
     partial void OnDescriptionChanged(string value) => RecomputeDirty();
 
-    partial void OnShellIndexChanged(int value) => RecomputeDirty();
+    partial void OnShellIndexChanged(int value)
+    {
+        RecomputeDirty();
+        if (!_loading) ValidateText();
+    }
 
     partial void OnRunAsIndexChanged(int value) => RecomputeDirty();
 
@@ -281,6 +300,13 @@ public sealed partial class ScriptsViewModel : ObservableObject
     partial void OnTextChanged(string value) => RecomputeDirty();
 
     // ------------------------------------------------------------------ commands
+
+    [RelayCommand]
+    private void AddBuiltIns()
+    {
+        var added = _session.Scripts.AddBuiltIns(SeedScripts.Embedded());
+        Status = Strings.Format("Scripts.BuiltInsAdded", added);
+    }
 
     [RelayCommand]
     private void New()
@@ -383,6 +409,13 @@ public sealed partial class ScriptsViewModel : ObservableObject
         if (record.Text.Trim().Length == 0)
         {
             Error = Strings.Get("Scripts.NeedText");
+            return;
+        }
+
+        ValidateText();
+        if (Analysis.Errors.Count > 0)
+        {
+            Error = Strings.Get("Scripts.FixErrors");
             return;
         }
 

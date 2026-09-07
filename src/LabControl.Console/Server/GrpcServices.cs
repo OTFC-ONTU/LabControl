@@ -57,6 +57,9 @@ public sealed class AgentGrpcService : AgentService.AgentServiceBase
     public override Task<VideoAck> PushVideo(IAsyncStreamReader<VideoFrame> requestStream, ServerCallContext context) =>
         _session.ReceiveVideoAsync(context.GetHttpContext().Connection.ClientCertificate, requestStream, context.CancellationToken);
 
-    // Uploads (M4/M5) are not here yet; the base class answers Unimplemented, which an agent
-    // of any version treats as "not available on this console".
+    public override Task<FileAck> PushFile(IAsyncStreamReader<FileChunk> requestStream, ServerCallContext context) =>
+        _session.ReceiveFileAsync(context.GetHttpContext().Connection.ClientCertificate, requestStream, context.CancellationToken);
+
+    public override Task<FileAck> GetUploadStatus(FileRequest request, ServerCallContext context) =>
+        _session.UploadStatusAsync(context.GetHttpContext().Connection.ClientCertificate, request, context.CancellationToken);
 }

@@ -549,6 +549,37 @@ ten-minute operation instead of a walk around the room. The console nags until a
 warns when <code>lab-key.lck</code> no longer matches the fingerprint taken at the last export or
 when a USB stick was written since (<code>D-28</code>).</p>
 <h2 id="data-on-a-student-pc">5. Data on a student PC<a class="anchor" href="#data-on-a-student-pc" aria-label="Link to this section">#</a></h2>
+<p>Planned M4 installation mode (<code>D-40</code>): creating the managed <code>student</code> account is optional
+(default on). With it off, the helper still follows the active Windows session and
+user-session scripts use that user's token. Managed-account operations such as profile
+reset and handout delivery must refuse clearly when no managed account is configured;
+never substitute the home user's profile. Setup persists the choice and an installation
+journal with a schema version, prior settings and ownership in the protected agent data
+directory; sensitive prior sign-in state stays in its designed protected store. Repair
+and updates preserve the mode. A standalone uninstaller shares Setup's removal pipeline,
+restores only owned changes and preserves existing users/files; see INSTALLER.md.</p>
+<p>The account portion of this journal is now built in Shared (<code>D-45</code>):
+<code>InstallationDocument</code> and <code>InstallationState</code> store <code>installation.json</code> separately from
+trust material. It records the mode, installation id, pending creation and created SID;
+it holds no password or profile path. Matching SID evidence gates account/profile plans.
+The Windows preparation component now connects this journal to local SAM creation
+(<code>D-46</code>): <code>AccountSetupScope</code> enforces private storage and an exclusive file lock, then
+<code>StudentAccountProvisioning</code> records intent before <code>WindowsStudentAccountSystem</code> creates
+a disabled account and verifies its SID. It is not yet called by Setup’s executable
+pipeline. The protected original-settings journal core is now built (<code>D-47</code>):
+<code>SetupSettingsJournal</code> stores original/applied values and operation phases in encrypted
+<code>setup-settings.json</code>, bound to the installation id with machine-scope DPAPI by
+<code>AccountSetupScope</code>. It restores only confirmed changes whose values still match,
+preserving later edits and ambiguous interrupted applies. The first native registry
+adapter is built (<code>D-48</code>): a fixed allowlist of Fast Startup and SoftwareSASGeneration,
+64-bit HKLM, DWORD-only snapshots and an optimistic reread before mutation. Unsupported
+types are preserved by refusal; no account/sign-in keys are included. AC power timeouts
+are also built (<code>D-49</code>): snapshots include the active scheme GUID, fixed sleep/display/disk
+settings and original seconds. Optional journal activation confirms the native refresh
+before completion, including interrupted restoration. A changed active scheme is a
+conflict; Setup never follows it by editing another scheme. Other settings/sign-in
+adapters, activation and group configuration remain pending; existing dev installations
+gain no ownership evidence from these components.</p>
 <pre><code>C:\Program Files\LabControl\   app\&lt;version&gt;\  agent.exe, session.exe — one directory per
                                                installed version, kept side by side (D-19);
                                                a pushed build is named 0.1.0+1a2b3c4d — the
@@ -577,6 +608,22 @@ running service cannot overwrite its own <code>.exe</code>, and because a bad up
 reversible without anyone entering the room (<code>D-19</code>). The Defender exclusion is set on the
 <code>C:\Program Files\LabControl\</code> <strong>parent</strong>, so a version directory created later is
 covered without a second visit.</p>
+<p>The shared file client resumes a running <code>PullFile</code> after a link reconnect at the last
+fully written chunk, retaining its hash and destination stream (<code>D-41</code>). Recovery shares
+the 30-second no-progress timeout with download; partial files do not survive service
+restarts. Each attempt uses the current console client; unavailable offers on a replacement
+console fail clearly. Scripts and updates use this same path without changing their landing.</p>
+<p>The M4 upload transport (<code>D-42</code>) uses explicit per-PC grants (<code>FileUploads</code>) and
+<code>GetUploadStatus</code> to resume <code>PushFile</code> at committed offsets. The console selects the
+staging stream and expected size/hash; an agent cannot choose a console path. Callers own
+staging/cleanup and expose only verified results. This transport is built; the per-PC
+diagnostic-upload and collected-work consumers remain pending. Fan-out result bundles
+use existing <code>Link</code> job output instead (D-43).</p>
+<p>The console's <em>Send files…</em> action and FakeAgent handout delivery are built (D-44).
+Every selected file/PC pair is one job in a shared batch. FakeAgent writes into <code>Materials</code>
+under its own data directory and replaces the named file after successful hash verification.
+Windows delivery and opening await D-40 managed-account ownership; the dialog states this
+limitation. Source files must remain unchanged and available until all jobs complete.</p>
 <h2 id="feature-mechanism-map">6. Feature → mechanism map<a class="anchor" href="#feature-mechanism-map" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
 <thead>
@@ -826,10 +873,17 @@ the teacher's mouse and keyboard to the PC, with <em>Ctrl+Alt+Del</em> and <em>W
 keys the teacher's keyboard cannot send (<code>D-36</code>). One window per PC; the tile keeps
 moving meanwhile.</li>
 <li><strong>Jobs panel</strong>: every action becomes a job with per-PC rows (pending / running /
-ok / failed + log). Jobs persist in <code>logs/</code>.</li>
+ok / failed + log). Jobs persist in <code>logs/</code>. Batch snapshots in
+<code>logs/batches/&lt;batch-id&gt;.json</code> preserve the roster and per-PC output at creation and
+terminal updates; <em>Export batch logs…</em> exports the selected row's entire batch as a
+ZIP with a manifest and a JSON log per PC (D-43). A running export explicitly includes
+pending/running PCs and is a snapshot, not a promise that the batch finished.</li>
 <li><strong>Scripts</strong> tab: the library on the left, the selected script edited in place on the
 right, <em>Run on selected PCs</em> sending the editor's text to the lab view's selection (M4,
-<code>D-31</code>, <code>D-38</code>).</li>
+<code>D-31</code>, <code>D-38</code>). A quick selector/run button above the lab mosaic shares the same
+draft and selection. The editor has line numbers, token highlighting and local parse
+diagnostics (PowerShell; basic checks only for cmd), and blocks parse errors on run.
+Missing built-in application scripts can be imported explicitly (<code>D-39</code>).</li>
 <li><strong>Packages</strong> panel (M6): manage the catalog; &quot;Install on all missing&quot;.</li>
 <li><strong>Settings</strong>: lab key (export backup, reprint the recovery code, change the
 passphrase), teacher machines (this one, others seen, <em>Take over</em>, revoke behind a
@@ -921,7 +975,7 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-09-07 21:02 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 23:34 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#three-separate-identities">3.1 Three separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>

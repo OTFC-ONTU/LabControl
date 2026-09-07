@@ -18,7 +18,7 @@ implement.
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
-| **M4** | Deployment: USB installer, files, self-update | **in progress — portion 1 (the script library) built on the Mac (2026-09-07), `D-38`** | M3 |
+| **M4** | Deployment: USB installer, files, self-update | **in progress — portion 1 built; portion 2: resumable file transport and per-PC batch logs built on the Mac (2026-09-07), handout UI and simulator delivery built; portion 3 account journal, Windows preparation, protected settings journal and machine registry/AC power-plan adapters built, executable pipeline pending (`D-38`, `D-41`…`D-49`)** | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
 | **M6** | Software catalog, localization, polish | not started | M5 |
 
@@ -794,6 +794,14 @@ never walk again — including when the teacher machine is replaced.
 - `LabControl.Setup` exactly as specified in `docs/INSTALLER.md`: `ISetupStep` pipeline,
   `--dry-run`, `--number`, `--uninstall`, `--rekey`, idempotent re-runs, `setup.log`,
   green summary, reboot prompt, Defender exclusion, third-party-antivirus detection.
+- **Optional student account and standalone uninstall (planned, D-40).** On the PC-number
+  screen, *Create student account and enable automatic sign-in* is checked on a fresh
+  install. Unticking it installs the agent for testing with an existing Windows session,
+  without changing accounts, passwords, password policy, automatic sign-in or profile
+  defaults. Repair preserves the saved choice. Provide `Uninstall.exe` on the PC and a
+  Windows Installed apps entry, usable without the USB stick or console; retain
+  `Setup.exe --uninstall` as an equivalent entry point. Track installer-owned changes
+  so uninstall preserves personal accounts/files and restores settings safely.
 - `tools/build-usb.sh` and the console's *Build USB installer* action, writing the
   **secret-free** payload of `docs/INSTALLER.md`: public CA certificate + a batch of
   single-use enrollment codes.
@@ -816,11 +824,14 @@ never walk again — including when the teacher machine is replaced.
 - **The script library** (`D-31`): scripts live *inside the console*, not as files on the
   teacher's disk. A *Scripts* view with a list on the left (name, one-line description) and
   the script itself on the right — name, description, PowerShell / cmd, run as SYSTEM / in
-  the student session, timeout, and the text in a plain monospaced editor. *Run on selected
+  the student session, timeout, and the text in a monospaced code editor. *Run on selected
   PCs* and *Save*; unsaved text can be run once. Stored in `scripts.json` next to
   `lab.json` (with a `schema_version`, `D-20`), so the library is in the backup and moves
   with the lab; the repository's `scripts/` directory is the **seed** imported on first run.
-  Results go to the existing jobs panel. No syntax highlighting, no parameters, no schedule.
+  Results go to the existing jobs panel. Owner-requested extension (2026-09-07, D-39):
+  syntax highlighting and local validation, a quick runner in the Lab view, and built-in
+  open/close scripts for Word, PyCharm, IntelliJ IDEA, Visual Studio and VS Code,
+  including explicit UAC launch variants. No parameters or schedule.
 
 **Acceptance criteria**
 
@@ -832,6 +843,13 @@ never walk again — including when the teacher machine is replaced.
 - `Setup.exe --uninstall` leaves no service, no firewall rule and no LabControl
   directories; `--rekey` re-issues trust material in about 30 s while leaving the
   `student` account, the installed software and the settings untouched.
+- **Home-PC round trip (D-40).** Untick account creation, install, reboot, log into the
+  existing account, verify capture/control and a user-session script, repair and update,
+  then uninstall without the USB or console. No student account is created at any stage;
+  existing accounts, profiles and sign-in settings stay intact. The removal restores
+  installer-owned system changes without overwriting later user changes. Repeat uninstall
+  after a partial install and with a pre-existing account named `student`; it is never
+  adopted or deleted. Verify the default checked classroom path separately.
 - All 14 PCs of the first lab are enrolled and visible.
 - **Migration, for real this time.** Move the console to another computer (or another OS
   user profile standing in for one) using only the backup and the passphrase. All 14 real
@@ -867,7 +885,8 @@ already proved, the library inside the backup; **(2)** the file channel grown up
 *open after delivery* and *Send files…* on the toolbar, the parallel fan-out with the
 per-PC log bundle — console and simulator on the Mac, the agent on the VM; **(3)**
 `Setup.exe` as `docs/INSTALLER.md` specifies it, `tools/build-usb.sh` and the console's
-*Build USB installer* — on the VM, then the fresh-PC criterion on `PC-00`; **(4)** the
+*Build USB installer*, optional account creation and standalone uninstall (`D-40`) —
+on the VM, then the fresh-PC criterion on `PC-00` and the home-PC round trip; **(4)** the
 full `self_update` — the signed manifest, probation, the rollback driven from outside the
 agent, the fleet view — on the VM with the deliberately broken release. The order puts the
 console-only work first (nothing new to prove on Windows) and the two Windows-heavy
@@ -875,6 +894,107 @@ portions last, each with its own VM day.
 
 **Progress.**
 
+- *Portion 2 handout dispatch and simulator delivery built (2026-09-07, D-44).*
+  *Send files…* selects multiple local files, with optional document opening, and creates
+  one batch containing every file/PC job. Names are validated for Windows before dispatch;
+  offline PCs remain pending. FakeAgent really downloads into its own `Materials`, checks
+  SHA-256 and replaces only after completion; corrupt downloads preserve the old file.
+  Opening is simulated, limited to document/image formats; executables are never launched.
+  The dialog states that Windows delivery is not implemented yet. The next step is the
+  D-40 managed-account ownership prerequisite in Setup, then Windows delivery/opening under
+  that identity; real fleet acceptance remains pending. TLS, validation and headless UI tests
+  cover this Mac slice. Keep source files unchanged and available until delivery completes.
+- *Portion 3 account ownership foundation built (2026-09-07, D-45).*
+  The shared `installation.json` journal preserves the selected account mode and records
+  creation intent and the created SID. Pure account/removal plans refuse existing or
+  replaced accounts and ambiguous interrupted installs. Missing legacy history requires
+  an explicit mode choice; no profile is inferred from a name. Tests cover repair, opt-out,
+  collisions, crash recovery, confirmed removal, corrupt/future records and storage failure.
+  This pulls forward the D-40 prerequisite identified above; Setup.exe remains a skeleton.
+  The Windows create-new/SID bridge and lock/private storage component are now built
+  in D-46 below. Next: the protected settings journal, account activation/group
+  verification, setup pipeline and Windows handout delivery.
+  No real Windows account, sign-in setting or profile was changed or verified in this slice.
+- *Portion 3 Windows account preparation component built (2026-09-07, D-46).*
+  `AccountSetupScope` establishes private fresh storage, refuses untrusted existing
+  journals/reparse points and holds the exclusive setup file lock. The shared coordinator
+  records intent before local SAM create-new and saves the verified SID afterwards;
+  new users remain disabled. Opt-out makes no account API calls; collisions and failed
+  creation/read-back/storage never cause adoption or deletion. Mac tests cover ordering,
+  repair, lookup/storage failures and concurrent account replacement. The component
+  compiles for Windows; Setup's executable still does not invoke it. No real user was
+  created or modified. Validation: 331 solution tests passed on macOS; Setup published
+  self-contained for win-x64 and win-arm64. Next: protected prior-settings/sign-in storage, group verification
+  and activation, then the executable pipeline and Windows handout delivery.
+  VM checks pending: fresh disabled creation and SID match, repeat without password
+  changes, opt-out, existing-name collision, password-policy refusal, simultaneous
+  setup scopes, permissive/redirected storage refusal, and failure after SAM creation.
+- *Portion 3 protected settings journal core built (2026-09-07, D-47).*
+  `SetupSettingsJournal` saves original/applied values and operation phases before native
+  changes, verifies read-back, preserves user edits and leaves ambiguous interrupted
+  applies for review. `AccountSetupScope` provides the private lock and machine-scope
+  DPAPI binding to this installation. Main and temporary files contain only ciphertext.
+  Mac tests cover absence, pre-existing settings, repair, conflicts, interrupted writes
+  and restoration, storage failures and invalid/missing/future/mismatched history.
+  Validation: all 354 solution tests passed on macOS (23 new journal cases).
+  No executable command invokes this component or changes Windows settings yet.
+  Next: native settings/sign-in adapters, group verification and activation, executable
+  install/repair/removal pipeline, then Windows handout delivery. DPAPI verification and
+  the home-PC round trip still require a Windows VM.
+- *Portion 3 first machine registry adapters built (2026-09-07, D-48).*
+  Fast Startup and SoftwareSASGeneration now have a fixed Windows registry adapter and
+  typed journal bridge, exposed by `AccountSetupScope`. Existing SAS value 3 is retained;
+  non-DWORD originals are refused unchanged. Reread before mutation and read-back detect
+  observed concurrent changes; the guard is not a transaction with other administrators.
+  Mac tests exercise original DWORD/absence restoration, already-correct values,
+  user changes, failed reads and malformed snapshots. No CLI invokes these policies;
+  Windows runtime verification remains pending. Validation: `dotnet build` passed
+  (two existing AVLN3001 window warnings), all 369 solution tests passed on macOS
+  (15 new cases), and Setup published self-contained for win-x64 and win-arm64.
+  Next: remaining settings/sign-in
+  adapters, group verification/activation and the executable install/repair/removal flow.
+- *Portion 3 AC power-plan adapters built (2026-09-07, D-49).*
+  Sleep/display/disk AC timeouts now journal the active scheme identity and original
+  seconds, with guarded Windows writes and activation before completion. Repair/removal
+  preserves changed schemes and later edits; interrupted restore retries activation when
+  the original index has already been written. Battery settings remain untouched.
+  Mac tests exercise native failures, scheme races, activation recovery and journal
+  round trips. Validation: build passed with the two existing Avalonia warnings; all
+  392 solution tests passed (23 new power cases); self-contained Setup publishes passed
+  for win-x64 and win-arm64. One existing file-resume TLS test failed on the first full
+  run and passed on the complete rerun. Windows runtime checks and executable integration
+  remain pending.
+  Next: remaining native settings/sign-in adapters, account group verification/activation,
+  then the executable install/repair/removal flow and Windows handout delivery.
+- *Portion 2 started (2026-09-07, D-41).* `PullFile` now resumes at the last fully
+  written chunk after a link reconnect, with a bounded inactivity timeout and a full-file
+  SHA-256 check. Fixed terminal metadata for empty files and exact 64 KiB multiples.
+  Loopback TLS tests cover repeated reconnects and cancellation; suffix and offset checks
+  exercise the server.
+- *Portion 2 upload transport built (2026-09-07, D-42).* `PushFile` and the additive
+  `GetUploadStatus` RPC resume uploads at console-confirmed offsets, with per-PC grants,
+  expected size/SHA-256 checks and recovery when the final acknowledgement is lost.
+  Loopback TLS tests exercise reconnects and boundary files; rejection tests cover peer
+  isolation and corrupt chunks. This is the shared agent/console transport API;
+  Windows `send_file`/Materials, Windows verification and
+  fleet-scale acceptance are still pending.
+- *Portion 2 batch logs built (2026-09-07, D-43).* Every group action saves a
+  schema-versioned report under `logs/batches/<batch-id>.json`, with the complete roster
+  and per-PC results/output, at creation and on terminal results. In *Jobs*, select a row
+  and use *Export batch logs…* for a ZIP containing every PC in that batch. Export captures
+  current output consistently, includes unfinished PCs explicitly, and leaves the chosen
+  destination intact on failure. Disk errors raise an event without stopping delivery.
+  These are the results already received over `Link`, not uploaded agent diagnostic files.
+  Tests cover concurrent results for 30 PCs, mixed outcomes over loopback TLS, late results,
+  Unicode, unfinished exports, schema refusal and storage failures; the Jobs view is
+  rendered by the headless UI suite. Real fleet transfer acceptance remains pending.
+- *Script editor extension (2026-09-07, D-39).* Added line numbers, syntax coloring,
+  local PowerShell diagnostics and parse-error blocking on run; cmd checks are explicitly
+  limited. Quick runs now sit above the lab mosaic. Added open/UAC-open/graceful-close
+  for Word, PyCharm, IntelliJ IDEA, Visual Studio and VS Code, plus `find-python`.
+  Existing libraries use *Add missing built-in scripts*. Windows verification remains:
+  installed-app discovery, GUI lifetime after the script exits, save prompts, UAC
+  approval/cancellation and Python visibility under the student account.
 - *Portion 1 (built 2026-09-07).* The script library (`D-31` items 4–5, `D-38`). The
   *Scripts* tab sits between *Lab* and *Jobs*: the library on the left (name, one line,
   shell · run-as · timeout), the selected script on the right — name, description, shell,
@@ -889,7 +1009,7 @@ portions last, each with its own VM day.
   seed once and saves on every change, and `LabSession.RunScript` offers the text through
   `PullFile` and sends the `run_script` jobs exactly as the development dialog did. The
   seed is `scripts/library/*.ps1|*.cmd`, embedded into the console at build time, so a
-  published console carries it; four scripts to start with (`pc-info`, `list-installed`,
+  published console carries it; originally four scripts (`pc-info`, `list-installed`,
   `close-browsers`, `clear-temp`). The backup carries the library (`BackupPayload.scripts`;
   an older backup restores without one and the seed fills in). The jobs panel names the
   script in the *Job* column. The development-only *Run test script…* dialog is gone

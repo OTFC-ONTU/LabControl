@@ -136,6 +136,26 @@ public sealed class ScriptLibrary
         return true;
     }
 
+    /// <summary>Explicitly add missing built-ins; preserve existing seed edits and name collisions.</summary>
+    public int AddBuiltIns(IReadOnlyList<SeedScript> seed)
+    {
+        var added = 0;
+        lock (_gate)
+        {
+            foreach (var file in seed)
+            {
+                var record = ScriptSeed.ToRecord(file, _clock());
+                if (Document.Scripts.Any(s => string.Equals(s.SeedFile, file.FileName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(s.Name, record.Name, StringComparison.OrdinalIgnoreCase))) continue;
+                Document.Scripts.Add(record);
+                added++;
+            }
+            if (added > 0) _store.SaveScripts(Document);
+        }
+        if (added > 0) Changed?.Invoke();
+        return added;
+    }
+
     public bool Remove(string id)
     {
         lock (_gate)

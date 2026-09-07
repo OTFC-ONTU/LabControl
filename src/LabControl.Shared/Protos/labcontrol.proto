@@ -52,6 +52,7 @@ service AgentService {
   rpc PushVideo (stream VideoFrame)   returns (VideoAck);              // opened on demand
   rpc PullFile  (FileRequest)         returns (stream FileChunk);      // agent downloads
   rpc PushFile  (stream FileChunk)    returns (FileAck);               // agent uploads
+  rpc GetUploadStatus (FileRequest)  returns (FileAck);               // committed upload offset
   rpc Renew     (RenewRequest)        returns (RenewResponse);         // certificate renewal (D-25)
 }
 
@@ -437,6 +438,7 @@ message FileAck {
   bool   ok           = 2;
   int64  bytes_stored = 3;
   string message      = 4;
+  string sha256       = 5;  // expected content hash bound to the upload grant
 }
 
 // ---------------------------------------------------------------------------

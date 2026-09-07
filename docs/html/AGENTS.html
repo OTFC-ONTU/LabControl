@@ -168,6 +168,14 @@ not expose the lab-key passphrase, private keys, enrollment material, or the
 <li>Keep the solution buildable with plain <code>dotnet build</code> and <code>dotnet test</code> on the
 Apple Silicon development machine. Windows-only behavior needs a Windows VM or
 a lab PC for runtime verification.</li>
+<li>Planned M4 Setup must support opting out of student-account creation (default on)
+and standalone uninstall. Preserve personal accounts and profiles; repair retains the
+selected mode and removal uses recorded ownership (<code>docs/INSTALLER.md</code>, D-40).</li>
+<li>The account journal, Windows preparation component (<code>D-45</code>, <code>D-46</code>), protected
+settings journal core (<code>D-47</code>), two machine DWORD adapters (<code>D-48</code>) and AC power-plan
+adapters with activation confirmation (<code>D-49</code>) are built,
+but the Setup executable pipeline is pending. <code>AccountSetupScope</code> owns the private storage/lock; new accounts
+remain disabled until later setup steps. Never infer ownership for legacy dev installs from the account name.</li>
 <li>Do not invent features outside <code>docs/ROADMAP.md</code>; propose the scope there first.</li>
 </ul>
 <h2 id="shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code<a class="anchor" href="#shared-documentation-contract-for-codex-and-claude-code" aria-label="Link to this section">#</a></h2>
@@ -235,7 +243,7 @@ latest milestone state; do not duplicate that volatile detail here unless Codex
 needs a specific additional instruction.</p>
 
 </article>
-<footer>Generated 2026-09-07 21:02 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 23:34 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

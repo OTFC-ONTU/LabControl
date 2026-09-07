@@ -168,12 +168,16 @@ runs the console, and nothing may hard-code 14 PCs: design for <strong>up to 30<
 <li><strong>Student agent is Windows-only</strong> (10/11 x64). Runs as a Windows service, survives
 reboots, cannot be killed or uninstalled by the student.</li>
 <li><strong>Installer is one-shot from a USB stick</strong>: run once as local admin on each PC,
-asks at most one question (PC number), does <em>everything</em> else itself (service,
+asks at most one question (PC number) with default options, does <em>everything</em> else itself (service,
 firewall, Wake-on-LAN, power settings, <code>student</code> user, auto-logon, enrollment).
+M4 adds a checked-by-default account-creation checkbox: untick it for testing with
+an existing home-PC account, preserving accounts and sign-in settings. A standalone
+uninstaller works without the USB or console (<code>D-40</code>, <code>docs/INSTALLER.md</code>).
 The stick carries <strong>no secret</strong> — only the public CA certificate and single-use
 enrollment codes (D-14).</li>
 <li><strong><code>student</code> account</strong>: standard (non-admin) local user, password <code>1</code>, auto-logon at
-boot, profile can be reset to a clean desktop on command.</li>
+boot, profile can be reset to a clean desktop on command. This is the default classroom
+configuration; installations opting out never reset or adopt a personal profile (D-40).</li>
 <li><strong>Live screens</strong>: mosaic of all 14 screens on the teacher's monitor, click a tile
 for full-size view with mouse/keyboard control.</li>
 <li><strong>Power</strong>: Wake-on-LAN, shutdown, reboot, log off — for one PC or all.</li>
@@ -352,12 +356,64 @@ with an <em>Auto</em> mode the producer drives from the pacer's waits (<code>D-3
 <code>VideoFrame.quality</code>). Version 0.1.4, verified on <code>PC-10</code>: <em>Auto</em> at q40–50, 14–18 fps
 while scrolling. M3's close-out measurements (an hour of streaming, the 30-tile mosaic,
 Ukrainian text) are what remains before M4.
+<strong>M4 portion 3 planning update (D-40):</strong> optional student creation (checked by default),
+existing-account testing and standalone uninstall with ownership-aware restoration are
+planned; Setup remains a skeleton. <strong>The shared account journal is built (D-45):</strong>
+<code>InstallationDocument</code> / <code>InstallationState</code> persist the selected mode, installation id,
+pending creation and created SID in <code>installation.json</code>. Repair preserves the choice;
+missing legacy history, account collisions and interrupted creation never imply ownership.
+Managed-profile access and confirmed removal require the recorded SID to match. Mac tests
+cover these rules and storage failures. <strong>Windows account preparation is built (D-46):</strong>
+<code>AccountSetupScope</code> checks private ownership storage and holds an exclusive file lock;
+<code>StudentAccountProvisioning</code> connects the journal to <code>WindowsStudentAccountSystem</code>
+(create-new local SAM account, disabled, with immediate SID/creation-marker read-back).
+The component is compiled on the Mac, not run on Windows. Setup’s executable pipeline,
+account activation/Users membership, native sign-in/settings adapters, and standalone
+removal remain pending. No command currently invokes account preparation.
+<strong>The protected settings journal core is built (D-47):</strong> <code>SetupSettingsJournal</code> records
+original/applied values before mutation, confirms native read-back, preserves user edits
+and refuses ambiguous interrupted applies. <code>AccountSetupScope</code> binds its encrypted
+<code>setup-settings.json</code> to this installation using machine-scope DPAPI; temporary files
+contain only ciphertext. Mac tests cover recovery and storage failures; Windows DPAPI
+still needs Windows verification. <strong>The first machine registry adapters are built
+(D-48):</strong> Fast Startup and SoftwareSASGeneration use typed DWORD snapshots and the
+protected journal through <code>AccountSetupScope</code>. Existing SAS value 3 is retained;
+unsupported native types and observed concurrent changes are refused. Native execution,
+the remaining setting/sign-in adapters and executable integration are still pending.
+<strong>AC power-plan adapters are built (D-49):</strong> sleep/display/disk timeouts use the protected
+journal with the active scheme GUID and original seconds. Native activation is confirmed
+before completion; interrupted restoration retries activation even after the original
+index is written. A later scheme/value change is preserved as a conflict. Windows
+execution and the executable pipeline remain pending.
 <strong>M4 is in progress, in four portions</strong> (ROADMAP M4, <em>How it is being built</em>; <code>D-38</code>).
 <strong>Portion 1 is built (2026-09-07)</strong>, all on the Mac: the <em>Scripts</em> tab (<code>ScriptsViewModel</code>,
 <code>ScriptsView</code>), <code>Shared/Persistence/ScriptsDocument</code> (<code>scripts.json</code> beside <code>lab.json</code>, in
 the backup), <code>Shared/Jobs/ScriptSeed</code> and <code>Console/Services/ScriptLibrary</code> (the seed from
 <code>scripts/library/</code> embedded in the console, imported once), <code>LabSession.RunScript</code>. Not yet
-run against a real agent: the four seed scripts wait for the next push to the VM.</p>
+run against a real agent: the seed scripts wait for Windows verification.
+The owner-requested editor extension (<code>D-39</code>) adds AvaloniaEdit, local PowerShell parse
+diagnostics, a quick runner above the lab mosaic, and 16 additional built-ins: open,
+UAC-open and graceful close for five apps, plus Python discovery. Existing libraries
+can add missing built-ins explicitly without replacing edits. UAC still requires admin
+credentials on a standard student account; no SYSTEM desktop launch was introduced.</p>
+<p><strong>M4 portion 2 has started (2026-09-07, D-41):</strong> <code>PullFile</code> resumes a running download
+at completed chunk boundaries across reconnects, keeping the whole-file hash and a
+30-second inactivity budget. Empty files and exact 64 KiB multiples finish correctly.
+Loopback TLS tests cover repeated disconnects and cancellation. <strong>The upload transport is
+also built (D-42):</strong> <code>FileUploads</code> grants a specific PC an expected size/hash and staging
+stream; <code>AgentLink.PushFileAsync</code> resumes through the additive <code>GetUploadStatus</code> RPC.
+Tests cover repeated reconnects, lost completion acknowledgements, corruption and peer
+isolation. Grant callers own staging and cleanup; no upload UI or collection job yet.
+<strong>Per-PC batch logs are built (D-43):</strong> <code>JobBatchLogs</code> saves the roster and results under
+<code>logs/batches/</code>; <em>Jobs → Export batch logs…</em> exports a consistent ZIP snapshot with a
+separate log for each PC, including unfinished jobs. This uses existing <code>Link</code> output;
+no diagnostic-upload job was added. Tests cover 30 concurrent PC results, mixed outcomes,
+late results and disk errors. <strong>Handout dispatch and simulator delivery are built (D-44):</strong>
+<em>Send files…</em> queues a file/PC job matrix in one batch; FakeAgent downloads into its own
+<code>Materials</code>, verifies the hash and replaces a same-named file only on success. Opening is
+simulated and only document/image formats are eligible. The UI states Windows delivery
+is pending; D-40 managed-account ownership must land before any real student profile is
+used. Windows delivery/opening and fleet-scale verification remain pending.</p>
 <p>The console's non-UI core lives in <code>src/LabControl.Console/Services</code> (<code>LabSession</code>,
 <code>ConsoleBootstrap</code>, <code>LabKeyVault</code>) and <code>Server/</code>; the agent side shared by <code>FakeAgent</code> and
 the real agent is <code>src/LabControl.Shared/Link/AgentLink.cs</code>, and the install-time routines
@@ -368,7 +424,7 @@ shared by the agent, the simulator and Setup are <code>src/LabControl.Shared/Set
 (<code>tests/&lt;project&gt;/bin/Debug/net10.0/&lt;project&gt;</code>).</p>
 
 </article>
-<footer>Generated 2026-09-07 21:02 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 23:34 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

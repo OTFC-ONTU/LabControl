@@ -80,13 +80,16 @@ public static class Defaults
 
     public static readonly TimeSpan WakePacketSpacing = TimeSpan.FromSeconds(1);
 
-    // ---------------------------------------------------------------- files (PullFile)
+    // ---------------------------------------------------------------- files (PullFile / PushFile)
 
     /// <summary>One <c>FileChunk</c> on the wire; small enough that a job is never delayed behind one.</summary>
     public const int FileChunkBytes = 64 * 1024;
 
-    /// <summary>A file the agent pulls must show a chunk at least this often, or the pull is abandoned.</summary>
+    /// <summary>A file transfer must make progress at least this often, or it is abandoned.</summary>
     public static readonly TimeSpan FileChunkTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>Retry a transient file failure without spinning while the control link reconnects.</summary>
+    public static readonly TimeSpan FileRetryDelay = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
     /// A linked agent whose certificate is due for renewal asks again on this backoff while
@@ -159,6 +162,8 @@ public static class Defaults
     public const int BackupSchemaVersion = 1;
     public const int ScriptsSchemaVersion = 1;
     public const int SetupPayloadSchemaVersion = 1;
+    public const int InstallationSchemaVersion = 1;
+    public const int SetupSettingsSchemaVersion = 1;
 
     /// <summary>Name of the version field, first in every persisted file.</summary>
     public const string SchemaVersionFieldName = "schema_version";
@@ -180,6 +185,10 @@ public static class Defaults
     /// <summary>Events and job results are appended to these, one file per day, under <c>logs/</c>.</summary>
     public const string EventLogFilePattern = "events-{0:yyyy-MM-dd}.jsonl";
     public const string JobLogFilePattern = "jobs-{0:yyyy-MM-dd}.jsonl";
+    public const string JobBatchesDirectoryName = "batches";
+    public const string JobBatchManifestFileName = "manifest.json";
+    public const string JobBatchArchiveExtension = ".zip";
+    public const int JobBatchSchemaVersion = 1;
 
     // ---------------------------------------------------------------- USB payload
 
@@ -318,6 +327,21 @@ public static class Defaults
     public const string AgentCertificateFileName = "agent.crt";
     public const string CaCertificateFileName = "ca.crt";
     public const string SetupLogFileName = "setup.log";
+    public const string InstallationFileName = "installation.json";
+    public const string SetupLockFileName = "setup.lock";
+    public const string SetupSettingsFileName = "setup-settings.json";
+    public const string FastStartupPolicyKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Power";
+    public const string FastStartupPolicyValue = "HiberbootEnabled";
+    public const uint SetupSleepAcSeconds = 0;
+    public const uint SetupDisplayAcSeconds = 20 * 60;
+    public const uint SetupDiskAcSeconds = 0;
+    public static readonly Guid PowerSleepSubgroup = new("238c9fa8-0aad-41ed-83f4-97be242c8f20");
+    public static readonly Guid PowerSleepTimeout = new("29f6c1db-86da-48c5-9fdb-f2b67b1f44da");
+    public static readonly Guid PowerDisplaySubgroup = new("7516b95f-f776-4464-8c53-06167f40cc99");
+    public static readonly Guid PowerDisplayTimeout = new("3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e");
+    public static readonly Guid PowerDiskSubgroup = new("0012ee47-9041-4b5d-9b77-535fba8b1442");
+    public static readonly Guid PowerDiskTimeout = new("6738e2c4-e8a5-4a42-b16a-e040e769756e");
+    public const string StudentCreationCommentPrefix = "LabControl account creation ";
 
     // ------------------------------------------------------------ session helper
 
@@ -589,5 +613,6 @@ public static class Defaults
     /// desktop the student cannot miss and a profile reset wipes (D-23). Installers never
     /// land here; they go to the agent's staging directory.
     /// </summary>
-    public const string MaterialsRelativePath = @"Desktop\Materials";
+    public const string MaterialsFolderName = "Materials";
+    public const string MaterialsRelativePath = @"Desktop\" + MaterialsFolderName;
 }

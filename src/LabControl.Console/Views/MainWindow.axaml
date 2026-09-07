@@ -53,11 +53,12 @@
     <!-- Toolbar: actions apply to the selection (ARCHITECTURE §8). -->
     <Border DockPanel.Dock="Top" Padding="10,8" BorderThickness="0,0,0,1"
             BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
-      <StackPanel Orientation="Horizontal" Spacing="8">
+      <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
         <Button Content="{loc:Localize Action.Wake}" Command="{Binding WakeCommand}" />
         <Button Content="{loc:Localize Action.Shutdown}" Command="{Binding ShutdownCommand}" />
         <Button Content="{loc:Localize Action.Reboot}" Command="{Binding RebootCommand}" />
         <Button Content="{loc:Localize Action.Logoff}" Command="{Binding LogoffCommand}" />
+        <Button Content="{loc:Localize Action.SendFiles}" Command="{Binding SendFilesCommand}" />
         <Button Content="{loc:Localize Action.PushBuild}" Command="{Binding PushBuildCommand}" />
         <Button Content="{loc:Localize Action.RemoveSelected}" Command="{Binding RemoveSelectedCommand}" />
         <Rectangle Width="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" Margin="4,0" />
@@ -68,7 +69,7 @@
         <Button Content="{loc:Localize Key.Lock}" Command="{Binding LockCommand}" IsVisible="{Binding IsUnlocked}" />
         <TextBlock Text="{Binding SelectedCount, StringFormat={loc:Localize Main.SelectedFormat}}"
                    VerticalAlignment="Center" Opacity="0.7" Margin="12,0,0,0" />
-      </StackPanel>
+      </WrapPanel>
     </Border>
 
     <!-- Status bar. -->
@@ -82,7 +83,30 @@
 
     <TabControl Padding="0">
       <TabItem Header="{loc:Localize Tab.Lab}">
-        <views:LabView />
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Padding="10,8" DataContext="{Binding Scripts}" x:DataType="vm:ScriptsViewModel">
+            <StackPanel Spacing="4">
+              <WrapPanel>
+                <ComboBox ItemsSource="{Binding Scripts}" SelectedItem="{Binding Selected}" Width="260" Margin="0,0,8,0">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ScriptRowViewModel">
+                      <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="{Binding Name}" />
+                        <TextBlock Text="•" IsVisible="{Binding IsDirty}" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Content="{Binding RunLabel}" Command="{Binding RunCommand}" />
+              </WrapPanel>
+              <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Opacity="0.7" />
+              <TextBlock Text="{loc:Localize Scripts.QuickHint}" IsVisible="{Binding IsDirty}" />
+              <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Error}" Foreground="IndianRed" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <views:LabView />
+        </DockPanel>
       </TabItem>
       <TabItem Header="{loc:Localize Tab.Scripts}">
         <views:ScriptsView DataContext="{Binding Scripts}" />

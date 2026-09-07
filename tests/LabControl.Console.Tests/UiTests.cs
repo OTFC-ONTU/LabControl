@@ -214,6 +214,16 @@ public sealed class UiTests
                 window.DataContext = vm;
                 window.Show();
                 await Render(window, "main-1-lab");
+                window.Width = 720;
+                await Render(window, "main-lab-narrow");
+                window.Width = 1100;
+                Assert.False(vm.SendFilesCommand.CanExecute(null));
+                var handouts = new SendFilesDialog(8);
+                handouts.Show();
+                await Render(handouts, "send-files-empty");
+                Assert.False(handouts.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "Send").IsEnabled);
+                handouts.Close();
+
 
                 Assert.Equal(7, vm.Machines.Count(m => m.HasPicture));
                 Assert.False(vm.Machines.Single(m => m.Number == 3).HasPicture);
@@ -246,6 +256,7 @@ public sealed class UiTests
                 vm.Select(vm.Machines[0], toggle: false);
                 vm.Select(vm.Machines[3], toggle: true);
                 Assert.Equal(2, vm.SelectedCount);
+                Assert.True(vm.SendFilesCommand.CanExecute(null));
                 Assert.True(vm.RebootCommand.CanExecute(null));
                 vm.RebootCommand.Execute(null);
                 await Render(window, "main-2-selected");
@@ -253,8 +264,12 @@ public sealed class UiTests
                 Assert.True(await Wait.UntilAsync(() => vm.Jobs.Count == 2 && vm.Jobs.All(j => j.IsFinished)));
                 var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
                 tabs.SelectedIndex = 2;
+                Assert.False(vm.ExportBatchLogsCommand.CanExecute(null));
                 vm.SelectedJob = vm.Jobs[0];
+                Assert.True(vm.ExportBatchLogsCommand.CanExecute(null));
                 await Render(window, "main-3-jobs");
+                Assert.Contains(window.GetVisualDescendants().OfType<Button>(),
+                    button => Equals(button.Content, "Export batch logs…") && button.IsEnabled);
                 tabs.SelectedIndex = 3;
                 await Render(window, "main-4-events");
                 tabs.SelectedIndex = 4;
@@ -271,6 +286,14 @@ public sealed class UiTests
                 scripts.Name = "say-hello";
                 scripts.Description = "Prints a greeting";
                 scripts.Text = "Write-Output \"hello\"\nexit 0\n";
+                await Render(window, "main-6-editor-ready");
+                var editor = window.GetVisualDescendants().OfType<AvaloniaEdit.TextEditor>().Single();
+                editor.Text = "if ($true) {";
+                scripts.RunCommand.Execute(null);
+                Assert.NotEmpty(scripts.Error);
+                Assert.Equal(2, vm.Jobs.Count);
+                Assert.Equal(editor.Text, scripts.Text);
+                editor.Text = "Write-Output \"hello\"\nexit 0\n";
                 Assert.True(scripts.IsDirty);
                 Assert.True(scripts.RunCommand.CanExecute(null));
                 scripts.RunCommand.Execute(null);
@@ -281,6 +304,17 @@ public sealed class UiTests
                 scripts.SaveCommand.Execute(null);
                 Assert.False(scripts.IsDirty);
                 Assert.Equal("say-hello", console.Session.Scripts.Scripts.Single().Name);
+                tabs.SelectedIndex = 0;
+                scripts.RunCommand.Execute(null);
+                Assert.True(await Wait.UntilAsync(() => vm.Jobs.Count == 6 && vm.Jobs.All(j => j.IsFinished)));
+                scripts.AddBuiltInsCommand.Execute(null);
+                scripts.Selected = scripts.Scripts.Single(s => s.Name == "open-pycharm");
+                await Render(window, "main-7-quick-scripts");
+                tabs.SelectedIndex = 1;
+                await Render(window, "main-8-editor-highlighted");
+                scripts.Text = "if ($true) {";
+                scripts.ValidateText();
+                await Render(window, "main-9-editor-errors");
                 tabs.SelectedIndex = 0;
 
                 // Drag PC-01 to the cell of PC-06: they swap, and the layout persists.

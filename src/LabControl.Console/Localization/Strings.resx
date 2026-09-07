@@ -217,6 +217,10 @@ exit 0
   <data name="Jobs.State" xml:space="preserve"><value>State</value></data>
   <data name="Jobs.Message" xml:space="preserve"><value>Result</value></data>
   <data name="Jobs.Output" xml:space="preserve"><value>Output of the selected job</value></data>
+  <data name="Jobs.ExportBatch" xml:space="preserve"><value>Export batch logs…</value></data>
+  <data name="Jobs.ExportBatchHint" xml:space="preserve"><value>Save a ZIP with every PC in the selected job's batch. Unfinished jobs are included with their current status.</value></data>
+  <data name="Jobs.BatchExported" xml:space="preserve"><value>Batch logs saved to {0}</value></data>
+  <data name="Jobs.BatchExportFailed" xml:space="preserve"><value>Could not export the batch logs: {0}</value></data>
   <data name="Job.Shutdown" xml:space="preserve"><value>Shut down</value></data>
   <data name="Job.Reboot" xml:space="preserve"><value>Reboot</value></data>
   <data name="Job.Logoff" xml:space="preserve"><value>Log off</value></data>
@@ -289,4 +293,26 @@ exit 0
   <data name="Setup.NeedBackupFile" xml:space="preserve"><value>Choose a backup file first.</value></data>
   <data name="Setup.BadRecoveryCode" xml:space="preserve"><value>That is not a recovery code (letters and digits, dashes optional).</value></data>
   <data name="Setup.ImportAction" xml:space="preserve"><value>Import the lab</value></data>
+  <data name="Scripts.AddBuiltIns" xml:space="preserve"><value>Add missing built-in scripts</value></data>
+  <data name="Scripts.BuiltInsAdded" xml:space="preserve"><value>Added {0} built-in script(s). Existing scripts were kept.</value></data>
+  <data name="Scripts.Diagnostic" xml:space="preserve"><value>Line {0}, column {1}: {2}</value></data>
+  <data name="Scripts.CmdValidation" xml:space="preserve"><value>cmd: basic checks only. Full syntax and command availability are checked by Windows when run.</value></data>
+  <data name="Scripts.ValidPowerShell" xml:space="preserve"><value>No syntax errors (PowerShell parser). Commands, paths and full Windows PowerShell 5.1 compatibility must be checked on a PC.</value></data>
+  <data name="Scripts.FixErrors" xml:space="preserve"><value>Fix the errors in the Scripts editor before running.</value></data>
+  <data name="Scripts.QuickHint" xml:space="preserve"><value>Runs the unsaved draft. Review or edit it in Scripts.</value></data>
+  <data name="Scripts.InvalidNul" xml:space="preserve"><value>NUL is not valid in a batch file.</value></data>
+  <data name="Scripts.RequiresPowerShell7" xml:space="preserve"><value>This operator requires PowerShell 7; student PCs use Windows PowerShell 5.1.</value></data>
+  <data name="Action.SendFiles" xml:space="preserve"><value>Send files…</value></data>
+  <data name="Files.None" xml:space="preserve"><value>No files selected.</value></data>
+  <data name="Files.Choose" xml:space="preserve"><value>Choose files…</value></data>
+  <data name="Files.Open" xml:space="preserve"><value>Open after delivery</value></data>
+  <data name="Files.Send" xml:space="preserve"><value>Send</value></data>
+  <data name="Files.LocalOnly" xml:space="preserve"><value>Choose files stored on this computer.</value></data>
+  <data name="Files.Selected" xml:space="preserve"><value>{0} file(s) selected.</value></data>
+  <data name="Files.Targets" xml:space="preserve"><value>Send handouts to {0} selected PC(s)</value></data>
+  <data name="Files.Description" xml:space="preserve"><value>Files go to Materials on the student desktop. A file with the same name is replaced after verification. Offline PCs receive the jobs when they reconnect while this console remains open. Keep the source files available and unchanged until delivery finishes.</value></data>
+  <data name="Files.Availability" xml:space="preserve"><value>Available in the simulator. Windows delivery is awaiting managed student account support; current Windows agents report that this job is unsupported.</value></data>
+  <data name="Files.OpenHint" xml:space="preserve"><value>Only supported documents and images may open. Programs, scripts and shortcuts are delivered without being run. Opening is simulated on FakeAgent.</value></data>
+  <data name="Files.Queued" xml:space="preserve"><value>Queued {0} file delivery job(s). See Jobs for each PC’s result.</value></data>
+  <data name="Files.Failed" xml:space="preserve"><value>Could not queue the handouts: {0}</value></data>
 </root>

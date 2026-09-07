@@ -34,6 +34,17 @@ public partial class LabView : UserControl
         _canvas = this.FindControl<Canvas>("TileCanvas");
         DataContextChanged += (_, _) => Attach(DataContext as MainViewModel);
         SizeChanged += (_, _) => _viewModel?.SetViewportWidth(Bounds.Width);
+
+        // A tile's tooltip is its own floating window on macOS and pops up above whatever
+        // covers the console — the single-PC window, another application — whenever the
+        // pointer passes over the tile's place. Only an active console shows tooltips.
+        AddHandler(ToolTip.ToolTipOpeningEvent, (_, e) =>
+        {
+            if (TopLevel.GetTopLevel(this) is Window { IsActive: false })
+            {
+                e.Cancel = true;
+            }
+        });
     }
 
     private void Attach(MainViewModel? viewModel)

@@ -287,7 +287,7 @@ impersonate <em>that one PC</em> and nothing else, and the console can revoke it
 <ul>
 <li><strong>Agents dial out</strong> to the console's gRPC server on <code>47800/tcp</code>. Rationale unchanged:
 the console moves, the PCs do not, and outbound connections need no inbound firewall
-rule. The one inbound thing a PC receives is the discovery beacon (UDP 47801, §3.5),
+rule. The one inbound thing a PC receives is the discovery beacon (UDP 47801, below and PROTOCOL.md),
 and its firewall rule is by port, not by program path — a per-program rule stops
 matching after a self-update moves <code>agent.exe</code> (<code>D-33</code> item 8).</li>
 <li><strong>Mutual TLS.</strong> The agent validates the console's leaf certificate against the pinned

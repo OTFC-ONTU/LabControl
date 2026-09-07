@@ -110,7 +110,7 @@ impersonate *that one PC* and nothing else, and the console can revoke it.
 
 - **Agents dial out** to the console's gRPC server on `47800/tcp`. Rationale unchanged:
   the console moves, the PCs do not, and outbound connections need no inbound firewall
-  rule. The one inbound thing a PC receives is the discovery beacon (UDP 47801, §3.5),
+  rule. The one inbound thing a PC receives is the discovery beacon (UDP 47801, below and PROTOCOL.md),
   and its firewall rule is by port, not by program path — a per-program rule stops
   matching after a self-update moves `agent.exe` (`D-33` item 8).
 - **Mutual TLS.** The agent validates the console's leaf certificate against the pinned

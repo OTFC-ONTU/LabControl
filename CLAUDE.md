@@ -218,7 +218,9 @@ helper down), and `FakeScreen` drawing the teacher's input. **Run on `PC-10` the
 mouse, text, Ctrl+Alt+Del work; scrolling Edge reached 10–17 fps once the full-mode cap
 went to 24 Mbit/s (`D-36` items 10–11). The single-PC window then got a quality selector
 with an *Auto* mode the producer drives from the pacer's waits (`D-37`,
-`VideoFrame.quality`). Version 0.1.4.
+`VideoFrame.quality`). Version 0.1.4, verified on `PC-10`: *Auto* at q40–50, 14–18 fps
+while scrolling. M3's close-out measurements (an hour of streaming, the 30-tile mosaic,
+Ukrainian text) are what remains before M4.
 
 The console's non-UI core lives in `src/LabControl.Console/Services` (`LabSession`,
 `ConsoleBootstrap`, `LabKeyVault`) and `Server/`; the agent side shared by `FakeAgent` and

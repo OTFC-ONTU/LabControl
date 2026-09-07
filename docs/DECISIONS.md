@@ -1116,7 +1116,8 @@ Decisions:
    the picture shows *q55 auto* or *q60* — the teacher sees the lever move. An agent that
    predates the field sends 0 and the console shows *quality —*.
 5. **This is the second lever `D-36` item 11 named; H.264 stays the third** (`D-11`, M6)
-   and now has its number to beat: q40 at 24 Mbit/s while scrolling.
+   and now has its number to beat: measured on `PC-10` with build 0.1.4, *Auto* settles
+   at q40–50 while scrolling Edge and holds 14–18 fps at 24 Mbit/s, and *Low* is readable.
 
 Rejected: quality by frame size (item 2); a per-lab or persisted quality setting (item 3);
 adapting the frame rate instead of the quality (the pacer already does that; a lower

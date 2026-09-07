@@ -17,7 +17,7 @@ implement.
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
-| **M3** | Screens: mosaic, full view, remote control | **in progress — all three portions built and run on `PC-10` (2026-09-07): capture, control, text and Ctrl+Alt+Del work, scrolling reaches the fps line; the quality selector (`D-37`, build 0.1.4) awaits its run** | M2, `PC-00` |
+| **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
 | **M6** | Software catalog, localization, polish | not started | M5 |
@@ -771,6 +771,12 @@ to answer Windows questions (`D-34`).
   be updated first. To check on `PC-10` with 0.1.4: fps while scrolling Edge in *Auto* and
   the *q* the status line settles at; that *Low* is readable; that the mosaic thumbnail
   keeps moving through the choice.
+  *Third run, build `0.1.4+977f1b9b` (2026-09-07 17:00):* *Auto* settles at **q40–50**
+  while scrolling Edge and the window holds **14–18 fps** — the scrolling criterion is
+  met with the quality lever, on Wi-Fi; *Low* is readable. Portion 3 is verified on
+  `PC-10`. Left for the M3 close-out on `PC-00`: Ukrainian text and ⌘C/⌘V (typing works,
+  not yet tried in Ukrainian), CPU of `session.exe` in thumbnail mode, memory after an
+  hour, the 30-tile mosaic (29 fake + 1 real).
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

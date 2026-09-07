@@ -710,7 +710,11 @@ to answer Windows questions (`D-34`).
   once by the preflight (the dialog said 0.1.2, the binary still said 0.1.0; the version is
   now 0.1.2 in `Directory.Build.props`), once by *Access to the path 'agent.exe' is denied*
   while moving the staged version into `app\` — the antivirus scanning the new executable;
-  the move is retried now (`D-33` item 9).
+  the move is retried now (`D-33` item 9). Once installed, every new `session.exe` hung after
+  `Hello` and was killed as silent 12 s later, for as long as the console wanted video — a
+  pipe-flush deadlock between the service and the helper (`D-35` item 8, fixed the same
+  hour). With the console restarted the first real DXGI picture of `PC-10` reached the
+  mosaic (15:24).
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

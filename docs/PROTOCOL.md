@@ -463,7 +463,12 @@ its own:
   frame carries everything the console has not seen. In thumbnail mode the request simply
   forces the next thumbnail even if the screen did not change.
 - Frames stay under `SessionPipeMaxMessageBytes` by construction (a 4 MiB `VideoFrame`
-  limit on the console side, 16 MiB on the pipe).
+  limit on the console side, 16 MiB on the pipe). The pipe has a 2 MiB helper → service
+  buffer and a 64 KiB service → helper buffer (`Defaults.SessionPipe*BufferBytes`).
+- **Neither side ever awaits a write from inside its read loop**, and `PipeFraming` does
+  not flush: on Windows a pipe flush waits for the peer to read, so two full-duplex loops
+  that each wait for the other's read deadlock (`D-35` item 8). A message that has to go
+  out in response to one that came in is sent fire-and-forget.
 
 ### `SessionState` (agent → console)
 

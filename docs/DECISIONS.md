@@ -980,7 +980,20 @@ Decisions:
    `request_keyframe` once, until a frame is accepted again — one whole frame per congestion
    event, nothing lost. In thumbnail mode the request forces the next thumbnail regardless of
    change, which is exactly what a dropped thumbnail needs.
-7. **The primary display only, no cursor.** The mosaic shows one picture per PC and the lab's
+8. **Nobody awaits a pipe write from inside a read loop, and `PipeFraming` no longer
+   flushes** (found on `PC-10`, 2026-09-07 15:21). On Windows `PipeStream.Flush` is
+   `FlushFileBuffers`, which returns only when the peer has *read* everything written. With
+   the console already asking for video, the service wrote `Ping` and then `VideoControl`
+   to a fresh helper and flushed; the helper's read loop was answering the `Ping` with a
+   `HelperStatus`, waiting for the write lock held by its status loop, whose own flush was
+   waiting for the service to read — and the service was in its flush. Every new helper
+   hung after `Hello`, was killed as silent 12 s later, and the cycle repeated until the
+   console was restarted (no control at connect time). Pipe writes are unbuffered in .NET,
+   so the flush bought nothing; it is gone, the pipe has explicit buffers (2 MiB in for
+   frames, 64 KiB out), and every write issued from a read loop — the service's `Ping`,
+   the initial control, the keyframe request; the helper's `Ping` answer and events — is
+   fire-and-forget with its failure logged. The rule is now in PROTOCOL.
+9. **The primary display only, no cursor.** The mosaic shows one picture per PC and the lab's
    PCs have one monitor; DXGI's pointer shape is a separate stream and drawing it belongs
    with input (portion 3), when the teacher's own pointer matters.
 

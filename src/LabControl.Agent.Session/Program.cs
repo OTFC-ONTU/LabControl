@@ -130,14 +130,20 @@ internal static class Program
         await SendAsync(new HelperMessage { Hello = new HelperHello { SessionId = session ?? 0, ProcessId = (uint)pid, Version = Version } });
         log.LogInformation("connected to the service");
 
-        // Everything the producer says goes to the console through the service (D-35).
-        void Report(Event.Types.Severity severity, string code, string message)
+        // Fire-and-forget for writes that must not hold up a read loop; a failure is logged,
+        // and the pipe ending is noticed by the read loop anyway.
+        void Send(HelperMessage message)
         {
-            _ = SendAsync(new HelperMessage
-            {
-                Event = new Event { Severity = severity, Code = code, Message = message, AtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds() },
-            }).ContinueWith(t => log.LogDebug("could not report {Code}: {Message}", code, t.Exception?.GetBaseException().Message), TaskContinuationOptions.OnlyOnFaulted);
+            _ = SendAsync(message).ContinueWith(
+                t => log.LogDebug("could not send {What}: {Message}", message.PayloadCase, t.Exception?.GetBaseException().Message),
+                TaskContinuationOptions.OnlyOnFaulted);
         }
+
+        // Everything the producer says goes to the console through the service (D-35).
+        void Report(Event.Types.Severity severity, string code, string message) => Send(new HelperMessage
+        {
+            Event = new Event { Severity = severity, Code = code, Message = message, AtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds() },
+        });
 
         var sources = new ScreenSourceFactory(loggers.CreateLogger("capture"), Report);
         await using var producer = new ScreenProducer(
@@ -178,7 +184,9 @@ internal static class Program
                 switch (message.PayloadCase)
                 {
                     case ServiceMessage.PayloadOneofCase.Ping:
-                        await SendAsync(new HelperMessage { Status = DesktopProbe.Status() });
+                        // Never await a write from the read loop (D-35 item 8): the service may be
+                        // waiting for us to read its next message before it reads ours.
+                        Send(new HelperMessage { Status = DesktopProbe.Status() });
                         break;
 
                     case ServiceMessage.PayloadOneofCase.VideoControl:

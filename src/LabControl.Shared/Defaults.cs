@@ -334,6 +334,15 @@ public static class Defaults
     /// <summary>The largest message either side accepts on the pipe; a full-screen JPEG fits many times over.</summary>
     public const int SessionPipeMaxMessageBytes = 16 * 1024 * 1024;
 
+    /// <summary>
+    /// The pipe's buffers: helper → service carries video frames, so it is sized for a few
+    /// of them; service → helper carries controls and input, a few kilobytes at most. A
+    /// write that fits in the buffer never waits for the reader (D-35 item 8).
+    /// </summary>
+    public const int SessionPipeInBufferBytes = 2 * 1024 * 1024;
+
+    public const int SessionPipeOutBufferBytes = 64 * 1024;
+
     /// <summary>The helper reports its <c>HelperStatus</c> this often, whether or not anything changed.</summary>
     public static readonly TimeSpan HelperStatusInterval = TimeSpan.FromSeconds(2);
 

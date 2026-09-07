@@ -503,7 +503,9 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                 PipeDirection.InOut,
                 maxNumberOfServerInstances: 1,
                 PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly | PipeOptions.FirstPipeInstance);
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly | PipeOptions.FirstPipeInstance,
+                Defaults.SessionPipeInBufferBytes,
+                Defaults.SessionPipeOutBufferBytes);
             _pipeFailureReported = false;
             return true;
         }
@@ -573,13 +575,15 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             helper.Version = hello.Hello.Version;
             _log.LogInformation("session.exe {Version} (pid {Pid}) connected from session {Session}", hello.Hello.Version, hello.Hello.ProcessId, hello.Hello.SessionId);
 
+            // Writes are never awaited from the read loop (D-35 item 8): a write that had to
+            // wait for the helper to read, while the helper waits for us to read, is a deadlock.
             helper.Server = server;
-            await helper.SendAsync(new ServiceMessage { Ping = new Ping { SentAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds() } }, _log);
+            _ = helper.SendAsync(new ServiceMessage { Ping = new Ping { SentAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds() } }, _log);
 
             // A helper born while the console already wants video starts streaming at once (D-35).
             if (_link.VideoControl is { Active: true } wanted)
             {
-                await helper.SendAsync(new ServiceMessage { VideoControl = wanted }, _log);
+                _ = helper.SendAsync(new ServiceMessage { VideoControl = wanted }, _log);
             }
 
             var announced = false;
@@ -612,7 +616,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                         break;
 
                     case HelperMessage.PayloadOneofCase.VideoFrame:
-                        await RelayFrameAsync(helper, message.VideoFrame);
+                        RelayFrame(helper, message.VideoFrame);
                         break;
 
                     default:
@@ -644,7 +648,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
     /// so the refused frame is dropped and the helper is asked for a keyframe once, which
     /// makes its next frame carry everything the console missed.
     /// </summary>
-    private async Task RelayFrameAsync(Helper helper, VideoFrame frame)
+    private void RelayFrame(Helper helper, VideoFrame frame)
     {
         var control = _link.VideoControl;
         if (control is not { Active: true })
@@ -668,7 +672,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         _log.LogDebug("the video uplink refused a {Mode} frame; asking session.exe for a keyframe", frame.Mode);
         var again = control.Clone();
         again.RequestKeyframe = true;
-        await helper.SendAsync(new ServiceMessage { VideoControl = again }, _log);
+        _ = helper.SendAsync(new ServiceMessage { VideoControl = again }, _log);
     }
 
     /// <summary>One running instance of session.exe and what it has told us.</summary>

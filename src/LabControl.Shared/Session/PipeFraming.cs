@@ -28,8 +28,11 @@ public static class PipeFraming
         {
             BinaryPrimitives.WriteInt32LittleEndian(buffer, size);
             message.WriteTo(buffer.AsSpan(HeaderBytes, size));
+            // No Flush: pipe writes are unbuffered in .NET, and on Windows PipeStream.Flush is
+            // FlushFileBuffers, which blocks until the peer has READ everything — a handshake
+            // that deadlocked the service and the helper when both wrote from inside their
+            // read loops (PC-10, 2026-09-07; D-35 item 8).
             await stream.WriteAsync(buffer.AsMemory(0, HeaderBytes + size), token);
-            await stream.FlushAsync(token);
         }
         finally
         {

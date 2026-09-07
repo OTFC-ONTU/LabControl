@@ -2,8 +2,6 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using LabControl.Shared.Protocol;
 using Windows.Win32;
-using Windows.Win32.Foundation;
-using Windows.Win32.System.StationsAndDesktops;
 using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace LabControl.Agent.Session;
@@ -34,30 +32,7 @@ internal static class DesktopProbe
     }
 
     /// <summary>"Default", "Winlogon", "Screen-saver" — or "?" plus the error when the desktop cannot be opened.</summary>
-    public static unsafe string InputDesktopName()
-    {
-        var desktop = PInvoke.OpenInputDesktop(default, false, DESKTOP_ACCESS_FLAGS.DESKTOP_READOBJECTS);
-        if (desktop.IsNull)
-        {
-            return $"? ({new Win32Exception(Marshal.GetLastWin32Error()).Message})";
-        }
-
-        try
-        {
-            var buffer = stackalloc char[256];
-            uint needed = 0;
-            if (!PInvoke.GetUserObjectInformation((HANDLE)desktop.Value, USER_OBJECT_INFORMATION_INDEX.UOI_NAME, buffer, 256 * sizeof(char), &needed))
-            {
-                return $"? ({new Win32Exception(Marshal.GetLastWin32Error()).Message})";
-            }
-
-            return new string(buffer).TrimEnd('\0');
-        }
-        finally
-        {
-            PInvoke.CloseDesktop(desktop);
-        }
-    }
+    public static string InputDesktopName() => DesktopAccess.InputDesktopName();
 
     private static int Metric(SYSTEM_METRICS_INDEX index)
     {

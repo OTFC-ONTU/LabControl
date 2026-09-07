@@ -9,9 +9,11 @@ namespace LabControl.FakeAgent;
 /// A simulated student's desktop (M3): a coloured wallpaper with the PC's number, a clock
 /// that ticks once a second, a window whose text grows as the "student types", and a box
 /// that drifts about. Every change knows its own rectangle, so the frames it produces carry
-/// honest dirty rectangles — what DXGI reports on a real PC, without a real PC.
+/// honest dirty rectangles — what DXGI reports on a real PC, without a real PC. It is the
+/// simulator's <see cref="IScreenSource"/>, so the same <see cref="ScreenProducer"/> that
+/// runs in the session helper runs here.
 /// </summary>
-internal sealed class FakeScreen : IDisposable
+internal sealed class FakeScreen : IScreenSource
 {
     private static readonly SKColor[] Wallpapers =
     [
@@ -69,8 +71,43 @@ internal sealed class FakeScreen : IDisposable
 
     public int Height { get; }
 
+    public string Kind => "simulated";
+
     /// <summary>The picture as it is now; valid until the next <see cref="Advance"/>.</summary>
     public SKBitmap Bitmap => _bitmap;
+
+    /// <summary>
+    /// The producer's look at the desktop: moves it on by one tick and hands out the bitmap
+    /// with what changed. The simulator never waits — a tick is a tick.
+    /// </summary>
+    public IScreenFrame? Acquire(TimeSpan timeout)
+    {
+        IReadOnlyList<Rect> dirty;
+        lock (this)
+        {
+            dirty = Advance(DateTimeOffset.UtcNow);
+            MarkSent();
+        }
+
+        return new Frame(this, dirty);
+    }
+
+    private sealed class Frame(FakeScreen screen, IReadOnlyList<Rect> dirty) : IScreenFrame
+    {
+        public int Width => screen.Width;
+
+        public int Height => screen.Height;
+
+        public int RowBytes => screen._bitmap.RowBytes;
+
+        public ReadOnlySpan<byte> Pixels => screen._bitmap.GetPixelSpan();
+
+        public IReadOnlyList<Rect> Dirty => dirty;
+
+        public void Dispose()
+        {
+        }
+    }
 
     /// <summary>
     /// Moves the desktop on by one tick and returns the tile-aligned rectangles that changed

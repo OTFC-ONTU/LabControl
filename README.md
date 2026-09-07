@@ -63,8 +63,10 @@ only Wake-on-LAN is deferred to M4 with the installer ([`docs/ROADMAP.md`](docs/
 **M3 — screens: in progress.** Portion 1 of 3 (2026-09-07) — the `PushVideo` channel, the
 thumbnail and full-mode frame formats, the console's per-PC pictures, live thumbnails on the
 tiles, the single-PC window with dirty-rectangle deltas, and `FakeAgent` drawing synthetic
-desktops — is built and tested on the Mac. Portion 2 puts real DXGI capture into
-`session.exe`; portion 3 adds mouse and keyboard control.
+desktops — is built and tested on the Mac. Portion 2 (2026-09-07) puts real capture into
+`session.exe` — DXGI Desktop Duplication with a GDI fallback, relayed through the service's
+pipe, on the same producer the simulator uses — and awaits its VM run; portion 3 adds mouse
+and keyboard control.
 
 ## Quick start
 ```bash

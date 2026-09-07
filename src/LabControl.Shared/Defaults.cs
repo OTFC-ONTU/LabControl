@@ -471,6 +471,21 @@ public static class Defaults
     /// </summary>
     public static readonly TimeSpan VideoStallTimeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// A producer whose capture failed (no duplication, the desktop switched and could not be
+    /// followed, no session) tries to open the screen again this often while video is wanted (D-35).
+    /// </summary>
+    public static readonly TimeSpan CaptureRetryInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// The longest one capture waits for the screen to change before the producer's loop
+    /// looks at its control again; a mode switch or a stop is never delayed by more than this.
+    /// </summary>
+    public static readonly TimeSpan CaptureAcquireTimeout = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>A screen that has delivered no first picture for this long after opening is reported once.</summary>
+    public static readonly TimeSpan CaptureFirstFrameWarning = TimeSpan.FromSeconds(5);
+
     // ---------------------------------------------------------------- exam mode
 
     /// <summary>

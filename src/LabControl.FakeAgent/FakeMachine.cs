@@ -5,6 +5,7 @@ using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
+using LabControl.Shared.Video;
 using LabControl.Shared.Setup;
 using Microsoft.Extensions.Logging;
 
@@ -24,7 +25,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     private readonly Random _random = new();
 
     private CancellationTokenSource? _powerCycle;
-    private readonly FakeScreenStreamer _screen;
+    private readonly ScreenProducer _screen;
 
     /// <summary>What this PC says it runs; a simulated push changes it (D-33).</summary>
     private string _version = typeof(FakeMachine).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -50,8 +51,14 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         // A simulated desktop (M3): odd numbers are 1080p, even ones 1366×768 like the older
         // lab PCs; every third PC sits idle so the mosaic shows screens that do not change.
         var number = store.Config.Number;
-        var screen = number % 2 == 1 ? new FakeScreen(number, 1920, 1080, idle: number % 3 == 0) : new FakeScreen(number, 1366, 768, idle: number % 3 == 0);
-        _screen = new FakeScreenStreamer(Link, screen, log);
+        // The producer is the one the session helper runs (D-35); only the source is simulated.
+        _screen = new ScreenProducer(
+            Link.Name,
+            () => number % 2 == 1 ? new FakeScreen(number, 1920, 1080, idle: number % 3 == 0) : new FakeScreen(number, 1366, 768, idle: number % 3 == 0),
+            (frame, _) => ValueTask.FromResult(Link.TryPushVideo(frame)),
+            (severity, code, message) => Link.Report(severity, code, message),
+            log);
+        Link.VideoControlChanged += _screen.Apply;
 
         // A real PC's supervisor publishes this at start and on every change (M2); the
         // simulator pretends the helper is up and the student is at the desk.
@@ -408,6 +415,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _powerCycle?.Cancel();
+        Link.VideoControlChanged -= _screen.Apply;
         await _screen.DisposeAsync();
         await Link.DisposeAsync();
         _store.Dispose();

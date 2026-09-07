@@ -13,3 +13,27 @@ DESKTOP_ACCESS_FLAGS
 // Where this process lives
 ProcessIdToSessionId
 GetCurrentProcessId
+
+// Real pixels, not DPI-virtualised ones: the helper declares itself per-monitor DPI aware (D-35)
+SetProcessDpiAwarenessContext
+DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+
+// Following the input desktop (lock screen, UAC) with the capture thread
+GetThreadDesktop
+SetThreadDesktop
+GetCurrentThreadId
+
+// The GDI fallback: BitBlt of the primary display into a DIB section
+GetDC
+ReleaseDC
+CreateCompatibleDC
+DeleteDC
+CreateDIBSection
+SelectObject
+DeleteObject
+BitBlt
+GdiFlush
+ROP_CODE
+BITMAPINFO
+BI_COMPRESSION
+DIB_USAGE

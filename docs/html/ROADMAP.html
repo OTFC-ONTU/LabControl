@@ -175,7 +175,7 @@ implement.</p>
 <tr>
 <td><strong>M3</strong></td>
 <td>Screens: mosaic, full view, remote control</td>
-<td><strong>in progress — portion 1 of 3 built (2026-09-07)</strong></td>
+<td><strong>in progress — portions 1 and 2 of 3 built (2026-09-07); portion 2 awaits the VM</strong></td>
 <td>M2, <code>PC-00</code></td>
 </tr>
 <tr>
@@ -846,8 +846,29 @@ drifting box — each change with its own rectangle, so the full-mode deltas are
 Tests: geometry, codec, <code>ScreenImage</code>, pacer and settings in <code>Shared.Tests</code>; in
 <code>Console.Tests</code> the control after <code>Welcome</code>, thumbnails and deltas over a real <code>PushVideo</code>,
 the keyframe request, the identity check, a <code>FakeMachine</code> streaming both modes by itself,
-and the main window rendered with seven live thumbnails plus the single-PC window. Next:
-portion 2 on the VM.</li>
+and the main window rendered with seven live thumbnails plus the single-PC window.</li>
+<li><em>Portion 2 (built 2026-09-07, not yet run on the VM).</em> Real capture in <code>session.exe</code>
+(<code>D-35</code>). The producer loop moved out of the simulator into
+<code>Shared/Video/ScreenProducer</code> behind an <code>IScreenSource</code>, so the helper and <code>FakeAgent</code>
+run the same code: thumbnails on change, keyframes and deltas in full mode, the pacer,
+a refused frame's rectangles carried into the next, a failing source reported once and
+reopened every 2 s, a stop that closes the source. The helper has two sources —
+<code>DxgiScreenSource</code> (Vortice, primary output, a staging texture as the persistent picture,
+Windows' dirty and move rectangles, re-duplication after <code>ACCESS_LOST</code> on the desktop
+that has the input) and <code>GdiScreenSource</code> (<code>BitBlt</code> into alternating DIB sections,
+<code>TileDiff</code> for the rectangles) — chosen by <code>ScreenSourceFactory</code> on every open, with a
+<code>capture.fallback</code> event when GDI is used. <code>session.exe</code> declares itself per-monitor DPI
+aware and attaches its capture thread to the input desktop (<code>DesktopAccess</code>). The
+service relays: <code>VideoControl</code> down the pipe (and to every new helper), <code>VideoFrame</code> up
+into the uplink, and a refused frame dropped with a <code>request_keyframe</code> back to the
+helper. Tests (<code>ScreenProducerTests</code>): the producer against a scripted screen in both
+modes, the refused-frame union, the failure/recovery events, stop and mode change,
+<code>TileDiff</code>, and <code>JpegCodec.EncodeScaled</code>. <strong>To verify on the VM</strong> (expected: GDI, the
+basic display adapter has no duplication): <code>capture.fallback</code> once, the thumbnail on the
+tile moving when the desktop changes, the single-PC window with deltas, <code>session.exe</code>
+CPU in Task Manager; lock/unlock and a UAC prompt must not stop the picture for more
+than a couple of seconds. <strong>On <code>PC-00</code></strong> (DXGI): <code>capture</code> events absent, ≤ 5 % CPU in
+thumbnail mode, ≥ 15 fps in the window while scrolling. Then portion 3 (input).</li>
 </ul>
 <p><strong>Not in scope.</strong> Broadcast to students, lock, exam mode, H.264.</p>
 <p><strong>Rough size.</strong> Large.</p>
@@ -1169,7 +1190,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 14:54 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 15:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

@@ -18,6 +18,9 @@
     <!-- The same SkiaSharp Avalonia 12.1.2 ships, so the console carries one native Skia. -->
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
+    <!-- DXGI Desktop Duplication in the session helper (D-35); the maintained successor of SharpDX. -->
+    <PackageVersion Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageVersion Include="Vortice.DXGI" Version="3.8.3" />
   </ItemGroup>
 
   <ItemGroup Label="Transport">

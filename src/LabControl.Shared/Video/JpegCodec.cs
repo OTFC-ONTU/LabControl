@@ -64,6 +64,39 @@ public static class JpegCodec
         }
     }
 
+    /// <summary>
+    /// Scales a raw BGRA buffer to the given size and encodes the result — the thumbnail of
+    /// a captured screen, without copying the capture first.
+    /// </summary>
+    public static unsafe byte[] EncodeScaled(ReadOnlySpan<byte> pixels, int width, int height, int rowBytes, int targetWidth, int targetHeight, int quality)
+    {
+        if (rowBytes < width * BytesPerPixel || pixels.Length < (long)rowBytes * height)
+        {
+            throw new ArgumentException("the pixel buffer is smaller than its declared size", nameof(pixels));
+        }
+
+        if (targetWidth == width && targetHeight == height)
+        {
+            return Encode(pixels, width, height, rowBytes, VideoGeometry.Whole(width, height), quality);
+        }
+
+        fixed (byte* start = pixels)
+        {
+            var info = new SKImageInfo(width, height, PixelFormat, SKAlphaType.Premul);
+            using var whole = new SKPixmap(info, (IntPtr)start, rowBytes);
+            using var scaled = new SKBitmap(new SKImageInfo(Math.Max(1, targetWidth), Math.Max(1, targetHeight), PixelFormat, SKAlphaType.Premul));
+            using var target = scaled.PeekPixels();
+            if (!whole.ScalePixels(target, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear)))
+            {
+                throw new InvalidOperationException("SkiaSharp could not scale the picture");
+            }
+
+            using var data = target.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100))
+                ?? throw new InvalidOperationException("SkiaSharp could not encode the thumbnail as JPEG");
+            return data.ToArray();
+        }
+    }
+
     /// <summary>Decodes a JPEG into a fresh BGRA bitmap; <c>null</c> when the bytes are not a picture.</summary>
     public static SKBitmap? Decode(ReadOnlySpan<byte> jpeg)
     {

@@ -924,6 +924,63 @@ Rejected: one JPEG per 64×64 tile (item 1); a separate thumbnail stream in full
 (ties the store to Avalonia and the UI thread; the tests render headless anyway); dropping
 refused frames on the PC (item 3); letting the PC decide when to stream (item 4).
 
+## D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)
+
+Context: portion 1 finished the console against a simulator; portion 2 has to put real
+pixels into the same wire from `session.exe`, a process the Mac can compile but never run.
+The VM the owner tests on has a basic display adapter — no desktop duplication — while the
+lab PCs have real GPUs, so both capture paths will be exercised, on different machines.
+
+Decisions:
+
+1. **The producer loop is shared code, the source is the only Windows part.** The thumbnail
+   / keyframe / delta / pacer logic that `FakeScreenStreamer` carried in portion 1 moved to
+   `Shared/Video/ScreenProducer`, driven by an `IScreenSource` that hands out one
+   `IScreenFrame` per look (BGRA pixels, row stride, what changed). `FakeScreen` is a source;
+   `DxgiScreenSource` and `GdiScreenSource` are the helper's. So the loop the VM runs is the
+   one the Mac tests (`ScreenProducerTests`), and a bug in it is found without a VM.
+2. **DXGI Desktop Duplication first, GDI `BitBlt` second, chosen on every open.** Duplication
+   is the cheap path (the GPU copies, Windows names the dirty rectangles, the staging texture
+   is the persistent picture so a keyframe costs no capture). Where `DuplicateOutput` is
+   refused — the Microsoft Basic Display Adapter, a VM without a WDDM 1.2 driver, another
+   duplication already running — the helper falls back to `BitBlt` into two alternating DIB
+   sections and `TileDiff` compares them tile by tile (a few megabytes of vectorised
+   `SequenceEqual`, cheap next to the JPEG). The choice is announced once as
+   `capture.fallback` and is made again each time the producer opens the screen, so a PC
+   whose duplication comes back gets it back.
+3. **The helper follows the input desktop and is DPI aware.** A lock screen or a UAC prompt
+   switches the input desktop to `Winlogon`; duplication then reports `ACCESS_LOST` and GDI
+   would capture the wrong desktop. Before every duplication and every `BitBlt` the capture
+   thread is attached to whatever desktop has the input (`SetThreadDesktop`), which a SYSTEM
+   process may do and the student's could not — the reason §2 runs the helper as SYSTEM.
+   `SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2)` is called first thing, otherwise a
+   125 % display would be captured, and reported by `HelperStatus`, at its virtualised size.
+4. **A source opens when video is wanted and closes when it stops.** A PC nobody is watching
+   holds no duplication, no DIBs, no D3D device and burns no CPU; the switch between
+   thumbnail and full mode keeps the source (the loop reads its settings every tick) and
+   only starts a fresh pacer and a keyframe.
+5. **A failing source is reported once per reason and reopened every 2 s.** `no_desktop`,
+   `access_lost` that re-duplication could not cure, `no_duplication`, `gdi_failed` — each
+   becomes a `capture.<reason>` event the first time, `capture.recovered` when a source
+   opens again. Portion 3 turns these into the tile's reason line; the events are already
+   there for the VM run.
+6. **The service drops a refused frame and asks the helper for a keyframe.** `D-34` holds a
+   refused frame with the producer; over the pipe that would mean the helper waits for the
+   service to read, and the pipe carries the `HelperStatus` that keeps the helper from being
+   killed as silent. So the relay drops the frame and sends the current control with
+   `request_keyframe` once, until a frame is accepted again — one whole frame per congestion
+   event, nothing lost. In thumbnail mode the request forces the next thumbnail regardless of
+   change, which is exactly what a dropped thumbnail needs.
+7. **The primary display only, no cursor.** The mosaic shows one picture per PC and the lab's
+   PCs have one monitor; DXGI's pointer shape is a separate stream and drawing it belongs
+   with input (portion 3), when the teacher's own pointer matters.
+
+Rejected: keeping two producers (the simulator's and the helper's) in step by hand; blocking
+the pipe read as back-pressure (kills the helper as silent); GDI only (fine for thumbnails,
+too slow for 20 fps at 1080p); DXGI only (the VM cannot test it); one DIB and a managed copy
+for the comparison (an 8 MB copy per frame the alternating pair avoids); `WTSQueryUserToken`
+so the helper runs as the student (cannot attach to the secure desktop, `D-30`).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the
@@ -1047,7 +1104,7 @@ project cannot notice on its own).
 | System.Security.Cryptography.ProtectedData | Shared | Windows DPAPI for the console instance key; the BCL dropped it from the shared framework (D-24) |
 | SkiaSharp, SkiaSharp.NativeAssets.Linux | Shared (so Console, FakeAgent, Agent.Session) | JPEG encode/decode, scaling, the simulator's synthetic desktops (M3, D-34); pinned to the version Avalonia ships |
 | Microsoft.Windows.CsWin32 | Agent, Agent.Session, Setup | Win32 P/Invoke source generator; names listed in `NativeMethods.txt`, never a hand-written `DllImport` (M2) |
-| Vortice.Direct3D11, Vortice.DXGI | Agent.Session | Desktop Duplication |
+| Vortice.Direct3D11, Vortice.DXGI | Agent.Session | DXGI Desktop Duplication and the D3D11 staging texture it is read through (M3, D-35); the maintained successor of SharpDX |
 | Microsoft.Extensions.Hosting.WindowsServices | Agent | Windows service hosting (M2) |
 | System.Management | Agent, Setup | WMI (profiles, NIC properties) |
 | YamlDotNet | Console | package catalog |

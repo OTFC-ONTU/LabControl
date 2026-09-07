@@ -17,7 +17,7 @@ implement.
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
-| **M3** | Screens: mosaic, full view, remote control | **in progress — portion 1 of 3 built (2026-09-07)** | M2, `PC-00` |
+| **M3** | Screens: mosaic, full view, remote control | **in progress — portions 1 and 2 of 3 built (2026-09-07); portion 2 awaits the VM** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
 | **M6** | Software catalog, localization, polish | not started | M5 |
@@ -683,8 +683,29 @@ to answer Windows questions (`D-34`).
   Tests: geometry, codec, `ScreenImage`, pacer and settings in `Shared.Tests`; in
   `Console.Tests` the control after `Welcome`, thumbnails and deltas over a real `PushVideo`,
   the keyframe request, the identity check, a `FakeMachine` streaming both modes by itself,
-  and the main window rendered with seven live thumbnails plus the single-PC window. Next:
-  portion 2 on the VM.
+  and the main window rendered with seven live thumbnails plus the single-PC window.
+- *Portion 2 (built 2026-09-07, not yet run on the VM).* Real capture in `session.exe`
+  (`D-35`). The producer loop moved out of the simulator into
+  `Shared/Video/ScreenProducer` behind an `IScreenSource`, so the helper and `FakeAgent`
+  run the same code: thumbnails on change, keyframes and deltas in full mode, the pacer,
+  a refused frame's rectangles carried into the next, a failing source reported once and
+  reopened every 2 s, a stop that closes the source. The helper has two sources —
+  `DxgiScreenSource` (Vortice, primary output, a staging texture as the persistent picture,
+  Windows' dirty and move rectangles, re-duplication after `ACCESS_LOST` on the desktop
+  that has the input) and `GdiScreenSource` (`BitBlt` into alternating DIB sections,
+  `TileDiff` for the rectangles) — chosen by `ScreenSourceFactory` on every open, with a
+  `capture.fallback` event when GDI is used. `session.exe` declares itself per-monitor DPI
+  aware and attaches its capture thread to the input desktop (`DesktopAccess`). The
+  service relays: `VideoControl` down the pipe (and to every new helper), `VideoFrame` up
+  into the uplink, and a refused frame dropped with a `request_keyframe` back to the
+  helper. Tests (`ScreenProducerTests`): the producer against a scripted screen in both
+  modes, the refused-frame union, the failure/recovery events, stop and mode change,
+  `TileDiff`, and `JpegCodec.EncodeScaled`. **To verify on the VM** (expected: GDI, the
+  basic display adapter has no duplication): `capture.fallback` once, the thumbnail on the
+  tile moving when the desktop changes, the single-PC window with deltas, `session.exe`
+  CPU in Task Manager; lock/unlock and a UAC prompt must not stop the picture for more
+  than a couple of seconds. **On `PC-00`** (DXGI): `capture` events absent, ≤ 5 % CPU in
+  thumbnail mode, ≥ 15 fps in the window while scrolling. Then portion 3 (input).
 
 **Not in scope.** Broadcast to students, lock, exam mode, H.264.
 

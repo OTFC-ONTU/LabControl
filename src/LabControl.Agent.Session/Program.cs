@@ -3,6 +3,7 @@ using System.IO.Pipes;
 using LabControl.Shared;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Session;
+using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
@@ -14,8 +15,11 @@ namespace LabControl.Agent.Session;
 /// interactive session with a SYSTEM token, because a session-0 service can neither see the
 /// desktop nor inject input. It connects to the service's named pipe, says hello, and
 /// reports what it sees every <see cref="Defaults.HelperStatusInterval"/>. It never talks to
-/// the network, and it exits the moment the pipe closes — the service restarts it (M2). In
-/// M2 that is all it does; capture (M3), input (M3) and the overlay (M5) build on it.
+/// the network, and it exits the moment the pipe closes — the service restarts it (M2).
+/// Since M3 portion 2 it also captures the screen: the service relays the console's
+/// <c>VideoControl</c> down the pipe, a <see cref="ScreenProducer"/> on a DXGI or GDI
+/// <see cref="IScreenSource"/> answers with <c>VideoFrame</c>s up the pipe, and the service
+/// forwards them to the console (D-35). Input (M3 portion 3) and the overlay (M5) come next.
 /// </summary>
 internal static class Program
 {
@@ -51,9 +55,15 @@ internal static class Program
         using var loggers = ConfigureLogging(verbose);
         var log = loggers.CreateLogger("session");
 
+        // Before anything touches GDI or DXGI, so sizes and pixels are the display's own (D-35).
+        if (DesktopAccess.DeclareDpiAware() is { } dpiProblem)
+        {
+            log.LogWarning("could not declare DPI awareness: {Problem}; a scaled display will be captured scaled", dpiProblem);
+        }
+
         try
         {
-            return await RunAsync(log);
+            return await RunAsync(loggers, log);
         }
         catch (Exception ex)
         {
@@ -69,6 +79,7 @@ internal static class Program
     /// <summary>A hand check on a PC: what session, which desktop, which screen.</summary>
     private static int Probe()
     {
+        DesktopAccess.DeclareDpiAware();
         var status = DesktopProbe.Status();
         Console.WriteLine($"session helper {Version}");
         Console.WriteLine($"session id    : {DesktopProbe.OwnSessionId()?.ToString(CultureInfo.InvariantCulture) ?? "?"}");
@@ -79,7 +90,7 @@ internal static class Program
         return 0;
     }
 
-    private static async Task<int> RunAsync(Microsoft.Extensions.Logging.ILogger log)
+    private static async Task<int> RunAsync(ILoggerFactory loggers, Microsoft.Extensions.Logging.ILogger log)
     {
         var session = DesktopProbe.OwnSessionId();
         var pid = Environment.ProcessId;
@@ -119,6 +130,29 @@ internal static class Program
         await SendAsync(new HelperMessage { Hello = new HelperHello { SessionId = session ?? 0, ProcessId = (uint)pid, Version = Version } });
         log.LogInformation("connected to the service");
 
+        // Everything the producer says goes to the console through the service (D-35).
+        void Report(Event.Types.Severity severity, string code, string message)
+        {
+            _ = SendAsync(new HelperMessage
+            {
+                Event = new Event { Severity = severity, Code = code, Message = message, AtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds() },
+            }).ContinueWith(t => log.LogDebug("could not report {Code}: {Message}", code, t.Exception?.GetBaseException().Message), TaskContinuationOptions.OnlyOnFaulted);
+        }
+
+        var sources = new ScreenSourceFactory(loggers.CreateLogger("capture"), Report);
+        await using var producer = new ScreenProducer(
+            "screen",
+            sources.Open,
+            async (frame, ct) =>
+            {
+                // The pipe never refuses; the service drops what the console cannot take and
+                // asks for a keyframe (PROTOCOL "Agent ↔ Session helper").
+                await SendAsync(new HelperMessage { VideoFrame = frame });
+                return true;
+            },
+            Report,
+            loggers.CreateLogger("video"));
+
         var statusLoop = Task.Run(async () =>
         {
             var lastDesktop = string.Empty;
@@ -147,8 +181,12 @@ internal static class Program
                         await SendAsync(new HelperMessage { Status = DesktopProbe.Status() });
                         break;
 
+                    case ServiceMessage.PayloadOneofCase.VideoControl:
+                        producer.Apply(message.VideoControl);
+                        break;
+
                     default:
-                        // VideoControl, Input and Overlay arrive in M3/M5; until then say so once per message.
+                        // Input (M3 portion 3) and Overlay (M5) are not here yet; say so once per message.
                         log.LogWarning("the service sent {What}, which this build does not do yet", message.PayloadCase);
                         await SendAsync(new HelperMessage
                         {

@@ -6,6 +6,7 @@ using LabControl.Shared;
 using LabControl.Shared.Link;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Session;
+using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.Agent;
@@ -17,7 +18,12 @@ namespace LabControl.Agent;
 /// <see cref="Defaults.HelperStatusInterval"/>. The supervisor re-reads the session every
 /// <see cref="Defaults.SessionPollInterval"/> — sooner when the service control manager
 /// reports a change — and respawns the helper when it exits, hangs, or the session it lives
-/// in is no longer the one the student sees. Nothing here may throw out of the loop.
+/// in is no longer the one the student sees. Since M3 portion 2 it is also the relay for
+/// video (D-35): the console's <c>VideoControl</c> goes down the pipe as it arrives (and
+/// again to every new helper), the helper's <c>VideoFrame</c>s go up into the link's
+/// <c>PushVideo</c> uplink, and a frame the uplink refuses is dropped here with a keyframe
+/// request back to the helper, so nothing the console has not seen is ever lost. Nothing
+/// here may throw out of the loop.
 /// </summary>
 internal sealed class SessionSupervisor : IAsyncDisposable
 {
@@ -72,6 +78,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         }
 
         _changes.Changed += OnSessionChange;
+        _link.VideoControlChanged += OnVideoControl;
         _loop = Task.Run(() => LoopAsync(_stopping.Token));
     }
 
@@ -83,6 +90,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         }
 
         _changes.Changed -= OnSessionChange;
+        _link.VideoControlChanged -= OnVideoControl;
         _stopping.Cancel();
         Wake();
 
@@ -147,6 +155,23 @@ internal sealed class SessionSupervisor : IAsyncDisposable
 
         _log.LogDebug("session change: {Reason} in session {Session}", reason, sessionId);
         Wake();
+    }
+
+    /// <summary>
+    /// From the link, on its thread: the console's word on video goes to the helper as it
+    /// is; the link ending (<c>null</c>) is a stop. A helper that is not connected gets the
+    /// current control when it connects.
+    /// </summary>
+    private void OnVideoControl(VideoControl? control)
+    {
+        var helper = _helper;
+        if (helper is not { Connected: true })
+        {
+            return;
+        }
+
+        helper.KeyframeAsked = false;
+        _ = helper.SendAsync(new ServiceMessage { VideoControl = control ?? VideoSettings.StopControl() }, _log);
     }
 
     private void Wake()
@@ -548,7 +573,14 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             helper.Version = hello.Hello.Version;
             _log.LogInformation("session.exe {Version} (pid {Pid}) connected from session {Session}", hello.Hello.Version, hello.Hello.ProcessId, hello.Hello.SessionId);
 
-            await PipeFraming.WriteAsync(server, new ServiceMessage { Ping = new Ping { SentAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds() } }, token);
+            helper.Server = server;
+            await helper.SendAsync(new ServiceMessage { Ping = new Ping { SentAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds() } }, _log);
+
+            // A helper born while the console already wants video starts streaming at once (D-35).
+            if (_link.VideoControl is { Active: true } wanted)
+            {
+                await helper.SendAsync(new ServiceMessage { VideoControl = wanted }, _log);
+            }
 
             var announced = false;
             while (await PipeFraming.ReadAsync(server, HelperMessage.Parser, token) is { } message)
@@ -579,6 +611,10 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                         _link.Report(relayed.Severity, relayed.Code.Length > 0 ? relayed.Code : "session.event", relayed.Message);
                         break;
 
+                    case HelperMessage.PayloadOneofCase.VideoFrame:
+                        await RelayFrameAsync(helper, message.VideoFrame);
+                        break;
+
                     default:
                         _log.LogDebug("session.exe sent {What}, which this build does not handle", message.PayloadCase);
                         break;
@@ -601,9 +637,45 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// A frame from the helper goes to the console through the link's uplink. The uplink
+    /// keeps one frame beyond the one on the wire and refuses the rest (D-34); the helper
+    /// cannot be told to hold — its pipe must keep flowing or the status behind it stalls —
+    /// so the refused frame is dropped and the helper is asked for a keyframe once, which
+    /// makes its next frame carry everything the console missed.
+    /// </summary>
+    private async Task RelayFrameAsync(Helper helper, VideoFrame frame)
+    {
+        var control = _link.VideoControl;
+        if (control is not { Active: true })
+        {
+            // Video was switched off while this frame was on the pipe; the stop is on its way down.
+            return;
+        }
+
+        if (_link.TryPushVideo(frame))
+        {
+            helper.KeyframeAsked = false;
+            return;
+        }
+
+        if (helper.KeyframeAsked)
+        {
+            return;
+        }
+
+        helper.KeyframeAsked = true;
+        _log.LogDebug("the video uplink refused a {Mode} frame; asking session.exe for a keyframe", frame.Mode);
+        var again = control.Clone();
+        again.RequestKeyframe = true;
+        await helper.SendAsync(new ServiceMessage { VideoControl = again }, _log);
+    }
+
     /// <summary>One running instance of session.exe and what it has told us.</summary>
     private sealed class Helper : IDisposable
     {
+        private readonly SemaphoreSlim _writeLock = new(1, 1);
+
         public Helper(Process process, uint sessionId, DateTimeOffset startedAt)
         {
             Process = process;
@@ -632,6 +704,42 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         public string Version { get; set; } = string.Empty;
 
         public HelperStatus? Status { get; set; }
+
+        /// <summary>The pipe to this helper once it connected; writes go through <see cref="SendAsync"/>.</summary>
+        public NamedPipeServerStream? Server { get; set; }
+
+        /// <summary>A keyframe was requested after a refused frame and no frame has been accepted since.</summary>
+        public volatile bool KeyframeAsked;
+
+        /// <summary>One writer at a time on the pipe; a failure is logged, never thrown — the pump notices the pipe ending.</summary>
+        public async Task SendAsync(ServiceMessage message, ILogger log)
+        {
+            var server = Server;
+            if (server is null || Cancel.IsCancellationRequested)
+            {
+                return;
+            }
+
+            try
+            {
+                await _writeLock.WaitAsync(Cancel.Token);
+                try
+                {
+                    await PipeFraming.WriteAsync(server, message, Cancel.Token);
+                }
+                finally
+                {
+                    _writeLock.Release();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException or InvalidDataException)
+            {
+                log.LogDebug("could not send {What} to session.exe (pid {Pid}): {Message}", message.PayloadCase, ProcessId, ex.Message);
+            }
+        }
 
         public bool Alive(DateTimeOffset now) => Connected && now - LastHeard <= Defaults.HelperSilenceTimeout && !TryGetExitCode(out _);
 
@@ -664,6 +772,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         public void Dispose()
         {
             Cancel.Dispose();
+            _writeLock.Dispose();
             Process.Dispose();
         }
     }

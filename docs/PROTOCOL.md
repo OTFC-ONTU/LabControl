@@ -380,7 +380,14 @@ everything else; the PC is the producer.
   thumbnails, so the console scales every full keyframe into the thumbnail itself.
 - Graceful degradation: a linked PC that has sent nothing for `Defaults.VideoStallTimeout`
   (10 s) is shown with its last picture dimmed and a note; an M2-era agent answers the
-  control with `session.not_in_this_build` and simply shows no picture.
+  control with `session.not_in_this_build` and simply shows no picture. A PC whose screen
+  cannot be captured says why in a `capture.<reason>` event (M3 portion 2); portion 3 puts
+  that reason on the tile.
+- **Where the frames come from on a real PC** (`D-35`): DXGI Desktop Duplication of the
+  primary output in `session.exe`, with Windows' own dirty and move rectangles as `dirty`;
+  a GDI `BitBlt` fallback, with rectangles from a tile-by-tile comparison of two captures,
+  where duplication is not offered (basic display adapter, VM without a WDDM 1.2 driver).
+  The helper captures only while a control is active — an idle PC holds no duplication.
 
 ## Input (full-view control)
 
@@ -430,9 +437,33 @@ helper from a previous service instance, or an impostor). The service answers wi
 `Default` while the student works, `Winlogon` at the lock screen, the logon screen and a UAC
 prompt. A helper silent for `HelperSilenceTimeout` (10 s) is killed and restarted; an
 `Event` from the helper is relayed to the console unchanged. When the pipe closes the helper
-exits at once; when the helper exits the service respawns it (D-30). `VideoControl`, `Input`
-and `Overlay` are answered with a `session.not_in_this_build` warning until M3 portion 2
-(capture), portion 3 (input) and M5 (overlay); the console side of video is M3 portion 1.
+exits at once; when the helper exits the service respawns it (D-30). `Input` and `Overlay`
+are answered with a `session.not_in_this_build` warning until M3 portion 3 (input) and M5
+(overlay).
+
+**Video over the pipe (M3 portion 2, `D-35`).** The service is a relay with one policy of
+its own:
+
+- Every `VideoControl` the console sends on the `Link` stream is written down the pipe as it
+  is; the link ending is written as `VideoControl{active: false}`. A helper that connects
+  while the console already wants video gets the current control right after the `Ping`,
+  so a restarted helper (logon, crash) resumes without the console noticing more than a
+  short stall.
+- The helper's `ScreenProducer` (`LabControl.Shared/Video/`) answers with `VideoFrame`s up
+  the pipe — the same frames, in the same modes, as the simulator's — with `agent_id`, `seq`
+  and `at_unix_ms` left blank; the service's `PushVideo` uplink fills them in. The helper
+  also sends `Event`s about capture: `capture.fallback` (no desktop duplication, GDI is used),
+  `capture.<reason>` (`no_desktop`, `access_lost`, `no_duplication`, `gdi_failed`, …) when
+  the screen cannot be captured, `capture.recovered` when it can again.
+- **A frame the uplink refuses is dropped by the service**, which then sends the helper the
+  current control with `request_keyframe: true` — once, until a frame is accepted again.
+  The helper cannot be told to hold a frame: the pipe must keep flowing or the
+  `HelperStatus` behind the frame stalls and the helper is killed as silent. Dropping plus a
+  keyframe request costs one whole frame per congestion event and loses nothing: the next
+  frame carries everything the console has not seen. In thumbnail mode the request simply
+  forces the next thumbnail even if the screen did not change.
+- Frames stay under `SessionPipeMaxMessageBytes` by construction (a 4 MiB `VideoFrame`
+  limit on the console side, 16 MiB on the pipe).
 
 ### `SessionState` (agent → console)
 

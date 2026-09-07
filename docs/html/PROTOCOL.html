@@ -579,7 +579,14 @@ the full picture for the single-PC view. While a PC is in full mode it sends no
 thumbnails, so the console scales every full keyframe into the thumbnail itself.</li>
 <li>Graceful degradation: a linked PC that has sent nothing for <code>Defaults.VideoStallTimeout</code>
 (10 s) is shown with its last picture dimmed and a note; an M2-era agent answers the
-control with <code>session.not_in_this_build</code> and simply shows no picture.</li>
+control with <code>session.not_in_this_build</code> and simply shows no picture. A PC whose screen
+cannot be captured says why in a <code>capture.&lt;reason&gt;</code> event (M3 portion 2); portion 3 puts
+that reason on the tile.</li>
+<li><strong>Where the frames come from on a real PC</strong> (<code>D-35</code>): DXGI Desktop Duplication of the
+primary output in <code>session.exe</code>, with Windows' own dirty and move rectangles as <code>dirty</code>;
+a GDI <code>BitBlt</code> fallback, with rectangles from a tile-by-tile comparison of two captures,
+where duplication is not offered (basic display adapter, VM without a WDDM 1.2 driver).
+The helper captures only while a control is active — an idle PC holds no duplication.</li>
 </ul>
 <h2 id="input-full-view-control">Input (full-view control)<a class="anchor" href="#input-full-view-control" aria-label="Link to this section">#</a></h2>
 <p><code>Input { kind, x, y (normalized 0..1), button, delta, vk, scan, text, flags }</code> →
@@ -619,9 +626,33 @@ helper from a previous service instance, or an impostor). The service answers wi
 <code>Default</code> while the student works, <code>Winlogon</code> at the lock screen, the logon screen and a UAC
 prompt. A helper silent for <code>HelperSilenceTimeout</code> (10 s) is killed and restarted; an
 <code>Event</code> from the helper is relayed to the console unchanged. When the pipe closes the helper
-exits at once; when the helper exits the service respawns it (D-30). <code>VideoControl</code>, <code>Input</code>
-and <code>Overlay</code> are answered with a <code>session.not_in_this_build</code> warning until M3 portion 2
-(capture), portion 3 (input) and M5 (overlay); the console side of video is M3 portion 1.</p>
+exits at once; when the helper exits the service respawns it (D-30). <code>Input</code> and <code>Overlay</code>
+are answered with a <code>session.not_in_this_build</code> warning until M3 portion 3 (input) and M5
+(overlay).</p>
+<p><strong>Video over the pipe (M3 portion 2, <code>D-35</code>).</strong> The service is a relay with one policy of
+its own:</p>
+<ul>
+<li>Every <code>VideoControl</code> the console sends on the <code>Link</code> stream is written down the pipe as it
+is; the link ending is written as <code>VideoControl{active: false}</code>. A helper that connects
+while the console already wants video gets the current control right after the <code>Ping</code>,
+so a restarted helper (logon, crash) resumes without the console noticing more than a
+short stall.</li>
+<li>The helper's <code>ScreenProducer</code> (<code>LabControl.Shared/Video/</code>) answers with <code>VideoFrame</code>s up
+the pipe — the same frames, in the same modes, as the simulator's — with <code>agent_id</code>, <code>seq</code>
+and <code>at_unix_ms</code> left blank; the service's <code>PushVideo</code> uplink fills them in. The helper
+also sends <code>Event</code>s about capture: <code>capture.fallback</code> (no desktop duplication, GDI is used),
+<code>capture.&lt;reason&gt;</code> (<code>no_desktop</code>, <code>access_lost</code>, <code>no_duplication</code>, <code>gdi_failed</code>, …) when
+the screen cannot be captured, <code>capture.recovered</code> when it can again.</li>
+<li><strong>A frame the uplink refuses is dropped by the service</strong>, which then sends the helper the
+current control with <code>request_keyframe: true</code> — once, until a frame is accepted again.
+The helper cannot be told to hold a frame: the pipe must keep flowing or the
+<code>HelperStatus</code> behind the frame stalls and the helper is killed as silent. Dropping plus a
+keyframe request costs one whole frame per congestion event and loses nothing: the next
+frame carries everything the console has not seen. In thumbnail mode the request simply
+forces the next thumbnail even if the screen did not change.</li>
+<li>Frames stay under <code>SessionPipeMaxMessageBytes</code> by construction (a 4 MiB <code>VideoFrame</code>
+limit on the console side, 16 MiB on the pipe).</li>
+</ul>
 <h3 id="sessionstate-agent-console"><code>SessionState</code> (agent → console)<a class="anchor" href="#sessionstate-agent-console" aria-label="Link to this section">#</a></h3>
 <pre><code>SessionState { kind: UNSPECIFIED | LOGON | LOGOFF | LOCK | UNLOCK, user, session_id,
                helper_alive, locked }
@@ -756,7 +787,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-07 14:54 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 15:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

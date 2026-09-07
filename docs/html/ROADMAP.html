@@ -169,7 +169,7 @@ implement.</p>
 <tr>
 <td><strong>M2</strong></td>
 <td>Windows agent: service, helper, power, scripts</td>
-<td><strong>built; verified on the VM (2026-09-05…07); <code>PC-00</code> enrolled as <code>PC-10</code> and verified (2026-09-07) except Wake-on-LAN and antivirus</strong></td>
+<td><strong>built; verified on the VM (2026-09-05…07); <code>PC-00</code> enrolled as <code>PC-10</code> and verified (2026-09-07); Wake-on-LAN deferred to M4</strong></td>
 <td></td>
 </tr>
 <tr>
@@ -746,8 +746,11 @@ seconds, as <code>0.1.0+d82bee07</code>. The second push, <code>0.1.1+e8f19850</
 <code>-p:Version=0.1.1</code> <code>win-x64</code> build, went through with the port rule in place: pulled in
 4 s, link dropped at 13:56:15 and back as the new version 2.2 s later, <code>app\</code> left with
 exactly <code>0.1.0+d82bee07</code> and <code>0.1.1+e8f19850</code> (the plain <code>0.1.0</code> pruned). The push is
-verified on real x64 hardware. Still to check on <code>PC-10</code>: Wake-on-LAN once the BIOS/NIC
-are set, antivirus (<code>D-10</code>), real capture (M3).</p>
+verified on real x64 hardware. <strong>Wake-on-LAN is deferred to M4</strong> (owner's decision,
+2026-09-07): it is not critical for the lessons, its Windows half is Setup.exe's step 7
+anyway and the BIOS half is a hand visit either way, so the real wake is tested when
+Setup.exe exists — and if it then does not work, the fix reaches the PCs through the
+push. Still to check on <code>PC-10</code>: antivirus (<code>D-10</code>), real capture (M3).</p>
 </li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
@@ -1130,7 +1133,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 13:57 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 14:31 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

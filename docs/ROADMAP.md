@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07) except Wake-on-LAN and antivirus** |
+| **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -578,8 +578,11 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   `-p:Version=0.1.1` `win-x64` build, went through with the port rule in place: pulled in
   4 s, link dropped at 13:56:15 and back as the new version 2.2 s later, `app\` left with
   exactly `0.1.0+d82bee07` and `0.1.1+e8f19850` (the plain `0.1.0` pruned). The push is
-  verified on real x64 hardware. Still to check on `PC-10`: Wake-on-LAN once the BIOS/NIC
-  are set, antivirus (`D-10`), real capture (M3).
+  verified on real x64 hardware. **Wake-on-LAN is deferred to M4** (owner's decision,
+  2026-09-07): it is not critical for the lessons, its Windows half is Setup.exe's step 7
+  anyway and the BIOS half is a hand visit either way, so the real wake is tested when
+  Setup.exe exists — and if it then does not work, the fix reaches the PCs through the
+  push. Still to check on `PC-10`: antivirus (`D-10`), real capture (M3).
 
 **Acceptance criteria**
 

@@ -563,9 +563,19 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   Wake-on-LAN from the console ended in `wake.failed` after 90 s: the magic packet went to
   the broadcast and the PC's own address, but the PC's BIOS/NIC Wake-on-LAN settings were
   not touched by the dev install (INSTALLER.md step 7 is Setup.exe's job) — to enable by
-  hand and retry. Still to check on `PC-10`: the `student` refusals (services.msc, Task
-  Manager, `ProgramData`), shutdown/reboot from the console, the `win-x64` push, antivirus
-  (`D-10`), real capture (M3).
+  hand and retry. Later the same visit: the three `student` refusals (services.msc, Task
+  Manager on `session.exe`, `ProgramData`) held, and *Shutdown* / *Reboot* from the console
+  worked (`shutdown now`, `reboot now` in the agent log, the PC back and linked ~45 s
+  later). **The first `win-x64` push found a bug.** `0.1.0+d82bee07` from
+  `artifacts/win-x64`: both files pulled in 5 s over Wi-Fi, preflight passed, service
+  repointed, restarted — and the PC stayed offline for twelve minutes with the service
+  *Running* and the layout right. Cause: `dev-install.ps1`'s inbound firewall rule named
+  `app\0.1.0\agent.exe`, so Windows Firewall dropped the console's beacon for the new
+  directory; the VM never showed it because its console address was pinned. Fixed by a
+  rule **by port** (UDP 47801) in `dev-install.ps1` and INSTALLER.md step 6 (`D-33` item
+  8); on `PC-10` a `fixfw.cmd` from the stick replaced the rule and the tile was back in
+  seconds, as `0.1.0+d82bee07`. Still to check on `PC-10`: the second push (`0.1.1`, the
+  prune), Wake-on-LAN once the BIOS/NIC are set, antivirus (`D-10`), real capture (M3).
 
 **Acceptance criteria**
 

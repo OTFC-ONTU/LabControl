@@ -834,6 +834,17 @@ Decisions:
 7. **`FakeAgent` pulls everything for real and pretends only the install**, then drops the
    link, throws cancellation and comes back claiming the new version — the console's entire
    view of a push, exercised on the Mac and tested in `PushBuildTests`.
+8. **The firewall rule is by port, never by program path** (added 2026-09-07 after the
+   first push on `PC-00`). `dev-install.ps1` used to allow inbound traffic for
+   `app\0.1.0\agent.exe`; the pushed version ran from `app\0.1.0+d82bee07\`, matched no
+   rule, and Windows Firewall silently dropped the console's beacon (inbound UDP 47801) —
+   the service was *Running*, the layout was right, and the PC stayed offline for twelve
+   minutes until the rule was replaced. The VM never showed it because its console address
+   was pinned and no beacon was needed. The rule is now *LabControl Beacon*, UDP 47801 by
+   port, in the same group; Setup.exe (M4) does the same, and the updater has nothing to
+   touch. Rejected: rewriting a per-program rule on every push (one more thing that can
+   fail between stop and start), the agent adding a rule for itself at start-up (a
+   privileged side effect in the service loop for a problem the installer can avoid).
 
 What this form deliberately lacks (M4): a signature, so the push is only as trustworthy as
 the mutual-TLS link and the console it came from; probation and rollback, so a new build

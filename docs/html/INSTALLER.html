@@ -207,9 +207,13 @@ with the binary path pointing at <code>app\&lt;version&gt;\agent.exe</code>; rec
 failure (3×, 10 s) and then <code>agent.exe --rollback</code> on the fourth, which is the
 outside-the-agent half of the update rollback (<code>D-19</code>, <code>docs/ARCHITECTURE.md</code> §7.2);
 description string, then start it.</li>
-<li><strong>Firewall</strong> — outbound is allowed by default; add an inbound allow rule for
-<code>agent.exe</code> anyway (future direct-connect / diagnostics) and an ICMP echo allow
-rule (so the console can ping). Rules are tagged with a LabControl group name so
+<li><strong>Firewall</strong> — outbound is allowed by default, but the console's discovery beacon
+is an <strong>inbound</strong> UDP datagram on port 47801, so add an inbound allow rule for
+<strong>UDP 47801 by port</strong> and an ICMP echo allow rule (so the console can ping). Never a
+per-program rule: the agent's path changes with every self-update (<code>app\&lt;version&gt;\</code>,
+<code>D-19</code>) and Windows Firewall would then drop the beacon for the new version — the PC
+keeps running and never finds the console (found on <code>PC-00</code>, 2026-09-07, <code>D-33</code>
+item 8). Rules are tagged with a LabControl group name so
 exam-mode rules (<code>docs/ARCHITECTURE.md</code> §6.1) can be added and removed as a set
 without touching anything the college configured.
 6a. <strong>Antivirus exclusion</strong> — the binaries are unsigned (<code>D-15</code>), so add the
@@ -294,7 +298,7 @@ reverted between runs.</li>
 </ul>
 
 </article>
-<footer>Generated 2026-09-07 13:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 13:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#building-the-usb-payload-on-the-console">Building the USB payload (on the console)</a></li><li class="lvl2"><a href="#what-setup.exe-does-in-order">What Setup.exe does, in order</a></li><li class="lvl2"><a href="#uninstall-repair">Uninstall / repair</a></li><li class="lvl2"><a href="#things-the-installer-cannot-do">Things the installer cannot do</a></li><li class="lvl2"><a href="#testing-the-installer-without-a-room-full-of-real-pcs">Testing the installer without a room full of real PCs</a></li></ul></nav>
 </div>

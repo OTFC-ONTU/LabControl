@@ -81,9 +81,13 @@ makes re-runs safe. `--dry-run` prints the plan only; `--number 7` skips the pro
    failure (3×, 10 s) and then `agent.exe --rollback` on the fourth, which is the
    outside-the-agent half of the update rollback (`D-19`, `docs/ARCHITECTURE.md` §7.2);
    description string, then start it.
-6. **Firewall** — outbound is allowed by default; add an inbound allow rule for
-   `agent.exe` anyway (future direct-connect / diagnostics) and an ICMP echo allow
-   rule (so the console can ping). Rules are tagged with a LabControl group name so
+6. **Firewall** — outbound is allowed by default, but the console's discovery beacon
+   is an **inbound** UDP datagram on port 47801, so add an inbound allow rule for
+   **UDP 47801 by port** and an ICMP echo allow rule (so the console can ping). Never a
+   per-program rule: the agent's path changes with every self-update (`app\<version>\`,
+   `D-19`) and Windows Firewall would then drop the beacon for the new version — the PC
+   keeps running and never finds the console (found on `PC-00`, 2026-09-07, `D-33`
+   item 8). Rules are tagged with a LabControl group name so
    exam-mode rules (`docs/ARCHITECTURE.md` §6.1) can be added and removed as a set
    without touching anything the college configured.
 6a. **Antivirus exclusion** — the binaries are unsigned (`D-15`), so add the

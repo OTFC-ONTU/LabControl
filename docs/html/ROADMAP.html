@@ -731,9 +731,19 @@ reboot the PC signed in as <code>student</code> by itself and the tile read <em>
 Wake-on-LAN from the console ended in <code>wake.failed</code> after 90 s: the magic packet went to
 the broadcast and the PC's own address, but the PC's BIOS/NIC Wake-on-LAN settings were
 not touched by the dev install (INSTALLER.md step 7 is Setup.exe's job) — to enable by
-hand and retry. Still to check on <code>PC-10</code>: the <code>student</code> refusals (services.msc, Task
-Manager, <code>ProgramData</code>), shutdown/reboot from the console, the <code>win-x64</code> push, antivirus
-(<code>D-10</code>), real capture (M3).</p>
+hand and retry. Later the same visit: the three <code>student</code> refusals (services.msc, Task
+Manager on <code>session.exe</code>, <code>ProgramData</code>) held, and <em>Shutdown</em> / <em>Reboot</em> from the console
+worked (<code>shutdown now</code>, <code>reboot now</code> in the agent log, the PC back and linked ~45 s
+later). <strong>The first <code>win-x64</code> push found a bug.</strong> <code>0.1.0+d82bee07</code> from
+<code>artifacts/win-x64</code>: both files pulled in 5 s over Wi-Fi, preflight passed, service
+repointed, restarted — and the PC stayed offline for twelve minutes with the service
+<em>Running</em> and the layout right. Cause: <code>dev-install.ps1</code>'s inbound firewall rule named
+<code>app\0.1.0\agent.exe</code>, so Windows Firewall dropped the console's beacon for the new
+directory; the VM never showed it because its console address was pinned. Fixed by a
+rule <strong>by port</strong> (UDP 47801) in <code>dev-install.ps1</code> and INSTALLER.md step 6 (<code>D-33</code> item
+8); on <code>PC-10</code> a <code>fixfw.cmd</code> from the stick replaced the rule and the tile was back in
+seconds, as <code>0.1.0+d82bee07</code>. Still to check on <code>PC-10</code>: the second push (<code>0.1.1</code>, the
+prune), Wake-on-LAN once the BIOS/NIC are set, antivirus (<code>D-10</code>), real capture (M3).</p>
 </li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
@@ -1116,7 +1126,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 13:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 13:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

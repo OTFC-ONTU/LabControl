@@ -71,6 +71,7 @@ $DataDir     = 'C:\ProgramData\LabControl'
 $AppDir      = Join-Path $InstallDir 'app'
 $CurrentFile = Join-Path $AppDir 'current'
 $RuleGroup   = 'LabControl'
+$BeaconPort  = 47801      # Defaults.BeaconPort: the console's UDP discovery beacon
 $StudentName     = 'student'
 $StudentPassword = '1'     # Defaults.StudentDefaultPassword (D-09). Never write it to the console or a log.
 $UsersSid         = 'S-1-5-32-545'   # BUILTIN\Users, by SID so a Ukrainian Windows works too
@@ -336,9 +337,11 @@ if (Get-Service-IfExists) {
 & sc.exe failureflag $ServiceName 1 | Out-Null
 Done 'service configured (LocalSystem, auto-start, restart on failure)'
 
-Step 'Firewall rule (inbound allow for agent.exe, ICMP echo) in group LabControl'
+Step 'Firewall rules (inbound allow: console beacon UDP 47801, ICMP echo) in group LabControl'
+# By port, not by program path: the agent's path changes with every self-update (app\<version>\,
+# D-19) and a per-program rule silently stops the beacon for the new version (PC-00, 2026-09-07).
 Get-NetFirewallRule -Group $RuleGroup -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-New-NetFirewallRule -DisplayName 'LabControl Agent' -Group $RuleGroup -Direction Inbound -Action Allow -Program $agentExe -Profile Any | Out-Null
+New-NetFirewallRule -DisplayName 'LabControl Beacon' -Group $RuleGroup -Direction Inbound -Action Allow -Protocol UDP -LocalPort $BeaconPort -Profile Any | Out-Null
 New-NetFirewallRule -DisplayName 'LabControl ICMP' -Group $RuleGroup -Direction Inbound -Action Allow -Protocol ICMPv4 -IcmpType 8 -Profile Any | Out-Null
 Done 'rules added'
 

@@ -169,7 +169,7 @@ implement.</p>
 <tr>
 <td><strong>M2</strong></td>
 <td>Windows agent: service, helper, power, scripts</td>
-<td><strong>built; all four portions verified on the VM (2026-09-05…07), <code>PC-00</code> checks pending</strong></td>
+<td><strong>built; verified on the VM (2026-09-05…07); <code>PC-00</code> enrolled as <code>PC-10</code> (2026-09-07), its checks in progress</strong></td>
 <td></td>
 </tr>
 <tr>
@@ -721,6 +721,20 @@ on this VM, so it proves nothing here); the wrong-architecture preflight refusal
 for <code>PC-00</code>. Portion 4, and with it the M2 build, is verified on the VM; the <code>PC-00</code>
 checks (Wake-on-LAN, <code>win-x64</code>, antivirus, real capture) remain for the lab.</p>
 </li>
+<li><p><em>First <code>PC-00</code> visit (2026-09-07, the lab).</em> The stick held <code>dev-install.ps1</code>, an
+<code>install.cmd</code> that asks the PC number (the agent refuses 0, so the test box enrolled as
+<strong><code>PC-10</code></strong>; number 1 stays the VM), the <code>win-x64</code> portion-4 build and the payload whose
+codes were live. <code>install.cmd</code> with <code>STUDENT=1</code> ran as the local administrator, the PC
+found the console by its beacon (no pinned address), enrolled (<code>enroll.issued</code>) and linked
+in the same second; inventory: <code>DESKTOP-44I93Q7</code>, 1920×1080, <code>agent 0.1.0</code>. After the
+reboot the PC signed in as <code>student</code> by itself and the tile read <em>student</em>. The first
+Wake-on-LAN from the console ended in <code>wake.failed</code> after 90 s: the magic packet went to
+the broadcast and the PC's own address, but the PC's BIOS/NIC Wake-on-LAN settings were
+not touched by the dev install (INSTALLER.md step 7 is Setup.exe's job) — to enable by
+hand and retry. Still to check on <code>PC-10</code>: the <code>student</code> refusals (services.msc, Task
+Manager, <code>ProgramData</code>), shutdown/reboot from the console, the <code>win-x64</code> push, antivirus
+(<code>D-10</code>), real capture (M3).</p>
+</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -1102,7 +1116,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.<
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-07 02:04 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-07 13:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-classroom-control-broadcast-lock-exam-mode">M5 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m6-software-catalog-localization-polish">M6 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

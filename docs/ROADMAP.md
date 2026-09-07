@@ -16,7 +16,7 @@ implement.
 |---|---|---|---|
 | **M0** | Skeleton and toolchain | **done 2026-09-04** | — |
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
-| **M2** | Windows agent: service, helper, power, scripts | **built; all four portions verified on the VM (2026-09-05…07), `PC-00` checks pending** |
+| **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` (2026-09-07), its checks in progress** |
 | **M3** | Screens: mosaic, full view, remote control | not started | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | not started | M3 |
 | **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
@@ -553,6 +553,19 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   on this VM, so it proves nothing here); the wrong-architecture preflight refusal waits
   for `PC-00`. Portion 4, and with it the M2 build, is verified on the VM; the `PC-00`
   checks (Wake-on-LAN, `win-x64`, antivirus, real capture) remain for the lab.
+- *First `PC-00` visit (2026-09-07, the lab).* The stick held `dev-install.ps1`, an
+  `install.cmd` that asks the PC number (the agent refuses 0, so the test box enrolled as
+  **`PC-10`**; number 1 stays the VM), the `win-x64` portion-4 build and the payload whose
+  codes were live. `install.cmd` with `STUDENT=1` ran as the local administrator, the PC
+  found the console by its beacon (no pinned address), enrolled (`enroll.issued`) and linked
+  in the same second; inventory: `DESKTOP-44I93Q7`, 1920×1080, `agent 0.1.0`. After the
+  reboot the PC signed in as `student` by itself and the tile read *student*. The first
+  Wake-on-LAN from the console ended in `wake.failed` after 90 s: the magic packet went to
+  the broadcast and the PC's own address, but the PC's BIOS/NIC Wake-on-LAN settings were
+  not touched by the dev install (INSTALLER.md step 7 is Setup.exe's job) — to enable by
+  hand and retry. Still to check on `PC-10`: the `student` refusals (services.msc, Task
+  Manager, `ProgramData`), shutdown/reboot from the console, the `win-x64` push, antivirus
+  (`D-10`), real capture (M3).
 
 **Acceptance criteria**
 

@@ -37,15 +37,21 @@ public partial class LabView : UserControl
 
         // A tile's tooltip is its own floating window on macOS and pops up above whatever
         // covers the console — the single-PC window, another application — whenever the
-        // pointer passes over the tile's place. Only an active console shows tooltips.
-        AddHandler(ToolTip.ToolTipOpeningEvent, (_, e) =>
+        // pointer passes over the tile's place. Tooltips are served only while the console
+        // window is active (ToolTip.ServiceEnabled inherits down to every tile).
+        AttachedToVisualTree += (_, _) =>
         {
-            if (TopLevel.GetTopLevel(this) is Window { IsActive: false })
+            if (TopLevel.GetTopLevel(this) is Window window && !ReferenceEquals(window, _window))
             {
-                e.Cancel = true;
+                _window = window;
+                window.Activated += (_, _) => ToolTip.SetServiceEnabled(this, true);
+                window.Deactivated += (_, _) => ToolTip.SetServiceEnabled(this, false);
+                ToolTip.SetServiceEnabled(this, window.IsActive);
             }
-        });
+        };
     }
+
+    private Window? _window;
 
     private void Attach(MainViewModel? viewModel)
     {

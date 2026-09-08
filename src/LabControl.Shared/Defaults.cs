@@ -254,6 +254,24 @@ public static class Defaults
     public const string DeviceGrantFileExtension = ".lcgrant";
 
     /// <summary>
+    /// Every file the console opens as a document (M5, D-59 item 5): what a positional
+    /// command-line argument, a forwarded launch or a LaunchServices open may name. The
+    /// order is the order of the file-picker filters.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ConsoleDocumentExtensions =
+        [LabFileExtension, BackupFileExtension, DeviceGrantFileExtension, DeviceRequestFileExtension];
+
+    /// <summary>
+    /// The single-instance endpoint (D-59 item 5): <c>labcontrol-console-&lt;hash&gt;</c>, where the
+    /// hash is the first 16 hex digits of SHA-256 over the data directory — a Windows named
+    /// pipe of that name, or a Unix socket of that name plus <see cref="SingleInstanceSocketExtension"/>.
+    /// Two <c>--data</c> directories get two endpoints.
+    /// </summary>
+    public const string SingleInstanceNamePrefix = "labcontrol-console-";
+    public const string SingleInstanceSocketExtension = ".sock";
+    public const int SingleInstanceNameHashLength = 16;
+
+    /// <summary>
     /// The pseudo-serial that revokes a teacher device across renewals (D-56 item 6):
     /// <c>instance:&lt;instance_id&gt;</c>, signed like any serial. An agent older than M5
     /// cannot hold it: its <c>NormalizeSerial</c> upper-cases the id, the signature no longer

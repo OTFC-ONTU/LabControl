@@ -341,11 +341,11 @@ of M; pending on …* — the console never claims a revocation reached a PC it 
 from.
 
 **One active session** (`D-57`). `ActiveLabController` holds at most one `LabSession`;
-selections are serialised so a rapid A → B → C activates C once. Activation shows the
-destination's saved mosaic first, then releases the current session in a fixed order —
-beacons, links (`the console left this lab`), listener, server, housekeeping, save,
-screens, vault (locking the CA), instance — and only then opens the next profile and
-starts its Kestrel. A failed activation is an explicit `Failed` state with *Retry*, never
+selections are serialised so a rapid A → B → C activates C once. Activation releases the
+current session in a fixed order — beacons, links (`the console left this lab`), listener,
+server, housekeeping, save, screens, vault (locking the CA), instance — then opens the
+next profile, builds its session and shows the destination's saved mosaic from its own
+`lab.json` (*Connecting…*), and only then starts its Kestrel. A failed activation is an explicit `Failed` state with *Retry*, never
 two half-active labs. A lab-A agent reaching the lab-B server is refused as *belongs to
 lab A, which is not the active lab*. Leaving with work in flight shows a departure report:
 scripts and file deliveries continue on the PC and report on return, power jobs complete,

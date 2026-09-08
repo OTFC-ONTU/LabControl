@@ -9,6 +9,7 @@ using LabControl.Shared;
 using LabControl.Shared.Identity;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Setup;
+using Avalonia.Input;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 
@@ -348,5 +349,173 @@ public sealed class PushBuildDialog : DialogWindow<AgentBuild>
                 });
             });
         }
+    }
+}
+
+/// <summary>One row per imported file (M5 §5): what became a saved lab and what did not, and why.</summary>
+public sealed class ImportResultsDialog : DialogWindow<bool?>
+{
+    public ImportResultsDialog(IReadOnlyList<ImportFileResult> results)
+    {
+        Title = Strings.Get("Import.ResultsTitle");
+
+        var rows = new StackPanel { Spacing = 6 };
+        foreach (var result in results)
+        {
+            var row = new DockPanel { LastChildFill = true };
+            var mark = new TextBlock
+            {
+                Text = Strings.Get(result.Ok ? "Import.MarkAdded" : "Import.MarkFailed"),
+                Foreground = result.Ok ? Brushes.SeaGreen : Brushes.IndianRed,
+                FontWeight = FontWeight.Bold,
+                Width = 20,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            DockPanel.SetDock(mark, Dock.Left);
+            row.Children.Add(mark);
+
+            var text = new StackPanel { Spacing = 2 };
+            text.Children.Add(new TextBlock { Text = result.FileName, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, MaxWidth = 440 });
+            text.Children.Add(new TextBlock { Text = result.Message, TextWrapping = TextWrapping.Wrap, MaxWidth = 440, Opacity = 0.85 });
+            row.Children.Add(text);
+            rows.Children.Add(row);
+        }
+
+        var added = results.Count(r => r.Ok);
+        var ok = Primary(Strings.Get("Common.Ok"));
+        ok.Click += (_, _) => Finish(true);
+
+        Body(
+            Heading(Strings.Format("Import.ResultsHeading", added, results.Count)),
+            new ScrollViewer { Content = rows, MaxHeight = 360 },
+            Label(Strings.Get("Import.NothingOpened")),
+            Buttons(ok));
+    }
+}
+
+/// <summary>What the teacher chose in the departure dialog (M5, D-57 item 3).</summary>
+public enum DepartureChoice
+{
+    Stay = 0,
+    Leave = 1,
+    Wait = 2,
+}
+
+/// <summary>
+/// <i>Leave {lab}?</i> — the <see cref="DepartureReport"/> in words: every running job with
+/// its fate, queued jobs, uploads, probations and wakes; then <i>Stay</i>, <i>Wait for N
+/// jobs</i> (only when jobs are running) and <i>Leave anyway</i>.
+/// </summary>
+public sealed class DepartureDialog : DialogWindow<DepartureChoice?>
+{
+    public DepartureDialog(string labName, DepartureReport report)
+    {
+        Title = Strings.Format("Departure.Title", labName);
+
+        var lines = new StackPanel { Spacing = 4 };
+        foreach (var group in report.RunningJobs)
+        {
+            var kind = Strings.Get("Job." + group.Kind);
+            var key = group.Consequence switch
+            {
+                DepartureConsequence.Completes => "Departure.Jobs.Completes",
+                DepartureConsequence.CannotBeAborted => "Departure.Jobs.CannotAbort",
+                _ => "Departure.Jobs.ContinuesOnPc",
+            };
+            lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format(key, group.Count, kind)));
+        }
+
+        if (report.QueuedJobs > 0)
+        {
+            lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format("Departure.Queued", report.QueuedJobs)));
+        }
+
+        if (report.UploadsInProgress > 0)
+        {
+            lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format("Departure.Uploads", report.UploadsInProgress)));
+        }
+
+        if (report.ProbationPcs.Count > 0)
+        {
+            lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format("Departure.Probation", Names(report.ProbationPcs))));
+        }
+
+        if (report.PendingWakes.Count > 0)
+        {
+            lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format("Departure.Wakes", Names(report.PendingWakes))));
+        }
+
+        var stay = Secondary(Strings.Get("Departure.Stay"));
+        stay.Click += (_, _) => Finish(DepartureChoice.Stay);
+
+        var leave = new Button { Content = Strings.Get("Departure.Leave"), Classes = { "danger" } };
+        leave.Click += (_, _) => Finish(DepartureChoice.Leave);
+
+        var buttons = new List<Control> { stay };
+        if (report.RunningJobCount > 0)
+        {
+            var wait = Primary(Strings.Format("Departure.Wait", report.RunningJobCount));
+            wait.Click += (_, _) => Finish(DepartureChoice.Wait);
+            buttons.Add(wait);
+        }
+
+        buttons.Add(leave);
+        Body(Heading(Strings.Format("Departure.Title", labName)), Label(Strings.Format("Departure.Body", labName)), lines, Buttons(buttons.ToArray()));
+    }
+
+    private static string Names(IEnumerable<int> numbers) =>
+        string.Join(", ", numbers.Select(n => string.Format(Strings.Culture, Defaults.MachineNameFormat, n)));
+}
+
+/// <summary>
+/// <i>Waiting for N jobs…</i>: follows the session's job book and finishes with <c>true</c>
+/// once no job is delivered or running any more; <i>Cancel</i> finishes with <c>false</c>.
+/// </summary>
+public sealed class WaitForJobsDialog : DialogWindow<bool?>
+{
+    private readonly LabSession _session;
+    private readonly TextBlock _text;
+    private readonly Action<LabControl.Shared.Lab.JobRecord> _onUpdated;
+
+    public WaitForJobsDialog(LabSession session)
+    {
+        _session = session;
+        Title = Strings.Get("Departure.WaitTitle");
+        _text = Label(string.Empty);
+
+        var cancel = Secondary(Strings.Get("Common.Cancel"));
+        cancel.Click += (_, _) => Finish(false);
+
+        Body(Heading(Strings.Get("Departure.WaitTitle")), _text, new ProgressBar { IsIndeterminate = true }, Buttons(cancel));
+
+        _onUpdated = _ => Dispatcher.UIThread.Post(Check);
+        session.Jobs.Updated += _onUpdated;
+        Closed += (_, _) => session.Jobs.Updated -= _onUpdated;
+        Opened += (_, _) => Check();
+    }
+
+    private void Check()
+    {
+        var remaining = _session.DescribeDeparture().RunningJobCount;
+        _text.Text = Strings.Format("Departure.Waiting", remaining);
+        if (remaining == 0)
+        {
+            Finish(true);
+        }
+    }
+}
+
+/// <summary>The local paths behind a drag-and-drop, or none when what was dragged is not files.</summary>
+public static class DroppedFiles
+{
+    public static IReadOnlyList<string> PathsOf(DragEventArgs e)
+    {
+        var files = e.DataTransfer?.TryGetFiles();
+        if (files is null)
+        {
+            return [];
+        }
+
+        return files.Select(f => f.TryGetLocalPath()).Where(p => !string.IsNullOrEmpty(p)).Select(p => p!).ToList();
     }
 }

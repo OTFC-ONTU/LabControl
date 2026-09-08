@@ -2,51 +2,51 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using Avalonia.Threading;
 using LabControl.Console.Services;
 using LabControl.Console.ViewModels;
 using LabControl.Shared.Identity;
+using LabControl.Shared.Setup;
 
 namespace LabControl.Console.Views;
 
-public partial class MainWindow : Window, IDialogs
+/// <summary>
+/// <i>My labs</i> (M5 §5): the window around <see cref="LabChooserViewModel"/>. A row opens
+/// on double-click or Enter; files dropped anywhere on it are added as saved labs and
+/// nothing switches. It is also its own <see cref="IDialogs"/>, forwarded to the
+/// owner-bound implementation, so the view model never sees Avalonia.
+/// </summary>
+public partial class LabChooserWindow : Window, IDialogs
 {
     private readonly WindowDialogs _dialogs;
-    private readonly DispatcherTimer _clock;
+    private LabChooserViewModel? _viewModel;
 
-    public MainWindow()
+    public LabChooserWindow()
     {
         AvaloniaXamlLoader.Load(this);
         _dialogs = new WindowDialogs(this);
-        _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => (DataContext as MainViewModel)?.Tick());
-        Opened += (_, _) => _clock.Start();
-        Closed += (_, _) => _clock.Stop();
+        DataContextChanged += (_, _) => _viewModel = DataContext as LabChooserViewModel;
 
-        // Lab files dropped on the main window are added to the saved labs (M5 §5); nothing switches.
         DragDrop.SetAllowDrop(this, true);
         DragDrop.AddDragOverHandler(this, (_, e) => e.DragEffects = DroppedFiles.PathsOf(e).Count > 0 ? DragDropEffects.Copy : DragDropEffects.None);
-        DragDrop.AddDropHandler(this, (_, e) =>
+        DragDrop.AddDropHandler(this, async (_, e) =>
         {
             var paths = DroppedFiles.PathsOf(e);
-            if (paths.Count > 0)
+            if (paths.Count > 0 && _viewModel is { IsBusy: false } vm)
             {
-                FilesDropped?.Invoke(paths);
+                await vm.ImportFilesAsync(paths);
             }
         });
     }
 
-    /// <summary>Local paths dropped on the window; the app imports them as saved labs.</summary>
-    public event Action<IReadOnlyList<string>>? FilesDropped;
-
-    private async void OnBannerAction(object? sender, RoutedEventArgs e)
+    private void OnRowDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if ((sender as Button)?.DataContext is BannerViewModel { Action: { } action })
+        if (_viewModel is { } vm && vm.OpenCommand.CanExecute(vm.Selected))
         {
-            await action();
+            vm.OpenCommand.Execute(vm.Selected);
         }
     }
 
-    // IDialogs: forwarded to the owner-bound implementation so the view model never sees Avalonia.
+    // IDialogs
 
     public Task<UnlockAnswer?> UnlockAsync(string reason) => _dialogs.UnlockAsync(reason);
 
@@ -64,15 +64,15 @@ public partial class MainWindow : Window, IDialogs
 
     public Task<string?> PickOpenFileAsync(string title, string extension) => _dialogs.PickOpenFileAsync(title, extension);
 
-    public Task<string?> PickFolderAsync(string title) => _dialogs.PickFolderAsync(title);
-
     public Task<IReadOnlyList<string>> PickOpenFilesAsync(string title, IReadOnlyList<FileFilter> filters) => _dialogs.PickOpenFilesAsync(title, filters);
 
     public Task ShowImportResultsAsync(IReadOnlyList<ImportFileResult> results) => _dialogs.ShowImportResultsAsync(results);
 
+    public Task<string?> PickFolderAsync(string title) => _dialogs.PickFolderAsync(title);
+
     public Task<SendFilesAnswer?> SendFilesAsync(int pcCount) => _dialogs.SendFilesAsync(pcCount);
 
-    public Task<LabControl.Shared.Setup.AgentBuild?> PushAgentBuildAsync(int pcCount) => _dialogs.PushAgentBuildAsync(pcCount);
+    public Task<AgentBuild?> PushAgentBuildAsync(int pcCount) => _dialogs.PushAgentBuildAsync(pcCount);
 
     public void ShowScreen(ScreenViewModel screen) => _dialogs.ShowScreen(screen);
 }

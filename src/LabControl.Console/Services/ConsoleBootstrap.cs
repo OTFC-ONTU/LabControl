@@ -36,12 +36,18 @@ public sealed class ConsoleBootstrap
     private readonly ConsoleOptions _options;
     private readonly ILoggerFactory _loggers;
     private readonly ILogger _log;
+    private readonly Func<ISecretProtector> _newProtector;
 
-    public ConsoleBootstrap(ConsoleOptions options, ILoggerFactory loggers)
+    /// <param name="newProtector">
+    /// The keystore a freshly minted instance key is written with; the platform's own by
+    /// default. Tests inject one that refuses, to check an import leaves nothing behind.
+    /// </param>
+    public ConsoleBootstrap(ConsoleOptions options, ILoggerFactory loggers, Func<ISecretProtector>? newProtector = null)
     {
         _options = options;
         _loggers = loggers;
         _log = loggers.CreateLogger<ConsoleBootstrap>();
+        _newProtector = newProtector ?? SecretProtector.ForCurrentPlatform;
         Profiles = new ProfileStore(options.DataDirectory, loggers.CreateLogger<ProfileStore>());
     }
 
@@ -53,6 +59,13 @@ public sealed class ConsoleBootstrap
 
     /// <summary>The lab's own directory, whether or not it exists yet.</summary>
     public LabStore StoreFor(string labId) => new(Profiles.Directory(labId));
+
+    /// <summary>This machine's name as the default console instance name; "Console" when the OS has none.</summary>
+    public static string DefaultInstanceName()
+    {
+        var host = Environment.MachineName;
+        return host.Length > 0 ? host : "Console";
+    }
 
     /// <summary>
     /// The lab this device opens without asking: the last used one; failing that mark, the
@@ -86,7 +99,7 @@ public sealed class ConsoleBootstrap
         store.EnsureDirectories();
         store.SaveLabKey(lab.Document);
 
-        var instance = ConsoleInstance.Mint(lab, instanceName, SecretProtector.ForCurrentPlatform());
+        var instance = ConsoleInstance.Mint(lab, instanceName, _newProtector());
         store.SaveInstance(instance.Document);
         store.SaveLab(new LabDocument { LabId = lab.LabId, LabName = lab.LabName });
 
@@ -95,7 +108,7 @@ public sealed class ConsoleBootstrap
         var vault = new LabKeyVault(store, lab.Document);
         vault.Adopt(lab);
 
-        return new LabSession(_options, store, vault, instance, instance.Document, _loggers, seedScripts: SeedScripts.Embedded());
+        return NewSession(store, vault, instance);
     }
 
     /// <summary>Reads a backup far enough to show its lab name and holders before asking for a secret.</summary>
@@ -111,6 +124,20 @@ public sealed class ConsoleBootstrap
     /// </summary>
     public LabSession ImportBackup(BackupDocument backup, string? passphrase, RecoveryCode? recoveryCode, string instanceName)
     {
+        var imported = ImportBackupProfile(backup, passphrase, recoveryCode, instanceName);
+        var store = StoreFor(imported.LabId);
+        var vault = new LabKeyVault(store, imported.Key.Document);
+        vault.Adopt(imported.Key);
+        return NewSession(store, vault, imported.Instance);
+    }
+
+    /// <summary>
+    /// The profile half of <see cref="ImportBackup"/> (M5 portion 2): everything is written
+    /// and indexed, nothing is started. The chooser's <i>Add labs…</i> uses it so a batch of
+    /// backups lands as saved labs and nothing activates. The caller disposes the result.
+    /// </summary>
+    public ImportedLab ImportBackupProfile(BackupDocument backup, string? passphrase, RecoveryCode? recoveryCode, string instanceName)
+    {
         LabKey lab;
         var opened = recoveryCode is not null
             ? LabKey.TryUnlock(backup.LabKey, recoveryCode, out lab)
@@ -121,71 +148,136 @@ public sealed class ConsoleBootstrap
             throw new UnauthorizedAccessException(Strings.Get(recoveryCode is not null ? "Bootstrap.WrongRecoveryCode" : "Bootstrap.WrongPassphrase"));
         }
 
-        var payload = LabBackup.Open(backup, lab);
-
-        var existing = Profiles.Find(lab.LabId);
-        var store = StoreFor(lab.LabId);
-        if (existing is not null)
+        // Atomic per file (M5 portion 2 review): the directory this import creates and the
+        // instance key it mints are both undone when anything after them fails, so a refused
+        // keystore or a full disk never leaves labs/<id>/lab-key.lck without an index entry
+        // (which would refuse every later import as "occupied" and hide the lab from Remove)
+        // or an orphaned item in the keystore.
+        var createdDirectory = false;
+        string? directory = null;
+        ConsoleInstance? instance = null;
+        ISecretProtector? protector = null;
+        var recording = false;
+        try
         {
-            throw new InvalidDataException(Strings.Format("Bootstrap.LabAlreadySaved", existing.LabName));
-        }
+            var payload = LabBackup.Open(backup, lab);
 
-        if (Directory.Exists(store.Directory))
-        {
-            if (store.HasLabKey || File.Exists(store.InstancePath))
+            var existing = Profiles.Find(lab.LabId);
+            var store = StoreFor(lab.LabId);
+            if (existing is not null)
             {
-                // Files of this lab that the index does not list: a directory someone put back
-                // by hand, or an index that was replaced. Not ours to overwrite.
-                throw new InvalidDataException(Strings.Format("Bootstrap.LabDirectoryOccupied", store.Directory, lab.LabName, Defaults.ProfilesFileName));
+                throw new InvalidDataException(Strings.Format("Bootstrap.LabAlreadySaved", existing.LabName));
             }
 
-            // Neither the key nor an instance: a leftover — an import that died before it wrote
-            // anything that matters, or a removal that did not finish. It holds no identity.
-            _log.LogWarning("Removing the leftover directory {Directory}: it holds no key and no instance and is not in {Index}", store.Directory, Defaults.ProfilesFileName);
-            Directory.Delete(store.Directory, recursive: true);
+            if (Directory.Exists(store.Directory))
+            {
+                if (store.HasLabKey || File.Exists(store.InstancePath))
+                {
+                    // Files of this lab that the index does not list: a directory someone put back
+                    // by hand, or an index that was replaced. Not ours to overwrite.
+                    throw new InvalidDataException(Strings.Format("Bootstrap.LabDirectoryOccupied", store.Directory, lab.LabName, Defaults.ProfilesFileName));
+                }
+
+                // Neither the key nor an instance: a leftover — an import that died before it wrote
+                // anything that matters, or a removal that did not finish. It holds no identity.
+                _log.LogWarning("Removing the leftover directory {Directory}: it holds no key and no instance and is not in {Index}", store.Directory, Defaults.ProfilesFileName);
+                Directory.Delete(store.Directory, recursive: true);
+            }
+
+            directory = store.Directory;
+            store.EnsureDirectories();
+            createdDirectory = true;
+            store.SaveLabKey(lab.Document);
+
+            // The machine list and layout come from the backup; the instance list keeps the
+            // other teacher machines it knew, and this one is added when the session starts.
+            payload.Lab.LabId = lab.LabId;
+            payload.Lab.LabName = lab.LabName;
+            foreach (var record in payload.Lab.Instances)
+            {
+                record.IsThisMachine = false;
+            }
+
+            store.SaveLab(payload.Lab);
+            store.WriteCatalog(payload.Catalog);
+            if (payload.Scripts is not null)
+            {
+                // The library moves with the lab (D-31 item 4); the seed is imported only when nothing came.
+                payload.Scripts.LabId = lab.LabId;
+                store.SaveScripts(payload.Scripts);
+            }
+
+            if (payload.Enrollment is not null)
+            {
+                // The codes on sticks written by the old machine keep working here (D-28).
+                payload.Enrollment.LabId = lab.LabId;
+                store.SaveEnrollment(payload.Enrollment);
+            }
+
+            protector = _newProtector();
+            instance = ConsoleInstance.Mint(lab, instanceName, protector);
+            instance.Document.BackupExportedAtUnix = backup.ExportedAtUnix;
+            instance.Document.BackupLocation = "imported from a backup";
+            instance.Document.BackupFingerprint = JsonStore.Fingerprint(JsonStore.Serialize(lab.Document, LabKeyDocument.Migrations));
+            instance.Document.RecoveryCodeAcknowledged = true;
+            store.SaveInstance(instance.Document);
+
+            recording = true;
+            Record(lab, instance.Document, ProfileSource.Backup, payload.Lab.Machines.Count);
+
+            var imported = new ImportedLab(lab.LabId, lab.LabName, payload.Lab.Machines.Count, lab, instance);
+            instance = null;
+            return imported;
         }
-
-        store.EnsureDirectories();
-        store.SaveLabKey(lab.Document);
-
-        // The machine list and layout come from the backup; the instance list keeps the
-        // other teacher machines it knew, and this one is added when the session starts.
-        payload.Lab.LabId = lab.LabId;
-        payload.Lab.LabName = lab.LabName;
-        foreach (var record in payload.Lab.Instances)
+        catch (Exception ex)
         {
-            record.IsThisMachine = false;
+            if (recording)
+            {
+                // The index entry was added in memory and its write failed: what is on disk is
+                // the truth, so the index is re-read and the unsaved entry is gone with it —
+                // otherwise the same file would be refused as "already saved" until a restart.
+                try
+                {
+                    Profiles.Load();
+                }
+                catch (Exception reload) when (reload is IOException or InvalidDataException or SchemaVersionException or UnauthorizedAccessException)
+                {
+                    _log.LogWarning(reload, "The lab index could not be re-read after the failed import of lab {LabId}", lab.LabId);
+                }
+            }
+
+            if (instance is not null)
+            {
+                // The minted key was stored before the failure: take it back out of the same
+                // keystore that holds it (the injected one, in tests), not one looked up by name.
+                try
+                {
+                    (protector ?? SecretProtector.For(instance.Document.PrivateKey)).Forget(instance.Document.PrivateKey);
+                }
+                catch (Exception forget) when (forget is InvalidDataException or IOException or InvalidOperationException)
+                {
+                    _log.LogWarning(forget, "The instance key minted by the failed import of lab {LabId} could not be removed from the keystore", lab.LabId);
+                }
+
+                instance.Dispose();
+            }
+
+            if (createdDirectory && directory is not null)
+            {
+                try
+                {
+                    Directory.Delete(directory, recursive: true);
+                }
+                catch (Exception delete) when (delete is IOException or UnauthorizedAccessException)
+                {
+                    _log.LogWarning(delete, "The directory written by the failed import of lab {LabId} could not be removed: {Directory}", lab.LabId, directory);
+                }
+            }
+
+            _log.LogWarning(ex, "Import of lab {LabId} failed; nothing of it is kept", lab.LabId);
+            lab.Dispose();
+            throw;
         }
-
-        store.SaveLab(payload.Lab);
-        store.WriteCatalog(payload.Catalog);
-        if (payload.Scripts is not null)
-        {
-            // The library moves with the lab (D-31 item 4); the seed is imported only when nothing came.
-            payload.Scripts.LabId = lab.LabId;
-            store.SaveScripts(payload.Scripts);
-        }
-
-        if (payload.Enrollment is not null)
-        {
-            // The codes on sticks written by the old machine keep working here (D-28).
-            payload.Enrollment.LabId = lab.LabId;
-            store.SaveEnrollment(payload.Enrollment);
-        }
-
-        var instance = ConsoleInstance.Mint(lab, instanceName, SecretProtector.ForCurrentPlatform());
-        instance.Document.BackupExportedAtUnix = backup.ExportedAtUnix;
-        instance.Document.BackupLocation = "imported from a backup";
-        instance.Document.BackupFingerprint = JsonStore.Fingerprint(JsonStore.Serialize(lab.Document, LabKeyDocument.Migrations));
-        instance.Document.RecoveryCodeAcknowledged = true;
-        store.SaveInstance(instance.Document);
-
-        Record(lab, instance.Document, ProfileSource.Backup, payload.Lab.Machines.Count);
-
-        var vault = new LabKeyVault(store, lab.Document);
-        vault.Adopt(lab);
-
-        return new LabSession(_options, store, vault, instance, instance.Document, _loggers, seedScripts: SeedScripts.Embedded());
     }
 
     // ------------------------------------------------------------------ every later run
@@ -242,10 +334,23 @@ public sealed class ConsoleBootstrap
     /// <summary>Builds the session for an opened lab and marks the lab as last used.</summary>
     public LabSession Start(OpenedLab opened, ConsoleInstance instance)
     {
-        var session = new LabSession(_options, opened.Store, opened.Vault, instance, instance.Document, _loggers, seedScripts: SeedScripts.Embedded());
+        var session = Build(opened, instance);
         Profiles.Touch(session.LabId, session.Now, session.Registry.Document.Machines.Count);
         return session;
     }
+
+    /// <summary>
+    /// Builds the session for an opened lab without touching the index: the controller marks
+    /// the lab as used only once the session actually serves (M5, D-57 item 1).
+    /// </summary>
+    public LabSession Build(OpenedLab opened, ConsoleInstance instance) => NewSession(opened.Store, opened.Vault, instance);
+
+    private LabSession NewSession(LabStore store, LabKeyVault vault, ConsoleInstance instance) =>
+        new(_options, store, vault, instance, instance.Document, _loggers, seedScripts: SeedScripts.Embedded())
+        {
+            // A PC of another saved lab is refused by name (D-57 item 2); the index is the only source.
+            LabNameResolver = labId => Profiles.Find(labId)?.LabName,
+        };
 
     // ------------------------------------------------------------------ backup
 
@@ -340,3 +445,13 @@ public sealed class ConsoleBootstrap
 }
 
 public sealed record OpenedLab(LabStore Store, LabKeyVault Vault, ConsoleInstance Instance, InstanceDocument Document, bool NeedsRemint);
+
+/// <summary>A lab just written from a backup (M5): its identity, the unlocked key and the minted instance, both owned by the holder.</summary>
+public sealed record ImportedLab(string LabId, string LabName, int PcCount, LabKey Key, ConsoleInstance Instance) : IDisposable
+{
+    public void Dispose()
+    {
+        Key.Dispose();
+        Instance.Dispose();
+    }
+}

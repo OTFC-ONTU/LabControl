@@ -9,6 +9,7 @@ using LabControl.Console.Services;
 using LabControl.Console.ViewModels;
 using LabControl.Console.Views;
 using LabControl.Shared.Link;
+using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
 
 namespace LabControl.Console.Tests;
@@ -336,6 +337,112 @@ public sealed class UiTests
                 await agent.DisposeAsync();
             }
         }
+    }
+
+    [Fact]
+    public async Task The_chooser_lists_saved_labs_opens_one_on_request_and_never_by_itself()
+    {
+        var directory = TestConsole.TempDirectory();
+        using var roomA = SavedLab.Save(directory, "Room 214");
+        using var roomB = SavedLab.Save(directory, "Room 318");
+        var profiles = new ProfileStore(directory);
+        profiles.Touch(roomB.LabId, DateTimeOffset.UtcNow.AddDays(-1), pcCount: 12);
+
+        var bootstrap = new ConsoleBootstrap(new ConsoleOptions { DataDirectory = directory, Port = 0, BindAddress = System.Net.IPAddress.Loopback, BeaconPort = TestConsole.BeaconPort }, TestLogging.Factory);
+        await using var controller = new ActiveLabController(bootstrap, TestLogging.Factory);
+
+        await Session.Dispatch<bool>(async () =>
+        {
+            var window = new LabChooserWindow();
+            var vm = new LabChooserViewModel(bootstrap, controller, window, action => Dispatcher.UIThread.Post(action));
+            window.DataContext = vm;
+            window.Show();
+            await Render(window, "chooser-1-labs");
+
+            // Two rows; the last-used lab is highlighted and preselected, and nothing is active.
+            Assert.Equal(2, vm.Labs.Count);
+            Assert.True(vm.HasLabs);
+            var highlighted = Assert.Single(vm.Labs, l => l.IsHighlighted);
+            Assert.Equal(roomB.LabId, highlighted.LabId);
+            Assert.Same(highlighted, vm.Selected);
+            Assert.Equal("12 PCs", highlighted.PcCountText);
+            Assert.Equal("Administrator", highlighted.AccessLabel);
+            Assert.Equal("Ready", highlighted.StatusText);
+            Assert.StartsWith("last opened", highlighted.LastUsedText, StringComparison.Ordinal);
+            var other = Assert.Single(vm.Labs, l => l.LabId == roomA.LabId);
+            Assert.Equal("never opened here", other.LastUsedText);
+            Assert.Equal("no PCs yet", other.PcCountText);
+            Assert.Null(controller.Active);
+            Assert.Equal(ActivationState.Idle, controller.Status.State);
+            Assert.True(vm.OpenCommand.CanExecute(null));
+            Assert.True(vm.AddLabsCommand.CanExecute(null));
+            Assert.True(vm.CreateLabCommand.CanExecute(null));
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Open") && b.IsEnabled);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Add labs…") && b.IsEnabled);
+
+            // Open: the selected lab becomes active; the row says so after the status arrives.
+            vm.Selected = other;
+            await vm.OpenCommand.ExecuteAsync(null);
+            Assert.True(await Wait.UntilAsync(() => controller.Status.State == ActivationState.Active));
+            Assert.Equal(roomA.LabId, controller.Active!.LabId);
+            await Render(window, "chooser-2-open");
+            Assert.False(vm.IsBusy);
+            Assert.Equal(string.Empty, vm.Error);
+            Assert.Equal("Active", vm.Labs.Single(l => l.LabId == roomA.LabId).StatusText);
+            Assert.True(vm.Labs.Single(l => l.LabId == roomA.LabId).IsHighlighted);
+            Assert.False(vm.RemoveCommand.CanExecute(null));
+
+            // A failed activation shows the reason and leaves the list usable.
+            File.WriteAllText(bootstrap.StoreFor(roomB.LabId).InstancePath, "not json");
+            vm.Selected = vm.Labs.Single(l => l.LabId == roomB.LabId);
+            await vm.OpenCommand.ExecuteAsync(null);
+            Assert.True(await Wait.UntilAsync(() => controller.Status.State == ActivationState.Failed));
+            await Render(window, "chooser-3-failed");
+            Assert.StartsWith("Could not open Room 318", vm.Error, StringComparison.Ordinal);
+            Assert.Null(controller.Active);
+            Assert.True(vm.OpenCommand.CanExecute(null));
+            Assert.True(vm.HasFailure);
+            Assert.Equal(roomB.LabId, vm.FailedLabId);
+            Assert.True(vm.RetryCommand.CanExecute(null));
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Retry") && b.IsVisible && b.IsEnabled);
+
+            // The import results dialog: one row per file.
+            var results = new ImportResultsDialog(
+            [
+                new ImportFileResult("/sticks/room-214.lcbak", true, "Added \"Room 214\" with 14 PCs.", "Room 214"),
+                new ImportFileResult("/sticks/room-318.lcbak", false, "The passphrase is wrong.", "Room 318"),
+                new ImportFileResult("/sticks/notes.txt", false, "Not a file this console can add (.txt).", null),
+            ]);
+            results.Show();
+            await Render(results, "import-results");
+            Assert.Contains(results.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "1 of 3 files added");
+            Assert.Contains(results.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "room-318.lcbak");
+            results.Close();
+
+            // The departure dialog: the report in words, with Wait only when jobs run.
+            var report = new DepartureReport(
+                [new DepartureJobGroup(Job.Types.Kind.RunScript, 3, DepartureConsequence.ContinuesOnPc), new DepartureJobGroup(Job.Types.Kind.SelfUpdate, 1, DepartureConsequence.CannotBeAborted)],
+                QueuedJobs: 2, UploadsInProgress: 1, ProbationPcs: [4, 9], PendingWakes: [12]);
+            var departure = new DepartureDialog("Room 214", report);
+            departure.Show();
+            await Render(departure, "departure");
+            var buttons = departure.GetVisualDescendants().OfType<Button>().Select(b => b.Content?.ToString()).ToList();
+            Assert.Contains("Leave anyway", buttons);
+            Assert.Contains("Stay", buttons);
+            Assert.Contains("Wait for 4 job(s)", buttons);
+            Assert.Contains(departure.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("PC-04, PC-09", StringComparison.Ordinal) == true);
+            departure.Close();
+
+            var quiet = new DepartureDialog("Room 214", new DepartureReport([], 0, 1, [], []));
+            quiet.Show();
+            await Render(quiet, "departure-quiet");
+            Assert.DoesNotContain(quiet.GetVisualDescendants().OfType<Button>(), b => b.Content?.ToString()?.StartsWith("Wait", StringComparison.Ordinal) == true);
+            quiet.Close();
+
+            vm.Detach();
+            window.Close();
+            return true;
+        }, TestContext.Current.CancellationToken);
     }
 
     private static VideoFrame FakeThumbnail(int number)

@@ -2285,6 +2285,58 @@ Decisions:
    other result is answered when that console re-sends the job after its `Welcome`, which
    it already does for in-flight jobs. No proto change is needed.
 
+Recorded with portion 2 (built and reviewed 2026-09-08):
+
+5. **The cached mosaic precedes `StartAsync`, not the release.** The order is release
+   the current session → `OpenExisting` → `Build` → `SessionBuilt` → `StartAsync`, so
+   the roster tiles the app shows on `SessionBuilt` come from the destination's own
+   `lab.json` and belong to a session that already exists; the main window is shown with
+   the toolbar disabled and *Connecting…* in the lab chip, and enabled on `Active`.
+   `SwitchTimings` therefore has four phases — departure, open (documents and the
+   instance key from the OS keystore: a Keychain prompt lands here), build (registry,
+   scripts, logs, screens) and start (server and beacons) — plus `MosaicReadyMs` and
+   `ServerUpMs` from the start of the switch; every switch logs one line.
+6. **The host is disposed in a `finally`.** `ConsoleServer.DisposeAsync` calls
+   `StopAsync` with the 2 s budget and disposes the host whatever the stop did, because
+   the next lab binds the same port right after; a stop that times out or throws still
+   frees the listener.
+7. **Every close step is isolated.** `LabCloseStep` names the steps; `CloseAsync` runs
+   each through `Step`/`StepAsync`, which logs a failure and continues, and the tail —
+   save, screens, vault, instance — sits in a `finally`, so no exception on the way can
+   leave the CA unlocked or the instance key open. `IsDisposed` and `Disposed` are set
+   there, once. `BeforeCloseStep` is a test hook that makes one step fail. Activation and
+   deactivation run on the thread pool (`Task.Run`), never on the UI thread; disposing the
+   controller cancels an activation, including one waiting on a prompt.
+8. **Import is atomic per file.** `LabImports` runs one handler per extension
+   (`Register(extension, label, handler)` — `.lcbak` now, `.lclab`/`.lcreq`/`.lcgrant`
+   in portion 3) and returns an `ImportFileResult` per file; a wrong passphrase fails only
+   that file, and a failure after writing undoes the profile directory, the keystore item
+   and the in-memory index entry, so a mixed batch leaves exactly the good labs behind.
+9. **Closing the main window returns to the chooser.** Windows come and go with the
+   active lab: closing the main window (after the departure report) releases the lab and
+   shows *My labs* again; only the chooser's *Quit* ends the process. *Disconnect* shows
+   *Leaving…* in the chooser before the release runs. A profile record without an access
+   label reads as *Teacher*, the less privileged reading. *Remove from this device* asks
+   twice when the device holds the lab key, the second time naming the last exported
+   backup (or that none was ever exported).
+10. **Which side refuses a foreign PC.** A real agent refuses the other lab's console
+   certificate itself (its own `LabTrust` check) before presenting its leaf, so the
+   console-side `link.refused` — *belongs to lab "A", which is not the active lab on
+   this console* (via `LabNameResolver`) — is for clients without that check; the
+   switching test proves both.
+11. **Timing observations and limits.** In-process, 30 agents per lab over real TLS/UDP
+   on one port: departure 12–30 ms, server up 156–965 ms, all 30 PCs linked in
+   1.0–2.6 s, 0 lab-A beacons in the 5 s after departure; 20 × A → B → C → A with bounded
+   threads and no leaked session. Under sustained refusal load a departure can spend the
+   whole 2 s stop budget, and a PC refused for a long stretch returns within the 30 s
+   reconnect cap rather than 15 s — a `BeaconGate` follow-up for portion 5. On the owner's
+   Mac (Debug build, ad-hoc signed) the server was up 4–6 s after *Open* and after a
+   re-open; the prime suspect is a Keychain prompt per rebuilt ad-hoc binary (the cdhash
+   changes with every Debug build; the tests use the file protector).
+   `SecretProtectorTiming` now warns about any keystore call slower than 250 ms, the
+   open/build/start split isolates it, and it is expected to disappear with the signed
+   packaged app (portion 7); to be re-measured.
+
 Rejected: keeping inactive labs connected in the background (`D-53` item 2); one Kestrel
 shared across sessions with per-lab routing (trust is per lab and the listener would
 outlive its session); a process restart per switch (slow, and loses the departure
@@ -2298,7 +2350,7 @@ A, B, C, A ending with one active lab and one Kestrel, a failed activation leavi
 `ScreenStore` disposed, a mixed batch with one wrong passphrase importing the rest, and a
 headless chooser render. Portion 4 on the VM: a script on A, switch to B and back, the
 result arrives; the other instance never receives A's result; uploads fail with the report;
-probation is reported. Implementation status is tracked in ROADMAP M5.
+probation is reported. Portion 2 (2026-09-08): the `TestRig` tests above pass, plus a close step that throws and the rest still running, a release that throws never leaving the controller `Activating`, a selection arriving while the previous lab starts, disposal cancelling an activation waiting on a prompt, 20 rounds of switching leaking neither sessions nor threads nor handles, and an import that fails after writing leaving no directory, index entry or keystore item — 728 tests in all (603 Shared + 125 Console, `LabSwitchTests` a non-parallel collection). The measured numbers are item 11; the real-Mac 4–6 s is under investigation. Implementation status is tracked in ROADMAP M5.
 
 ## D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)
 

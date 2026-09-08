@@ -52,6 +52,7 @@ public partial class ScreenWindow : Window
         };
 
         viewModel.Activated += Activate;
+        viewModel.CloseRequested += Close;
         Deactivated += (_, _) => _viewModel.ReleaseAll();
         Opened += (_, _) =>
         {
@@ -63,6 +64,7 @@ public partial class ScreenWindow : Window
             _clock.Stop();
             _flush.Stop();
             viewModel.Activated -= Activate;
+            viewModel.CloseRequested -= Close;
             _viewModel.Close();
         };
     }

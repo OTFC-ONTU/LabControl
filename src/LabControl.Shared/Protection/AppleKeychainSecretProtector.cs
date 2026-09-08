@@ -33,6 +33,19 @@ public sealed class AppleKeychainSecretProtector : ISecretProtector
 
     public ProtectedSecret Protect(string reference, ReadOnlySpan<byte> secret)
     {
+        var bytes = secret.ToArray();
+        try
+        {
+            return SecretProtectorTiming.Measure(ProtectorName, nameof(Protect), () => ProtectCore(reference, bytes));
+        }
+        finally
+        {
+            Array.Clear(bytes);
+        }
+    }
+
+    private ProtectedSecret ProtectCore(string reference, ReadOnlySpan<byte> secret)
+    {
         // An item for this reference may exist from an earlier instance; SecItemAdd would
         // return errSecDuplicateItem rather than replace it.
         Delete(reference);
@@ -76,6 +89,22 @@ public sealed class AppleKeychainSecretProtector : ISecretProtector
 
     public bool TryUnprotect(ProtectedSecret secret, out byte[] plaintext)
     {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            return TryUnprotectCore(secret, out plaintext);
+        }
+        finally
+        {
+            if (clock.Elapsed > SecretProtectorTiming.Threshold)
+            {
+                SecretProtectorTiming.SlowOperation?.Invoke(ProtectorName, nameof(TryUnprotect), clock.Elapsed);
+            }
+        }
+    }
+
+    private static bool TryUnprotectCore(ProtectedSecret secret, out byte[] plaintext)
+    {
         plaintext = [];
         var owned = new List<IntPtr>();
 
@@ -105,7 +134,8 @@ public sealed class AppleKeychainSecretProtector : ISecretProtector
         }
     }
 
-    public void Forget(ProtectedSecret secret) => Delete(secret.Reference);
+    public void Forget(ProtectedSecret secret) =>
+        SecretProtectorTiming.Measure(ProtectorName, nameof(Forget), () => Delete(secret.Reference));
 
     private static void Delete(string reference)
     {

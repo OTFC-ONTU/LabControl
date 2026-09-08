@@ -23,6 +23,7 @@
   <data name="Common.Continue" xml:space="preserve"><value>Continue</value></data>
   <data name="Common.Done" xml:space="preserve"><value>Done</value></data>
   <data name="Common.Quit" xml:space="preserve"><value>Quit</value></data>
+  <data name="Common.Bullet" xml:space="preserve"><value>• </value></data>
   <data name="App.AlreadyRunning" xml:space="preserve"><value>Another LabControl console is already using {0}. Close it first, then start this one again. ({1})</value></data>
   <data name="App.NoLabSaved" xml:space="preserve"><value>No lab is saved in {0}.</value></data>
   <data name="Bootstrap.LabNotSaved" xml:space="preserve"><value>Lab {0} is not saved on this computer.</value></data>
@@ -344,4 +345,68 @@ exit 0
   <data name="Readiness.NoWarnings" xml:space="preserve"><value>Setup reports no installation warnings. This is not a network or Wake-on-LAN test.</value></data>
   <data name="Readiness.InvalidReport" xml:space="preserve"><value>The PC sent an unreadable installation readiness report. Previous warnings were retained.</value></data>
   <data name="Update.RollbackReported" xml:space="preserve"><value>The previous agent version was restored.</value></data>
+  <data name="Chooser.Title" xml:space="preserve"><value>My labs · LabControl</value></data>
+  <data name="Chooser.Heading" xml:space="preserve"><value>My labs</value></data>
+  <data name="Chooser.Hint" xml:space="preserve"><value>Open a lab to drive its room. One lab is open at a time; the others keep their saved settings and connect to nothing until you open them.</value></data>
+  <data name="Chooser.Empty" xml:space="preserve"><value>No lab is saved on this computer yet. Create one, or add a backup file.</value></data>
+  <data name="Chooser.DropHint" xml:space="preserve"><value>Drop backup files here to add labs. Adding never opens a lab.</value></data>
+  <data name="Chooser.Open" xml:space="preserve"><value>Open</value></data>
+  <data name="Chooser.AddLabs" xml:space="preserve"><value>Add labs…</value></data>
+  <data name="Chooser.AddLabsTitle" xml:space="preserve"><value>Add labs</value></data>
+  <data name="Chooser.Create" xml:space="preserve"><value>Create a lab…</value></data>
+  <data name="Chooser.Remove" xml:space="preserve"><value>Remove from this device</value></data>
+  <data name="Chooser.Opening" xml:space="preserve"><value>Opening {0}…</value></data>
+  <data name="Chooser.Leaving" xml:space="preserve"><value>Leaving {0}…</value></data>
+  <data name="Chooser.OpenFailed" xml:space="preserve"><value>Could not open {0}: {1} Try again, or open another lab.</value></data>
+  <data name="Chooser.PcCount" xml:space="preserve"><value>{0} PCs</value></data>
+  <data name="Chooser.PcCountOne" xml:space="preserve"><value>1 PC</value></data>
+  <data name="Chooser.NoPcs" xml:space="preserve"><value>no PCs yet</value></data>
+  <data name="Chooser.LastUsed" xml:space="preserve"><value>last opened {0}</value></data>
+  <data name="Chooser.NeverUsed" xml:space="preserve"><value>never opened here</value></data>
+  <data name="Chooser.Status.Ready" xml:space="preserve"><value>Ready</value></data>
+  <data name="Chooser.Status.NeedsAuthorization" xml:space="preserve"><value>Needs authorization</value></data>
+  <data name="Chooser.Status.RequestPending" xml:space="preserve"><value>Request pending</value></data>
+  <data name="Chooser.Status.Expires" xml:space="preserve"><value>Access expires {0}</value></data>
+  <data name="Chooser.Status.Expired" xml:space="preserve"><value>Expired</value></data>
+  <data name="Chooser.Status.Revoked" xml:space="preserve"><value>Withdrawn</value></data>
+  <data name="Chooser.Status.Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Chooser.RemoveTitle" xml:space="preserve"><value>Remove {0} from this device?</value></data>
+  <data name="Chooser.RemoveConfirm" xml:space="preserve"><value>The lab's files on this computer are deleted: its PC list and layout, scripts, logs and this device's own certificate for it. Nothing happens in the classroom — no student PC is uninstalled or changed, the lab itself is not deleted, and nobody's access is revoked. You can add the lab again later from a backup or a lab file.</value></data>
+  <data name="Chooser.RemoveKeyTitle" xml:space="preserve"><value>Also delete the lab key of {0}?</value></data>
+  <data name="Chooser.RemoveKeyConfirm" xml:space="preserve"><value>This device holds the lab key of {0} ({1}). {2} Without a backup that opens, nobody can ever again enrol PCs, renew their certificates or authorize teachers for this lab. Delete the key from this device?</value></data>
+  <data name="Chooser.LastBackup" xml:space="preserve"><value>The last backup was exported {0} to {1}.</value></data>
+  <data name="Chooser.NoBackup" xml:space="preserve"><value>No backup was ever exported from this device.</value></data>
+  <data name="Chooser.RemoveKey" xml:space="preserve"><value>Delete the key too</value></data>
+  <data name="Chooser.RemoveFailed" xml:space="preserve"><value>Could not remove {0}: {1}</value></data>
+  <data name="Chooser.Retry" xml:space="preserve"><value>Retry</value></data>
+  <data name="Access.Administrator" xml:space="preserve"><value>Administrator</value></data>
+  <data name="Access.Teacher" xml:space="preserve"><value>Teacher</value></data>
+  <data name="Import.ResultsTitle" xml:space="preserve"><value>Add labs</value></data>
+  <data name="Import.ResultsHeading" xml:space="preserve"><value>{0} of {1} files added</value></data>
+  <data name="Import.NothingOpened" xml:space="preserve"><value>Nothing was opened. Pick a lab from the list and press Open.</value></data>
+  <data name="Import.Unsupported" xml:space="preserve"><value>Not a file this console can add ({0}). Lab files, device grants and requests come with a later update; backups (.lcbak) work now.</value></data>
+  <data name="Import.UnlockReason" xml:space="preserve"><value>Backup of lab "{0}", exported {1} by {2}. Type a holder's passphrase or the recovery code to add it to this device.</value></data>
+  <data name="Import.Cancelled" xml:space="preserve"><value>Skipped: no passphrase was given.</value></data>
+  <data name="Import.Added" xml:space="preserve"><value>Added "{0}" with {1} PCs.</value></data>
+  <data name="Import.MarkAdded" xml:space="preserve"><value>✓</value></data>
+  <data name="Import.MarkFailed" xml:space="preserve"><value>✗</value></data>
+  <data name="Main.Disconnect" xml:space="preserve"><value>⟵ Disconnect</value></data>
+  <data name="Main.LabChip" xml:space="preserve"><value>{0} · {1}</value></data>
+  <data name="Main.LabChipConnecting" xml:space="preserve"><value>{0} · {1} · Connecting…</value></data>
+  <data name="Departure.Title" xml:space="preserve"><value>Leave {0}?</value></data>
+  <data name="Departure.Body" xml:space="preserve"><value>This console lets go of every PC in {0}. Still going on right now:</value></data>
+  <data name="Departure.Jobs.ContinuesOnPc" xml:space="preserve"><value>{0} × {1}: continues on the PC; the result is shown when you come back.</value></data>
+  <data name="Departure.Jobs.Completes" xml:space="preserve"><value>{0} × {1}: the PC completes it on its own.</value></data>
+  <data name="Departure.Jobs.CannotAbort" xml:space="preserve"><value>{0} × {1}: cannot be aborted from here; leaving is safe.</value></data>
+  <data name="Departure.Queued" xml:space="preserve"><value>{0} job(s) waiting for an offline PC will not be delivered.</value></data>
+  <data name="Departure.Uploads" xml:space="preserve"><value>{0} upload(s) in progress will fail.</value></data>
+  <data name="Departure.Probation" xml:space="preserve"><value>{0}: trying a new agent version; they report when you come back.</value></data>
+  <data name="Departure.Wakes" xml:space="preserve"><value>{0}: Wake-on-LAN is no longer watched.</value></data>
+  <data name="Departure.Leave" xml:space="preserve"><value>Leave anyway</value></data>
+  <data name="Departure.Stay" xml:space="preserve"><value>Stay</value></data>
+  <data name="Departure.Wait" xml:space="preserve"><value>Wait for {0} job(s)</value></data>
+  <data name="Departure.WaitTitle" xml:space="preserve"><value>Waiting for jobs</value></data>
+  <data name="Departure.Waiting" xml:space="preserve"><value>Waiting for {0} job(s) to finish…</value></data>
+  <data name="Departure.Reason" xml:space="preserve"><value>the console left this lab</value></data>
+  <data name="App.SetupNotFinished" xml:space="preserve"><value>Setup of this lab was not finished; it is closed again until it is.</value></data>
 </root>

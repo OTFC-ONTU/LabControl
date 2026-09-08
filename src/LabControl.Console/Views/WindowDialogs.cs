@@ -70,6 +70,21 @@ public sealed class WindowDialogs : IDialogs
         return files.Count == 0 ? null : files[0].TryGetLocalPath();
     }
 
+    public async Task<IReadOnlyList<string>> PickOpenFilesAsync(string title, IReadOnlyList<FileFilter> filters)
+    {
+        var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = true,
+            FileTypeFilter = filters.Select(f => new FilePickerFileType(f.Label) { Patterns = f.Patterns.ToList() }).ToList(),
+        });
+
+        return files.Select(f => f.TryGetLocalPath()).Where(p => p is not null).Select(p => p!).ToList();
+    }
+
+    public async Task ShowImportResultsAsync(IReadOnlyList<ImportFileResult> results) =>
+        await Show(new ImportResultsDialog(results));
+
     public async Task<string?> PickFolderAsync(string title)
     {
         var folders = await _owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title, AllowMultiple = false });

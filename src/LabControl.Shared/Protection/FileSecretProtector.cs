@@ -30,6 +30,7 @@ public sealed class FileSecretProtector : ISecretProtector
 
     public ProtectedSecret Protect(string reference, ReadOnlySpan<byte> secret)
     {
+        var clock = Stopwatch.StartNew();
         var salt = RandomNumberGenerator.GetBytes(32);
         var key = DeriveKey(reference, salt);
 
@@ -46,11 +47,13 @@ public sealed class FileSecretProtector : ISecretProtector
         finally
         {
             CryptographicOperations.ZeroMemory(key);
+            Report(nameof(Protect), clock.Elapsed);
         }
     }
 
     public bool TryUnprotect(ProtectedSecret secret, out byte[] plaintext)
     {
+        var clock = Stopwatch.StartNew();
         plaintext = [];
         if (!Unpack(secret.Payload, out var sealedSecret))
         {
@@ -65,6 +68,15 @@ public sealed class FileSecretProtector : ISecretProtector
         finally
         {
             CryptographicOperations.ZeroMemory(key);
+            Report(nameof(TryUnprotect), clock.Elapsed);
+        }
+    }
+
+    private static void Report(string operation, TimeSpan elapsed)
+    {
+        if (elapsed > SecretProtectorTiming.Threshold)
+        {
+            SecretProtectorTiming.SlowOperation?.Invoke(ProtectorName, operation, elapsed);
         }
     }
 

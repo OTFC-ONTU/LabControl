@@ -19,25 +19,34 @@ public sealed class DpapiSecretProtector : ISecretProtector
 
     public bool IsAvailable => OperatingSystem.IsWindows();
 
-    public ProtectedSecret Protect(string reference, ReadOnlySpan<byte> secret) => new()
+    public ProtectedSecret Protect(string reference, ReadOnlySpan<byte> secret)
     {
-        Protector = ProtectorName,
-        Reference = reference,
-        Payload = ProtectedData.Protect(secret.ToArray(), Entropy(reference), DataProtectionScope.CurrentUser),
-    };
+        var bytes = secret.ToArray();
+        return SecretProtectorTiming.Measure(ProtectorName, nameof(Protect), () => new ProtectedSecret
+        {
+            Protector = ProtectorName,
+            Reference = reference,
+            Payload = ProtectedData.Protect(bytes, Entropy(reference), DataProtectionScope.CurrentUser),
+        });
+    }
 
     public bool TryUnprotect(ProtectedSecret secret, out byte[] plaintext)
     {
-        try
+        byte[] opened = [];
+        var ok = SecretProtectorTiming.Measure(ProtectorName, nameof(TryUnprotect), () =>
         {
-            plaintext = ProtectedData.Unprotect(secret.Payload, Entropy(secret.Reference), DataProtectionScope.CurrentUser);
-            return true;
-        }
-        catch (CryptographicException)
-        {
-            plaintext = [];
-            return false;
-        }
+            try
+            {
+                opened = ProtectedData.Unprotect(secret.Payload, Entropy(secret.Reference), DataProtectionScope.CurrentUser);
+                return true;
+            }
+            catch (CryptographicException)
+            {
+                return false;
+            }
+        });
+        plaintext = opened;
+        return ok;
     }
 
     public void Forget(ProtectedSecret secret)

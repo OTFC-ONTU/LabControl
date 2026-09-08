@@ -26,7 +26,14 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly Dictionary<string, JobRowViewModel> _jobs = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ScreenViewModel> _openScreens = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _framesPending = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Action _onMachinesChanged;
+    private readonly Action _onOtherConsolesChanged;
+    private readonly Action<EventRecord> _onEventAdded;
+    private readonly Action<JobRecord> _onJobUpdated;
+    private readonly Action _onVaultChanged;
+    private readonly Action<AgentScreen, FrameOutcome> _onScreenUpdated;
     private int _refreshPending;
+    private volatile bool _detached;
 
     public MainViewModel(LabSession session, ConsoleBootstrap bootstrap, IDialogs dialogs, Action<Action> post)
     {
@@ -40,18 +47,28 @@ public sealed partial class MainViewModel : ObservableObject
         Scripts = new ScriptsViewModel(session, dialogs, () => Selected.Select(t => t.AgentId).ToArray());
 
         Title = Strings.Format("Main.Title", session.LabName, session.Instance.InstanceName);
+        Generation = session.Generation;
+        // A missing profile record never grants more than a teacher sees (M5 §5).
+        AccessLabel = AccessLabels.For(bootstrap.Profiles.Find(session.LabId)?.Access ?? ProfileAccess.Teacher);
 
         foreach (var record in session.Events.Recent)
         {
             Events.Insert(0, new EventRowViewModel(record));
         }
 
-        session.MachinesChanged += () => Post(RefreshMachines);
-        session.OtherConsolesChanged += () => Post(() => { RefreshMachines(); RefreshBanners(); Settings.Refresh(); });
-        session.Events.Added += record => Post(() => AddEvent(record));
-        session.Jobs.Updated += job => Post(() => UpdateJob(job));
-        session.Vault.Changed += () => Post(() => { RefreshBanners(); Settings.Refresh(); });
-        session.Screens.Updated += (screen, _) => OnFrame(screen.AgentId);
+        // Kept as fields so Detach can unsubscribe every one of them (M5, D-57 item 2).
+        _onMachinesChanged = () => Post(RefreshMachines);
+        _onOtherConsolesChanged = () => Post(() => { RefreshMachines(); RefreshBanners(); Settings.Refresh(); });
+        _onEventAdded = record => Post(() => AddEvent(record));
+        _onJobUpdated = job => Post(() => UpdateJob(job));
+        _onVaultChanged = () => Post(() => { RefreshBanners(); Settings.Refresh(); });
+        _onScreenUpdated = (screen, _) => OnFrame(screen.AgentId);
+        session.MachinesChanged += _onMachinesChanged;
+        session.OtherConsolesChanged += _onOtherConsolesChanged;
+        session.Events.Added += _onEventAdded;
+        session.Jobs.Updated += _onJobUpdated;
+        session.Vault.Changed += _onVaultChanged;
+        session.Screens.Updated += _onScreenUpdated;
 
         RefreshMachines();
         RefreshBanners();
@@ -65,6 +82,46 @@ public sealed partial class MainViewModel : ObservableObject
     public ScriptsViewModel Scripts { get; }
 
     public string Title { get; }
+
+    /// <summary>The session this view model was built for; a posted callback from an older one is dropped (M5).</summary>
+    public long Generation { get; }
+
+    /// <summary>"Administrator" or "Teacher", from the profile (M5 §5).</summary>
+    public string AccessLabel { get; }
+
+    /// <summary>The toolbar chip next to <i>Disconnect</i>: lab name and access, and "Connecting…" until the server serves.</summary>
+    public string LabChip => Strings.Format(IsConnecting ? "Main.LabChipConnecting" : "Main.LabChip", _session.LabName, AccessLabel);
+
+    /// <summary>
+    /// True while the window shows the cached mosaic of a lab whose server has not started
+    /// yet (D-57 item 1): every tile offline, no action enabled. <see cref="MarkConnected"/>
+    /// ends it once the controller reports <c>Active</c>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LabChip), nameof(IsToolbarEnabled))]
+    public partial bool IsConnecting { get; set; }
+
+    /// <summary>True once <see cref="Detach"/> ran: this view model belongs to a lab the console has left.</summary>
+    public bool IsDetached => _detached;
+
+    /// <summary>The toolbar acts only on a live, connected session: never on one still connecting or already left.</summary>
+    public bool IsToolbarEnabled => !_detached && !IsConnecting;
+
+    /// <summary>The server is up: the mosaic becomes live and the toolbar wakes.</summary>
+    public void MarkConnected()
+    {
+        if (_detached)
+        {
+            return;
+        }
+
+        IsConnecting = false;
+        RefreshMachines();
+        RefreshBanners();
+    }
+
+    /// <summary>The teacher pressed <i>Disconnect</i>; the app shows the departure report and releases the lab.</summary>
+    public event Action? DisconnectRequested;
 
     public ObservableCollection<MachineTileViewModel> Machines { get; } = [];
 
@@ -117,7 +174,49 @@ public sealed partial class MainViewModel : ObservableObject
         Reflow();
     }
 
-    private void Post(Action action) => _post(action);
+    /// <summary>Marshals to the UI thread; once detached, nothing from the old session runs.</summary>
+    private void Post(Action action) => _post(() =>
+    {
+        if (!_detached)
+        {
+            action();
+        }
+    });
+
+    /// <summary>
+    /// Cuts this view model off from its session before the console leaves the lab (M5,
+    /// D-57 item 2): every subscription is removed, every single-PC window is closed, and a
+    /// callback already posted from the old session is dropped when it runs. The next lab
+    /// gets a fresh view model; nothing here is reused.
+    /// </summary>
+    public void Detach()
+    {
+        if (_detached)
+        {
+            return;
+        }
+
+        _detached = true;
+        OnPropertyChanged(nameof(IsDetached));
+        OnPropertyChanged(nameof(IsToolbarEnabled));
+        _session.MachinesChanged -= _onMachinesChanged;
+        _session.OtherConsolesChanged -= _onOtherConsolesChanged;
+        _session.Events.Added -= _onEventAdded;
+        _session.Jobs.Updated -= _onJobUpdated;
+        _session.Vault.Changed -= _onVaultChanged;
+        _session.Screens.Updated -= _onScreenUpdated;
+        Scripts.Detach();
+
+        foreach (var screen in _openScreens.Values.ToArray())
+        {
+            screen.RequestClose();
+        }
+
+        _openScreens.Clear();
+    }
+
+    [RelayCommand]
+    private void Disconnect() => DisconnectRequested?.Invoke();
 
     // ------------------------------------------------------------------ machines
 

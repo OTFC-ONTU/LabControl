@@ -24,39 +24,48 @@ public sealed class SecretToolProtector : ISecretProtector
     public ProtectedSecret Protect(string reference, ReadOnlySpan<byte> secret)
     {
         var encoded = Convert.ToBase64String(secret);
-        if (!TryRun(["store", "--label=LabControl", "service", ServiceName, "account", reference], encoded, out var error))
+        return SecretProtectorTiming.Measure(ProtectorName, nameof(Protect), () =>
         {
-            throw new InvalidOperationException($"secret-tool could not store '{reference}': {error}");
-        }
+            if (!TryRun(["store", "--label=LabControl", "service", ServiceName, "account", reference], encoded, out var error))
+            {
+                throw new InvalidOperationException($"secret-tool could not store '{reference}': {error}");
+            }
 
-        return new ProtectedSecret
-        {
-            Protector = ProtectorName,
-            Reference = reference,
-        };
+            return new ProtectedSecret
+            {
+                Protector = ProtectorName,
+                Reference = reference,
+            };
+        });
     }
 
     public bool TryUnprotect(ProtectedSecret secret, out byte[] plaintext)
     {
-        plaintext = [];
-        if (!TryRun(["lookup", "service", ServiceName, "account", secret.Reference], input: null, out var output))
+        byte[] opened = [];
+        var ok = SecretProtectorTiming.Measure(ProtectorName, nameof(TryUnprotect), () =>
         {
-            return false;
-        }
+            if (!TryRun(["lookup", "service", ServiceName, "account", secret.Reference], input: null, out var output))
+            {
+                return false;
+            }
 
-        try
-        {
-            plaintext = Convert.FromBase64String(output.Trim());
-            return true;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
+            try
+            {
+                opened = Convert.FromBase64String(output.Trim());
+                return true;
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+        });
+        plaintext = opened;
+        return ok;
     }
 
     public void Forget(ProtectedSecret secret) =>
-        TryRun(["clear", "service", ServiceName, "account", secret.Reference], input: null, out _);
+        SecretProtectorTiming.Measure(ProtectorName, nameof(Forget), () =>
+            TryRun(["clear", "service", ServiceName, "account", secret.Reference], input: null, out _));
 
     private static bool TryRun(string[] arguments, string? input, out string output)
     {

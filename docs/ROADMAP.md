@@ -19,7 +19,7 @@ implement.
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
-| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portion 1 (profile store and migration) built and reviewed 2026-09-08, migration tried on a copy of the live data; portion 2 next** | M4 |
+| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–2 built and reviewed 2026-09-08 (profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import), migration tried on a copy of the live data; portion 3 next; real-Mac switch timing under investigation** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
@@ -1396,7 +1396,55 @@ contract, then desktop integration (`D-54` item 6).
   instance id served lab "444-2", the `PC-01` VM agent linked with its existing
   certificate; a second launch ran no migration step and linked again. The live
   directory itself is not migrated yet — it will be on the owner's next launch of an
-  M5 build. Portion 2 is next.
+  M5 build.
+- *Portion 2 (built and reviewed 2026-09-08, on the Mac).* One active session, the chooser
+  and bulk import (`D-57` items 1–3 and 5–11): `ActiveLabController` holds the only
+  `LabSession`; activation is serialised by a `SemaphoreSlim(1,1)`, a generation counter
+  and a latest-request collapse (a burst A → B → C activates C once), moves through
+  `Activating` / `Active` / `Deactivating` / `Failed` / `Idle`, runs off the UI thread and
+  is cancelled when the controller is disposed (also while it waits on a prompt).
+  `LabSession.CloseAsync` releases in the fixed order `LabCloseStep` names — cancel →
+  beacons → every link closed with *the console left this lab* → listener → server stop
+  and dispose (`ConsoleServer.DisposeAsync` disposes the host in a `finally`, so the port
+  is always freed) → housekeeping join → `SaveLab` → `Screens` → `Vault` (the CA locked)
+  → `Instance` → `Disposed` — each step isolated, so a step that throws does not stop the
+  rest, and the tail (save, screens, vault, instance) sits in a `finally`. `SwitchTimings`
+  logs the departure, open, build and start phases of every switch. The cached mosaic:
+  `SessionBuilt` shows the main window with the roster tiles from `lab.json` before the
+  server starts (*Connecting…* in the lab chip, toolbar disabled) and the window is
+  enabled on `Active`. `DescribeDeparture` → `DepartureReport` behind the *Leave anyway* /
+  *Stay* / *Wait for N jobs* dialog; `MainViewModel.Detach` unsubscribes and closes every
+  screen window. The *My labs* chooser (`LabChooserViewModel`, `LabChooserWindow`): one
+  row per saved lab, the last-used one highlighted and never opened by itself, *Open*,
+  *Add labs…* (`.lcbak` only until portion 3 — `LabImports.Register` is the extension
+  point for `.lclab`/`.lcreq`/`.lcgrant`), *Create a lab…*, *Remove from this device*
+  with a second confirmation that names the last exported backup before a lab key is
+  deleted, *Retry* after a failed activation, *Quit*; files dropped on the chooser or on
+  the main window import the same way; one result per file, a wrong passphrase fails only
+  that file, and an import is atomic per file (directory, keystore item and in-memory
+  index undone on failure). Closing the main window returns to the chooser; only the
+  chooser's *Quit* ends the process; *Disconnect* shows *Leaving…* in the chooser before
+  the release runs. A profile record without an access label reads as *Teacher*.
+  `FakeAgent --lab <payload>` groups run several labs from one process, with one default
+  `--count`. `SecretProtectorTiming` warns when a keystore call takes longer than 250 ms.
+  Real agents refuse the other lab's console certificate themselves (their own `LabTrust`
+  check) before presenting theirs; the console-side `link.refused` — *belongs to lab
+  "A", which is not the active lab on this console* — is for clients without that check,
+  and the test proves both. Measured in-process (30 agents per lab, real TLS/UDP, one
+  port): departure 12–30 ms, server up 156–965 ms, all 30 PCs linked in 1.0–2.6 s, 0
+  lab-A beacons in the 5 s after departure; 20 × A → B → C → A with bounded threads and
+  no leaked session. Two limits: under sustained refusal load a departure can spend
+  Kestrel's 2 s stop budget, and a PC refused for a long stretch returns within the 30 s
+  reconnect cap rather than the 15 s target — a `BeaconGate` follow-up for portion 5.
+  Tests: 728 (603 Shared + 125 Console; the Console run twice, `LabSwitchTests` a
+  non-parallel collection). *On the owner's Mac* (Debug build, ad-hoc signed) the server
+  was up 4–6 s after *Open* and after a re-open; the Keychain prompt per rebuilt ad-hoc
+  binary is the prime suspect (the cdhash changes with every Debug build; the tests use
+  the file protector), the open/build/start split and the 250 ms warning now instrument
+  it, and it is expected to disappear with the signed packaged app (portion 7) — to be
+  re-measured. *Trial against a copy of the live data*: the chooser appeared with the lab
+  row (administrator, 14 PCs), nothing listening until *Open*; the owner had exercised
+  *Open* → *Disconnect* → *Open* on the copy earlier. Portion 3 is next.
 
 **Not in scope.** Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs

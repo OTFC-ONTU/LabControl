@@ -122,9 +122,30 @@ public sealed partial class ScreenViewModel : ObservableObject
     /// <summary>The window closed; the main view model forgets it.</summary>
     public event Action? Closed;
 
+    /// <summary>The main view model is leaving the lab (M5): the window listening here closes itself.</summary>
+    public event Action? CloseRequested;
+
+    /// <summary>Closes the single-PC view from the outside: through its window when one is up, directly otherwise.</summary>
+    public void RequestClose()
+    {
+        if (CloseRequested is { } handler)
+        {
+            handler();
+        }
+        else
+        {
+            Close();
+        }
+    }
+
     /// <summary>The window closed: release what is held, back to the thumbnail.</summary>
     public void Close()
     {
+        if (!_open)
+        {
+            return;
+        }
+
         ReleaseAll();
         IsControlling = false;
         _open = false;

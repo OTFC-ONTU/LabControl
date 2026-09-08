@@ -49,6 +49,7 @@ public sealed partial class ScriptRowViewModel : ObservableObject
 public sealed partial class ScriptsViewModel : ObservableObject
 {
     private readonly LabSession _session;
+    private readonly Action _onScriptsChanged;
     private readonly IDialogs _dialogs;
     private readonly Func<IReadOnlyList<string>> _selectedAgents;
     private readonly Dictionary<string, ScriptRecord> _drafts = new(StringComparer.Ordinal);
@@ -74,13 +75,17 @@ public sealed partial class ScriptsViewModel : ObservableObject
         _session = session;
         _dialogs = dialogs;
         _selectedAgents = selectedAgents;
-        session.Scripts.Changed += () => RefreshList();
+        _onScriptsChanged = () => RefreshList();
+        session.Scripts.Changed += _onScriptsChanged;
         RefreshList();
         if (Scripts.Count > 0)
         {
             Selected = Scripts[0];
         }
     }
+
+    /// <summary>The session is being left (M5): stop listening to its library.</summary>
+    public void Detach() => _session.Scripts.Changed -= _onScriptsChanged;
 
     public ObservableCollection<ScriptRowViewModel> Scripts { get; } = [];
 

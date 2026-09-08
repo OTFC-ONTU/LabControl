@@ -85,6 +85,9 @@ public sealed class ConsoleServer : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // Stop gracefully within the budget, then dispose whatever the stop did: the listener
+        // must let go of the port even when the stop itself fails, because the next lab's
+        // session binds the same port right after (M5, D-57 item 2).
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
@@ -93,7 +96,9 @@ public sealed class ConsoleServer : IAsyncDisposable
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
         {
         }
-
-        await _app.DisposeAsync();
+        finally
+        {
+            await _app.DisposeAsync();
+        }
     }
 }

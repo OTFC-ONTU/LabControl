@@ -150,6 +150,86 @@ internal sealed class TestConsole : IAsyncDisposable
     }
 }
 
+/// <summary>
+/// A lab saved on a device and not running (M5 portion 2): the files the chooser lists and
+/// <see cref="ActiveLabController"/> opens — <c>labs/&lt;id&gt;/</c> with the key, an instance
+/// and <c>lab.json</c>, plus the administrator entry in <c>profiles.json</c>. The key stays
+/// in the test so PCs can be issued certificates without a running console.
+/// </summary>
+internal sealed class SavedLab : IDisposable
+{
+    private SavedLab(string dataDirectory, LabKey key, string instanceId)
+    {
+        DataDirectory = dataDirectory;
+        Key = key;
+        InstanceId = instanceId;
+    }
+
+    public string DataDirectory { get; }
+
+    public LabKey Key { get; }
+
+    public string LabId => Key.LabId;
+
+    public string LabName => Key.LabName;
+
+    public string InstanceId { get; }
+
+    public LabStore Store => new(new ProfileStore(DataDirectory).Directory(LabId));
+
+    /// <summary>
+    /// Writes a lab into <paramref name="dataDirectory"/> exactly as an import or a first run
+    /// would leave it, closed. <paramref name="mintedAt"/> back-dates the console leaf: far
+    /// enough back and opening the lab asks to re-mint it (ARCHITECTURE §3.8).
+    /// </summary>
+    public static SavedLab Save(string dataDirectory, string labName, string instanceName = "Test console", DateTimeOffset? mintedAt = null)
+    {
+        var lab = LabKey.Create(labName, TestConsole.HolderName, TestConsole.Passphrase, out _, iterations: TestConsole.Iterations);
+        var profiles = new ProfileStore(dataDirectory);
+        var store = new LabStore(profiles.Directory(lab.LabId));
+        store.EnsureDirectories();
+        store.SaveLabKey(lab.Document);
+
+        using var instance = ConsoleInstance.Mint(lab, instanceName, new FileSecretProtector(), mintedAt);
+        instance.Document.RecoveryCodeAcknowledged = true;
+        store.SaveInstance(instance.Document);
+        store.SaveLab(new LabDocument
+        {
+            LabId = lab.LabId,
+            LabName = lab.LabName,
+            Instances = [new InstanceRecord { InstanceId = instance.InstanceId, Name = instanceName, IsThisMachine = true }],
+        });
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        profiles.Upsert(new ProfileRecord
+        {
+            LabId = lab.LabId,
+            LabName = lab.LabName,
+            AuthorityFingerprint = ProfileRecord.AuthorityFingerprintOf(lab.Document.Authority),
+            Access = ProfileAccess.Administrator,
+            Authorization = ProfileAuthorization.Authorized,
+            InstanceId = instance.InstanceId,
+            InstanceName = instanceName,
+            AddedAtUnix = now,
+            Source = ProfileSource.Created,
+        });
+        profiles.Save();
+
+        return new SavedLab(dataDirectory, lab, instance.InstanceId);
+    }
+
+    /// <summary>Lists the PCs in <c>lab.json</c>, so the lab "knows" them before it is opened (the cached mosaic).</summary>
+    public void RecordMachines(IEnumerable<TestAgent> agents)
+    {
+        var store = Store;
+        var document = store.LoadLab(LabId, LabName);
+        document.Machines = agents.Select(a => new MachineRecord { AgentId = a.AgentId, Number = a.Number, Hostname = a.Store.Config.Hostname, Mac = a.Store.Config.Mac }).ToList();
+        store.SaveLab(document);
+    }
+
+    public void Dispose() => Key.Dispose();
+}
+
 /// <summary>A simulated PC: a directory store, a scripted behaviour and an <see cref="AgentLink"/>.</summary>
 internal sealed class TestAgent : IAsyncDisposable
 {
@@ -204,6 +284,33 @@ internal sealed class TestAgent : IAsyncDisposable
         using var certificate = LabCertificates.IssueAgentFromCsr(lab.Authority, lab.LabId, agent.AgentId, number, csr, DateTimeOffset.UtcNow, lifetime);
         agent.Store.InstallCertificate(agent.Store.Key, certificate);
         return agent;
+    }
+
+    /// <summary>
+    /// A PC of a lab that is saved on the device but not running (M5): installed with a
+    /// certificate issued straight from the lab key, pointed at the controller's port when
+    /// <paramref name="pinHost"/> is set, otherwise waiting for a beacon of its own lab.
+    /// </summary>
+    public static TestAgent InstallEnrolled(LabKey lab, int number, int port, bool pinHost)
+    {
+        var directory = Path.Combine(TestConsole.TempDirectory(), $"PC-{number:00}");
+        var config = new AgentConfigDocument
+        {
+            LabId = lab.LabId,
+            AgentId = Guid.NewGuid().ToString("d"),
+            Number = number,
+            Hostname = string.Format(Defaults.MachineNameFormat, number),
+            Mac = $"02:00:5E:00:00:{number:X2}",
+            ConsoleHost = pinHost ? IPAddress.Loopback.ToString() : null,
+            ConsolePort = port,
+        };
+
+        using var authority = X509CertificateLoader.LoadCertificate(lab.Document.Authority);
+        var store = DirectoryAgentStore.Install(directory, config, authority);
+        var csr = LabCertificates.CreateSigningRequest(store.Key, "test");
+        using var certificate = LabCertificates.IssueAgentFromCsr(lab.Authority, lab.LabId, config.AgentId, number, csr, DateTimeOffset.UtcNow);
+        store.InstallCertificate(store.Key, certificate);
+        return Open(store);
     }
 
     public static TestAgent Open(DirectoryAgentStore store, AgentLinkOptions? options = null)

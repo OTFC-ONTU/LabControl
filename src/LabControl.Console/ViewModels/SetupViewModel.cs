@@ -29,11 +29,19 @@ public sealed partial class SetupViewModel : ObservableObject
     private BackupDocument? _backup;
     private RecoveryCode? _recoveryCode;
 
-    public SetupViewModel(ConsoleBootstrap bootstrap, IDialogs dialogs)
+    /// <param name="startAtCreate">
+    /// Skip the choose step (M5 chooser's <i>Create a lab…</i>): the lab list already offers
+    /// <i>Add labs…</i> for backups, so the wizard opens straight on the form.
+    /// </param>
+    public SetupViewModel(ConsoleBootstrap bootstrap, IDialogs dialogs, bool startAtCreate = false)
     {
         _bootstrap = bootstrap;
         _dialogs = dialogs;
-        InstanceName = DefaultInstanceName();
+        InstanceName = ConsoleBootstrap.DefaultInstanceName();
+        if (startAtCreate)
+        {
+            Step = SetupStep.Create;
+        }
     }
 
     /// <summary>The running session once the wizard has finished.</summary>
@@ -332,11 +340,5 @@ public sealed partial class SetupViewModel : ObservableObject
             IsBusy = false;
             ImportSecret = string.Empty;
         }
-    }
-
-    private static string DefaultInstanceName()
-    {
-        var host = Environment.MachineName;
-        return host.Length > 0 ? host : "Console";
     }
 }

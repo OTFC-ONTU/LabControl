@@ -120,3 +120,10 @@ public sealed partial class BannerViewModel : ObservableObject
 
     public bool IsWarning { get; }
 }
+
+/// <summary>The access label of a saved lab (M5 §5), from the profile record.</summary>
+public static class AccessLabels
+{
+    public static string For(Shared.Persistence.ProfileAccess access) =>
+        Strings.Get(access == Shared.Persistence.ProfileAccess.Teacher ? "Access.Teacher" : "Access.Administrator");
+}

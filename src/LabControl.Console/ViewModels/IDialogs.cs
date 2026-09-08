@@ -38,6 +38,12 @@ public interface IDialogs
 
     Task<string?> PickOpenFileAsync(string title, string extension);
 
+    /// <summary>Several files at once (M5 <i>Add labs…</i>), filtered by extension; empty when cancelled.</summary>
+    Task<IReadOnlyList<string>> PickOpenFilesAsync(string title, IReadOnlyList<FileFilter> filters);
+
+    /// <summary>The one-row-per-file outcome of an import batch (M5 §5).</summary>
+    Task ShowImportResultsAsync(IReadOnlyList<ImportFileResult> results);
+
     Task<SendFilesAnswer?> SendFilesAsync(int pcCount);
 
     Task<string?> PickFolderAsync(string title);

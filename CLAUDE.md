@@ -215,9 +215,12 @@ report and results bound to the delivering instance (`D-57`), take-over on the a
 clock and observed-only ownership (`D-58`), the C# per-user Windows installer, scripted
 `.app`/`.dmg`, Linux tarball, single instance and scoped firewall rules (`D-59`), and
 dormant imported enrollment codes (`D-60`). Eight portions (ROADMAP M5, *How it is being
-built*); portion 1 built and reviewed 2026-09-08 (profile store, resumable migration,
-`lab.json` schema 2, `console.lock`; migration tried on a copy of the owner's live data,
-the live directory migrates on the next M5 launch); portion 2 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
+built*); portions 1–2 built and reviewed 2026-09-08 (portion 1: profile store, resumable
+migration, `lab.json` schema 2, `console.lock`; migration tried on a copy of the owner's
+live data, the live directory migrates on the next M5 launch; portion 2:
+`ActiveLabController`, the *My labs* chooser, *Disconnect*, the departure report, bulk
+`.lcbak` import; 728 tests; real-Mac switch timing under investigation, `D-57` item 11);
+portion 3 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
 (*Files exchanged offline*, *M5 additions*) describe the design; the `Welcome.console_access`
 `.proto` change lands with portion 5 and must update PROTOCOL again in that commit.
 

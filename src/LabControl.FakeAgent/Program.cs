@@ -22,8 +22,10 @@ internal static class Program
     private static readonly string Usage =
         "usage: LabControl.FakeAgent [--count N] [--payload <dir>] [--data <dir>] [--console host[:port]]\n" +
         "                            [--fail SPEC]... [--reinstall N]... [--verbose]\n" +
-        "  --count N        how many PCs to simulate, 1..30 (default 14)\n" +
+        "       LabControl.FakeAgent --lab <payload-dir> [--count N] [--lab <payload-dir> [--count N]]... [--data <dir>] [--verbose]\n" +
+        $"  --count N        how many PCs to simulate, 1..30 (default {Options.DefaultPcCount}); before the first --lab, for every lab; after a --lab, for that lab\n" +
         "  --payload <dir>  the USB payload written by the console (setup.json + ca.crt); needed to install new PCs\n" +
+        "  --lab <dir>      a lab's payload directory; several --lab groups run from one process (M5), each under <data>/lab-<id>\n" +
         "  --data <dir>     where the PCs keep their state (default ~/.labcontrol-fake)\n" +
         "  --console h[:p]  pin the console address instead of listening for beacons (a Mac with no network)\n" +
         "  --fail SPEC      " + FailureSpec.Help + "\n" +
@@ -71,8 +73,8 @@ internal static class Program
                 machine.Start();
             }
 
-            log.LogInformation("Simulating {Count} PCs from {Data}; {Mode}. Ctrl+C to stop.",
-                machines.Count, options.DataDirectory,
+            log.LogInformation("Simulating {Count} PCs in {Labs} lab(s) from {Data}; {Mode}. Ctrl+C to stop.",
+                machines.Count, Math.Max(1, options.Groups.Count), options.DataDirectory,
                 options.ConsoleHost is null ? "listening for beacons on UDP " + Defaults.BeaconPort : "pinned to " + options.ConsoleHost);
 
             using var stopping = new CancellationTokenSource();
@@ -106,7 +108,36 @@ internal static class Program
     private static Task<List<FakeMachine>> InstallOrOpenAsync(Options options, ILoggerFactory loggers, ILogger log)
     {
         var machines = new List<FakeMachine>();
-        SetupPayload? payload = null;
+
+        // Several labs from one process (M5): each --lab group keeps its PCs under its own
+        // directory, named after the lab id in the payload, and enrols from its own codes.
+        foreach (var group in options.Groups)
+        {
+            var payload = SetupPayload.Open(group.PayloadDirectory);
+            var data = Path.Combine(options.DataDirectory, "lab-" + payload.Document.LabId);
+            // A --count before the first --lab is the default for every group; one after a --lab is that group's own.
+            var scoped = new Options { Count = group.Count ?? options.Count, PayloadDirectory = group.PayloadDirectory, DataDirectory = data, Verbose = options.Verbose };
+            var installed = InstallOrOpenLab(scoped, payload, loggers, log, payload.Document.LabName);
+            if (installed is null)
+            {
+                return Task.FromResult(new List<FakeMachine>());
+            }
+
+            machines.AddRange(installed);
+        }
+
+        if (options.Groups.Count > 0)
+        {
+            return Task.FromResult(machines);
+        }
+
+        return Task.FromResult(InstallOrOpenLab(options, null, loggers, log, null) ?? []);
+    }
+
+    /// <summary>One lab's PCs: the single-lab behaviour, also used per <c>--lab</c> group.</summary>
+    private static List<FakeMachine>? InstallOrOpenLab(Options options, SetupPayload? payload, ILoggerFactory loggers, ILogger log, string? labName)
+    {
+        var machines = new List<FakeMachine>();
 
         foreach (var number in options.Reinstall)
         {
@@ -134,7 +165,8 @@ internal static class Program
         {
             var directory = MachineDirectory(options, number);
             var failure = options.Failures.GetValueOrDefault(number);
-            var machineLog = loggers.CreateLogger(string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, number));
+            var name = string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, number);
+            var machineLog = loggers.CreateLogger(labName is null ? name : $"{labName}/{name}");
 
             DirectoryAgentStore store;
             if (DirectoryAgentStore.Exists(directory))
@@ -154,7 +186,7 @@ internal static class Program
                     if (options.PayloadDirectory is null)
                     {
                         log.LogError("PC-{Number:00} is not installed yet and no --payload was given. Write a USB payload from the console and pass its directory.", number);
-                        return Task.FromResult(new List<FakeMachine>());
+                        return null;
                     }
 
                     payload = SetupPayload.Open(options.PayloadDirectory);
@@ -173,12 +205,12 @@ internal static class Program
 
             var machine = new FakeMachine(store, failure, machineLog);
             machines.Add(machine);
-            log.LogInformation("  {Name}  agent {AgentId}  {Enrolled}{Failure}",
-                machine.Name, machine.AgentId, machine.Link.IsEnrolled ? "enrolled" : "not enrolled yet",
+            log.LogInformation("  {Lab}{Name}  agent {AgentId}  {Enrolled}{Failure}",
+                labName is null ? string.Empty : labName + " / ", machine.Name, machine.AgentId, machine.Link.IsEnrolled ? "enrolled" : "not enrolled yet",
                 failure is null ? string.Empty : $"  [{failure.Kind}]");
         }
 
-        return Task.FromResult(machines);
+        return machines;
     }
 
     private static string MachineDirectory(Options options, int number) =>
@@ -204,7 +236,10 @@ internal static class Program
 
     private sealed class Options
     {
-        public int Count { get; set; } = 14;
+        /// <summary>PCs simulated when <c>--count</c> is absent: the first room's size, a simulator default only (D-17 forbids it anywhere real).</summary>
+        public const int DefaultPcCount = 14;
+
+        public int Count { get; set; } = DefaultPcCount;
 
         public string? PayloadDirectory { get; set; }
 
@@ -220,6 +255,17 @@ internal static class Program
         public List<int> Reinstall { get; } = [];
 
         public bool Verbose { get; set; }
+
+        /// <summary>The <c>--lab</c> groups (M5); empty for the single-lab command line.</summary>
+        public List<LabGroup> Groups { get; } = [];
+    }
+
+    private sealed class LabGroup(string payloadDirectory)
+    {
+        public string PayloadDirectory { get; } = payloadDirectory;
+
+        /// <summary>The group's own <c>--count</c>; <c>null</c> falls back to the shared one (<see cref="Options.Count"/>).</summary>
+        public int? Count { get; set; }
     }
 
     private static bool TryParse(string[] args, out Options options, out string error)
@@ -259,7 +305,19 @@ internal static class Program
                         return false;
                     }
 
-                    options.Count = count;
+                    if (options.Groups.Count > 0)
+                    {
+                        options.Groups[^1].Count = count;
+                    }
+                    else
+                    {
+                        options.Count = count;
+                    }
+
+                    break;
+
+                case "--lab":
+                    options.Groups.Add(new LabGroup(Path.GetFullPath(value)));
                     break;
 
                 case "--payload":
@@ -307,6 +365,12 @@ internal static class Program
                     error = $"unknown argument '{name}'";
                     return false;
             }
+        }
+
+        if (options.Groups.Count > 0 && (options.PayloadDirectory is not null || options.ConsoleHost is not null || options.Failures.Count > 0 || options.Reinstall.Count > 0))
+        {
+            error = "--lab groups cannot be combined with --payload, --console, --fail or --reinstall";
+            return false;
         }
 
         return true;

@@ -128,8 +128,12 @@ public sealed class ScreenStore : IDisposable
 {
     private readonly ConcurrentDictionary<string, AgentScreen> _screens = new(StringComparer.OrdinalIgnoreCase);
     private readonly Func<DateTimeOffset> _clock;
+    private volatile bool _disposed;
 
     public ScreenStore(Func<DateTimeOffset> clock) => _clock = clock;
+
+    /// <summary>True after <see cref="Dispose"/>: the session left its lab and every picture was released (M5).</summary>
+    public bool IsDisposed => _disposed;
 
     /// <summary>A frame was applied (or refused) for this PC. On a gRPC thread.</summary>
     public event Action<AgentScreen, FrameOutcome>? Updated;
@@ -137,7 +141,13 @@ public sealed class ScreenStore : IDisposable
     /// <summary>The picture needs a keyframe before deltas make sense (first frame, or the screen changed size).</summary>
     public event Action<AgentScreen>? KeyframeNeeded;
 
-    public AgentScreen Get(string agentId) => _screens.GetOrAdd(agentId, id => new AgentScreen(id));
+    /// <summary>
+    /// This PC's screen, created on first use. After <see cref="Dispose"/> a caller that is
+    /// still holding a stale view model gets a detached, empty screen that is never stored:
+    /// nothing from a departed lab is kept alive by a late frame or a late tile.
+    /// </summary>
+    public AgentScreen Get(string agentId) =>
+        _disposed ? new AgentScreen(agentId) : _screens.GetOrAdd(agentId, id => new AgentScreen(id));
 
     public AgentScreen? Find(string agentId) => _screens.GetValueOrDefault(agentId);
 
@@ -212,6 +222,7 @@ public sealed class ScreenStore : IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         foreach (var screen in _screens.Values)
         {
             screen.Dispose();

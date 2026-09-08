@@ -12,10 +12,10 @@ public partial class SetupWindow : Window
     private readonly TaskCompletionSource<LabSession?> _completion = new();
     private readonly SetupViewModel _viewModel;
 
-    public SetupWindow(ConsoleBootstrap bootstrap)
+    public SetupWindow(ConsoleBootstrap bootstrap, bool startAtCreate = false)
     {
         AvaloniaXamlLoader.Load(this);
-        _viewModel = new SetupViewModel(bootstrap, new WindowDialogs(this));
+        _viewModel = new SetupViewModel(bootstrap, new WindowDialogs(this), startAtCreate);
         DataContext = _viewModel;
         Closed += (_, _) => _completion.TrySetResult(_viewModel.IsDone ? _viewModel.Session : null);
     }
@@ -32,5 +32,6 @@ public partial class SetupWindow : Window
     private void OnFinish(object? sender, RoutedEventArgs e)
     {
         _completion.TrySetResult(_viewModel.Session);
+        Close();
     }
 }

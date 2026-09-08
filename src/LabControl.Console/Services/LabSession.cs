@@ -24,6 +24,21 @@ public sealed record OtherConsole(string InstanceId, string Name, string Endpoin
 /// <summary>A Wake-on-LAN in progress: the packets went out, the PC has until <see cref="Deadline"/> to link.</summary>
 public sealed record PendingWake(string AgentId, int Number, DateTimeOffset StartedAt, DateTimeOffset Deadline);
 
+/// <summary>The steps of <see cref="LabSession.CloseAsync"/>, in order (D-57 item 2).</summary>
+public enum LabCloseStep
+{
+    Cancel = 0,
+    Beacons = 1,
+    Links = 2,
+    Listener = 3,
+    Server = 4,
+    Housekeeping = 5,
+    Save = 6,
+    Screens = 7,
+    Vault = 8,
+    Instance = 9,
+}
+
 /// <summary>
 /// The running lab on this teacher machine: the identity it serves with, the machine list
 /// it caches, the PCs linked to it right now, the jobs in flight, the events, the beacon
@@ -41,6 +56,8 @@ public sealed class LabSession : IAsyncDisposable
     private readonly Lock _gate = new();
     private readonly CancellationTokenSource _stopping = new();
     private readonly JobJournal _journal;
+    private static long _generations;
+    private int _closed;
 
     private ConsoleServer? _server;
     private BeaconBroadcaster? _broadcaster;
@@ -131,6 +148,22 @@ public sealed class LabSession : IAsyncDisposable
 
     public DateTimeOffset Now => _clock();
 
+    /// <summary>
+    /// Distinguishes this session from every other one this process has built (M5, D-57): a
+    /// callback posted by one session checks it before touching the UI of the next.
+    /// </summary>
+    public long Generation { get; } = Interlocked.Increment(ref _generations);
+
+    /// <summary>True once <see cref="CloseAsync"/> has run: nothing here serves, beacons or holds a key any more.</summary>
+    public bool IsDisposed { get; private set; }
+
+    /// <summary>
+    /// Names a lab saved on this device by id, or <c>null</c> (M5, D-57 item 2): when a PC of
+    /// another saved lab reaches this session, the refusal says which lab it belongs to
+    /// instead of only "not this one". Set by <see cref="ConsoleBootstrap"/>; never a network call.
+    /// </summary>
+    public Func<string, string?>? LabNameResolver { get; set; }
+
     // ------------------------------------------------------------------ notifications
 
     /// <summary>A PC linked, unlinked, changed status or was added/replaced; the lab view refreshes.</summary>
@@ -142,6 +175,9 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>Another teacher machine appeared, disappeared or took over.</summary>
     public event Action? OtherConsolesChanged;
+
+    /// <summary>The session has released everything (M5, D-57): the room, the port, the key.</summary>
+    public event Action<LabSession>? Disposed;
 
     // ------------------------------------------------------------------ lifecycle
 
@@ -165,46 +201,128 @@ public sealed class LabSession : IAsyncDisposable
         _housekeeping = Task.Run(() => HousekeepingAsync(_stopping.Token));
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync() => CloseAsync("the console is closing");
+
+    /// <summary>
+    /// Releases the lab in the fixed order of D-57 item 2, so that the room is let go before
+    /// anything else and the port is free for the next session: cancel; beacons stop first
+    /// (no PC hears this instance any more); every link is closed with
+    /// <paramref name="reason"/>; the beacon listener stops; the server stops (2 s budget) and
+    /// is disposed; housekeeping joins; <c>lab.json</c> is saved; screens are dropped; the
+    /// vault locks the CA key; the instance key is released. Idempotent.
+    /// </summary>
+    public async ValueTask CloseAsync(string reason)
     {
-        _stopping.Cancel();
-
-        AgentConnection[] connections;
-        lock (_gate)
+        if (Interlocked.Exchange(ref _closed, 1) == 1)
         {
-            connections = _linked.Values.ToArray();
+            return;
         }
 
-        foreach (var connection in connections)
+        // Every step runs whatever the previous one did: a failure is logged and the next
+        // step still runs, and steps 6–9 — the ones that hold the key and the pictures — sit
+        // in a finally, so no exception on the way can leave the CA unlocked or the
+        // instance key open. IsDisposed and Disposed are set there too, once, always.
+        try
         {
-            connection.Close("the console is closing");
-        }
+            Step(LabCloseStep.Cancel, () => _stopping.Cancel());
 
-        _broadcaster?.Dispose();
-        _listener?.Dispose();
+            // 1. Beacons first: a PC that hears nothing from this instance stops considering it.
+            Step(LabCloseStep.Beacons, () => _broadcaster?.Dispose());
 
-        if (_server is not null)
-        {
-            await _server.DisposeAsync();
-        }
-
-        if (_housekeeping is not null)
-        {
-            try
+            // 2. Every link, with the reason the PC's event log will show.
+            Step(LabCloseStep.Links, () =>
             {
-                await _housekeeping.WaitAsync(TimeSpan.FromSeconds(3));
-            }
-            catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
-            {
-            }
-        }
+                AgentConnection[] connections;
+                lock (_gate)
+                {
+                    connections = _linked.Values.ToArray();
+                }
 
-        SaveLab();
-        Screens.Dispose();
-        Vault.Dispose();
-        Instance.Dispose();
-        Authority.Dispose();
-        _stopping.Dispose();
+                foreach (var connection in connections)
+                {
+                    connection.Close(reason);
+                }
+            });
+
+            // 3. Stop hearing other consoles.
+            Step(LabCloseStep.Listener, () => _listener?.Dispose());
+
+            // 4. The server: stop, then dispose, so the port is free for the next session.
+            await StepAsync(LabCloseStep.Server, async () =>
+            {
+                if (_server is not null)
+                {
+                    var server = _server;
+                    _server = null;
+                    await server.DisposeAsync().ConfigureAwait(false);
+                }
+            }).ConfigureAwait(false);
+
+            // 5. Housekeeping joins.
+            await StepAsync(LabCloseStep.Housekeeping, async () =>
+            {
+                if (_housekeeping is not null)
+                {
+                    try
+                    {
+                        await _housekeeping.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
+                    {
+                    }
+                }
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            // 6–9. Persist, drop the pictures, lock the CA key, release the instance key.
+            Step(LabCloseStep.Save, SaveLab);
+            Step(LabCloseStep.Screens, Screens.Dispose);
+            Step(LabCloseStep.Vault, Vault.Dispose);
+            Step(LabCloseStep.Instance, () =>
+            {
+                Instance.Dispose();
+                Authority.Dispose();
+            });
+            Step(LabCloseStep.Cancel, _stopping.Dispose);
+
+            IsDisposed = true;
+            _log.LogInformation("Lab '{Lab}' released: {Reason}", LabName, reason);
+            Disposed?.Invoke(this);
+        }
+    }
+
+    /// <summary>
+    /// A hook run before each step of <see cref="CloseAsync"/>, for diagnostics and for the
+    /// tests that make one step fail and check the rest still ran. An exception thrown here
+    /// counts as that step failing. <c>null</c> in production.
+    /// </summary>
+    public Action<LabCloseStep>? BeforeCloseStep { get; set; }
+
+    private void Step(LabCloseStep step, Action action)
+    {
+        try
+        {
+            BeforeCloseStep?.Invoke(step);
+            action();
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Releasing lab '{Lab}': step {Step} failed; continuing", LabName, step);
+        }
+    }
+
+    private async Task StepAsync(LabCloseStep step, Func<Task> action)
+    {
+        try
+        {
+            BeforeCloseStep?.Invoke(step);
+            await action().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Releasing lab '{Lab}': step {Step} failed; continuing", LabName, step);
+        }
     }
 
     // ------------------------------------------------------------------ linked PCs
@@ -476,7 +594,12 @@ public sealed class LabSession : IAsyncDisposable
             return name;
         }
 
-        var reason = $"this PC's certificate was refused: {LabTrust.Describe(failure, name)}";
+        // A PC of another lab saved on this device is the everyday case since M5: the teacher
+        // opened lab B while lab A's PCs still dial. Say which lab, not only "not this one".
+        var description = failure == TrustFailure.WrongLab && name is not null && LabNameResolver?.Invoke(name.LabId) is { Length: > 0 } otherLab
+            ? $"it belongs to lab \"{otherLab}\", which is not the active lab on this console"
+            : LabTrust.Describe(failure, name);
+        var reason = $"this PC's certificate was refused: {description}";
         Events.Warning("link.refused", reason, name?.Id, name?.Number ?? 0);
         throw new RpcException(new Status(StatusCode.PermissionDenied, reason));
     }
@@ -740,11 +863,7 @@ public sealed class LabSession : IAsyncDisposable
 
                 // A capture or input problem is state the tile and the single-PC window show
                 // (M3 portion 3), not only a line in the log.
-                if (connection.ApplyEvent(reported))
-                {
-                    if (reported.Code == LabControl.Shared.Setup.SetupReadiness.EventCode) SaveLabSoon();
-                    MachinesChanged?.Invoke();
-                }
+                if (connection.ApplyEvent(reported)) MachinesChanged?.Invoke();
 
                 break;
 
@@ -1271,6 +1390,38 @@ public sealed class LabSession : IAsyncDisposable
         Events.Warning("revocation.issued", $"Certificate {entry.Serial} revoked: {reason}");
         message = $"Certificate {entry.Serial} is revoked.";
         return true;
+    }
+
+    // ------------------------------------------------------------------ departure (M5, D-57)
+
+    /// <summary>
+    /// What leaving this lab right now would interrupt (D-57 item 3): jobs delivered and
+    /// still running, grouped by kind with what happens to each; jobs waiting for an offline
+    /// PC; uploads in progress; PCs trying a new agent version; wakes being watched. Read
+    /// only — nothing is cancelled here.
+    /// </summary>
+    public DepartureReport DescribeDeparture()
+    {
+        var jobs = Jobs.All();
+        var running = jobs
+            .Where(j => j.State is JobState.Delivered or JobState.Running)
+            .GroupBy(j => j.Kind)
+            .Select(g => new DepartureJobGroup(g.Key, g.Count(), DepartureReport.ConsequenceOf(g.Key)))
+            .OrderBy(g => g.Kind)
+            .ToArray();
+        var queued = jobs.Count(j => j.State == JobState.Pending);
+
+        int[] probation;
+        int[] wakes;
+        lock (_gate)
+        {
+            probation = _linked.Values
+                .Where(c => c.UpdateState.Phase == UpdateState.Types.Phase.OnProbation)
+                .Select(c => c.Number).Order().ToArray();
+            wakes = _waking.Values.Select(w => w.Number).Order().ToArray();
+        }
+
+        return new DepartureReport(running, queued, Uploads.InProgressCount, probation, wakes);
     }
 
     // ------------------------------------------------------------------ persistence and housekeeping

@@ -26,6 +26,9 @@ public sealed class FileUploads
         return upload;
     }
 
+    /// <summary>Grants that are neither complete, failed nor disposed: what leaving the lab would cut off (M5, D-57).</summary>
+    public int InProgressCount => _uploads.Values.Count(u => !u.Complete && !u.Failed && !u.IsDisposed);
+
     private Upload Find(string agentId, string reference)
     {
         if (!_uploads.TryGetValue(reference, out var upload) || upload.AgentId != agentId)
@@ -129,6 +132,8 @@ public sealed class FileUploads
         internal bool Complete;
         internal bool Failed;
         private bool _disposed;
+
+        internal bool IsDisposed => _disposed;
 
         internal Upload(FileUploads owner, string agentId, Stream destination, long size, string sha256)
         {

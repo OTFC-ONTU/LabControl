@@ -1,0 +1,9 @@
+// Start-menu and desktop shortcuts (D-59 item 1).
+IShellLinkW
+IPersistFile
+
+// Tell Explorer the file associations changed, so .lclab shows the new icon at once.
+SHChangeNotify
+
+// Whether this process owns its console window: only then does it wait for Enter.
+GetConsoleProcessList

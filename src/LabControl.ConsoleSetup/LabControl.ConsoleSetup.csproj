@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>LabControl.ConsoleSetup</RootNamespace>
+    <AssemblyName>LabControl.ConsoleSetup</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- asInvoker, never requireAdministrator: installing the console is a per-user
+         operation (D-59 item 1). Only the firewall switch asks for elevation, at the
+         point of use. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../LabControl.Console/Assets/labcontrol.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Written by tools/package-windows.sh: the published win-x64 console, zipped.
+         The project builds without it so `dotnet build` works on any machine; an
+         executable built that way refuses to install and says why. -->
+    <ConsolePayloadZip>$(MSBuildThisFileDirectory)..\..\artifacts\package\windows\console-payload.zip</ConsolePayloadZip>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(ConsolePayloadZip)')">
+    <EmbeddedResource Include="$(ConsolePayloadZip)" LogicalName="LabControl.ConsoleSetup.Payload.zip" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.CsWin32" PrivateAssets="all" />
+    <ProjectReference Include="..\LabControl.Shared\LabControl.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

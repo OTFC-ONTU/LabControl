@@ -32,15 +32,24 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly Action<JobRecord> _onJobUpdated;
     private readonly Action _onVaultChanged;
     private readonly Action<AgentScreen, FrameOutcome> _onScreenUpdated;
+    private readonly NetworkReadiness _network;
+    private readonly Action _onNetworkChanged;
     private int _refreshPending;
     private volatile bool _detached;
 
-    public MainViewModel(LabSession session, ConsoleBootstrap bootstrap, IDialogs dialogs, Action<Action> post)
+    /// <param name="network">
+    /// The LAN-access check behind the firewall banner (M5, D-59 item 2). Windows only; on
+    /// macOS and Linux it reports <see cref="NetworkReadinessState.NotApplicable"/> and no
+    /// banner is ever shown.
+    /// </param>
+    public MainViewModel(LabSession session, ConsoleBootstrap bootstrap, IDialogs dialogs, Action<Action> post,
+        NetworkReadiness? network = null)
     {
         _session = session;
         _bootstrap = bootstrap;
         _dialogs = dialogs;
         _post = post;
+        _network = network ?? NetworkReadiness.ForThisMachine();
 
         Settings = new SettingsViewModel(session, bootstrap, dialogs, EnsureUnlockedAsync);
         Settings.BackupChanged += RefreshBanners;
@@ -63,6 +72,8 @@ public sealed partial class MainViewModel : ObservableObject
         _onJobUpdated = job => Post(() => UpdateJob(job));
         _onVaultChanged = () => Post(() => { RefreshBanners(); Settings.Refresh(); });
         _onScreenUpdated = (screen, _) => OnFrame(screen.AgentId);
+        _onNetworkChanged = () => Post(RefreshBanners);
+        _network.Changed += _onNetworkChanged;
         session.MachinesChanged += _onMachinesChanged;
         session.OtherConsolesChanged += _onOtherConsolesChanged;
         session.Events.Added += _onEventAdded;
@@ -76,6 +87,11 @@ public sealed partial class MainViewModel : ObservableObject
 
         RefreshMachines();
         RefreshBanners();
+
+        // A lab has just been activated: this is the moment the LAN has to be able to
+        // reach the console (D-59 item 2). The read is COM on Windows, so it is not done
+        // on this thread; everywhere else it answers "not applicable" and stops.
+        _ = _network.CheckAsync();
     }
 
     public LabSession Session => _session;
@@ -128,6 +144,7 @@ public sealed partial class MainViewModel : ObservableObject
         IsConnecting = false;
         RefreshMachines();
         RefreshBanners();
+        _ = _network.CheckAsync();
     }
 
     /// <summary>The teacher pressed <i>Disconnect</i>; the app shows the departure report and releases the lab.</summary>
@@ -219,6 +236,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         _session.Screens.Updated -= _onScreenUpdated;
+        _network.Changed -= _onNetworkChanged;
         Scripts.Detach();
 
         foreach (var screen in _openScreens.Values.ToArray())
@@ -640,6 +658,22 @@ public sealed partial class MainViewModel : ObservableObject
                 : Strings.Get("Key.Locked");
 
         var wanted = new List<BannerViewModel>();
+
+        // LAN access (D-59 item 2). Non-blocking: the console serves either way, and a
+        // teacher who cannot elevate gets the two commands rather than a dead end.
+        if (_network.HasBanner)
+        {
+            // The key carries the state, so moving from "Allow…" to the netsh diagnostic
+            // replaces the banner instead of only rewriting its text.
+            var key = "network:" + _network.State;
+            var lines = string.Join("  ", _network.Diagnostic);
+            wanted.Add(_network.State == NetworkReadinessState.Missing
+                ? new BannerViewModel(key, Strings.Get("Network.Blocked"), Strings.Get("Network.Allow"),
+                    () => _network.AllowAsync(), isWarning: true)
+                : new BannerViewModel(key,
+                    Strings.Format(_network.State == NetworkReadinessState.Denied ? "Network.Denied" : "Network.Failed", lines),
+                    Strings.Get("Network.Recheck"), () => _network.CheckAsync(), isWarning: true));
+        }
 
         foreach (var other in _session.OtherConsoles)
         {

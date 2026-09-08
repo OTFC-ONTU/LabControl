@@ -138,14 +138,15 @@ footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
 <p>All console↔agent traffic is gRPC over HTTP/2 + TLS. Contracts live in
 <code>src/LabControl.Shared/Protos/*.proto</code> and are the single source of truth; this
 document explains intent and flows. <strong>Update this file whenever a .proto changes.</strong></p>
-<p><strong>Planned M5 boundary (<code>D-53</code>).</strong> Several labs may be saved on a teacher device, but
-only the selected lab may advertise or hold agent/file/video/control connections.
-Switching must close the old session before activating the next and prevent stale
-messages/results from crossing lab or originating-console boundaries. Each profile
-keeps its lab-scoped identity. Separate teacher authorization, revocation across renewal
-and takeover without comparing unsynchronized clocks require a documented compatible
-protocol design during M5. No new message or wire format is introduced by this plan;
-the frozen subset below remains mandatory. Classroom control is M6, catalog/polish M7.</p>
+<p><strong>M5 boundary (<code>D-53</code>; designed 2026-09-08, <code>D-55</code>…<code>D-60</code>, being implemented).</strong> Several
+labs may be saved on a teacher device, but only the selected lab may advertise or hold
+agent/file/video/control connections. Switching closes the old session before activating
+the next and prevents stale messages/results from crossing lab or originating-console
+boundaries. Each profile keeps its lab-scoped identity. Teacher authorization, revocation
+across renewal and take-over without comparing unsynchronised clocks are specified in
+<em>M5 additions</em> under <em>Versioning</em> and in <em>Files exchanged offline</em> below; the only wire
+change is one additive, informational <code>Welcome</code> field, and the frozen subset remains
+mandatory. Classroom control is M6, catalog/polish M7.</p>
 <h2 id="ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (<code>LabControl.Shared/Defaults.cs</code>)<a class="anchor" href="#ports-and-identifiers-labcontrol.shareddefaults.cs" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
 <thead>
@@ -258,7 +259,9 @@ fully verified beacon from a <strong>different</strong> instance whose <code>tak
 moment its current link was established closes that link and dials the taker. Each
 <code>take</code> value is honoured once, so a console rebroadcasting the same value for 30 s does
 not cause a re-dial loop, and two consoles pressing the button alternately simply move
-the room back and forth — never split a PC between them.</li>
+the room back and forth — never split a PC between them.
+This &quot;newer than the link&quot; comparison sets the taker's clock against the agent's; M5
+replaces it with an arrival-order rule on the agent's clock alone (<code>D-58</code>, <em>M5 additions</em>).</li>
 <li>Consoles listen on the beacon port too. A verified beacon from another instance of the
 same lab is recorded in <code>lab.json</code> <code>instances[]</code> and drives the <em>other teacher machine</em>
 banner; a beacon that fails verification is dropped exactly as an agent would drop it.</li>
@@ -315,23 +318,35 @@ parse (<code>D-24</code>):</p>
 <tr>
 <th>Certificate</th>
 <th>Subject alternative name</th>
+<th>Subject OU (M5, <code>D-56</code>)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>lab authority</td>
 <td><code>labcontrol://&lt;lab_id&gt;/authority</code></td>
+<td>—</td>
 </tr>
 <tr>
-<td>console instance</td>
+<td>console instance (administrator)</td>
 <td><code>labcontrol://&lt;lab_id&gt;/console/&lt;instance_id&gt;</code></td>
+<td><code>LabControl Console</code></td>
+</tr>
+<tr>
+<td>teacher device</td>
+<td><code>labcontrol://&lt;lab_id&gt;/console/&lt;instance_id&gt;</code></td>
+<td><code>LabControl Teacher</code></td>
 </tr>
 <tr>
 <td>agent</td>
 <td><code>labcontrol://&lt;lab_id&gt;/agent/&lt;agent_id&gt;/&lt;number&gt;</code></td>
+<td>—</td>
 </tr>
 </tbody>
 </table></div>
+<p>The teacher device's SAN is deliberately identical to a console's: every agent already in
+the field parses it as a console and links to it. The role is read from the subject OU
+(<code>LabName.Access</code>); agents older than M5 treat both as full consoles (see <em>M5 additions</em>).</p>
 <p>A peer is accepted when the certificate chains to the pinned CA, its URI names <strong>this</strong>
 lab, its role is the one expected on that side of the connection, and its serial is not in
 the revocation set. Anything else is refused with a reason in plain language — &quot;belongs to
@@ -370,6 +385,13 @@ on the say-so of a TLS peer alone: an entry that does not verify against the pin
 dropped and logged. Because entries are self-authenticating, the list has no version and
 no owner — every party keeps the union of what it has seen, in any order, which is what
 lets several teacher machines revoke independently (<code>D-21</code>).</p>
+<p>M5 (<code>D-56</code>) adds a <strong>pseudo-serial</strong> in the same signed form: <code>instance:&lt;instance_id&gt;</code>
+withdraws a teacher device across certificate renewal — an M5 verifier refuses a console
+peer whose SAN instance id has such an entry, whatever its leaf serial. Agents older than
+M5 store the entry inertly and carry it on like any other. An M5 agent answers <em>every</em>
+<code>Revocation</code> it applies with a fresh <code>RevocationState</code>, which is how the console records
+per PC which entries were delivered (<code>RevocationSerialsSeen</code>) and shows a pending status
+for the rest.</p>
 <h3 id="job-every-action-is-a-job"><code>Job</code> — every action is a job<a class="anchor" href="#job-every-action-is-a-job" aria-label="Link to this section">#</a></h3>
 <pre><code>Job { id, kind, args map&lt;string,string&gt;, timeout_s }
 kinds: shutdown | reboot | logoff | run_script | install_package | reset_profile |
@@ -804,6 +826,75 @@ notification wakes it, a 2-second poll of WTS backs that up — and re-sends the
 after every <code>Welcome</code>, so a console that (re)connects sees the current state at once. The
 console shows <code>user</code>, marks the tile <em>locked</em>, warns when <code>helper_alive</code> turns false, and
 logs LOGON / LOGOFF / LOCK / UNLOCK as informational events.</p>
+<h2 id="files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: <code>.lclab</code>, <code>.lcreq</code>, <code>.lcgrant</code> (M5, <code>D-56</code>)<a class="anchor" href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56" aria-label="Link to this section">#</a></h2>
+<p>These never cross the wire; they travel on a USB stick, by e-mail or in a chat, and are
+the whole of the teacher-device authorization flow. Each is a JSON document written by
+<code>JsonStore</code> (snake_case, <code>schema_version</code> first) in one <strong>signed envelope</strong>:</p>
+<pre><code>{ schema_version, kind, lab_id, lab_name,
+  payload:   base64 of the UTF-8 JSON payload bytes,
+  signature: base64, ECDSA P-256 / SHA-256, IEEE P1363 (64 bytes),
+             over  domain || payload bytes  (the UpdateManifest pattern, D-52) }
+</code></pre>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Extension</th>
+<th>Domain</th>
+<th>Signed by</th>
+<th>Verified against</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>lab file</td>
+<td><code>.lclab</code></td>
+<td><code>labcontrol/lab-file/v1\0</code></td>
+<td>the lab CA key</td>
+<td>the CA certificate inside the file on first import; the pinned CA on re-import</td>
+</tr>
+<tr>
+<td>device request</td>
+<td><code>.lcreq</code></td>
+<td><code>labcontrol/device-request/v1\0</code></td>
+<td>the device's own key (self-signed PKCS#10 CSR)</td>
+<td>the CSR's self-signature</td>
+</tr>
+<tr>
+<td>device grant</td>
+<td><code>.lcgrant</code></td>
+<td><code>labcontrol/device-grant/v1\0</code></td>
+<td>the lab CA key</td>
+<td>the pinned CA of the profile it targets</td>
+</tr>
+</tbody>
+</table></div>
+<p>Payloads:</p>
+<ul>
+<li><strong><code>.lclab</code></strong> — <code>lab_id</code>, <code>lab_name</code>, <code>issued_at_unix</code>, <code>issued_by_instance_id</code>,
+<code>issued_by_instance_name</code>, <code>authority</code> (DER of the public CA), <code>authority_fingerprint</code>,
+<code>snapshot_version</code> (monotonic per issuing console), <code>roster[]</code> <code>{agent_id, number, hostname, mac, last_ip, certificate_serial, certificate_not_after_unix}</code>, <code>layout[]</code>
+<code>{number, column, row}</code>, <code>revocations[]</code> (signed entries as on the wire, so they are
+self-authenticating), optional <code>scripts</code> (a <code>ScriptsDocument</code>, imported only into a
+profile without one). Produced only by <em>Export lab file…</em>.</li>
+<li><strong><code>.lcreq</code></strong> — <code>lab_id</code>, <code>instance_id</code>, <code>instance_name</code>, <code>requested_access: teacher</code>,
+<code>created_at_unix</code>, <code>csr</code> (PKCS#10 from the device's pending key, <code>CN</code> = instance name),
+<code>console_version</code>. Re-running the request on the device regenerates the same file from
+the same key.</li>
+<li><strong><code>.lcgrant</code></strong> — <code>lab_id</code>, <code>instance_id</code>, <code>certificate</code> (DER: SAN
+<code>labcontrol://&lt;lab&gt;/console/&lt;instance&gt;</code>, <code>OU=LabControl Teacher</code>, 365 days), the beacon
+<code>endorsement</code> over <code>lab | inst | base64(pub)</code> (<code>D-24</code>), <code>issued_at_unix</code>, <code>expires_unix</code>,
+<code>snapshot</code> (a full <code>.lclab</code> payload). The device accepts it only if the instance id and
+public key match its pending request and the leaf validates as a console of this lab.</li>
+</ul>
+<p><strong>What they must never contain</strong> — a test serialises each and asserts the absence of: the
+<code>LabKeyDocument</code>, any holder or recovery wrapping, the CA private key; the
+<code>EnrollmentDocument</code> or any enrollment code; any <code>instance.json</code> or private key (a <code>.lcreq</code>
+carries only the CSR's public half); package binaries; logs. A <code>.lcbak</code> is the one file
+that carries the lab key, and it stays the administrator's backup (<code>D-26</code>, <code>D-54</code>).</p>
+<p>A corrupt, unsigned, wrongly signed or newer-schema file is refused with a reason and
+changes nothing; re-importing an older <code>.lclab</code> never rolls back revocations, deletes a PC
+this console has seen linked, downgrades access or replaces the device identity.</p>
 <h2 id="versioning">Versioning<a class="anchor" href="#versioning" aria-label="Link to this section">#</a></h2>
 <p><code>Hello</code> also carries <code>lab_id</code> and the agent's certificate serial, so a console that has
 been migrated to a new machine (<code>docs/ARCHITECTURE.md</code> §3.6) recognises the PCs it
@@ -820,6 +911,40 @@ number until then.</p>
 record already holds — a different <code>agent_id</code>, the same sticker — is the same PC after a
 reinstall. The old record is replaced, not kept beside the new one, and the console
 records an event naming both agent ids and the old certificate serial.</p>
+<h3 id="m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, <code>D-55</code>…<code>D-60</code>)<a class="anchor" href="#m5-additions-being-implemented-d-55.d-60" aria-label="Link to this section">#</a></h3>
+<p>Recorded from the design on 2026-09-08; the portion that lands each item is in ROADMAP
+M5, and the <code>.proto</code> change below must be reflected here again in the commit that makes it.</p>
+<ol>
+<li><strong><code>Welcome.console_access = 6</code></strong> — <code>enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0; ADMINISTRATOR = 1; TEACHER = 2; }</code>. Additive and informational: the authoritative role
+is the subject OU of the console leaf the agent already validated; the field lets an
+agent name the access level in events without re-parsing the certificate. Agents that
+do not know the field ignore it.</li>
+<li><strong>Role in the certificate table</strong> (above): <code>OU=LabControl Console</code> versus
+<code>OU=LabControl Teacher</code> with an unchanged SAN. Agents older than M5 treat both as
+consoles — a teacher console can, until the next agent push, replay an
+administrator-signed update bundle to such an agent; this is documented, not negotiated.</li>
+<li><strong>Revocation</strong>: the <code>instance:&lt;instance_id&gt;</code> pseudo-serial; an M5 agent answers every
+applied <code>Revocation</code> with <code>RevocationState</code>, and the console keeps a per-PC delivered
+list and a pending status. No message change.</li>
+<li><strong><code>Job</code></strong>: an M5 agent refuses <code>self_update</code> and <code>rekey</code> on a link whose console has
+teacher access — <code>JobResult{ok: false, message: &quot;refused: this console has teacher access&quot;}</code> plus the event <code>job.refused_by_role</code>, before any manifest is pulled. The
+agent's renewal loop is not run on a teacher link. <strong><code>JobResult</code> ownership</strong>: an M5
+agent records the delivering console's <code>instance_id</code> (from <code>Welcome</code>) in its ledger and
+drains a kept result only to a link with that instance id; any other console receives
+the result only when it re-sends the job after its own <code>Welcome</code>, which it already does
+for jobs it had in flight. No field change; the frozen subset is untouched.</li>
+<li><strong>Beacon <code>take</code></strong>: honoured when the <code>(inst, take)</code> token is unhonoured, the beacon
+arrived after the link was established on the agent's own clock, and <code>take</code> is within
+<code>TakeOverWindow + BeaconMaxSkew</code> of the beacon's own <code>ts</code>. The taker's timestamp is
+never compared with the agent's link time. No field change.</li>
+<li><strong>Versioning</strong>: an M5 console accepts every older agent as before and shows the
+<em>update available</em> badge; the two behaviours it cannot get from an older agent —
+role-based refusal of <code>self_update</code>/<code>rekey</code> and result binding to the delivering
+instance — are listed on the tile as reasons to update, not as connection failures.
+An older console meeting an M5 agent sees an <code>instance:</code> entry as an odd serial and a
+<code>Welcome</code> field it did not send; both are harmless.</li>
+<li><strong>Files exchanged offline</strong> — the section above.</li>
+</ol>
 <h3 id="the-frozen-subset">The frozen subset<a class="anchor" href="#the-frozen-subset" aria-label="Link to this section">#</a></h3>
 <p>Four things are <strong>frozen at wire version 1 and may never change</strong>: the <code>Hello</code> message,
 the <code>Heartbeat</code> message, <code>Job</code> with <code>kind: self_update</code>, and <code>JobResult</code>. Fields may be
@@ -959,9 +1084,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-08 08:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-08 09:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>
 </body>
 </html>

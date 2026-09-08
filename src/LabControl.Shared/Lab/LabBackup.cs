@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using LabControl.Shared.Identity;
 using LabControl.Shared.Persistence;
 
@@ -60,12 +61,34 @@ public static class LabBackup
 
         try
         {
-            return JsonSerializer.Deserialize<BackupPayload>(bytes, JsonStore.Options)
+            var root = JsonNode.Parse(bytes) as JsonObject
+                       ?? throw new InvalidDataException("The backup holds no lab data.");
+
+            // Each sealed document carries its own schema_version: an older one is walked
+            // forward through the same chain the file on disk uses, and a newer one is refused
+            // by name rather than half read (D-20).
+            UpgradeNested(root, "lab", Defaults.LabFileName, LabDocument.Migrations);
+            UpgradeNested(root, "scripts", Defaults.ScriptsFileName, ScriptsDocument.Migrations);
+            UpgradeNested(root, "enrollment", Defaults.EnrollmentFileName, EnrollmentDocument.Migrations);
+
+            return root.Deserialize<BackupPayload>(JsonStore.Options)
                    ?? throw new InvalidDataException("The backup holds no lab data.");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"The backup's lab data is not valid JSON: {ex.Message}", ex);
         }
         finally
         {
             CryptographicOperations.ZeroMemory(bytes);
+        }
+    }
+
+    private static void UpgradeNested(JsonObject root, string property, string fileName, SchemaMigrations migrations)
+    {
+        if (root[property] is JsonObject node)
+        {
+            root[property] = migrations.Upgrade($"{fileName} (in the backup)", node);
         }
     }
 

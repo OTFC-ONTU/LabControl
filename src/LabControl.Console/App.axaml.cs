@@ -19,6 +19,7 @@ public partial class App : Application
 {
     private LabSession? _session;
     private ILoggerFactory? _loggers;
+    private ConsoleLock? _lock;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -50,8 +51,19 @@ public partial class App : Application
     private async Task StartAsync(IClassicDesktopStyleApplicationLifetime desktop)
     {
         var options = Program.Options;
-        var store = new LabStore(options.DataDirectory);
-        store.EnsureDirectories();
+        Directory.CreateDirectory(options.DataDirectory);
+
+        // One process per data directory (M5 §2.1): taken before anything is read or written.
+        _lock = ConsoleLock.TryAcquire(options.DataDirectory, out var lockError);
+        if (_lock is null)
+        {
+            var refused = new ConfirmDialog(Strings.Get("App.Title"), Strings.Format("App.AlreadyRunning", options.DataDirectory, lockError), Strings.Get("Common.Quit"), null, destructive: false);
+            desktop.MainWindow = refused;
+            refused.Show();
+            await refused.Completion;
+            desktop.Shutdown(1);
+            return;
+        }
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
@@ -60,15 +72,23 @@ public partial class App : Application
             // LabSession already says which PC unlinked and why.
             .MinimumLevel.Override("Grpc", Serilog.Events.LogEventLevel.Warning)
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
-            .WriteTo.File(Path.Combine(store.LogsDirectory, "console-.log"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
+            .WriteTo.File(Path.Combine(options.DataDirectory, Defaults.ConsoleLogFileName), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
             .CreateLogger();
         _loggers = new SerilogLoggerFactory(Log.Logger);
         var log = _loggers.CreateLogger<App>();
 
-        var bootstrap = new ConsoleBootstrap(options, _loggers);
-
         try
         {
+            // A pre-M5 single-lab directory is moved into labs/<lab_id>/ before anything
+            // else reads it (M5 §2.3); a directory that is already in the new layout is left alone.
+            var migrated = new ProfileMigration(options.DataDirectory, _loggers.CreateLogger<ProfileMigration>()).Run();
+            if (migrated is not null)
+            {
+                log.LogInformation("Single-lab data directory migrated; lab {LabId} now lives under {Labs}", migrated, Defaults.LabsDirectoryName);
+            }
+
+            var bootstrap = new ConsoleBootstrap(options, _loggers);
+
             LabSession session;
             if (!bootstrap.HasLab)
             {
@@ -179,5 +199,7 @@ public partial class App : Application
 
         Log.CloseAndFlush();
         _loggers?.Dispose();
+        _lock?.Dispose();
+        _lock = null;
     }
 }

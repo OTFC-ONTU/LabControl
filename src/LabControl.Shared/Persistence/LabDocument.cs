@@ -44,6 +44,15 @@ public sealed class MachineRecord
 
     /// <summary>Which console instance this PC was last linked to; drives the "held by" banner.</summary>
     public string? LastInstanceId { get; set; }
+
+    /// <summary>
+    /// When <see cref="LastInstanceId"/> was positively learned — a take-over reason or a
+    /// <c>Hello.previous_instance_id</c> — rather than presumed (M5 §4.6). 0 = never.
+    /// </summary>
+    public long LastInstanceObservedUnix { get; set; }
+
+    /// <summary>Revocation serials this PC has confirmed holding (M5 §3.5); shows delivery, never claims it.</summary>
+    public string[] RevocationSerialsSeen { get; set; } = [];
 }
 
 /// <summary>
@@ -64,6 +73,13 @@ public sealed class InstanceRecord
 
     /// <summary>True for the console that owns this copy of <c>lab.json</c>.</summary>
     public bool IsThisMachine { get; set; }
+
+    /// <summary>The administrator's device book (M5 §2.4): what this console was authorized as.</summary>
+    public ProfileAccess Access { get; set; }
+
+    public long AuthorizedAtUnix { get; set; }
+
+    public long RevokedAtUnix { get; set; }
 }
 
 /// <summary>Where a PC's tile sits in the room view. Absent tiles fall back to number order.</summary>
@@ -82,7 +98,16 @@ public sealed class LayoutTile
 /// </summary>
 public sealed class LabDocument : ISchemaVersioned
 {
-    public static readonly SchemaMigrations Migrations = new(Defaults.LabSchemaVersion);
+    /// <summary>
+    /// 1 → 2 (M5, D-55): <c>instances[].access/authorized_at_unix/revoked_at_unix</c> and
+    /// <c>machines[].revocation_serials_seen/last_instance_observed_unix</c> were added, all
+    /// optional. A version-1 document is a valid version-2 document with them absent, so the
+    /// step rewrites nothing; it exists so that the chain is complete (D-20) and a version-1
+    /// file is stamped 2 on its next save.
+    /// </summary>
+    public static readonly SchemaMigrations Migrations = new(
+        Defaults.LabSchemaVersion,
+        new SchemaMigration(1, root => root));
 
     public int SchemaVersion { get; set; } = Defaults.LabSchemaVersion;
 

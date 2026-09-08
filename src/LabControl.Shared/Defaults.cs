@@ -161,7 +161,8 @@ public static class Defaults
     // a file written by a newer build is refused rather than partially read (D-20).
 
     public const int LabKeySchemaVersion = 1;
-    public const int LabSchemaVersion = 1;
+    /// <summary>Version 2 (M5, D-55) adds the optional device-book and revocation-delivery fields; a version-1 file reads as version 2 with them absent.</summary>
+    public const int LabSchemaVersion = 2;
     public const int InstanceSchemaVersion = 1;
     public const int EnrollmentSchemaVersion = 1;
     public const int AgentConfigSchemaVersion = 1;
@@ -171,6 +172,8 @@ public static class Defaults
     public const int SetupPayloadSchemaVersion = 1;
     public const int InstallationSchemaVersion = 1;
     public const int SetupSettingsSchemaVersion = 1;
+    /// <summary><c>profiles.json</c>, the index of saved labs on this device (M5, D-55).</summary>
+    public const int ProfilesSchemaVersion = 1;
 
     /// <summary>Name of the version field, first in every persisted file.</summary>
     public const string SchemaVersionFieldName = "schema_version";
@@ -185,6 +188,43 @@ public static class Defaults
     /// <summary>The script library (D-31 item 4): beside <c>lab.json</c>, inside the backup.</summary>
     public const string ScriptsFileName = "scripts.json";
     public const string LogsDirectoryName = "logs";
+
+    // ---------------------------------------------------------------- saved labs (M5, D-55)
+
+    /// <summary>The index of every lab saved on this device, at the data root.</summary>
+    public const string ProfilesFileName = "profiles.json";
+
+    /// <summary>Holds one directory per saved lab: <c>&lt;data&gt;/labs/&lt;lab_id&gt;/</c>.</summary>
+    public const string LabsDirectoryName = "labs";
+
+    /// <summary>
+    /// Suffix of a lab directory while the single-lab migration is still copying into it;
+    /// it is renamed to the bare lab id in one step once the copy is complete.
+    /// </summary>
+    public const string MigratingDirectorySuffix = ".migrating";
+
+    /// <summary>
+    /// Where the migration parks root files that no longer match the copy of an already
+    /// committed lab (<c>&lt;data&gt;/migration-conflict-&lt;yyyyMMdd-HHmmss&gt;/</c>):
+    /// nothing that differs from its copy is ever deleted, only moved aside and reported.
+    /// </summary>
+    public const string MigrationConflictDirectoryPrefix = "migration-conflict-";
+
+    /// <summary>
+    /// Held open for the whole process lifetime, exclusively: one console process per data
+    /// directory. A second launch on the same directory is refused, not silently shared.
+    /// </summary>
+    public const string ConsoleLockFileName = "console.lock";
+
+    /// <summary>A teacher profile's authorization state (M5 portion 3); the name is reserved here.</summary>
+    public const string AccessFileName = "access.json";
+
+    /// <summary>The app-level Serilog file at the data root; Serilog inserts the date before the extension.</summary>
+    public const string ConsoleLogFileName = ConsoleLogFilePrefix + ConsoleLogFileExtension;
+
+    /// <summary>What every app-level log file starts with (<c>console-20260908.log</c>).</summary>
+    public const string ConsoleLogFilePrefix = "console-";
+    public const string ConsoleLogFileExtension = ".log";
 
     /// <summary>The encrypted backup archive (ARCHITECTURE §4, D-26): <c>&lt;lab&gt;-&lt;date&gt;.lcbak</c>.</summary>
     public const string BackupFileExtension = ".lcbak";

@@ -58,12 +58,13 @@ the identity of *the lab* is deliberately separated from the identity of *the co
 that happens to be running the console today*. Nothing in the design may require
 walking to the student PCs again after a change of teacher machine.
 
-### 3.1 Three separate identities
+### 3.1 Separate identities
 
 | Identity | Created | Lives | Proves |
 |---|---|---|---|
 | **Lab key** — a private certificate authority (ECDSA P-256) | once, on the console's first run | `lab-key.lck`, encrypted; backed up wherever the teacher wants | "this is lab *X*" |
 | **Console instance** — leaf certificate + key signed by the lab key | when a teacher machine is set up or migrated | that machine only | "I am a legitimate console of lab *X*" |
+| **Teacher device** — leaf signed by the lab key with `OU=LabControl Teacher`, issued through the offline request/grant exchange (M5, `D-56`) | when an administrator authorizes a `.lcreq` and the device imports the `.lcgrant` | that device only | "I am an authorized teacher console of lab *X*" — but not its administrator: no issuance, enrollment or update signing |
 | **Agent** — keypair + certificate signed by the lab key | at enrollment, on the PC itself | that PC only | "I am PC-07 of lab *X*" |
 
 The lab key is the only thing that must survive; everything else can be reissued from it.
@@ -177,8 +178,11 @@ was itself a credential.)
 
 The following is the current single-lab/full-owner model and its intended handover
 behavior. M5 extends it with saved lab profiles and separate ordinary teacher access
-(§3.9). The audit gaps in device revocation, ownership reporting, enrollment-code copies
-and clock-dependent takeover are M5 acceptance work, not verified guarantees here.
+(§3.9). The audit gaps in device revocation and clock-dependent takeover are closed by the
+designs in `D-56`/`D-57`/`D-58` (instance revocation, result ownership, the agent-clock-only
+take-over rule and observed-only ownership states) and enrollment-code copies by `D-60`;
+until ROADMAP M5 records them as built and verified, the text below describes the current
+behaviour and they remain M5 acceptance work, not verified guarantees.
 
 Replacement is the disaster case. The everyday case is **alternation**: the owner drives
 the lab from a MacBook on some days, a colleague drives it from the Windows PC at the
@@ -289,73 +293,95 @@ The console shows one banner — *"N certificates need renewing — unlock the l
 both cases, so the yearly and five-yearly chores are the same gesture as enrolment. A
 leaf never outlives the authority that signed it.
 
-### 3.9 Saved labs and one active room (planned M5, D-53)
+### 3.9 Saved labs and one active room (M5, D-53…D-60 — designed, being implemented)
 
-The teacher imports several lab files once and selects a room for each lesson from
-*My labs*. A room's `lab_id` and pinned authority are stable; neither its file name nor
-its IP address is its identity. Each lab holds up to 30 PCs, independently of the number
-of saved profiles. Import does not connect. Startup shows the chooser; selecting a lab
-activates it, *Disconnect* returns to the chooser, and selecting another lab releases
-the old session before starting the new one. No app restart or daily backup restore.
-Administrators use the same chooser: *Add labs…* accepts `.lcbak` backups directly,
-including multi-file and mixed imports, and adds administrator profiles after unlocking
-each archive. The backup is not limited to disaster recovery (`D-54`).
+The requirements are `D-53`/`D-54`; the mechanism below is the design recorded in
+`D-55`…`D-60` on 2026-09-08. Which portions are built and verified is tracked in ROADMAP
+M5; nothing here should be read as a verified guarantee until that section says so.
 
-The registry contains only saved metadata for inactive rooms. Each profile owns its
-trust, device identity, roster/layout, scripts/catalog and job history. Active networking,
-video buffers and input belong to a single disposable session. On departure stop old
-beacons, streams and connection attempts, invalidate old UI actions/callbacks, and never
-accept peers from an inactive lab. Import/refresh is transactional per file, deduplicated
-by identity and cannot downgrade trust/revocations or erase local outcomes. Existing
-single-lab data migrates without re-enrolling student PCs or replacing its identity.
+**Profiles.** The console keeps a local index, `profiles.json`, and one directory per lab,
+`labs/<lab_id>/` (§4, `D-55`). A room's `lab_id` and pinned authority fingerprint are its
+identity; neither its file name nor an IP address is. The index is saved metadata only —
+name, access, authorization state, PC count, last use — and the chooser reads nothing
+else; it does not listen for beacons. Each profile owns its trust, this device's identity
+(`instance.json`), roster/layout/revocations (`lab.json` schema 2), scripts, packages and
+logs; an administrator profile also holds `lab-key.lck` and `enrollment.json`, a teacher
+profile holds `access.json` instead. The existing single-lab directory migrates on the
+first M5 start by copy → rename → write index → delete, resumable after a crash at any
+step, keeping the same instance id and keystore reference and touching no student PC. The
+migration dialog states the `D-53` item 6 limit: a device that holds the CA key keeps
+administrator authority whatever label its profile carries.
 
-A **lab file** is a versioned, authenticated room/access distribution artifact. It
-carries public trust and a roster/layout snapshot and supports initial authorization of
-the teacher's device, batched for several labs and usable without internet. Ordinary
-teacher files do not contain the CA private key, recovery material or student enrollment
-codes. Each device needs its own revocable identity; a copied file is not a reason to
-share one private key across teachers. Exact file format and the offline authorization
-exchange must be specified before implementation. This is a new flow, not a rename of
-the existing `.lcbak` file: that archive remains a full administrator backup and also
-serves as an input for adding a switchable lab. Access level is per profile. Importing
-a backup for an existing teacher profile upgrades access after explicit unlock while
-preserving its identity/history; importing a teacher file does not downgrade it. Switching
-never restores the archive again or unlocks its CA: routine control uses the local device
-identity, privileged actions require the lab-key unlock, and departure locks that key.
-An existing full-owner copy cannot be downgraded by relabeling it; retained CA keys keep
-their authority. The migration UI must explain this limit.
+**Lab files and device authorization** (`D-56`). A `.lclab` is a CA-signed envelope
+carrying the public CA, the roster/layout snapshot, the signed revocations and, optionally,
+the script library — never the CA private key, wrappings, recovery material, enrollment
+codes, an `instance.json`, package binaries or logs. Importing one creates a *teacher*
+profile in the `needs_authorization` state with a fresh key pair and instance id, and with
+no certificate, so nothing beacons. The device writes a `.lcreq` (its self-signed CSR);
+the administrator opens several at once in *Settings → Teacher devices → Authorize
+requests…*, unlocks the lab key, and returns one `.lcgrant` per device: a leaf with the
+same SAN URI as a console (`labcontrol://<lab>/console/<instance>`) and
+`OU=LabControl Teacher`, valid 365 days, plus the beacon endorsement and a fresh snapshot.
+Every agent already installed therefore links to a teacher console unchanged; an M5 agent
+reads the OU and refuses `self_update`/`rekey` from a teacher link. On the console a
+teacher profile has no vault: enrollment, renewal, signing, revocation, USB payloads and
+backups answer *Administrator access needed*. Re-import merges by agent id and number,
+unions revocations, replaces the layout only for a newer `snapshot_version` and never
+touches the device identity, the access level or local history; the same `lab_id` under a
+different authority is refused. A `.lcbak` is still the full administrator backup and is
+accepted by the same *Add labs…*: into a new profile as today, or into an existing
+teacher profile as an upgrade that keeps its instance id and history, with the imported
+enrollment codes dormant until explicitly activated (`D-60`). Lab files come only from an
+explicit *Export lab file…*.
 
-The administrator retains issuance, enrollment and update-signing authority. Device
-revocation must remain effective across leaf renewal once delivered to agents; show
-pending propagation for unreachable PCs. Stale admin backups must not silently restore
-spent enrollment codes as usable. Do not claim immediate global revocation on an isolated
-LAN with disconnected devices, or require a continuously running owner/server for lessons.
-Adding a backup for switching does not automatically activate its pending enrollment
-codes; retain history and use an explicit recovery/issuer-coordination flow (`D-54`).
-Independent offline CA owners cannot promise global single-use from local journals alone.
-Teacher files require a concrete initial device-authorization flow; public metadata
-alone cannot grant a device a signed identity. Existing valid access needs no owner
-present for daily switching, while expired/revoked access has a separate recovery path.
+**Withdrawing a device** revokes both its leaf serial and the pseudo-serial
+`instance:<instance_id>`, signed like any revocation entry, so a renewed leaf is refused
+too. Delivery is confirmed per PC (`RevocationSerialsSeen`) and shown as *delivered to N
+of M; pending on …* — the console never claims a revocation reached a PC it has not heard
+from.
 
-Switching an idle lab targets a responsive saved mosaic within 2 seconds and connection
-of all reachable running agents within 15 seconds on a supported healthy LAN. Running
-scripts/transfers/updates require explicit safe departure handling and retained result
-ownership; keeping an inactive lab secretly connected is not a solution. M6 extends the
-same contract to lock/broadcast/exam policy expiry and work collection. Truthful room
-ownership and takeover resilient to allowed clock skew are M5 requirements. Detailed
-acceptance and failure drills are in ROADMAP M5; none of this section is implemented yet.
+**One active session** (`D-57`). `ActiveLabController` holds at most one `LabSession`;
+selections are serialised so a rapid A → B → C activates C once. Activation shows the
+destination's saved mosaic first, then releases the current session in a fixed order —
+beacons, links (`the console left this lab`), listener, server, housekeeping, save,
+screens, vault (locking the CA), instance — and only then opens the next profile and
+starts its Kestrel. A failed activation is an explicit `Failed` state with *Retry*, never
+two half-active labs. A lab-A agent reaching the lab-B server is refused as *belongs to
+lab A, which is not the active lab*. Leaving with work in flight shows a departure report:
+scripts and file deliveries continue on the PC and report on return, power jobs complete,
+an update cannot be aborted and is safe to leave, uploads in progress fail, probation is
+reported on return. Results belong to the instance that delivered the job: the agent
+drains a result only to that instance and answers anyone else only when that console
+re-sends the job. Targets: 2 s to the cached mosaic, 15 s for reachable running agents,
+measured per switch.
+
+**Take-over and ownership** (`D-58`). An agent honours a `take` beacon by its own clock
+only — the beacon must have arrived after the link was made, be unhonoured, and lie within
+the take-over window plus the allowed skew of the beacon's own timestamp. A PC is *held
+elsewhere* only when that was positively observed; otherwise it is linked here, offline or
+unknown, and the other-console banner says *holds at least N*.
+
+**Packaging and activation** (`D-59`, INSTALLER). Windows gets a C# per-user installer
+with Start-menu entry, file associations and scoped inbound firewall rules requested at the
+point of use; macOS a scripted, ad-hoc-signed `.app` in a `.dmg`; Linux a tarball with
+per-user XDG registration and a documented prerequisite matrix. Opening a `.lclab`,
+`.lcbak`, `.lcgrant` or `.lcreq` from the OS, the command line or a drop enters the same
+import; a second launch forwards its files to the running console over a per-data-directory
+pipe or socket and exits. Import never activates a lab.
+
 The timing goals assume graceful idle departure and already authorized access/network
 permissions; first import, OS consent and dead-peer timeout recovery are measured
-separately. Desktop packaging also requires network readiness and application-side file
-activation, as documented in INSTALLER and D-54.
+separately. M6 extends the departure contract to lock/broadcast/exam policy expiry and
+work collection.
 
 ## 4. Data on the console
 
-The layout below is the current single-lab profile. M5 will add a local registry and
-isolated per-lab profiles (§3.9), with a migration preserving this data. Paths and new
-format constants will be specified in `Defaults.cs` during implementation.
+The first layout below is the single-lab profile every console before M5 has on disk;
+the second is the M5 profile layout (`D-55`) that the console migrates it into on its
+first M5 start. Which builds use which is tracked in ROADMAP M5.
 
-`~/.labcontrol/` (macOS/Linux) or `%APPDATA%\LabControl\` (Windows):
+`~/.labcontrol/` (macOS/Linux) or `%APPDATA%\LabControl\` (Windows) —
+`Defaults.ConsoleDataDirectory`, overridable with `--data`:
 
 ```
 lab-key.lck       the lab certificate authority, encrypted (§3.2). The one file that
@@ -373,6 +399,47 @@ packages/         package catalog: <name>.yaml + cached installer binaries
 logs/             per-day console log + per-command result bundles
 ```
 
+**M5 profile layout** (`D-55`): the same root gains an index and one directory per lab;
+the files above keep their names and formats inside `labs/<lab_id>/`.
+
+```
+profiles.json     ProfilesDocument: last_used_lab_id and one entry per saved lab —
+                  lab_id, lab_name, directory, authority_fingerprint, access
+                  (administrator | teacher), authorization state, instance id/name,
+                  pc_count, added/last-used times, source. Metadata only: no keys, no
+                  certificates. The chooser reads nothing else.
+console-<date>.log  app-level Serilog log at the root (not per lab); a pre-M5 console's
+                  copies under logs/ are moved here once by the migration
+console.lock      held open with FileShare.None for the process lifetime: one console
+                  process per data directory (D-55 item 12)
+migration-conflict-<timestamp>/
+                  only after a downgrade: root files that no longer matched the
+                  committed copy, moved aside instead of deleted (D-55 item 6)
+labs/
+  <lab_id>/       one profile; lab_id is the UUID from the CA's SAN
+    lab-key.lck   administrator profiles only
+    instance.json this device's identity for this lab (leaf, endorsement, key reference)
+    lab.json      schema 2: adds InstanceRecord.Access/AuthorizedAtUnix/RevokedAtUnix,
+                  MachineRecord.RevocationSerialsSeen, MachineRecord.LastInstanceObservedUnix
+    enrollment.json  administrator profiles only; codes imported from a backup are dormant (D-60)
+    scripts.json
+    access.json   teacher profiles: pending request / grant metadata (D-56)
+    packages/
+    logs/         events-*, jobs-*, batches/ — per lab
+```
+
+**Migration** (`D-55`): on the first M5 start, when `profiles.json` is absent and
+`lab-key.lck` or `instance.json` is present at the root, the console copies (never
+moves) the flat files into `labs/<lab_id>.migrating/`, renames that directory to
+`labs/<lab_id>/` in one same-volume rename, writes `profiles.json` with one
+administrator entry (`source: migrated`) — the commit point — and only then deletes the
+originals — and only those that still match their copy byte for byte (`D-55` items
+5–7). Each step is resumable after a crash; the instance id and its keystore reference
+`instance-<instanceId>` are unchanged, so no student PC notices. Downgrading means
+copying `labs/<lab_id>/*` back to the root; the pre-M5 build drops the schema-2
+`lab.json` fields it does not know on its next save, and the next M5 launch keeps that
+changed root in a conflict directory rather than deleting it (README, *Downgrading*).
+
 Every one of these files — and the backup archive — carries a `schema_version` as its
 first field, and the console refuses to open a file written by a **newer** version of
 itself rather than silently dropping the fields it does not understand (`D-20`). This is
@@ -380,7 +447,8 @@ what keeps §3.6 working a year from now, when the backup being restored was wri
 older build than the console restoring it.
 
 Created on first launch by the setup wizard. **Backup** = `lab-key.lck` + `lab.json` +
-`enrollment.json` + the catalog, exported as one file (`<lab> <date>.lcbak`): the key document as it is —
+`enrollment.json` + `scripts.json` + the catalog (`BackupPayload`: Lab, Catalog,
+Enrollment, Scripts), exported as one file (`<lab> <date>.lcbak`): the key document as it is —
 already encrypted under its holders and the recovery code — and the rest sealed with
 AES-256-GCM under the same master key, so whoever can open the lab key can open the backup
 and nobody else can read even the machine list (`D-26`). It is what makes §3.6 a

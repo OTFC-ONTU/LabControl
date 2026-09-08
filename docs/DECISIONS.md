@@ -1964,6 +1964,467 @@ Sources: [Avalonia macOS packaging](https://docs.avaloniaui.net/docs/deployment/
 [Windows Firewall rules](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/rules),
 [Linux runtime dependencies](https://learn.microsoft.com/en-us/dotnet/core/install/linux-scripted-manual#dependencies).
 
+## D-55 — The profile store: `profiles.json`, `labs/<lab_id>/`, and a resumable migration (M5 portion 1)
+
+Context (2026-09-08): `D-53` and `D-54` promised several saved labs per console and left
+the on-disk shape open. The console's data directory (`Defaults.ConsoleDataDirectory`,
+`--data`) holds exactly one lab today — `lab-key.lck`, `instance.json`, `lab.json`,
+`enrollment.json`, `scripts.json`, `packages/`, `logs/` — and `LabStore` is written
+against that flat layout. The M5 design (`D-55`…`D-60` are the entries it proposed) is
+recorded here before the code; implementation status is tracked in ROADMAP M5.
+
+Decisions:
+
+1. **One index, one directory per lab.** The data directory root does not move and
+   `--data` keeps working. It gains `profiles.json` (`ProfilesDocument`,
+   `Defaults.ProfilesFileName`), an app-level `console-.log`, a `console.lock` held open
+   with `FileShare.None` for the process lifetime (one process per data directory, `D-59`),
+   and `labs/` (`Defaults.LabsDirectoryName`). Each `labs/<lab_id>/` — `lab_id` is the
+   UUID from the CA's SAN — is one profile and contains exactly the files the flat layout
+   had, plus `access.json` on teacher profiles: `lab-key.lck` and `enrollment.json` exist
+   only on administrator profiles; `instance.json` is this device's identity for this lab;
+   `lab.json`, `scripts.json`, `packages/`, `logs/` (events, jobs, batches) are per lab.
+   `LabStore` keeps its API and is constructed with the profile directory, so
+   `LabSession`, `ScriptLibrary`, `EventLog` and `JobBatchLogs` need no path changes; it
+   gains `AccessPath`, `LoadAccess`/`SaveAccess`.
+2. **`profiles.json` is metadata only.** Schema:
+
+   ```json
+   {
+     "schema_version": 1,
+     "last_used_lab_id": "5b1c…",
+     "labs": [
+       {
+         "lab_id": "5b1c…",
+         "lab_name": "ОНТФК lab 214",
+         "directory": "labs/5b1c…",
+         "authority_fingerprint": "<sha256 hex of the CA DER>",
+         "access": "administrator" | "teacher",
+         "authorization": "authorized" | "needs_authorization" | "request_pending" | "expired" | "revoked",
+         "instance_id": "…", "instance_name": "MacBook-2026",
+         "access_expires_unix": 0,
+         "pc_count": 14,
+         "added_at_unix": 0, "last_used_unix": 0,
+         "source": "migrated" | "backup" | "lab_file" | "created"
+       }
+     ]
+   }
+   ```
+
+   `directory` is relative to the data directory. `authority_fingerprint` pins trust:
+   the same `lab_id` with a different CA is refused, never merged (`D-53` item 4). The
+   index carries no key material, no certificate and nothing an inactive lab could use to
+   connect; the chooser reads only this file and never listens for beacons (default
+   chosen 2026-09-08, owner may change). `ProfileStore` (`Load`, `Save` through
+   `JsonStore`, `Find`, `Directory`, `Touch`, `Remove(labId, deleteData)`, `Upsert`) is
+   the only writer; `ConsoleBootstrap` becomes per-profile (`OpenExisting(labId)`,
+   `CreateLab` into `labs/<newId>/`).
+3. **Migration is copy, rename, commit, delete — and resumable at every step.** Trigger:
+   at startup `profiles.json` is absent and `<data>/lab-key.lck` or `<data>/instance.json`
+   exists. Sequence: (1) read `lab_id` from `lab-key.lck`, falling back to
+   `instance.json`; a mismatch refuses with the existing `OpenExisting` message; (2) create
+   `labs/<lab_id>.migrating/` and *copy* — never move — `lab-key.lck`, `instance.json`,
+   `lab.json`, `enrollment.json`, `scripts.json`, `packages/**`, `logs/**`, skipping
+   `console-*.log`; (3) rename `labs/<lab_id>.migrating` → `labs/<lab_id>` in one
+   same-volume rename; (4) write `profiles.json` with one entry — `access: administrator`,
+   `authorization: authorized`, `source: migrated`, the instance id from `instance.json`,
+   `pc_count` from `lab.json` — this is the commit point; (5) delete the originals.
+   Resume rules: a `.migrating` directory without `profiles.json` is deleted and step 2
+   restarts; `labs/<id>` present without `profiles.json` redoes 4–5; `profiles.json`
+   present with the originals still there runs 5 only. Reversal for a pre-M5 build is a
+   copy back from `labs/<id>/`. Identity is preserved because `instance.json` moves
+   verbatim and the keystore reference `instance-<instanceId>` is path-independent; no
+   student PC sees anything. The migration dialog states the `D-53` item 6 limit: a device
+   that holds the CA key keeps administrator authority, whatever label it is given.
+4. **`lab.json` schema 1 → 2** is the first real `SchemaMigrations` step:
+   `InstanceRecord.Access` (`administrator` | `teacher` | unknown), `AuthorizedAtUnix`,
+   `RevokedAtUnix` — the administrator's device book (`D-56`);
+   `MachineRecord.RevocationSerialsSeen` — entries this PC confirmed holding (`D-56`);
+   `MachineRecord.LastInstanceObservedUnix` — when `LastInstanceId` was positively learned
+   (`D-58`). Absent fields default. A schema-2 file is unreadable by a pre-M5 console by
+   design (`D-20`); the reversal note says so.
+
+Added while building portion 1 (2026-09-08), all in `ProfileMigration`, `ConsoleLock`
+and `LabBackup`:
+
+5. **Nothing at the root is deleted unless it matches its copy.** Before the delete step
+   every root document (`lab-key.lck`, `instance.json`, `lab.json`, `enrollment.json`,
+   `scripts.json`) is compared byte for byte with its copy under `labs/<id>/`, and
+   `packages/` and `logs/` file by file and size by size. A root file already gone counts
+   as matching (a delete that stopped half-way is the expected way to get there); extra
+   files in the copy are the copy's business. Copying is `File.Copy` plus clearing a
+   read-only attribute, because the console saves over the copy from now on.
+6. **A differing copy is discarded or the root is parked — by commit state.** A copy that
+   differs and is not yet in `profiles.json` is deleted and made again from the root: the
+   root is still the only truth. A copy that differs and *is* committed is kept, and the
+   root files are moved, complete, to `<data>/migration-conflict-<yyyyMMdd-HHmmss>/`
+   (`Defaults.MigrationConflictDirectoryPrefix`) and logged as a warning; the console
+   opens the saved lab. This is the downgrade-then-upgrade case (README, *Downgrading*),
+   where a pre-M5 build ran on the root after the copy and the root is newer. The
+   conflict directory is never deleted by the console.
+7. **Sentinel ordering on delete.** The originals go in the order `lab.json`,
+   `enrollment.json`, `scripts.json`, `packages/`, `logs/`, then `instance.json`, then
+   `lab-key.lck`. The two files that mark a root as pending (`IsPending`) are deleted
+   last, so a crash anywhere in between leaves a root the next launch still recognises
+   and finishes; once the index exists, any other leftover lab file also counts as
+   pending and is finished from the lab it names.
+8. **Symlinks and junctions are skipped, not followed.** A link under the root or under
+   `packages/`/`logs/` (`LinkTarget` set or `ReparsePoint`) is logged and not copied:
+   following one could loop forever or copy something far outside the data directory.
+   A symlink loop is a test case.
+9. **Free space is checked before the copy** (`DriveInfo.AvailableFreeSpace` against the
+   size of the originals plus a 64 MiB margin); too little refuses with an `IOException`
+   naming the sizes rather than failing part-way, and the rename is retried five times
+   at 250 ms for an antivirus hold (`D-33` item 9).
+10. **An instance-only root is refused, not committed.** `instance.json` without
+    `lab-key.lck` is a pre-M5 installation that lost its key, not a lab: the migration
+    throws (`Migration.InstanceWithoutKey`) instead of writing an index entry that could
+    never open — unless the index already names that lab, in which case an earlier
+    delete stopped between the two sentinels and the leftover is finished. A key naming
+    no lab and a key/instance `lab_id` mismatch are refused the same way.
+11. **The app-level log moves to the data root.** Serilog now writes
+    `console-<date>.log` (`Defaults.ConsoleLogFileName`) at the root, not under `logs/`,
+    because `logs/` is per lab from now on. The migration moves a pre-M5 console's
+    `console-*.log` files out of `logs/` once (a file with a namesake at the root stays)
+    and does not copy them into the profile, so the retention limit applies to all of
+    them and `logs/` holding only app logs does not count as pending lab data.
+12. **`console.lock` — one process per data directory.** `ConsoleLock.TryAcquire` opens
+    `console.lock` with `FileShare.None` and holds it for the process lifetime; a second
+    launch on the same directory is told so and quits, and the OS releases the lock when
+    the process dies, so the file's existence means nothing — only holding it open does.
+    Caveat: on Unix this rests on .NET's advisory `flock`, which
+    `DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1` turns off; with that variable set two
+    consoles can share a directory unnoticed, and the console does not try to detect it.
+13. **`LabBackup.Open` upgrades the nested documents.** Each sealed document inside a
+    backup — `lab`, `scripts`, `enrollment` — carries its own `schema_version` and is
+    walked through its own `SchemaMigrations` on open (the same 1 → 2 step as the file on
+    disk), so an M4 backup restores into a schema-2 profile; a document written by a
+    newer build is refused by name (`lab.json (in the backup)`), per `D-20`.
+
+Rejected: one data directory per lab chosen on the command line (the switcher is the
+product, `D-53`); moving files instead of copying during migration (an interrupted move
+leaves neither layout complete); keeping the flat layout for the first lab and nesting only
+later ones (two code paths for one store); storing certificates or keys in `profiles.json`
+(the index would become sensitive and an inactive lab could connect).
+
+Validation: Shared tests round-trip `profiles.json`, refuse a newer schema and migrate
+`lab.json` 1 → 2; console tests migrate a populated directory (same instance id, key
+reopened, logs/scripts/packages present), crash after every step and resume with
+byte-identical originals, produce the conflict directory, skip a symlink loop, survive a
+crash mid-delete and a keystore protector that throws on `Remove`, confirm the second
+launch is a no-op and that two `--data` directories coexist — 702 tests on 2026-09-08.
+The trial on a copy of the owner's live directory is in ROADMAP M5 *Progress*.
+
+## D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, `instance:` revocation (M5 portion 3)
+
+Context (2026-09-08): `D-53` item 3 required a routine lab file that is not a backup and
+an offline way for a teacher's device to obtain its own revocable identity, and left the
+format to be specified before code. `D-54` item 6 asked for a concrete request/approval
+flow. Every agent today validates a console by chaining to the pinned CA and parsing the
+SAN URI `labcontrol://<lab>/console/<instance>` (`LabTrust.TryValidate`, `LabName`); a
+URI with a new segment is `Malformed` to every agent already installed.
+
+Decisions:
+
+1. **Three files, one signed envelope.** All are JSON documents through `JsonStore`
+   (snake_case, `schema_version` first) with the shape
+   `{schema_version, kind, lab_id, lab_name, payload, signature}`: `payload` is base64 of
+   the UTF-8 JSON payload bytes; `signature` is base64 of a P-256/SHA-256 signature in
+   IEEE P1363 form over *domain + payload bytes*, the pattern of
+   `UpdateManifestSignature` (`D-52`). Domains: `labcontrol/lab-file/v1\0`,
+   `labcontrol/device-request/v1\0`, `labcontrol/device-grant/v1\0`.
+
+   | Kind | Extension | Signed by | Verified against |
+   |---|---|---|---|
+   | lab file | `.lclab` | the lab CA key | the CA certificate inside the file on first import; the pinned CA on re-import |
+   | device request | `.lcreq` | the device's own key (a self-signed PKCS#10 CSR) | the CSR's self-signature |
+   | device grant | `.lcgrant` | the lab CA key | the pinned CA of the profile it targets |
+
+   A corrupt, unsigned, wrongly signed or newer-schema file is `ImportOutcome.Failed`
+   with a reason and changes nothing.
+2. **What a `.lclab` carries, and what it must never carry.** Payload: `lab_id`,
+   `lab_name`, `issued_at_unix`, `issued_by_instance_id`/`_name`, `authority` (DER of the
+   public CA) and `authority_fingerprint`, `snapshot_version` (monotonic per issuing
+   console), `roster[]` (`agent_id`, `number`, `hostname`, `mac`, `last_ip`,
+   `certificate_serial`, `certificate_not_after_unix`), `layout[]`, `revocations[]`
+   (signed entries, self-authenticating), and an optional `scripts` library. It must not
+   contain the `LabKeyDocument`, any wrapping, the CA private key or recovery material;
+   the `EnrollmentDocument` or any code; any `instance.json` or private key; package
+   binaries; logs. A test serialises a file and asserts every one of these absences. Lab
+   files are produced only by an explicit *Export lab file…* in Settings, never as a side
+   effect of a backup export; the embedded scripts are imported only into a profile that
+   has no `scripts.json` yet (defaults chosen 2026-09-08, owner may change).
+3. **Import is a merge that cannot go backwards.** A new lab creates `labs/<lab_id>/`
+   with `lab.json` from the snapshot, `access.json = {state: needs_authorization}` and a
+   `teacher` profile; a `PendingDeviceIdentity` — a new key pair under `SecretProtector`,
+   a new `instance_id`, the machine name — is created, but with no certificate nothing
+   beacons. For an existing lab the `authority_fingerprint` must match ("same lab id,
+   different key — refused"); then the roster is added/updated by agent id and number and
+   never loses a PC this console has itself seen linked, the layout is replaced only when
+   `snapshot_version` is newer, revocations are unioned, and scripts, `instance.json`,
+   the access level and local history are untouched. Importing a backup into an existing
+   teacher profile writes `lab-key.lck` and a dormant `enrollment.json` (`D-60`) into the
+   same directory, sets `access: administrator`, keeps `instance.json` and history, and
+   re-mints the leaf as an administrator only after an explicit *Renew this device's
+   certificate*. A backup for a new lab behaves like today's import, into `labs/<id>/`.
+   *Add labs…* accepts `.lclab`, `.lcbak`, `.lcgrant` and — on administrator profiles —
+   `.lcreq` in one selection with a per-file result; nothing activates.
+4. **The request/grant exchange.** The teacher device writes `<device> – <lab>.lcreq`
+   with payload `{lab_id, instance_id, instance_name, requested_access: teacher,
+   created_at_unix, csr, console_version}`; the CSR is PKCS#10 from the pending key with
+   `CN = instance name`, and `access.json` records `{state: request_pending, instance_id,
+   requested_at, csr_fingerprint}` so a re-run regenerates the same request from the same
+   key. The administrator's *Settings → Teacher devices → Authorize requests…* takes
+   several files: verify the CSR self-signature, `lab_id` = this profile, a UUID
+   `instance_id`, no `instance:<id>` revocation; a second request from an authorized
+   device is a renewal under the same instance id. After `EnsureUnlockedAsync`,
+   `LabCertificates.IssueTeacherDevice` issues a leaf with the *same* SAN URI and EKUs,
+   `OU=LabControl Teacher`, and `Defaults.TeacherCertificateLifetime` = 365 days, the
+   console leaf's lifetime (default chosen 2026-09-08, owner may change); the endorsement
+   is `Beacon.Endorse(lab, instanceId, P256.Compress(csrPublicKey))`. The console records
+   `InstanceRecord{Access: teacher, AuthorizedAtUnix}`, raises `device.authorized`, and
+   writes the CA-signed `<device> – <lab>.lcgrant`: `{lab_id, instance_id, certificate
+   DER, endorsement, issued_at_unix, expires_unix, snapshot: LabFilePayload}`. The device
+   imports the grant through *Add labs…*: verify against the pinned CA, `instance_id`
+   equal to the pending one, public key equal to the pending key,
+   `LabTrust.TryValidate(cert, LabRole.Console)`; then write `instance.json`, mark
+   `access.json` and the profile `authorized`, and apply the snapshot as a refresh.
+   Fewer than 60 days of validity offers a renewal request from the chooser; an expired
+   leaf leaves the profile listed as `expired`, with its history.
+5. **The role lives in the subject OU, not in the SAN.** `OU=LabControl Console`
+   (administrator, unchanged) versus `OU=LabControl Teacher`; the SAN stays
+   `console/<instance_id>` so every agent already in the field links to a teacher console.
+   `LabName` gains `ConsoleAccess Access` (`Administrator`, `Teacher`, `Unknown`) parsed
+   from the OU; `LabTrust.TryValidate` is unchanged and callers inspect `name.Access`. On
+   the console a teacher profile has no `lab-key.lck`, so `LabSession.Vault` becomes
+   nullable: `Enroll`/`Renew` answer `Closed` naming the administrator; `PushAgentBuild`,
+   `TryRevoke`, `WritePayload`, backup export and holders are unavailable with
+   *Administrator access needed*. An M5 agent reads the peer's OU (`ConsoleChannel.PeerName`,
+   `AgentLink.LinkedConsoleAccess`) and answers `self_update`/`rekey` on a teacher link
+   with `JobResult{ok:false, "refused: this console has teacher access"}` and the event
+   `job.refused_by_role` before pulling any manifest; `RenewalLoopAsync` is skipped on
+   teacher links. Older agents treat a teacher leaf as a full console — a documented gap
+   closed by the next agent push, not by a wire negotiation; `Welcome.console_access` is
+   informational only.
+6. **A device is revoked across renewal with a pseudo-serial.** *Settings → Teacher
+   devices → Withdraw access…* (unlock required) issues two signed entries through
+   `Registry.Revoke`: the current leaf serial and `instance:<instance_id>`, in the same
+   signed `serial|revoked_at_unix|reason` form, so older agents store it inertly. The M5
+   `LabTrust.TryValidate` also checks `instance:` entries for console peers, so a renewed
+   leaf for a withdrawn device is refused; `InstanceRecord.RevokedAtUnix` is set.
+   Propagation: pushed to linked agents at once (`TryRevoke`), carried in later `.lclab`
+   and `.lcgrant` files, and carried agent-to-console as today. Delivery is confirmed,
+   not assumed: an M5 agent answers every `Revocation` with `RevocationState`, the console
+   records `MachineRecord.RevocationSerialsSeen`, and Settings shows *delivered to 11 of
+   14 PCs; pending on PC-03 (offline since …)* — never "revoked everywhere". Re-importing
+   an old `.lclab` after withdrawal cannot bypass it; a new request mints a new instance id
+   and key and needs a fresh approval.
+
+Rejected: a new SAN segment or a private OID for the role (every installed agent would
+parse `Malformed`); a shared teacher key copied with the file (`D-53` item 3); a
+per-device password or an online issuance step; carrying enrollment codes in a lab file;
+a revocation list with a version and an owner (the union of self-authenticating entries
+already works across independent consoles, `D-21`); silently treating a re-imported old
+file as newer than local state.
+
+Validation: Shared tests sign, verify, tamper and newer-schema-refuse each envelope,
+assert the must-not-contain list, exercise the merge rules and the request/grant round
+trip, parse a teacher leaf as `Console` with `Access = Teacher`, and refuse a renewed leaf
+under an `instance:` entry. Console tests link agents to a teacher console and run a
+script, see `Enroll`/`Renew` `Closed`, withdraw a device (link closed, entry reaches
+agents, pending list shrinks) and upgrade a teacher profile from a backup keeping its
+instance id and logs. Implementation status is tracked in ROADMAP M5.
+
+## D-57 — One active session: `ActiveLabController`, release before acquire, the departure report, result ownership (M5 portions 2 and 4)
+
+Context (2026-09-08): `App.StartAsync` builds one `LabSession` at startup and shows the
+main window; `ConsoleServer` is one Kestrel per session; `AgentLink` drains finished job
+results to the next console that links, whichever instance that is; `JobQueue` on the
+receiving console drops ids it does not know, so the originating console loses them.
+`D-53` items 2 and 5 require at most one active lab, release before acquire and retained
+result ownership.
+
+Decisions:
+
+1. **One controller owns the only session.** `ActiveLabController` (`Idle`, `Activating`,
+   `Active`, `Deactivating`, `Failed`; `Active: LabSession?`; `StatusChanged` raised on a
+   background thread, the UI posts) exposes `ActivateAsync(labId)`, `DeactivateAsync(reason)`
+   and `DescribeDepartureAsync()`. Requests are serialised with a `SemaphoreSlim(1,1)`, a
+   generation counter and a single `_requested` slot, so a rapid A → B → C ends with exactly
+   one activation of C and one Kestrel. Activation: (1) `Activating(labId)` — the chooser
+   shows the destination's saved mosaic from its `lab.json` immediately; (2) deactivate
+   the current session; (3) `bootstrap.OpenExisting(labId)` — an administrator profile
+   opens with the vault locked and the instance open, prompting to re-mint if due; a
+   teacher profile needs a present `instance.json` and a valid leaf, else `Failed`;
+   (4) `new LabSession(...)` and `StartAsync()`; (5) `profiles.Touch`. Any exception
+   disposes what was built and leaves `Failed(labId, message)` with *Retry* in the chooser
+   — never two half-active labs.
+2. **Deactivation order is fixed.** `_stopping.Cancel()`; beacons stop first; every link
+   gets `connection.Close("the console left this lab")`; the beacon listener stops; the
+   server `StopAsync` (2 s budget) and dispose; housekeeping joins; `SaveLab()`;
+   `Screens.Dispose()`; `Vault.Dispose()` (locks the CA); `Instance.Dispose()`.
+   `FileOffers`/`FileUploads` die with the session. `LabSession` gains a `Disposed` event
+   and a `Generation`; `MainViewModel.Detach()` unsubscribes, closes every `ScreenWindow`
+   and generation-checks posted lambdas. Pending jobs are never re-created by the next
+   session. The new session's `LabTrust` is built from the new lab's authority, so a
+   lab-A agent reaching the lab-B server is refused as `NotIssuedByThisLab`/`WrongLab`,
+   and `RequireAgent` consults `ProfileStore` to log the truthful `link.refused` —
+   *belongs to lab A, which is not the active lab*. A second process on the same `--data`
+   is refused by `console.lock`; a second launch forwards its files (`D-59`).
+3. **Departure is described, not guessed.** `LabSession.DescribeDeparture()` returns a
+   `DepartureReport`: running jobs grouped — `run_script`/`send_file` continue on the PC
+   and show their result on return, power jobs complete, `self_update` cannot be aborted
+   and leaving is safe; uploads in progress will fail; PCs in probation report on return;
+   pending wakes are dropped. The dialog offers *Leave anyway*, *Stay* and *Wait for N
+   jobs*. Timing targets: 2 s to the cached mosaic, 15 s for reachable agents; a
+   `SwitchTimings` record is logged per switch and asserted in the drill.
+4. **A result belongs to the instance that delivered the job.** The console journals
+   under `labs/<id>/logs/` and `JobJournal`/`JobBatchLogs` rows gain `instance_id` and
+   `lab_id`. The agent's `JobLedger` records the delivering console's `instance_id` (from
+   `Welcome`); `_pendingResults` are drained only to a link with that instance id, and any
+   other result is answered when that console re-sends the job after its `Welcome`, which
+   it already does for in-flight jobs. No proto change is needed.
+
+Rejected: keeping inactive labs connected in the background (`D-53` item 2); one Kestrel
+shared across sessions with per-lab routing (trust is per lab and the listener would
+outlive its session); a process restart per switch (slow, and loses the departure
+report); delivering a previous teacher's output to whichever console links next
+(`D-53` item 5).
+
+Validation: console tests with a `TestRig` of two labs, one controller and one port —
+A → B → A with 30 agents per lab, no lab-A beacon within 5 s of departure, all A links
+closed, B agents linked within 15 s, an A agent refused with the lab-mismatch event, rapid
+A, B, C, A ending with one active lab and one Kestrel, a failed activation leaving `Failed`,
+`ScreenStore` disposed, a mixed batch with one wrong passphrase importing the rest, and a
+headless chooser render. Portion 4 on the VM: a script on A, switch to B and back, the
+result arrives; the other instance never receives A's result; uploads fail with the report;
+probation is reported. Implementation status is tracked in ROADMAP M5.
+
+## D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)
+
+Context (2026-09-08): `BeaconGate` honours a `take` beacon from another instance when
+`beacon.TakeAtUnix > _linkedAtUnix` — the taker's clock against the agent's clock, so a
+console 40 s behind cannot take a room from a console that linked 30 s ago. `HeldElsewhere()`
+returns every known PC not linked here — presumed ownership, shown as fact. `D-53` item 6
+asked for both to be fixed.
+
+Decisions:
+
+1. **Only the agent's clock is compared with itself.** A linked agent honours a verified
+   beacon from a *different* instance with `take != 0` when (a) the `(inst, take)` token
+   has not been honoured before, (b) the beacon *arrived* after the link was established,
+   measured on the agent's own clock, and (c) `take` is within `TakeOverWindow +
+   BeaconMaxSkew` of the beacon's own `ts`. The taker's timestamp is never compared with
+   the agent's link time. No beacon field changes.
+2. **Ownership has four states, and only one of them claims another holder.**
+   `HeldElsewhere()` is replaced by `Ownership(machine)`: `LinkedHere`;
+   `ObservedElsewhere(instance, at)` only when positively learned — an `Unlinked` reason
+   naming a take-over, or `Hello.previous_instance_id` within a fresh sighting of that
+   instance's beacon — recorded as `MachineRecord.LastInstanceObservedUnix` (`D-55`);
+   `Offline(lastSeen)`; `Unknown`. The other-console banner counts only observed PCs —
+   *holds at least N* — and an offline PC is shown offline, not *held by …*.
+
+Rejected: a clock-sync step between consoles (no server, no channel between them, `D-21`);
+correcting the taker's `take` by the `Welcome.server_time_unix` skew the agent knows (the
+agent knows the skew of the console it is linked to, not of the taker); treating every PC
+not linked here as held elsewhere (the current behaviour; false on an idle lab).
+
+Validation: Shared tests drive the gate with skewed clocks, the honour-once rule and the
+window; console tests run two consoles with ±30 s skew and show an offline PC as offline.
+Implementation status is tracked in ROADMAP M5.
+
+## D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted `.app`/`.dmg`, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)
+
+Context (2026-09-08): `tools/publish-all.sh` produces executable directories, not
+packages; the console has no document activation and no notion of a second launch;
+`D-54` items 2–5 fixed the lifecycle rules and left the tooling open.
+
+Decisions:
+
+1. **Windows: a C# per-user self-installer, no third-party toolchain.**
+   `src/LabControl.ConsoleSetup/` is a single-file, self-contained `asInvoker` exe;
+   `tools/package-windows.sh` publishes the console for `win-x64` and embeds it as a
+   resource. It installs to `%LOCALAPPDATA%\Programs\LabControl\Console\`, creates the
+   Start-menu `.lnk` (`IShellLinkW` via CsWin32) and an optional desktop shortcut, writes
+   `HKCU\…\Uninstall\LabControl Console`, registers the `HKCU\Software\Classes` ProgIds
+   `LabControl.LabFile` (`.lclab`) and `LabControl.Backup` (`.lcbak`) with an OpenWith
+   handler, and becomes the default only when no `UserChoice` exists. `--uninstall`
+   removes owned files, keys and rules and keeps the data; `--remove-data` is separate.
+   Product and Start-menu name: *LabControl Console* (default chosen 2026-09-08, owner
+   may change).
+2. **Scoped firewall rules, requested at the point of use.** `NetworkReadiness` checks
+   for inbound, port-scoped rules in the group `LabControl Console` (TCP `ConsolePort`
+   47800, UDP `BeaconPort` 47801, Private and Domain profiles). When they are missing the
+   console shows a banner whose *Allow…* runs `ConsoleSetup.exe --firewall` with `runas`;
+   a denied elevation yields a diagnostic with the exact `netsh` lines. Nothing disables
+   the firewall and no broad exclusion is created.
+3. **macOS: a scripted bundle with an ad-hoc signature.** `tools/package-mac.sh` builds
+   `LabControl.app/Contents/{Info.plist, MacOS/, Resources/labcontrol.icns}` with
+   `CFBundleIdentifier org.ontfk.labcontrol.console` (default chosen 2026-09-08, owner
+   may change), `CFBundleDocumentTypes` and `UTExportedTypeDeclarations` for `lclab` and
+   `lcbak`, `NSLocalNetworkUsageDescription`, signs with `codesign --force --deep --sign -`
+   and wraps it with `hdiutil` in a DMG carrying an Applications symlink. The Gatekeeper
+   prompt is documented, not promised away (`D-15`). File activation goes through
+   Avalonia 12's `IActivatableLifetime`/`FileActivatedEventArgs`; files that arrive before
+   the chooser exists are queued. *Remove local data…* lives inside the app.
+4. **Linux: a tarball with per-user scripts and XDG registration.** `tools/package-linux.sh`
+   produces `install.sh`/`uninstall.sh` installing to `~/.local/opt/labcontrol/console/`,
+   a `.desktop` entry (`Exec=… %F`, `MimeType`), MIME XML and icons, then runs
+   `update-mime-database`/`update-desktop-database` and `xdg-mime default` only when no
+   default exists. Prerequisites: `libicu`, `libfontconfig1`, `libx11-6`, `libice6`,
+   `libsm6`, `libgl1`; `libsecret-1-0` optional (its absence means the file-backed secret
+   protector, shown per profile). The documented matrix is Ubuntu 22.04 and 24.04, and
+   Linux acceptance in the first M5 pass is documented and manual (default chosen
+   2026-09-08, owner may change).
+5. **Document activation and the single instance.** `ConsoleOptions.TryParse` accepts
+   positional existing files with a known extension as `FilesToOpen` and `--import-only`
+   for the forwarder. `Services/SingleInstance.cs` derives a name from the first 16 hex
+   digits of `sha256(DataDirectory)`: a Windows named pipe `labcontrol-console-<hash>`
+   (`CurrentUserOnly`) or a Unix socket `labcontrol-console-<hash>.sock` (0600) in
+   `$XDG_RUNTIME_DIR` or the temp directory. The client sends one JSON line
+   `{"schema_version":1,"open":[…]}`, the server validates it and raises `FilesArrived`
+   on the UI thread, and the client exits 0 after the acknowledgement. `console.lock`
+   (`D-55`) distinguishes a stale socket from a running console. Files opened this way
+   enter the same import flow; they never activate a lab.
+
+Rejected: WiX, Inno Setup or MSIX for the console (a second toolchain to maintain, or
+store/signing prerequisites); the Windows student `Setup.exe` as the console installer
+(`D-54`); a machine-wide install (elevation for every update); an always-on helper for
+file activation; a mutex without a data-directory key (two `--data` directories are
+legitimate at once).
+
+Validation: forwarder → running server → import; a second process exits 0; a stale socket
+is recovered; dry-run step tests for the Windows installer; the manual matrix on Windows,
+macOS and Linux in ROADMAP M5. Implementation status is tracked in ROADMAP M5.
+
+## D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)
+
+Context (2026-09-08): `D-54` item 7 forbids treating a backup import as concurrent
+enrollment recovery, because two independent holders of the CA cannot enforce single use
+of a code from separate local journals. Today `ImportBackup` restores `enrollment.json`
+as it was, codes included.
+
+Decisions:
+
+1. **Imported codes are dormant.** `EnrollmentCodeRecord` gains `DormantSinceImportUnix`
+   and `IssuedByInstanceId`; `EnrollmentDocument` gains `Batches[]`, one issuer per batch.
+   A backup imported into a profile marks every usable code dormant; `Redeem` answers
+   `EnrollmentOutcome.DormantCode` naming *Settings → Enrollment → Use codes from the
+   imported backup*. Activation is an explicit administrator action on that profile.
+2. **Migration is not an import.** The single-lab migration (`D-55`) keeps its codes
+   active: nothing was copied between holders.
+3. **No global claim.** Two administrator copies that both activate the same batch can
+   both redeem a code; the console does not pretend otherwise, and the documented remedy
+   is a fresh batch, which voids the old stick (`D-28`).
+
+Rejected: voiding imported codes outright (a lost laptop would force a new stick even when
+the old one is in the administrator's hand); silently keeping them active (the `D-54`
+item 7 hazard).
+
+Validation: Shared tests refuse a dormant code and accept it after activation; console
+tests import a backup and see the codes dormant. Implementation status is tracked in
+ROADMAP M5.
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

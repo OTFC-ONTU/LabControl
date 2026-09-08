@@ -23,6 +23,20 @@
   <data name="Common.Continue" xml:space="preserve"><value>Continue</value></data>
   <data name="Common.Done" xml:space="preserve"><value>Done</value></data>
   <data name="Common.Quit" xml:space="preserve"><value>Quit</value></data>
+  <data name="App.AlreadyRunning" xml:space="preserve"><value>Another LabControl console is already using {0}. Close it first, then start this one again. ({1})</value></data>
+  <data name="App.NoLabSaved" xml:space="preserve"><value>No lab is saved in {0}.</value></data>
+  <data name="Bootstrap.LabNotSaved" xml:space="preserve"><value>Lab {0} is not saved on this computer.</value></data>
+  <data name="Bootstrap.InstanceMissing" xml:space="preserve"><value>'{0}' is missing from the lab's folder; import the lab from a backup to mint a new console instance.</value></data>
+  <data name="Bootstrap.KeyInstanceMismatch" xml:space="preserve"><value>'{0}' belongs to lab {1} but '{2}' is lab {3}.</value></data>
+  <data name="Bootstrap.WrongRecoveryCode" xml:space="preserve"><value>The recovery code does not open this backup.</value></data>
+  <data name="Bootstrap.WrongPassphrase" xml:space="preserve"><value>The passphrase does not open this backup.</value></data>
+  <data name="Bootstrap.LabAlreadySaved" xml:space="preserve"><value>Lab "{0}" is already saved on this computer. Replacing a saved lab from a backup is not supported yet; remove it first.</value></data>
+  <data name="Bootstrap.LabDirectoryOccupied" xml:space="preserve"><value>The folder {0} already holds files of lab "{1}", but the lab is not listed in {2}. Move that folder away, then import the backup again.</value></data>
+  <data name="Bootstrap.KeyLocked" xml:space="preserve"><value>The lab key is locked; unlock it to export a backup.</value></data>
+  <data name="Bootstrap.BackupWriteFailed" xml:space="preserve"><value>Could not write the backup: {0}</value></data>
+  <data name="Migration.KeyNamesNoLab" xml:space="preserve"><value>'{0}' names no lab; the data folder cannot be migrated.</value></data>
+  <data name="Migration.InstanceWithoutKey" xml:space="preserve"><value>'{0}' is in {1} but '{2}' is not. This is a broken installation from an earlier version, not a lab this computer can open: restore '{2}' from a copy of that folder, or move the leftover files away and import the lab from a backup.</value></data>
+  <data name="Migration.NotEnoughSpace" xml:space="preserve"><value>Moving the lab into its own folder needs {0} MB free in {1}, but only {2} MB is available. Free some space, then start the console again.</value></data>
   <data name="Action.Wake" xml:space="preserve"><value>Wake</value></data>
   <data name="Action.Shutdown" xml:space="preserve"><value>Shut down</value></data>
   <data name="Action.Reboot" xml:space="preserve"><value>Reboot</value></data>

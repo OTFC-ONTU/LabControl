@@ -36,6 +36,15 @@ the documents relevant to the task:
   no agent services or student preparation. Verify scoped LAN permissions and native
   prerequisites separately from copying files; retain profiles/keys on upgrade and by
   default on uninstall (`D-54`, `docs/INSTALLER.md`).
+- The M5 design is recorded in `D-55`…`D-60` (2026-09-08) and implementation started the
+  same day: profile store and resumable migration, signed `.lclab`/`.lcreq`/`.lcgrant`
+  files with the role in the subject OU and `instance:` revocation, one
+  `ActiveLabController` with release-before-acquire and result ownership, take-over on
+  the agent's clock, per-user console packaging with single-instance forwarding, dormant
+  imported enrollment codes. Follow those entries and ROADMAP M5 *How it is being built*
+  (eight portions; portion 1 built and reviewed 2026-09-08 — profile store, resumable
+  migration, `lab.json` schema 2, `console.lock`; portion 2 in progress); the `Welcome.console_access`
+  `.proto` change belongs to portion 5 and must update `docs/PROTOCOL.md` in its commit.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Student PCs may have no internet. Do not introduce a cloud or per-PC runtime

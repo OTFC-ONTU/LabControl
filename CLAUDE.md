@@ -207,6 +207,20 @@ import and device alternation remain the current behavior until M5 is delivered.
 and lightweight desktop installers for teacher devices. Switching does not re-import
 or unlock the CA; privileged operations still require unlocking the selected lab's key.
 
+**M5 design recorded, implementation started (2026-09-08, `D-55`…`D-60`):** the profile
+store and resumable migration (`profiles.json`, `labs/<lab_id>/`, `D-55`), the signed
+`.lclab`/`.lcreq`/`.lcgrant` exchange with the role in the subject OU and `instance:`
+revocation (`D-56`), `ActiveLabController` with release-before-acquire, the departure
+report and results bound to the delivering instance (`D-57`), take-over on the agent's
+clock and observed-only ownership (`D-58`), the C# per-user Windows installer, scripted
+`.app`/`.dmg`, Linux tarball, single instance and scoped firewall rules (`D-59`), and
+dormant imported enrollment codes (`D-60`). Eight portions (ROADMAP M5, *How it is being
+built*); portion 1 built and reviewed 2026-09-08 (profile store, resumable migration,
+`lab.json` schema 2, `console.lock`; migration tried on a copy of the owner's live data,
+the live directory migrates on the next M5 launch); portion 2 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
+(*Files exchanged offline*, *M5 additions*) describe the design; the `Welcome.console_access`
+`.proto` change lands with portion 5 and must update PROTOCOL again in that commit.
+
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, `FakeAgent` and the console UI — see the M1 *Progress* and

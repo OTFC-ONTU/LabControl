@@ -218,7 +218,7 @@ Windows PC, and the same software must be usable in another college's lab. There
 the identity of <em>the lab</em> is deliberately separated from the identity of <em>the computer
 that happens to be running the console today</em>. Nothing in the design may require
 walking to the student PCs again after a change of teacher machine.</p>
-<h3 id="three-separate-identities">3.1 Three separate identities<a class="anchor" href="#three-separate-identities" aria-label="Link to this section">#</a></h3>
+<h3 id="separate-identities">3.1 Separate identities<a class="anchor" href="#separate-identities" aria-label="Link to this section">#</a></h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -240,6 +240,12 @@ walking to the student PCs again after a change of teacher machine.</p>
 <td>when a teacher machine is set up or migrated</td>
 <td>that machine only</td>
 <td>&quot;I am a legitimate console of lab <em>X</em>&quot;</td>
+</tr>
+<tr>
+<td><strong>Teacher device</strong> — leaf signed by the lab key with <code>OU=LabControl Teacher</code>, issued through the offline request/grant exchange (M5, <code>D-56</code>)</td>
+<td>when an administrator authorizes a <code>.lcreq</code> and the device imports the <code>.lcgrant</code></td>
+<td>that device only</td>
+<td>&quot;I am an authorized teacher console of lab <em>X</em>&quot; — but not its administrator: no issuance, enrollment or update signing</td>
 </tr>
 <tr>
 <td><strong>Agent</strong> — keypair + certificate signed by the lab key</td>
@@ -349,8 +355,11 @@ stolen laptop stops working as soon as the lab has seen the new console.</li>
 <h3 id="several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time<a class="anchor" href="#several-teacher-machines-one-at-a-time" aria-label="Link to this section">#</a></h3>
 <p>The following is the current single-lab/full-owner model and its intended handover
 behavior. M5 extends it with saved lab profiles and separate ordinary teacher access
-(§3.9). The audit gaps in device revocation, ownership reporting, enrollment-code copies
-and clock-dependent takeover are M5 acceptance work, not verified guarantees here.</p>
+(§3.9). The audit gaps in device revocation and clock-dependent takeover are closed by the
+designs in <code>D-56</code>/<code>D-57</code>/<code>D-58</code> (instance revocation, result ownership, the agent-clock-only
+take-over rule and observed-only ownership states) and enrollment-code copies by <code>D-60</code>;
+until ROADMAP M5 records them as built and verified, the text below describes the current
+behaviour and they remain M5 acceptance work, not verified guarantees.</p>
 <p>Replacement is the disaster case. The everyday case is <strong>alternation</strong>: the owner drives
 the lab from a MacBook on some days, a colleague drives it from the Windows PC at the
 teacher's desk on others, and both machines keep their console installed permanently.
@@ -528,65 +537,84 @@ voided), otherwise the backup — and the main window stays shut until it is don
 <p>The console shows one banner — <em>&quot;N certificates need renewing — unlock the lab key&quot;</em> — for
 both cases, so the yearly and five-yearly chores are the same gesture as enrolment. A
 leaf never outlives the authority that signed it.</p>
-<h3 id="saved-labs-and-one-active-room-planned-m5-d-53">3.9 Saved labs and one active room (planned M5, D-53)<a class="anchor" href="#saved-labs-and-one-active-room-planned-m5-d-53" aria-label="Link to this section">#</a></h3>
-<p>The teacher imports several lab files once and selects a room for each lesson from
-<em>My labs</em>. A room's <code>lab_id</code> and pinned authority are stable; neither its file name nor
-its IP address is its identity. Each lab holds up to 30 PCs, independently of the number
-of saved profiles. Import does not connect. Startup shows the chooser; selecting a lab
-activates it, <em>Disconnect</em> returns to the chooser, and selecting another lab releases
-the old session before starting the new one. No app restart or daily backup restore.
-Administrators use the same chooser: <em>Add labs…</em> accepts <code>.lcbak</code> backups directly,
-including multi-file and mixed imports, and adds administrator profiles after unlocking
-each archive. The backup is not limited to disaster recovery (<code>D-54</code>).</p>
-<p>The registry contains only saved metadata for inactive rooms. Each profile owns its
-trust, device identity, roster/layout, scripts/catalog and job history. Active networking,
-video buffers and input belong to a single disposable session. On departure stop old
-beacons, streams and connection attempts, invalidate old UI actions/callbacks, and never
-accept peers from an inactive lab. Import/refresh is transactional per file, deduplicated
-by identity and cannot downgrade trust/revocations or erase local outcomes. Existing
-single-lab data migrates without re-enrolling student PCs or replacing its identity.</p>
-<p>A <strong>lab file</strong> is a versioned, authenticated room/access distribution artifact. It
-carries public trust and a roster/layout snapshot and supports initial authorization of
-the teacher's device, batched for several labs and usable without internet. Ordinary
-teacher files do not contain the CA private key, recovery material or student enrollment
-codes. Each device needs its own revocable identity; a copied file is not a reason to
-share one private key across teachers. Exact file format and the offline authorization
-exchange must be specified before implementation. This is a new flow, not a rename of
-the existing <code>.lcbak</code> file: that archive remains a full administrator backup and also
-serves as an input for adding a switchable lab. Access level is per profile. Importing
-a backup for an existing teacher profile upgrades access after explicit unlock while
-preserving its identity/history; importing a teacher file does not downgrade it. Switching
-never restores the archive again or unlocks its CA: routine control uses the local device
-identity, privileged actions require the lab-key unlock, and departure locks that key.
-An existing full-owner copy cannot be downgraded by relabeling it; retained CA keys keep
-their authority. The migration UI must explain this limit.</p>
-<p>The administrator retains issuance, enrollment and update-signing authority. Device
-revocation must remain effective across leaf renewal once delivered to agents; show
-pending propagation for unreachable PCs. Stale admin backups must not silently restore
-spent enrollment codes as usable. Do not claim immediate global revocation on an isolated
-LAN with disconnected devices, or require a continuously running owner/server for lessons.
-Adding a backup for switching does not automatically activate its pending enrollment
-codes; retain history and use an explicit recovery/issuer-coordination flow (<code>D-54</code>).
-Independent offline CA owners cannot promise global single-use from local journals alone.
-Teacher files require a concrete initial device-authorization flow; public metadata
-alone cannot grant a device a signed identity. Existing valid access needs no owner
-present for daily switching, while expired/revoked access has a separate recovery path.</p>
-<p>Switching an idle lab targets a responsive saved mosaic within 2 seconds and connection
-of all reachable running agents within 15 seconds on a supported healthy LAN. Running
-scripts/transfers/updates require explicit safe departure handling and retained result
-ownership; keeping an inactive lab secretly connected is not a solution. M6 extends the
-same contract to lock/broadcast/exam policy expiry and work collection. Truthful room
-ownership and takeover resilient to allowed clock skew are M5 requirements. Detailed
-acceptance and failure drills are in ROADMAP M5; none of this section is implemented yet.
-The timing goals assume graceful idle departure and already authorized access/network
+<h3 id="saved-labs-and-one-active-room-m5-d-53.d-60-designed-being-implemented">3.9 Saved labs and one active room (M5, D-53…D-60 — designed, being implemented)<a class="anchor" href="#saved-labs-and-one-active-room-m5-d-53.d-60-designed-being-implemented" aria-label="Link to this section">#</a></h3>
+<p>The requirements are <code>D-53</code>/<code>D-54</code>; the mechanism below is the design recorded in
+<code>D-55</code>…<code>D-60</code> on 2026-09-08. Which portions are built and verified is tracked in ROADMAP
+M5; nothing here should be read as a verified guarantee until that section says so.</p>
+<p><strong>Profiles.</strong> The console keeps a local index, <code>profiles.json</code>, and one directory per lab,
+<code>labs/&lt;lab_id&gt;/</code> (§4, <code>D-55</code>). A room's <code>lab_id</code> and pinned authority fingerprint are its
+identity; neither its file name nor an IP address is. The index is saved metadata only —
+name, access, authorization state, PC count, last use — and the chooser reads nothing
+else; it does not listen for beacons. Each profile owns its trust, this device's identity
+(<code>instance.json</code>), roster/layout/revocations (<code>lab.json</code> schema 2), scripts, packages and
+logs; an administrator profile also holds <code>lab-key.lck</code> and <code>enrollment.json</code>, a teacher
+profile holds <code>access.json</code> instead. The existing single-lab directory migrates on the
+first M5 start by copy → rename → write index → delete, resumable after a crash at any
+step, keeping the same instance id and keystore reference and touching no student PC. The
+migration dialog states the <code>D-53</code> item 6 limit: a device that holds the CA key keeps
+administrator authority whatever label its profile carries.</p>
+<p><strong>Lab files and device authorization</strong> (<code>D-56</code>). A <code>.lclab</code> is a CA-signed envelope
+carrying the public CA, the roster/layout snapshot, the signed revocations and, optionally,
+the script library — never the CA private key, wrappings, recovery material, enrollment
+codes, an <code>instance.json</code>, package binaries or logs. Importing one creates a <em>teacher</em>
+profile in the <code>needs_authorization</code> state with a fresh key pair and instance id, and with
+no certificate, so nothing beacons. The device writes a <code>.lcreq</code> (its self-signed CSR);
+the administrator opens several at once in <em>Settings → Teacher devices → Authorize
+requests…</em>, unlocks the lab key, and returns one <code>.lcgrant</code> per device: a leaf with the
+same SAN URI as a console (<code>labcontrol://&lt;lab&gt;/console/&lt;instance&gt;</code>) and
+<code>OU=LabControl Teacher</code>, valid 365 days, plus the beacon endorsement and a fresh snapshot.
+Every agent already installed therefore links to a teacher console unchanged; an M5 agent
+reads the OU and refuses <code>self_update</code>/<code>rekey</code> from a teacher link. On the console a
+teacher profile has no vault: enrollment, renewal, signing, revocation, USB payloads and
+backups answer <em>Administrator access needed</em>. Re-import merges by agent id and number,
+unions revocations, replaces the layout only for a newer <code>snapshot_version</code> and never
+touches the device identity, the access level or local history; the same <code>lab_id</code> under a
+different authority is refused. A <code>.lcbak</code> is still the full administrator backup and is
+accepted by the same <em>Add labs…</em>: into a new profile as today, or into an existing
+teacher profile as an upgrade that keeps its instance id and history, with the imported
+enrollment codes dormant until explicitly activated (<code>D-60</code>). Lab files come only from an
+explicit <em>Export lab file…</em>.</p>
+<p><strong>Withdrawing a device</strong> revokes both its leaf serial and the pseudo-serial
+<code>instance:&lt;instance_id&gt;</code>, signed like any revocation entry, so a renewed leaf is refused
+too. Delivery is confirmed per PC (<code>RevocationSerialsSeen</code>) and shown as <em>delivered to N
+of M; pending on …</em> — the console never claims a revocation reached a PC it has not heard
+from.</p>
+<p><strong>One active session</strong> (<code>D-57</code>). <code>ActiveLabController</code> holds at most one <code>LabSession</code>;
+selections are serialised so a rapid A → B → C activates C once. Activation shows the
+destination's saved mosaic first, then releases the current session in a fixed order —
+beacons, links (<code>the console left this lab</code>), listener, server, housekeeping, save,
+screens, vault (locking the CA), instance — and only then opens the next profile and
+starts its Kestrel. A failed activation is an explicit <code>Failed</code> state with <em>Retry</em>, never
+two half-active labs. A lab-A agent reaching the lab-B server is refused as <em>belongs to
+lab A, which is not the active lab</em>. Leaving with work in flight shows a departure report:
+scripts and file deliveries continue on the PC and report on return, power jobs complete,
+an update cannot be aborted and is safe to leave, uploads in progress fail, probation is
+reported on return. Results belong to the instance that delivered the job: the agent
+drains a result only to that instance and answers anyone else only when that console
+re-sends the job. Targets: 2 s to the cached mosaic, 15 s for reachable running agents,
+measured per switch.</p>
+<p><strong>Take-over and ownership</strong> (<code>D-58</code>). An agent honours a <code>take</code> beacon by its own clock
+only — the beacon must have arrived after the link was made, be unhonoured, and lie within
+the take-over window plus the allowed skew of the beacon's own timestamp. A PC is <em>held
+elsewhere</em> only when that was positively observed; otherwise it is linked here, offline or
+unknown, and the other-console banner says <em>holds at least N</em>.</p>
+<p><strong>Packaging and activation</strong> (<code>D-59</code>, INSTALLER). Windows gets a C# per-user installer
+with Start-menu entry, file associations and scoped inbound firewall rules requested at the
+point of use; macOS a scripted, ad-hoc-signed <code>.app</code> in a <code>.dmg</code>; Linux a tarball with
+per-user XDG registration and a documented prerequisite matrix. Opening a <code>.lclab</code>,
+<code>.lcbak</code>, <code>.lcgrant</code> or <code>.lcreq</code> from the OS, the command line or a drop enters the same
+import; a second launch forwards its files to the running console over a per-data-directory
+pipe or socket and exits. Import never activates a lab.</p>
+<p>The timing goals assume graceful idle departure and already authorized access/network
 permissions; first import, OS consent and dead-peer timeout recovery are measured
-separately. Desktop packaging also requires network readiness and application-side file
-activation, as documented in INSTALLER and D-54.</p>
+separately. M6 extends the departure contract to lock/broadcast/exam policy expiry and
+work collection.</p>
 <h2 id="data-on-the-console">4. Data on the console<a class="anchor" href="#data-on-the-console" aria-label="Link to this section">#</a></h2>
-<p>The layout below is the current single-lab profile. M5 will add a local registry and
-isolated per-lab profiles (§3.9), with a migration preserving this data. Paths and new
-format constants will be specified in <code>Defaults.cs</code> during implementation.</p>
-<p><code>~/.labcontrol/</code> (macOS/Linux) or <code>%APPDATA%\LabControl\</code> (Windows):</p>
+<p>The first layout below is the single-lab profile every console before M5 has on disk;
+the second is the M5 profile layout (<code>D-55</code>) that the console migrates it into on its
+first M5 start. Which builds use which is tracked in ROADMAP M5.</p>
+<p><code>~/.labcontrol/</code> (macOS/Linux) or <code>%APPDATA%\LabControl\</code> (Windows) —
+<code>Defaults.ConsoleDataDirectory</code>, overridable with <code>--data</code>:</p>
 <pre><code>lab-key.lck       the lab certificate authority, encrypted (§3.2). The one file that
                   must survive. Never leaves this directory unencrypted.
 instance.json     this console instance: name, leaf certificate, key reference
@@ -601,13 +629,51 @@ scripts.json      the script library (D-31, D-38): name, description, shell, run
 packages/         package catalog: &lt;name&gt;.yaml + cached installer binaries
 logs/             per-day console log + per-command result bundles
 </code></pre>
+<p><strong>M5 profile layout</strong> (<code>D-55</code>): the same root gains an index and one directory per lab;
+the files above keep their names and formats inside <code>labs/&lt;lab_id&gt;/</code>.</p>
+<pre><code>profiles.json     ProfilesDocument: last_used_lab_id and one entry per saved lab —
+                  lab_id, lab_name, directory, authority_fingerprint, access
+                  (administrator | teacher), authorization state, instance id/name,
+                  pc_count, added/last-used times, source. Metadata only: no keys, no
+                  certificates. The chooser reads nothing else.
+console-&lt;date&gt;.log  app-level Serilog log at the root (not per lab); a pre-M5 console's
+                  copies under logs/ are moved here once by the migration
+console.lock      held open with FileShare.None for the process lifetime: one console
+                  process per data directory (D-55 item 12)
+migration-conflict-&lt;timestamp&gt;/
+                  only after a downgrade: root files that no longer matched the
+                  committed copy, moved aside instead of deleted (D-55 item 6)
+labs/
+  &lt;lab_id&gt;/       one profile; lab_id is the UUID from the CA's SAN
+    lab-key.lck   administrator profiles only
+    instance.json this device's identity for this lab (leaf, endorsement, key reference)
+    lab.json      schema 2: adds InstanceRecord.Access/AuthorizedAtUnix/RevokedAtUnix,
+                  MachineRecord.RevocationSerialsSeen, MachineRecord.LastInstanceObservedUnix
+    enrollment.json  administrator profiles only; codes imported from a backup are dormant (D-60)
+    scripts.json
+    access.json   teacher profiles: pending request / grant metadata (D-56)
+    packages/
+    logs/         events-*, jobs-*, batches/ — per lab
+</code></pre>
+<p><strong>Migration</strong> (<code>D-55</code>): on the first M5 start, when <code>profiles.json</code> is absent and
+<code>lab-key.lck</code> or <code>instance.json</code> is present at the root, the console copies (never
+moves) the flat files into <code>labs/&lt;lab_id&gt;.migrating/</code>, renames that directory to
+<code>labs/&lt;lab_id&gt;/</code> in one same-volume rename, writes <code>profiles.json</code> with one
+administrator entry (<code>source: migrated</code>) — the commit point — and only then deletes the
+originals — and only those that still match their copy byte for byte (<code>D-55</code> items
+5–7). Each step is resumable after a crash; the instance id and its keystore reference
+<code>instance-&lt;instanceId&gt;</code> are unchanged, so no student PC notices. Downgrading means
+copying <code>labs/&lt;lab_id&gt;/*</code> back to the root; the pre-M5 build drops the schema-2
+<code>lab.json</code> fields it does not know on its next save, and the next M5 launch keeps that
+changed root in a conflict directory rather than deleting it (README, <em>Downgrading</em>).</p>
 <p>Every one of these files — and the backup archive — carries a <code>schema_version</code> as its
 first field, and the console refuses to open a file written by a <strong>newer</strong> version of
 itself rather than silently dropping the fields it does not understand (<code>D-20</code>). This is
 what keeps §3.6 working a year from now, when the backup being restored was written by an
 older build than the console restoring it.</p>
 <p>Created on first launch by the setup wizard. <strong>Backup</strong> = <code>lab-key.lck</code> + <code>lab.json</code> +
-<code>enrollment.json</code> + the catalog, exported as one file (<code>&lt;lab&gt; &lt;date&gt;.lcbak</code>): the key document as it is —
+<code>enrollment.json</code> + <code>scripts.json</code> + the catalog (<code>BackupPayload</code>: Lab, Catalog,
+Enrollment, Scripts), exported as one file (<code>&lt;lab&gt; &lt;date&gt;.lcbak</code>): the key document as it is —
 already encrypted under its holders and the recovery code — and the rest sealed with
 AES-256-GCM under the same master key, so whoever can open the lab key can open the backup
 and nobody else can read even the machine list (<code>D-26</code>). It is what makes §3.6 a
@@ -1065,9 +1131,9 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-09-08 08:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-08 09:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#three-separate-identities">3.1 Three separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl3"><a href="#saved-labs-and-one-active-room-planned-m5-d-53">3.9 Saved labs and one active room (planned M5, D-53)</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#separate-identities">3.1 Separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl3"><a href="#saved-labs-and-one-active-room-m5-d-53.d-60-designed-being-implemented">3.9 Saved labs and one active room (M5, D-53…D-60 — designed, being implemented)</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>
 </body>
 </html>

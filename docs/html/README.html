@@ -160,6 +160,13 @@ Linux: application files, launchers and opening both file types, without install
 student services or changing student-account/system settings on the teacher's device.
 Classroom control is now M6 and catalog/polish M7.
 See M5 in <a href="docs/ROADMAP.md">the roadmap</a>.</p>
+<p><strong>Downgrading to a pre-M5 build.</strong> An M5 console keeps each lab in
+<code>labs/&lt;lab_id&gt;/</code> under its data directory (<code>~/.labcontrol/</code> or <code>%APPDATA%\LabControl\</code>).
+To run an older build on the same lab, copy <code>labs/&lt;lab_id&gt;/*</code> back to the data root;
+the old build reads it, but on its next save it drops the schema-2 <code>lab.json</code> fields it
+does not know. The next launch of an M5 build notices the root differs from its saved
+copy, moves the root files to <code>migration-conflict-&lt;timestamp&gt;/</code> and opens the saved
+lab — nothing is deleted, but the two copies have to be reconciled by hand.</p>
 <p>Built with .NET 10 + Avalonia + gRPC. See <a href="CLAUDE.md"><code>CLAUDE.md</code></a> for the detailed
 project brief, <a href="AGENTS.md"><code>AGENTS.md</code></a> for Codex instructions and the shared agent
 documentation contract, and <a href="docs/"><code>docs/</code></a> for architecture, protocol, installer
@@ -337,7 +344,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-08 08:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-08 09:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

@@ -187,7 +187,7 @@ implement.</p>
 <tr>
 <td><strong>M5</strong></td>
 <td>Lab files, teacher access and fast switching between rooms</td>
-<td>not started — planned 2026-09-08 (<code>D-53</code>)</td>
+<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portion 1 (profile store and migration) built and reviewed 2026-09-08, migration tried on a copy of the live data; portion 2 next</strong></td>
 <td>M4</td>
 </tr>
 <tr>
@@ -1351,9 +1351,9 @@ Ordinary distribution must not carry the CA private key, recovery material or st
 enrollment codes. Any access secret is protected in transit and moved into the local
 designed store on import. Each device obtains its own revocable identity; importing
 the same room on several devices must not clone a shared private identity. The exact
-extension and authorization exchange are implementation decisions to document before
-coding; the acceptance requirement is one batched onboarding workflow, fully offline
-capable. Existing <code>.lcbak</code> archives remain full administrator backups and are also
+extension and authorization exchange are now specified in <code>D-56</code> (<code>.lclab</code>, <code>.lcreq</code>,
+<code>.lcgrant</code>; PROTOCOL <em>Files exchanged offline</em>); the acceptance requirement is one
+batched onboarding workflow, fully offline capable. Existing <code>.lcbak</code> archives remain full administrator backups and are also
 accepted directly by <em>Add labs…</em>: importing one adds a switchable administrator
 profile to the same list. Their recovery purpose and format remain compatible; there
 is no separate application, recovery-only restriction or repeated restore when
@@ -1369,8 +1369,8 @@ presence; expired/revoked access needs a separate renewal/recovery flow.</li>
 self-contained distribution for the supported teacher platforms: a Windows installer
 with Start-menu entry, optional desktop shortcut and Installed apps removal; a macOS
 <code>.app</code> in a <code>.dmg</code> with Applications installation; a Linux desktop package/install
-flow with launcher and removal instructions. Final packaging tools are implementation
-choices. Copy/register the console and its required runtime/native assets; register
+flow with launcher and removal instructions. The packaging tools are chosen in
+<code>D-59</code>. Copy/register the console and its required runtime/native assets; register
 file-opening support for teacher lab files and <code>.lcbak</code> backups. Opening files routes
 them into the existing console's import flow and does not start another active lab.
 No student Agent/Session service, background daemon, scheduled task, startup control
@@ -1525,6 +1525,64 @@ refused or requires an explicit safe recovery flow, never silently issues twice.
 <li>Switch during a script, a resumed transfer and update probation; confirm the departure
 choices, preserved result ownership and eventual visible outcome. Queued commands
 cannot leak into another lab or execute unexpectedly on a later lesson.</li>
+</ul>
+<p><strong>How it is being built.</strong> In eight portions, on the M2/M3/M4 pattern — each committed,
+then run before the next starts; the design is <code>D-55</code>…<code>D-60</code> (recorded 2026-09-08 from
+the reviewed design, before code): <strong>(1)</strong> the profile store and migration — <code>profiles.json</code>,
+<code>labs/&lt;lab_id&gt;/</code>, <code>LabStore</code> per profile, the copy-rename-commit-delete migration with
+resume at every step, <code>lab.json</code> schema 2 (<code>D-55</code>) — all on the Mac; <strong>(2)</strong>
+<code>ActiveLabController</code>, the chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import into profiles and
+the nullable vault (<code>D-57</code>) — on the Mac, with a <code>TestRig</code> of two labs on one port;
+<strong>(3)</strong> lab files, the <code>.lcreq</code>/<code>.lcgrant</code> exchange and teacher mode — envelopes,
+<code>IssueTeacherDevice</code>, <code>LabName.Access</code>, <code>instance:</code> revocation, the teacher branches of
+<code>LabSession</code>, <em>Teacher devices</em> and <em>Export lab file…</em> in Settings, dormant codes (<code>D-56</code>,
+<code>D-60</code>) — on the Mac; <strong>(4)</strong> the departure report and result ownership — the agent's
+ledger bound to the delivering instance, the journal columns, the dialog (<code>D-57</code>) — <strong>on
+the Windows VM</strong>, because the real agent's ledger is what must keep the result; <strong>(5)</strong>
+take-over on the agent's clock and the ownership states, <code>Welcome.console_access</code>
+(<code>D-58</code>) — <strong>on the VM</strong> with two consoles and skewed clocks; <strong>(6)</strong> document activation,
+the single instance and the command line (<code>D-59</code>) — tests on the Mac, manual on macOS;
+<strong>(7)</strong> packaging and the firewall flow — <code>LabControl.ConsoleSetup</code>, <code>tools/package-*.sh</code>,
+<code>NetworkReadiness</code>, README/INSTALLER (<code>D-59</code>) — <strong>on the VM</strong> for Windows, manual on macOS
+and Linux; <strong>(8)</strong> the acceptance drills and the documentation close-out — 20 × A → B →
+C → A with 30 agents each, the leak check, two devices alternating — in the lab and on the
+VM. <code>FakeAgent</code> gains <code>--lab &lt;payload&gt;</code> per group so three labs of 30 run from one process.
+The order proves isolated sessions and result ownership first, then the offline access
+contract, then desktop integration (<code>D-54</code> item 6).</p>
+<p><strong>Progress.</strong></p>
+<ul>
+<li><em>Design recorded 2026-09-08</em> (<code>D-55</code>…<code>D-60</code>; ARCHITECTURE §3.9/§4, PROTOCOL <em>Files
+exchanged offline</em> and <em>M5 additions</em>). The <code>.proto</code> addition of portion 5 is not made.</li>
+<li><em>Portion 1 (built and reviewed 2026-09-08, on the Mac).</em> The profile store and the
+migration (<code>D-55</code>): <code>ProfilesDocument</code> (<code>profiles.json</code>, schema 1), <code>ProfileStore</code>,
+<code>ProfileMigration</code>, <code>ConsoleLock</code> (<code>console.lock</code> opened with <code>FileShare.None</code>, one
+process per data directory — a second launch is told so and quits; not enforced where
+<code>DOTNET_SYSTEM_IO_DISABLEFILELOCKING</code> is set), and <code>ConsoleBootstrap</code> per profile:
+<code>OpenExisting(labId)</code>, <code>CreateLab</code> into <code>labs/&lt;id&gt;/</code>, <code>ImportBackup</code> into a new profile
+that refuses a lab already saved on this device until portion 3's upgrade semantics.
+<code>lab.json</code> is schema 2 with an identity 1 → 2 step; <code>LabBackup.Open</code> upgrades the
+nested lab/scripts/enrollment documents by their own <code>schema_version</code> and refuses a
+newer one by name. The Serilog console log moved from <code>logs/</code> to the data root
+(<code>console-&lt;date&gt;.log</code>); old files are moved once. The migration is state-driven and
+resumable: copy → rename (5 retries for an antivirus hold) → commit (<code>profiles.json</code>)
+→ delete the originals in the order <code>lab.json</code>, <code>enrollment.json</code>, <code>scripts.json</code>,
+<code>packages/</code>, <code>logs/</code>, then <code>instance.json</code>, then <code>lab-key.lck</code> (the two sentinels
+last). Before any delete every root document is compared byte for byte with its copy
+and <code>packages/</code>/<code>logs/</code> by file list and size; an uncommitted copy that differs is
+discarded and made again, a committed one that differs leaves the root files moved,
+complete, to <code>&lt;data&gt;/migration-conflict-&lt;timestamp&gt;/</code> — never deleted. Symlinks and
+junctions are skipped and logged, free space is checked before the copy, and a root
+with <code>instance.json</code> but no <code>lab-key.lck</code> is refused, not committed. Reversal to a
+pre-M5 build is copying <code>labs/&lt;id&gt;/*</code> back to the root; that build drops the schema-2
+fields it does not know on its next save (README, <em>Downgrading</em>). Tests: 702 (591
+Shared + 111 Console), including a crash and resume after every step with
+byte-identical originals, the conflict directory, a symlink loop, a crash mid-delete
+and a keystore protector that throws on <code>Remove</code>. <em>Trial on the owner's Mac</em> against
+a copy of the live <code>~/.labcontrol</code> (<code>--data</code>): migrated in under a second, the same
+instance id served lab &quot;444-2&quot;, the <code>PC-01</code> VM agent linked with its existing
+certificate; a second launch ran no migration step and linked again. The live
+directory itself is not migrated yet — it will be on the owner's next launch of an
+M5 build. Portion 2 is next.</li>
 </ul>
 <p><strong>Not in scope.</strong> Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs
@@ -1795,7 +1853,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-08 08:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-08 09:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

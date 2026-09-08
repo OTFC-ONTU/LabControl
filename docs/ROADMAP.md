@@ -19,7 +19,7 @@ implement.
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
-| **M5** | Lab files, teacher access and fast switching between rooms | not started — planned 2026-09-08 (`D-53`) | M4 |
+| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portion 1 (profile store and migration) built and reviewed 2026-09-08, migration tried on a copy of the live data; portion 2 next** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
@@ -1160,9 +1160,9 @@ also part of this milestone (`D-54`). This is planned work, not an existing capa
   enrollment codes. Any access secret is protected in transit and moved into the local
   designed store on import. Each device obtains its own revocable identity; importing
   the same room on several devices must not clone a shared private identity. The exact
-  extension and authorization exchange are implementation decisions to document before
-  coding; the acceptance requirement is one batched onboarding workflow, fully offline
-  capable. Existing `.lcbak` archives remain full administrator backups and are also
+  extension and authorization exchange are now specified in `D-56` (`.lclab`, `.lcreq`,
+  `.lcgrant`; PROTOCOL *Files exchanged offline*); the acceptance requirement is one
+  batched onboarding workflow, fully offline capable. Existing `.lcbak` archives remain full administrator backups and are also
   accepted directly by *Add labs…*: importing one adds a switchable administrator
   profile to the same list. Their recovery purpose and format remain compatible; there
   is no separate application, recovery-only restriction or repeated restore when
@@ -1178,8 +1178,8 @@ also part of this milestone (`D-54`). This is planned work, not an existing capa
   self-contained distribution for the supported teacher platforms: a Windows installer
   with Start-menu entry, optional desktop shortcut and Installed apps removal; a macOS
   `.app` in a `.dmg` with Applications installation; a Linux desktop package/install
-  flow with launcher and removal instructions. Final packaging tools are implementation
-  choices. Copy/register the console and its required runtime/native assets; register
+  flow with launcher and removal instructions. The packaging tools are chosen in
+  `D-59`. Copy/register the console and its required runtime/native assets; register
   file-opening support for teacher lab files and `.lcbak` backups. Opening files routes
   them into the existing console's import flow and does not start another active lab.
   No student Agent/Session service, background daemon, scheduled task, startup control
@@ -1338,6 +1338,65 @@ cross-VLAN discovery, Internet access or recovery from arbitrary firewall policy
 - Switch during a script, a resumed transfer and update probation; confirm the departure
   choices, preserved result ownership and eventual visible outcome. Queued commands
   cannot leak into another lab or execute unexpectedly on a later lesson.
+
+**How it is being built.** In eight portions, on the M2/M3/M4 pattern — each committed,
+then run before the next starts; the design is `D-55`…`D-60` (recorded 2026-09-08 from
+the reviewed design, before code): **(1)** the profile store and migration — `profiles.json`,
+`labs/<lab_id>/`, `LabStore` per profile, the copy-rename-commit-delete migration with
+resume at every step, `lab.json` schema 2 (`D-55`) — all on the Mac; **(2)**
+`ActiveLabController`, the chooser, *Disconnect*, bulk `.lcbak` import into profiles and
+the nullable vault (`D-57`) — on the Mac, with a `TestRig` of two labs on one port;
+**(3)** lab files, the `.lcreq`/`.lcgrant` exchange and teacher mode — envelopes,
+`IssueTeacherDevice`, `LabName.Access`, `instance:` revocation, the teacher branches of
+`LabSession`, *Teacher devices* and *Export lab file…* in Settings, dormant codes (`D-56`,
+`D-60`) — on the Mac; **(4)** the departure report and result ownership — the agent's
+ledger bound to the delivering instance, the journal columns, the dialog (`D-57`) — **on
+the Windows VM**, because the real agent's ledger is what must keep the result; **(5)**
+take-over on the agent's clock and the ownership states, `Welcome.console_access`
+(`D-58`) — **on the VM** with two consoles and skewed clocks; **(6)** document activation,
+the single instance and the command line (`D-59`) — tests on the Mac, manual on macOS;
+**(7)** packaging and the firewall flow — `LabControl.ConsoleSetup`, `tools/package-*.sh`,
+`NetworkReadiness`, README/INSTALLER (`D-59`) — **on the VM** for Windows, manual on macOS
+and Linux; **(8)** the acceptance drills and the documentation close-out — 20 × A → B →
+C → A with 30 agents each, the leak check, two devices alternating — in the lab and on the
+VM. `FakeAgent` gains `--lab <payload>` per group so three labs of 30 run from one process.
+The order proves isolated sessions and result ownership first, then the offline access
+contract, then desktop integration (`D-54` item 6).
+
+**Progress.**
+
+- *Design recorded 2026-09-08* (`D-55`…`D-60`; ARCHITECTURE §3.9/§4, PROTOCOL *Files
+  exchanged offline* and *M5 additions*). The `.proto` addition of portion 5 is not made.
+- *Portion 1 (built and reviewed 2026-09-08, on the Mac).* The profile store and the
+  migration (`D-55`): `ProfilesDocument` (`profiles.json`, schema 1), `ProfileStore`,
+  `ProfileMigration`, `ConsoleLock` (`console.lock` opened with `FileShare.None`, one
+  process per data directory — a second launch is told so and quits; not enforced where
+  `DOTNET_SYSTEM_IO_DISABLEFILELOCKING` is set), and `ConsoleBootstrap` per profile:
+  `OpenExisting(labId)`, `CreateLab` into `labs/<id>/`, `ImportBackup` into a new profile
+  that refuses a lab already saved on this device until portion 3's upgrade semantics.
+  `lab.json` is schema 2 with an identity 1 → 2 step; `LabBackup.Open` upgrades the
+  nested lab/scripts/enrollment documents by their own `schema_version` and refuses a
+  newer one by name. The Serilog console log moved from `logs/` to the data root
+  (`console-<date>.log`); old files are moved once. The migration is state-driven and
+  resumable: copy → rename (5 retries for an antivirus hold) → commit (`profiles.json`)
+  → delete the originals in the order `lab.json`, `enrollment.json`, `scripts.json`,
+  `packages/`, `logs/`, then `instance.json`, then `lab-key.lck` (the two sentinels
+  last). Before any delete every root document is compared byte for byte with its copy
+  and `packages/`/`logs/` by file list and size; an uncommitted copy that differs is
+  discarded and made again, a committed one that differs leaves the root files moved,
+  complete, to `<data>/migration-conflict-<timestamp>/` — never deleted. Symlinks and
+  junctions are skipped and logged, free space is checked before the copy, and a root
+  with `instance.json` but no `lab-key.lck` is refused, not committed. Reversal to a
+  pre-M5 build is copying `labs/<id>/*` back to the root; that build drops the schema-2
+  fields it does not know on its next save (README, *Downgrading*). Tests: 702 (591
+  Shared + 111 Console), including a crash and resume after every step with
+  byte-identical originals, the conflict directory, a symlink loop, a crash mid-delete
+  and a keystore protector that throws on `Remove`. *Trial on the owner's Mac* against
+  a copy of the live `~/.labcontrol` (`--data`): migrated in under a second, the same
+  instance id served lab "444-2", the `PC-01` VM agent linked with its existing
+  certificate; a second launch ran no migration step and linked again. The live
+  directory itself is not migrated yet — it will be on the owner's next launch of an
+  M5 build. Portion 2 is next.
 
 **Not in scope.** Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs

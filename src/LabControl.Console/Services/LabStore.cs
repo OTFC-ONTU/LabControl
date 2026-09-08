@@ -5,9 +5,11 @@ using LabControl.Shared.Persistence;
 namespace LabControl.Console.Services;
 
 /// <summary>
-/// The console's data directory (ARCHITECTURE §4): where every document lives and how it
-/// is read and written. Nothing here interprets the documents; it only knows the paths and
-/// that every file goes through <see cref="JsonStore"/> with its migration chain.
+/// One lab's directory (ARCHITECTURE §4): where every document of that lab lives and how it
+/// is read and written. Since M5 (D-55) that is <c>labs/&lt;lab_id&gt;/</c> under the data
+/// directory, one per saved lab, found through <see cref="ProfileStore"/>. Nothing here
+/// interprets the documents; it only knows the paths and that every file goes through
+/// <see cref="JsonStore"/> with its migration chain.
 /// </summary>
 public sealed class LabStore
 {
@@ -28,6 +30,9 @@ public sealed class LabStore
     public string ScriptsPath => Path.Combine(Directory, Defaults.ScriptsFileName);
 
     public string LogsDirectory => Path.Combine(Directory, Defaults.LogsDirectoryName);
+
+    /// <summary>A teacher profile's authorization state (M5 portion 3); the path is reserved here.</summary>
+    public string AccessPath => Path.Combine(Directory, Defaults.AccessFileName);
 
     /// <summary>A lab exists here once both the key and this machine's instance are on disk.</summary>
     public bool HasLab => File.Exists(LabKeyPath) && File.Exists(InstancePath);

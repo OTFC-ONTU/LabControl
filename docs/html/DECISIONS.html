@@ -2008,6 +2008,469 @@ No new packaging dependency or paid signing requirement is selected here.</p>
 <p>Sources: <a href="https://docs.avaloniaui.net/docs/deployment/macos">Avalonia macOS packaging</a>,
 <a href="https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/rules">Windows Firewall rules</a>,
 <a href="https://learn.microsoft.com/en-us/dotnet/core/install/linux-scripted-manual#dependencies">Linux runtime dependencies</a>.</p>
+<h2 id="d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1">D-55 — The profile store: <code>profiles.json</code>, <code>labs/&lt;lab_id&gt;/</code>, and a resumable migration (M5 portion 1)<a class="anchor" href="#d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): <code>D-53</code> and <code>D-54</code> promised several saved labs per console and left
+the on-disk shape open. The console's data directory (<code>Defaults.ConsoleDataDirectory</code>,
+<code>--data</code>) holds exactly one lab today — <code>lab-key.lck</code>, <code>instance.json</code>, <code>lab.json</code>,
+<code>enrollment.json</code>, <code>scripts.json</code>, <code>packages/</code>, <code>logs/</code> — and <code>LabStore</code> is written
+against that flat layout. The M5 design (<code>D-55</code>…<code>D-60</code> are the entries it proposed) is
+recorded here before the code; implementation status is tracked in ROADMAP M5.</p>
+<p>Decisions:</p>
+<ol>
+<li><p><strong>One index, one directory per lab.</strong> The data directory root does not move and
+<code>--data</code> keeps working. It gains <code>profiles.json</code> (<code>ProfilesDocument</code>,
+<code>Defaults.ProfilesFileName</code>), an app-level <code>console-.log</code>, a <code>console.lock</code> held open
+with <code>FileShare.None</code> for the process lifetime (one process per data directory, <code>D-59</code>),
+and <code>labs/</code> (<code>Defaults.LabsDirectoryName</code>). Each <code>labs/&lt;lab_id&gt;/</code> — <code>lab_id</code> is the
+UUID from the CA's SAN — is one profile and contains exactly the files the flat layout
+had, plus <code>access.json</code> on teacher profiles: <code>lab-key.lck</code> and <code>enrollment.json</code> exist
+only on administrator profiles; <code>instance.json</code> is this device's identity for this lab;
+<code>lab.json</code>, <code>scripts.json</code>, <code>packages/</code>, <code>logs/</code> (events, jobs, batches) are per lab.
+<code>LabStore</code> keeps its API and is constructed with the profile directory, so
+<code>LabSession</code>, <code>ScriptLibrary</code>, <code>EventLog</code> and <code>JobBatchLogs</code> need no path changes; it
+gains <code>AccessPath</code>, <code>LoadAccess</code>/<code>SaveAccess</code>.</p>
+</li>
+<li><p><strong><code>profiles.json</code> is metadata only.</strong> Schema:</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: 1,
+  &quot;last_used_lab_id&quot;: &quot;5b1c…&quot;,
+  &quot;labs&quot;: [
+    {
+      &quot;lab_id&quot;: &quot;5b1c…&quot;,
+      &quot;lab_name&quot;: &quot;ОНТФК lab 214&quot;,
+      &quot;directory&quot;: &quot;labs/5b1c…&quot;,
+      &quot;authority_fingerprint&quot;: &quot;&lt;sha256 hex of the CA DER&gt;&quot;,
+      &quot;access&quot;: &quot;administrator&quot; | &quot;teacher&quot;,
+      &quot;authorization&quot;: &quot;authorized&quot; | &quot;needs_authorization&quot; | &quot;request_pending&quot; | &quot;expired&quot; | &quot;revoked&quot;,
+      &quot;instance_id&quot;: &quot;…&quot;, &quot;instance_name&quot;: &quot;MacBook-2026&quot;,
+      &quot;access_expires_unix&quot;: 0,
+      &quot;pc_count&quot;: 14,
+      &quot;added_at_unix&quot;: 0, &quot;last_used_unix&quot;: 0,
+      &quot;source&quot;: &quot;migrated&quot; | &quot;backup&quot; | &quot;lab_file&quot; | &quot;created&quot;
+    }
+  ]
+}
+</code></pre>
+<p><code>directory</code> is relative to the data directory. <code>authority_fingerprint</code> pins trust:
+the same <code>lab_id</code> with a different CA is refused, never merged (<code>D-53</code> item 4). The
+index carries no key material, no certificate and nothing an inactive lab could use to
+connect; the chooser reads only this file and never listens for beacons (default
+chosen 2026-09-08, owner may change). <code>ProfileStore</code> (<code>Load</code>, <code>Save</code> through
+<code>JsonStore</code>, <code>Find</code>, <code>Directory</code>, <code>Touch</code>, <code>Remove(labId, deleteData)</code>, <code>Upsert</code>) is
+the only writer; <code>ConsoleBootstrap</code> becomes per-profile (<code>OpenExisting(labId)</code>,
+<code>CreateLab</code> into <code>labs/&lt;newId&gt;/</code>).</p>
+</li>
+<li><p><strong>Migration is copy, rename, commit, delete — and resumable at every step.</strong> Trigger:
+at startup <code>profiles.json</code> is absent and <code>&lt;data&gt;/lab-key.lck</code> or <code>&lt;data&gt;/instance.json</code>
+exists. Sequence: (1) read <code>lab_id</code> from <code>lab-key.lck</code>, falling back to
+<code>instance.json</code>; a mismatch refuses with the existing <code>OpenExisting</code> message; (2) create
+<code>labs/&lt;lab_id&gt;.migrating/</code> and <em>copy</em> — never move — <code>lab-key.lck</code>, <code>instance.json</code>,
+<code>lab.json</code>, <code>enrollment.json</code>, <code>scripts.json</code>, <code>packages/**</code>, <code>logs/**</code>, skipping
+<code>console-*.log</code>; (3) rename <code>labs/&lt;lab_id&gt;.migrating</code> → <code>labs/&lt;lab_id&gt;</code> in one
+same-volume rename; (4) write <code>profiles.json</code> with one entry — <code>access: administrator</code>,
+<code>authorization: authorized</code>, <code>source: migrated</code>, the instance id from <code>instance.json</code>,
+<code>pc_count</code> from <code>lab.json</code> — this is the commit point; (5) delete the originals.
+Resume rules: a <code>.migrating</code> directory without <code>profiles.json</code> is deleted and step 2
+restarts; <code>labs/&lt;id&gt;</code> present without <code>profiles.json</code> redoes 4–5; <code>profiles.json</code>
+present with the originals still there runs 5 only. Reversal for a pre-M5 build is a
+copy back from <code>labs/&lt;id&gt;/</code>. Identity is preserved because <code>instance.json</code> moves
+verbatim and the keystore reference <code>instance-&lt;instanceId&gt;</code> is path-independent; no
+student PC sees anything. The migration dialog states the <code>D-53</code> item 6 limit: a device
+that holds the CA key keeps administrator authority, whatever label it is given.</p>
+</li>
+<li><p><strong><code>lab.json</code> schema 1 → 2</strong> is the first real <code>SchemaMigrations</code> step:
+<code>InstanceRecord.Access</code> (<code>administrator</code> | <code>teacher</code> | unknown), <code>AuthorizedAtUnix</code>,
+<code>RevokedAtUnix</code> — the administrator's device book (<code>D-56</code>);
+<code>MachineRecord.RevocationSerialsSeen</code> — entries this PC confirmed holding (<code>D-56</code>);
+<code>MachineRecord.LastInstanceObservedUnix</code> — when <code>LastInstanceId</code> was positively learned
+(<code>D-58</code>). Absent fields default. A schema-2 file is unreadable by a pre-M5 console by
+design (<code>D-20</code>); the reversal note says so.</p>
+</li>
+</ol>
+<p>Added while building portion 1 (2026-09-08), all in <code>ProfileMigration</code>, <code>ConsoleLock</code>
+and <code>LabBackup</code>:</p>
+<ol start="5">
+<li><strong>Nothing at the root is deleted unless it matches its copy.</strong> Before the delete step
+every root document (<code>lab-key.lck</code>, <code>instance.json</code>, <code>lab.json</code>, <code>enrollment.json</code>,
+<code>scripts.json</code>) is compared byte for byte with its copy under <code>labs/&lt;id&gt;/</code>, and
+<code>packages/</code> and <code>logs/</code> file by file and size by size. A root file already gone counts
+as matching (a delete that stopped half-way is the expected way to get there); extra
+files in the copy are the copy's business. Copying is <code>File.Copy</code> plus clearing a
+read-only attribute, because the console saves over the copy from now on.</li>
+<li><strong>A differing copy is discarded or the root is parked — by commit state.</strong> A copy that
+differs and is not yet in <code>profiles.json</code> is deleted and made again from the root: the
+root is still the only truth. A copy that differs and <em>is</em> committed is kept, and the
+root files are moved, complete, to <code>&lt;data&gt;/migration-conflict-&lt;yyyyMMdd-HHmmss&gt;/</code>
+(<code>Defaults.MigrationConflictDirectoryPrefix</code>) and logged as a warning; the console
+opens the saved lab. This is the downgrade-then-upgrade case (README, <em>Downgrading</em>),
+where a pre-M5 build ran on the root after the copy and the root is newer. The
+conflict directory is never deleted by the console.</li>
+<li><strong>Sentinel ordering on delete.</strong> The originals go in the order <code>lab.json</code>,
+<code>enrollment.json</code>, <code>scripts.json</code>, <code>packages/</code>, <code>logs/</code>, then <code>instance.json</code>, then
+<code>lab-key.lck</code>. The two files that mark a root as pending (<code>IsPending</code>) are deleted
+last, so a crash anywhere in between leaves a root the next launch still recognises
+and finishes; once the index exists, any other leftover lab file also counts as
+pending and is finished from the lab it names.</li>
+<li><strong>Symlinks and junctions are skipped, not followed.</strong> A link under the root or under
+<code>packages/</code>/<code>logs/</code> (<code>LinkTarget</code> set or <code>ReparsePoint</code>) is logged and not copied:
+following one could loop forever or copy something far outside the data directory.
+A symlink loop is a test case.</li>
+<li><strong>Free space is checked before the copy</strong> (<code>DriveInfo.AvailableFreeSpace</code> against the
+size of the originals plus a 64 MiB margin); too little refuses with an <code>IOException</code>
+naming the sizes rather than failing part-way, and the rename is retried five times
+at 250 ms for an antivirus hold (<code>D-33</code> item 9).</li>
+<li><strong>An instance-only root is refused, not committed.</strong> <code>instance.json</code> without
+<code>lab-key.lck</code> is a pre-M5 installation that lost its key, not a lab: the migration
+throws (<code>Migration.InstanceWithoutKey</code>) instead of writing an index entry that could
+never open — unless the index already names that lab, in which case an earlier
+delete stopped between the two sentinels and the leftover is finished. A key naming
+no lab and a key/instance <code>lab_id</code> mismatch are refused the same way.</li>
+<li><strong>The app-level log moves to the data root.</strong> Serilog now writes
+<code>console-&lt;date&gt;.log</code> (<code>Defaults.ConsoleLogFileName</code>) at the root, not under <code>logs/</code>,
+because <code>logs/</code> is per lab from now on. The migration moves a pre-M5 console's
+<code>console-*.log</code> files out of <code>logs/</code> once (a file with a namesake at the root stays)
+and does not copy them into the profile, so the retention limit applies to all of
+them and <code>logs/</code> holding only app logs does not count as pending lab data.</li>
+<li><strong><code>console.lock</code> — one process per data directory.</strong> <code>ConsoleLock.TryAcquire</code> opens
+<code>console.lock</code> with <code>FileShare.None</code> and holds it for the process lifetime; a second
+launch on the same directory is told so and quits, and the OS releases the lock when
+the process dies, so the file's existence means nothing — only holding it open does.
+Caveat: on Unix this rests on .NET's advisory <code>flock</code>, which
+<code>DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1</code> turns off; with that variable set two
+consoles can share a directory unnoticed, and the console does not try to detect it.</li>
+<li><strong><code>LabBackup.Open</code> upgrades the nested documents.</strong> Each sealed document inside a
+backup — <code>lab</code>, <code>scripts</code>, <code>enrollment</code> — carries its own <code>schema_version</code> and is
+walked through its own <code>SchemaMigrations</code> on open (the same 1 → 2 step as the file on
+disk), so an M4 backup restores into a schema-2 profile; a document written by a
+newer build is refused by name (<code>lab.json (in the backup)</code>), per <code>D-20</code>.</li>
+</ol>
+<p>Rejected: one data directory per lab chosen on the command line (the switcher is the
+product, <code>D-53</code>); moving files instead of copying during migration (an interrupted move
+leaves neither layout complete); keeping the flat layout for the first lab and nesting only
+later ones (two code paths for one store); storing certificates or keys in <code>profiles.json</code>
+(the index would become sensitive and an inactive lab could connect).</p>
+<p>Validation: Shared tests round-trip <code>profiles.json</code>, refuse a newer schema and migrate
+<code>lab.json</code> 1 → 2; console tests migrate a populated directory (same instance id, key
+reopened, logs/scripts/packages present), crash after every step and resume with
+byte-identical originals, produce the conflict directory, skip a symlink loop, survive a
+crash mid-delete and a keystore protector that throws on <code>Remove</code>, confirm the second
+launch is a no-op and that two <code>--data</code> directories coexist — 702 tests on 2026-09-08.
+The trial on a copy of the owner's live directory is in ROADMAP M5 <em>Progress</em>.</p>
+<h2 id="d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3">D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, <code>instance:</code> revocation (M5 portion 3)<a class="anchor" href="#d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): <code>D-53</code> item 3 required a routine lab file that is not a backup and
+an offline way for a teacher's device to obtain its own revocable identity, and left the
+format to be specified before code. <code>D-54</code> item 6 asked for a concrete request/approval
+flow. Every agent today validates a console by chaining to the pinned CA and parsing the
+SAN URI <code>labcontrol://&lt;lab&gt;/console/&lt;instance&gt;</code> (<code>LabTrust.TryValidate</code>, <code>LabName</code>); a
+URI with a new segment is <code>Malformed</code> to every agent already installed.</p>
+<p>Decisions:</p>
+<ol>
+<li><p><strong>Three files, one signed envelope.</strong> All are JSON documents through <code>JsonStore</code>
+(snake_case, <code>schema_version</code> first) with the shape
+<code>{schema_version, kind, lab_id, lab_name, payload, signature}</code>: <code>payload</code> is base64 of
+the UTF-8 JSON payload bytes; <code>signature</code> is base64 of a P-256/SHA-256 signature in
+IEEE P1363 form over <em>domain + payload bytes</em>, the pattern of
+<code>UpdateManifestSignature</code> (<code>D-52</code>). Domains: <code>labcontrol/lab-file/v1\0</code>,
+<code>labcontrol/device-request/v1\0</code>, <code>labcontrol/device-grant/v1\0</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Extension</th>
+<th>Signed by</th>
+<th>Verified against</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>lab file</td>
+<td><code>.lclab</code></td>
+<td>the lab CA key</td>
+<td>the CA certificate inside the file on first import; the pinned CA on re-import</td>
+</tr>
+<tr>
+<td>device request</td>
+<td><code>.lcreq</code></td>
+<td>the device's own key (a self-signed PKCS#10 CSR)</td>
+<td>the CSR's self-signature</td>
+</tr>
+<tr>
+<td>device grant</td>
+<td><code>.lcgrant</code></td>
+<td>the lab CA key</td>
+<td>the pinned CA of the profile it targets</td>
+</tr>
+</tbody>
+</table></div>
+<p>A corrupt, unsigned, wrongly signed or newer-schema file is <code>ImportOutcome.Failed</code>
+with a reason and changes nothing.</p>
+</li>
+<li><p><strong>What a <code>.lclab</code> carries, and what it must never carry.</strong> Payload: <code>lab_id</code>,
+<code>lab_name</code>, <code>issued_at_unix</code>, <code>issued_by_instance_id</code>/<code>_name</code>, <code>authority</code> (DER of the
+public CA) and <code>authority_fingerprint</code>, <code>snapshot_version</code> (monotonic per issuing
+console), <code>roster[]</code> (<code>agent_id</code>, <code>number</code>, <code>hostname</code>, <code>mac</code>, <code>last_ip</code>,
+<code>certificate_serial</code>, <code>certificate_not_after_unix</code>), <code>layout[]</code>, <code>revocations[]</code>
+(signed entries, self-authenticating), and an optional <code>scripts</code> library. It must not
+contain the <code>LabKeyDocument</code>, any wrapping, the CA private key or recovery material;
+the <code>EnrollmentDocument</code> or any code; any <code>instance.json</code> or private key; package
+binaries; logs. A test serialises a file and asserts every one of these absences. Lab
+files are produced only by an explicit <em>Export lab file…</em> in Settings, never as a side
+effect of a backup export; the embedded scripts are imported only into a profile that
+has no <code>scripts.json</code> yet (defaults chosen 2026-09-08, owner may change).</p>
+</li>
+<li><p><strong>Import is a merge that cannot go backwards.</strong> A new lab creates <code>labs/&lt;lab_id&gt;/</code>
+with <code>lab.json</code> from the snapshot, <code>access.json = {state: needs_authorization}</code> and a
+<code>teacher</code> profile; a <code>PendingDeviceIdentity</code> — a new key pair under <code>SecretProtector</code>,
+a new <code>instance_id</code>, the machine name — is created, but with no certificate nothing
+beacons. For an existing lab the <code>authority_fingerprint</code> must match (&quot;same lab id,
+different key — refused&quot;); then the roster is added/updated by agent id and number and
+never loses a PC this console has itself seen linked, the layout is replaced only when
+<code>snapshot_version</code> is newer, revocations are unioned, and scripts, <code>instance.json</code>,
+the access level and local history are untouched. Importing a backup into an existing
+teacher profile writes <code>lab-key.lck</code> and a dormant <code>enrollment.json</code> (<code>D-60</code>) into the
+same directory, sets <code>access: administrator</code>, keeps <code>instance.json</code> and history, and
+re-mints the leaf as an administrator only after an explicit <em>Renew this device's
+certificate</em>. A backup for a new lab behaves like today's import, into <code>labs/&lt;id&gt;/</code>.
+<em>Add labs…</em> accepts <code>.lclab</code>, <code>.lcbak</code>, <code>.lcgrant</code> and — on administrator profiles —
+<code>.lcreq</code> in one selection with a per-file result; nothing activates.</p>
+</li>
+<li><p><strong>The request/grant exchange.</strong> The teacher device writes <code>&lt;device&gt; – &lt;lab&gt;.lcreq</code>
+with payload <code>{lab_id, instance_id, instance_name, requested_access: teacher, created_at_unix, csr, console_version}</code>; the CSR is PKCS#10 from the pending key with
+<code>CN = instance name</code>, and <code>access.json</code> records <code>{state: request_pending, instance_id, requested_at, csr_fingerprint}</code> so a re-run regenerates the same request from the same
+key. The administrator's <em>Settings → Teacher devices → Authorize requests…</em> takes
+several files: verify the CSR self-signature, <code>lab_id</code> = this profile, a UUID
+<code>instance_id</code>, no <code>instance:&lt;id&gt;</code> revocation; a second request from an authorized
+device is a renewal under the same instance id. After <code>EnsureUnlockedAsync</code>,
+<code>LabCertificates.IssueTeacherDevice</code> issues a leaf with the <em>same</em> SAN URI and EKUs,
+<code>OU=LabControl Teacher</code>, and <code>Defaults.TeacherCertificateLifetime</code> = 365 days, the
+console leaf's lifetime (default chosen 2026-09-08, owner may change); the endorsement
+is <code>Beacon.Endorse(lab, instanceId, P256.Compress(csrPublicKey))</code>. The console records
+<code>InstanceRecord{Access: teacher, AuthorizedAtUnix}</code>, raises <code>device.authorized</code>, and
+writes the CA-signed <code>&lt;device&gt; – &lt;lab&gt;.lcgrant</code>: <code>{lab_id, instance_id, certificate DER, endorsement, issued_at_unix, expires_unix, snapshot: LabFilePayload}</code>. The device
+imports the grant through <em>Add labs…</em>: verify against the pinned CA, <code>instance_id</code>
+equal to the pending one, public key equal to the pending key,
+<code>LabTrust.TryValidate(cert, LabRole.Console)</code>; then write <code>instance.json</code>, mark
+<code>access.json</code> and the profile <code>authorized</code>, and apply the snapshot as a refresh.
+Fewer than 60 days of validity offers a renewal request from the chooser; an expired
+leaf leaves the profile listed as <code>expired</code>, with its history.</p>
+</li>
+<li><p><strong>The role lives in the subject OU, not in the SAN.</strong> <code>OU=LabControl Console</code>
+(administrator, unchanged) versus <code>OU=LabControl Teacher</code>; the SAN stays
+<code>console/&lt;instance_id&gt;</code> so every agent already in the field links to a teacher console.
+<code>LabName</code> gains <code>ConsoleAccess Access</code> (<code>Administrator</code>, <code>Teacher</code>, <code>Unknown</code>) parsed
+from the OU; <code>LabTrust.TryValidate</code> is unchanged and callers inspect <code>name.Access</code>. On
+the console a teacher profile has no <code>lab-key.lck</code>, so <code>LabSession.Vault</code> becomes
+nullable: <code>Enroll</code>/<code>Renew</code> answer <code>Closed</code> naming the administrator; <code>PushAgentBuild</code>,
+<code>TryRevoke</code>, <code>WritePayload</code>, backup export and holders are unavailable with
+<em>Administrator access needed</em>. An M5 agent reads the peer's OU (<code>ConsoleChannel.PeerName</code>,
+<code>AgentLink.LinkedConsoleAccess</code>) and answers <code>self_update</code>/<code>rekey</code> on a teacher link
+with <code>JobResult{ok:false, &quot;refused: this console has teacher access&quot;}</code> and the event
+<code>job.refused_by_role</code> before pulling any manifest; <code>RenewalLoopAsync</code> is skipped on
+teacher links. Older agents treat a teacher leaf as a full console — a documented gap
+closed by the next agent push, not by a wire negotiation; <code>Welcome.console_access</code> is
+informational only.</p>
+</li>
+<li><p><strong>A device is revoked across renewal with a pseudo-serial.</strong> <em>Settings → Teacher
+devices → Withdraw access…</em> (unlock required) issues two signed entries through
+<code>Registry.Revoke</code>: the current leaf serial and <code>instance:&lt;instance_id&gt;</code>, in the same
+signed <code>serial|revoked_at_unix|reason</code> form, so older agents store it inertly. The M5
+<code>LabTrust.TryValidate</code> also checks <code>instance:</code> entries for console peers, so a renewed
+leaf for a withdrawn device is refused; <code>InstanceRecord.RevokedAtUnix</code> is set.
+Propagation: pushed to linked agents at once (<code>TryRevoke</code>), carried in later <code>.lclab</code>
+and <code>.lcgrant</code> files, and carried agent-to-console as today. Delivery is confirmed,
+not assumed: an M5 agent answers every <code>Revocation</code> with <code>RevocationState</code>, the console
+records <code>MachineRecord.RevocationSerialsSeen</code>, and Settings shows <em>delivered to 11 of
+14 PCs; pending on PC-03 (offline since …)</em> — never &quot;revoked everywhere&quot;. Re-importing
+an old <code>.lclab</code> after withdrawal cannot bypass it; a new request mints a new instance id
+and key and needs a fresh approval.</p>
+</li>
+</ol>
+<p>Rejected: a new SAN segment or a private OID for the role (every installed agent would
+parse <code>Malformed</code>); a shared teacher key copied with the file (<code>D-53</code> item 3); a
+per-device password or an online issuance step; carrying enrollment codes in a lab file;
+a revocation list with a version and an owner (the union of self-authenticating entries
+already works across independent consoles, <code>D-21</code>); silently treating a re-imported old
+file as newer than local state.</p>
+<p>Validation: Shared tests sign, verify, tamper and newer-schema-refuse each envelope,
+assert the must-not-contain list, exercise the merge rules and the request/grant round
+trip, parse a teacher leaf as <code>Console</code> with <code>Access = Teacher</code>, and refuse a renewed leaf
+under an <code>instance:</code> entry. Console tests link agents to a teacher console and run a
+script, see <code>Enroll</code>/<code>Renew</code> <code>Closed</code>, withdraw a device (link closed, entry reaches
+agents, pending list shrinks) and upgrade a teacher profile from a backup keeping its
+instance id and logs. Implementation status is tracked in ROADMAP M5.</p>
+<h2 id="d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4">D-57 — One active session: <code>ActiveLabController</code>, release before acquire, the departure report, result ownership (M5 portions 2 and 4)<a class="anchor" href="#d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): <code>App.StartAsync</code> builds one <code>LabSession</code> at startup and shows the
+main window; <code>ConsoleServer</code> is one Kestrel per session; <code>AgentLink</code> drains finished job
+results to the next console that links, whichever instance that is; <code>JobQueue</code> on the
+receiving console drops ids it does not know, so the originating console loses them.
+<code>D-53</code> items 2 and 5 require at most one active lab, release before acquire and retained
+result ownership.</p>
+<p>Decisions:</p>
+<ol>
+<li><strong>One controller owns the only session.</strong> <code>ActiveLabController</code> (<code>Idle</code>, <code>Activating</code>,
+<code>Active</code>, <code>Deactivating</code>, <code>Failed</code>; <code>Active: LabSession?</code>; <code>StatusChanged</code> raised on a
+background thread, the UI posts) exposes <code>ActivateAsync(labId)</code>, <code>DeactivateAsync(reason)</code>
+and <code>DescribeDepartureAsync()</code>. Requests are serialised with a <code>SemaphoreSlim(1,1)</code>, a
+generation counter and a single <code>_requested</code> slot, so a rapid A → B → C ends with exactly
+one activation of C and one Kestrel. Activation: (1) <code>Activating(labId)</code> — the chooser
+shows the destination's saved mosaic from its <code>lab.json</code> immediately; (2) deactivate
+the current session; (3) <code>bootstrap.OpenExisting(labId)</code> — an administrator profile
+opens with the vault locked and the instance open, prompting to re-mint if due; a
+teacher profile needs a present <code>instance.json</code> and a valid leaf, else <code>Failed</code>;
+(4) <code>new LabSession(...)</code> and <code>StartAsync()</code>; (5) <code>profiles.Touch</code>. Any exception
+disposes what was built and leaves <code>Failed(labId, message)</code> with <em>Retry</em> in the chooser
+— never two half-active labs.</li>
+<li><strong>Deactivation order is fixed.</strong> <code>_stopping.Cancel()</code>; beacons stop first; every link
+gets <code>connection.Close(&quot;the console left this lab&quot;)</code>; the beacon listener stops; the
+server <code>StopAsync</code> (2 s budget) and dispose; housekeeping joins; <code>SaveLab()</code>;
+<code>Screens.Dispose()</code>; <code>Vault.Dispose()</code> (locks the CA); <code>Instance.Dispose()</code>.
+<code>FileOffers</code>/<code>FileUploads</code> die with the session. <code>LabSession</code> gains a <code>Disposed</code> event
+and a <code>Generation</code>; <code>MainViewModel.Detach()</code> unsubscribes, closes every <code>ScreenWindow</code>
+and generation-checks posted lambdas. Pending jobs are never re-created by the next
+session. The new session's <code>LabTrust</code> is built from the new lab's authority, so a
+lab-A agent reaching the lab-B server is refused as <code>NotIssuedByThisLab</code>/<code>WrongLab</code>,
+and <code>RequireAgent</code> consults <code>ProfileStore</code> to log the truthful <code>link.refused</code> —
+<em>belongs to lab A, which is not the active lab</em>. A second process on the same <code>--data</code>
+is refused by <code>console.lock</code>; a second launch forwards its files (<code>D-59</code>).</li>
+<li><strong>Departure is described, not guessed.</strong> <code>LabSession.DescribeDeparture()</code> returns a
+<code>DepartureReport</code>: running jobs grouped — <code>run_script</code>/<code>send_file</code> continue on the PC
+and show their result on return, power jobs complete, <code>self_update</code> cannot be aborted
+and leaving is safe; uploads in progress will fail; PCs in probation report on return;
+pending wakes are dropped. The dialog offers <em>Leave anyway</em>, <em>Stay</em> and <em>Wait for N
+jobs</em>. Timing targets: 2 s to the cached mosaic, 15 s for reachable agents; a
+<code>SwitchTimings</code> record is logged per switch and asserted in the drill.</li>
+<li><strong>A result belongs to the instance that delivered the job.</strong> The console journals
+under <code>labs/&lt;id&gt;/logs/</code> and <code>JobJournal</code>/<code>JobBatchLogs</code> rows gain <code>instance_id</code> and
+<code>lab_id</code>. The agent's <code>JobLedger</code> records the delivering console's <code>instance_id</code> (from
+<code>Welcome</code>); <code>_pendingResults</code> are drained only to a link with that instance id, and any
+other result is answered when that console re-sends the job after its <code>Welcome</code>, which
+it already does for in-flight jobs. No proto change is needed.</li>
+</ol>
+<p>Rejected: keeping inactive labs connected in the background (<code>D-53</code> item 2); one Kestrel
+shared across sessions with per-lab routing (trust is per lab and the listener would
+outlive its session); a process restart per switch (slow, and loses the departure
+report); delivering a previous teacher's output to whichever console links next
+(<code>D-53</code> item 5).</p>
+<p>Validation: console tests with a <code>TestRig</code> of two labs, one controller and one port —
+A → B → A with 30 agents per lab, no lab-A beacon within 5 s of departure, all A links
+closed, B agents linked within 15 s, an A agent refused with the lab-mismatch event, rapid
+A, B, C, A ending with one active lab and one Kestrel, a failed activation leaving <code>Failed</code>,
+<code>ScreenStore</code> disposed, a mixed batch with one wrong passphrase importing the rest, and a
+headless chooser render. Portion 4 on the VM: a script on A, switch to B and back, the
+result arrives; the other instance never receives A's result; uploads fail with the report;
+probation is reported. Implementation status is tracked in ROADMAP M5.</p>
+<h2 id="d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5">D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)<a class="anchor" href="#d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): <code>BeaconGate</code> honours a <code>take</code> beacon from another instance when
+<code>beacon.TakeAtUnix &gt; _linkedAtUnix</code> — the taker's clock against the agent's clock, so a
+console 40 s behind cannot take a room from a console that linked 30 s ago. <code>HeldElsewhere()</code>
+returns every known PC not linked here — presumed ownership, shown as fact. <code>D-53</code> item 6
+asked for both to be fixed.</p>
+<p>Decisions:</p>
+<ol>
+<li><strong>Only the agent's clock is compared with itself.</strong> A linked agent honours a verified
+beacon from a <em>different</em> instance with <code>take != 0</code> when (a) the <code>(inst, take)</code> token
+has not been honoured before, (b) the beacon <em>arrived</em> after the link was established,
+measured on the agent's own clock, and (c) <code>take</code> is within <code>TakeOverWindow + BeaconMaxSkew</code> of the beacon's own <code>ts</code>. The taker's timestamp is never compared with
+the agent's link time. No beacon field changes.</li>
+<li><strong>Ownership has four states, and only one of them claims another holder.</strong>
+<code>HeldElsewhere()</code> is replaced by <code>Ownership(machine)</code>: <code>LinkedHere</code>;
+<code>ObservedElsewhere(instance, at)</code> only when positively learned — an <code>Unlinked</code> reason
+naming a take-over, or <code>Hello.previous_instance_id</code> within a fresh sighting of that
+instance's beacon — recorded as <code>MachineRecord.LastInstanceObservedUnix</code> (<code>D-55</code>);
+<code>Offline(lastSeen)</code>; <code>Unknown</code>. The other-console banner counts only observed PCs —
+<em>holds at least N</em> — and an offline PC is shown offline, not <em>held by …</em>.</li>
+</ol>
+<p>Rejected: a clock-sync step between consoles (no server, no channel between them, <code>D-21</code>);
+correcting the taker's <code>take</code> by the <code>Welcome.server_time_unix</code> skew the agent knows (the
+agent knows the skew of the console it is linked to, not of the taker); treating every PC
+not linked here as held elsewhere (the current behaviour; false on an idle lab).</p>
+<p>Validation: Shared tests drive the gate with skewed clocks, the honour-once rule and the
+window; console tests run two consoles with ±30 s skew and show an offline PC as offline.
+Implementation status is tracked in ROADMAP M5.</p>
+<h2 id="d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted <code>.app</code>/<code>.dmg</code>, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)<a class="anchor" href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): <code>tools/publish-all.sh</code> produces executable directories, not
+packages; the console has no document activation and no notion of a second launch;
+<code>D-54</code> items 2–5 fixed the lifecycle rules and left the tooling open.</p>
+<p>Decisions:</p>
+<ol>
+<li><strong>Windows: a C# per-user self-installer, no third-party toolchain.</strong>
+<code>src/LabControl.ConsoleSetup/</code> is a single-file, self-contained <code>asInvoker</code> exe;
+<code>tools/package-windows.sh</code> publishes the console for <code>win-x64</code> and embeds it as a
+resource. It installs to <code>%LOCALAPPDATA%\Programs\LabControl\Console\</code>, creates the
+Start-menu <code>.lnk</code> (<code>IShellLinkW</code> via CsWin32) and an optional desktop shortcut, writes
+<code>HKCU\…\Uninstall\LabControl Console</code>, registers the <code>HKCU\Software\Classes</code> ProgIds
+<code>LabControl.LabFile</code> (<code>.lclab</code>) and <code>LabControl.Backup</code> (<code>.lcbak</code>) with an OpenWith
+handler, and becomes the default only when no <code>UserChoice</code> exists. <code>--uninstall</code>
+removes owned files, keys and rules and keeps the data; <code>--remove-data</code> is separate.
+Product and Start-menu name: <em>LabControl Console</em> (default chosen 2026-09-08, owner
+may change).</li>
+<li><strong>Scoped firewall rules, requested at the point of use.</strong> <code>NetworkReadiness</code> checks
+for inbound, port-scoped rules in the group <code>LabControl Console</code> (TCP <code>ConsolePort</code>
+47800, UDP <code>BeaconPort</code> 47801, Private and Domain profiles). When they are missing the
+console shows a banner whose <em>Allow…</em> runs <code>ConsoleSetup.exe --firewall</code> with <code>runas</code>;
+a denied elevation yields a diagnostic with the exact <code>netsh</code> lines. Nothing disables
+the firewall and no broad exclusion is created.</li>
+<li><strong>macOS: a scripted bundle with an ad-hoc signature.</strong> <code>tools/package-mac.sh</code> builds
+<code>LabControl.app/Contents/{Info.plist, MacOS/, Resources/labcontrol.icns}</code> with
+<code>CFBundleIdentifier org.ontfk.labcontrol.console</code> (default chosen 2026-09-08, owner
+may change), <code>CFBundleDocumentTypes</code> and <code>UTExportedTypeDeclarations</code> for <code>lclab</code> and
+<code>lcbak</code>, <code>NSLocalNetworkUsageDescription</code>, signs with <code>codesign --force --deep --sign -</code>
+and wraps it with <code>hdiutil</code> in a DMG carrying an Applications symlink. The Gatekeeper
+prompt is documented, not promised away (<code>D-15</code>). File activation goes through
+Avalonia 12's <code>IActivatableLifetime</code>/<code>FileActivatedEventArgs</code>; files that arrive before
+the chooser exists are queued. <em>Remove local data…</em> lives inside the app.</li>
+<li><strong>Linux: a tarball with per-user scripts and XDG registration.</strong> <code>tools/package-linux.sh</code>
+produces <code>install.sh</code>/<code>uninstall.sh</code> installing to <code>~/.local/opt/labcontrol/console/</code>,
+a <code>.desktop</code> entry (<code>Exec=… %F</code>, <code>MimeType</code>), MIME XML and icons, then runs
+<code>update-mime-database</code>/<code>update-desktop-database</code> and <code>xdg-mime default</code> only when no
+default exists. Prerequisites: <code>libicu</code>, <code>libfontconfig1</code>, <code>libx11-6</code>, <code>libice6</code>,
+<code>libsm6</code>, <code>libgl1</code>; <code>libsecret-1-0</code> optional (its absence means the file-backed secret
+protector, shown per profile). The documented matrix is Ubuntu 22.04 and 24.04, and
+Linux acceptance in the first M5 pass is documented and manual (default chosen
+2026-09-08, owner may change).</li>
+<li><strong>Document activation and the single instance.</strong> <code>ConsoleOptions.TryParse</code> accepts
+positional existing files with a known extension as <code>FilesToOpen</code> and <code>--import-only</code>
+for the forwarder. <code>Services/SingleInstance.cs</code> derives a name from the first 16 hex
+digits of <code>sha256(DataDirectory)</code>: a Windows named pipe <code>labcontrol-console-&lt;hash&gt;</code>
+(<code>CurrentUserOnly</code>) or a Unix socket <code>labcontrol-console-&lt;hash&gt;.sock</code> (0600) in
+<code>$XDG_RUNTIME_DIR</code> or the temp directory. The client sends one JSON line
+<code>{&quot;schema_version&quot;:1,&quot;open&quot;:[…]}</code>, the server validates it and raises <code>FilesArrived</code>
+on the UI thread, and the client exits 0 after the acknowledgement. <code>console.lock</code>
+(<code>D-55</code>) distinguishes a stale socket from a running console. Files opened this way
+enter the same import flow; they never activate a lab.</li>
+</ol>
+<p>Rejected: WiX, Inno Setup or MSIX for the console (a second toolchain to maintain, or
+store/signing prerequisites); the Windows student <code>Setup.exe</code> as the console installer
+(<code>D-54</code>); a machine-wide install (elevation for every update); an always-on helper for
+file activation; a mutex without a data-directory key (two <code>--data</code> directories are
+legitimate at once).</p>
+<p>Validation: forwarder → running server → import; a second process exits 0; a stale socket
+is recovered; dry-run step tests for the Windows installer; the manual matrix on Windows,
+macOS and Linux in ROADMAP M5. Implementation status is tracked in ROADMAP M5.</p>
+<h2 id="d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)<a class="anchor" href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): <code>D-54</code> item 7 forbids treating a backup import as concurrent
+enrollment recovery, because two independent holders of the CA cannot enforce single use
+of a code from separate local journals. Today <code>ImportBackup</code> restores <code>enrollment.json</code>
+as it was, codes included.</p>
+<p>Decisions:</p>
+<ol>
+<li><strong>Imported codes are dormant.</strong> <code>EnrollmentCodeRecord</code> gains <code>DormantSinceImportUnix</code>
+and <code>IssuedByInstanceId</code>; <code>EnrollmentDocument</code> gains <code>Batches[]</code>, one issuer per batch.
+A backup imported into a profile marks every usable code dormant; <code>Redeem</code> answers
+<code>EnrollmentOutcome.DormantCode</code> naming <em>Settings → Enrollment → Use codes from the
+imported backup</em>. Activation is an explicit administrator action on that profile.</li>
+<li><strong>Migration is not an import.</strong> The single-lab migration (<code>D-55</code>) keeps its codes
+active: nothing was copied between holders.</li>
+<li><strong>No global claim.</strong> Two administrator copies that both activate the same batch can
+both redeem a code; the console does not pretend otherwise, and the documented remedy
+is a fresh batch, which voids the old stick (<code>D-28</code>).</li>
+</ol>
+<p>Rejected: voiding imported codes outright (a lost laptop would force a new stick even when
+the old one is in the administrator's hand); silently keeping them active (the <code>D-54</code>
+item 7 hazard).</p>
+<p>Validation: Shared tests refuse a dormant code and accept it after activation; console
+tests import a backup and see the codes dormant. Implementation status is tracked in
+ROADMAP M5.</p>
 <h2 id="d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated<a class="anchor" href="#d-12-documentation-markdown-is-the-source-html-is-generated" aria-label="Link to this section">#</a></h2>
 <p>Context: the owner wants every document available as a readable <code>.html</code> next to the
 <code>.md</code>. Maintaining two hand-written copies guarantees they drift apart, and a drifted
@@ -2214,9 +2677,9 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-08 08:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-08 09:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-34-the-screen-stream-one-jpeg-per-frame-latest-wins-the-console-asks-m3-portion-1">D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)</a></li><li class="lvl2"><a href="#d-35-real-capture-one-producer-for-the-helper-and-the-simulator-dxgi-with-a-gdi-fallback-the-service-relays-m3-portion-2">D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)</a></li><li class="lvl2"><a href="#d-36-remote-control-text-as-text-shortcuts-by-position-the-service-raises-ctrlaltdel-m3-portion-3">D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)</a></li><li class="lvl2"><a href="#d-37-full-mode-quality-auto-by-default-three-manual-steps-the-frame-says-what-it-used-m3-portion-3">D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)</a></li><li class="lvl2"><a href="#d-38-m4-in-four-portions-and-the-script-library-as-the-first-m4-portion-1">D-38 — M4 in four portions, and the script library as the first (M4 portion 1)</a></li><li class="lvl2"><a href="#d-39-script-editor-quick-launch-and-desktop-application-templates">D-39 — Script editor, quick launch and desktop application templates</a></li><li class="lvl2"><a href="#d-40-optional-student-provisioning-and-standalone-removal-for-home-pc-testing">D-40 — Optional student provisioning and standalone removal for home-PC testing</a></li><li class="lvl2"><a href="#d-41-resume-a-running-file-pull-at-completed-chunk-boundaries-m4-portion-2">D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)</a></li><li class="lvl2"><a href="#d-42-explicit-upload-grants-and-a-committed-offset-query-m4-portion-2">D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)</a></li><li class="lvl2"><a href="#d-43-per-pc-result-bundles-from-the-existing-job-stream-m4-portion-2">D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)</a></li><li class="lvl2"><a href="#d-44-handout-dispatch-and-simulator-delivery-before-managed-windows-profiles">D-44 — Handout dispatch and simulator delivery before managed Windows profiles</a></li><li class="lvl2"><a href="#d-45-persist-account-mode-and-creation-evidence-before-windows-setup-integration">D-45 — Persist account mode and creation evidence before Windows Setup integration</a></li><li class="lvl2"><a href="#d-46-windows-account-preparation-under-private-storage-and-an-exclusive-lock">D-46 — Windows account preparation under private storage and an exclusive lock</a></li><li class="lvl2"><a href="#d-47-encrypt-the-settings-journal-and-restore-only-confirmed-unchanged-values">D-47 — Encrypt the settings journal and restore only confirmed, unchanged values</a></li><li class="lvl2"><a href="#d-48-start-native-settings-integration-with-two-fixed-dword-policies">D-48 — Start native settings integration with two fixed DWORD policies</a></li><li class="lvl2"><a href="#d-49-bind-ac-power-timeouts-to-a-scheme-and-confirm-native-activation">D-49 — Bind AC power timeouts to a scheme and confirm native activation</a></li><li class="lvl2"><a href="#d-50-journal-the-windows-update-active-hours-tuple-as-one-policy">D-50 — Journal the Windows Update active-hours tuple as one policy</a></li><li class="lvl2"><a href="#d-51-gate-the-lsa-autologon-secret-on-recorded-student-ownership">D-51 — Gate the LSA autologon secret on recorded student ownership</a></li><li class="lvl2"><a href="#d-52-integrate-m4-with-guarded-native-ownership-and-external-recovery">D-52 — Integrate M4 with guarded native ownership and external recovery</a></li><li class="lvl2"><a href="#d-53-lab-files-and-one-active-room-per-teacher-console-planned-m5">D-53 — Lab files and one active room per teacher console (planned M5)</a></li><li class="lvl2"><a href="#d-54-administrator-backup-onboarding-and-lightweight-console-installation-planned-m5">D-54 — Administrator backup onboarding and lightweight console installation (planned M5)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-34-the-screen-stream-one-jpeg-per-frame-latest-wins-the-console-asks-m3-portion-1">D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)</a></li><li class="lvl2"><a href="#d-35-real-capture-one-producer-for-the-helper-and-the-simulator-dxgi-with-a-gdi-fallback-the-service-relays-m3-portion-2">D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)</a></li><li class="lvl2"><a href="#d-36-remote-control-text-as-text-shortcuts-by-position-the-service-raises-ctrlaltdel-m3-portion-3">D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)</a></li><li class="lvl2"><a href="#d-37-full-mode-quality-auto-by-default-three-manual-steps-the-frame-says-what-it-used-m3-portion-3">D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)</a></li><li class="lvl2"><a href="#d-38-m4-in-four-portions-and-the-script-library-as-the-first-m4-portion-1">D-38 — M4 in four portions, and the script library as the first (M4 portion 1)</a></li><li class="lvl2"><a href="#d-39-script-editor-quick-launch-and-desktop-application-templates">D-39 — Script editor, quick launch and desktop application templates</a></li><li class="lvl2"><a href="#d-40-optional-student-provisioning-and-standalone-removal-for-home-pc-testing">D-40 — Optional student provisioning and standalone removal for home-PC testing</a></li><li class="lvl2"><a href="#d-41-resume-a-running-file-pull-at-completed-chunk-boundaries-m4-portion-2">D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)</a></li><li class="lvl2"><a href="#d-42-explicit-upload-grants-and-a-committed-offset-query-m4-portion-2">D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)</a></li><li class="lvl2"><a href="#d-43-per-pc-result-bundles-from-the-existing-job-stream-m4-portion-2">D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)</a></li><li class="lvl2"><a href="#d-44-handout-dispatch-and-simulator-delivery-before-managed-windows-profiles">D-44 — Handout dispatch and simulator delivery before managed Windows profiles</a></li><li class="lvl2"><a href="#d-45-persist-account-mode-and-creation-evidence-before-windows-setup-integration">D-45 — Persist account mode and creation evidence before Windows Setup integration</a></li><li class="lvl2"><a href="#d-46-windows-account-preparation-under-private-storage-and-an-exclusive-lock">D-46 — Windows account preparation under private storage and an exclusive lock</a></li><li class="lvl2"><a href="#d-47-encrypt-the-settings-journal-and-restore-only-confirmed-unchanged-values">D-47 — Encrypt the settings journal and restore only confirmed, unchanged values</a></li><li class="lvl2"><a href="#d-48-start-native-settings-integration-with-two-fixed-dword-policies">D-48 — Start native settings integration with two fixed DWORD policies</a></li><li class="lvl2"><a href="#d-49-bind-ac-power-timeouts-to-a-scheme-and-confirm-native-activation">D-49 — Bind AC power timeouts to a scheme and confirm native activation</a></li><li class="lvl2"><a href="#d-50-journal-the-windows-update-active-hours-tuple-as-one-policy">D-50 — Journal the Windows Update active-hours tuple as one policy</a></li><li class="lvl2"><a href="#d-51-gate-the-lsa-autologon-secret-on-recorded-student-ownership">D-51 — Gate the LSA autologon secret on recorded student ownership</a></li><li class="lvl2"><a href="#d-52-integrate-m4-with-guarded-native-ownership-and-external-recovery">D-52 — Integrate M4 with guarded native ownership and external recovery</a></li><li class="lvl2"><a href="#d-53-lab-files-and-one-active-room-per-teacher-console-planned-m5">D-53 — Lab files and one active room per teacher console (planned M5)</a></li><li class="lvl2"><a href="#d-54-administrator-backup-onboarding-and-lightweight-console-installation-planned-m5">D-54 — Administrator backup onboarding and lightweight console installation (planned M5)</a></li><li class="lvl2"><a href="#d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1">D-55 — The profile store: profiles.json, labs/&lt;lab_id&gt;/, and a resumable migration (M5 portion 1)</a></li><li class="lvl2"><a href="#d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3">D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, instance: revocation (M5 portion 3)</a></li><li class="lvl2"><a href="#d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4">D-57 — One active session: ActiveLabController, release before acquire, the departure report, result ownership (M5 portions 2 and 4)</a></li><li class="lvl2"><a href="#d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5">D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)</a></li><li class="lvl2"><a href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted .app/.dmg, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)</a></li><li class="lvl2"><a href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>
 </body>
 </html>

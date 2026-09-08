@@ -33,14 +33,18 @@ internal sealed class TestConsole : IAsyncDisposable
     public const string HolderName = "Viacheslav";
     public const string Passphrase = "correct horse battery staple";
 
-    private TestConsole(string directory, LabSession session, RecoveryCode? recoveryCode)
+    private TestConsole(string dataDirectory, LabSession session, RecoveryCode? recoveryCode)
     {
-        Directory = directory;
+        DataDirectory = dataDirectory;
         Session = session;
         RecoveryCode = recoveryCode;
     }
 
-    public string Directory { get; }
+    /// <summary>The data root: <c>profiles.json</c> and <c>labs/</c> (M5 layout).</summary>
+    public string DataDirectory { get; }
+
+    /// <summary>The lab's own directory, <c>labs/&lt;lab_id&gt;/</c>: what a <see cref="LabStore"/> reads.</summary>
+    public string Directory => Session.Store.Directory;
 
     public LabSession Session { get; }
 
@@ -69,28 +73,49 @@ internal sealed class TestConsole : IAsyncDisposable
 
         if (labDocument is not null)
         {
-            new LabStore(directory).EnsureDirectories();
-            new LabStore(directory).SaveLab(labDocument);
+            var store = new LabStore(new ProfileStore(directory).Directory(lab.LabId));
+            store.EnsureDirectories();
+            store.SaveLab(labDocument);
         }
 
         return new TestConsole(directory, await OpenAsync(directory, lab, instanceName, null, port), null);
     }
 
-    private static async Task<LabSession> OpenAsync(string directory, LabKey lab, string instanceName, TimeSpan? agentCertificateLifetime, int port)
+    private static async Task<LabSession> OpenAsync(string dataDirectory, LabKey lab, string instanceName, TimeSpan? agentCertificateLifetime, int port)
     {
-        var store = new LabStore(directory);
+        // The M5 layout: the lab under labs/<lab_id>/ and an administrator entry in profiles.json,
+        // so a ConsoleBootstrap built over the same options finds the lab.
+        var profiles = new ProfileStore(dataDirectory);
+        var store = new LabStore(profiles.Directory(lab.LabId));
         store.EnsureDirectories();
         store.SaveLabKey(lab.Document);
 
         var instance = ConsoleInstance.Mint(lab, instanceName, new FileSecretProtector());
         store.SaveInstance(instance.Document);
 
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        profiles.Upsert(new ProfileRecord
+        {
+            LabId = lab.LabId,
+            LabName = lab.LabName,
+            AuthorityFingerprint = ProfileRecord.AuthorityFingerprintOf(lab.Document.Authority),
+            Access = ProfileAccess.Administrator,
+            Authorization = ProfileAuthorization.Authorized,
+            InstanceId = instance.InstanceId,
+            InstanceName = instanceName,
+            AddedAtUnix = now,
+            LastUsedUnix = now,
+            Source = ProfileSource.Created,
+        });
+        profiles.LastUsedLabId = lab.LabId;
+        profiles.Save();
+
         var vault = new LabKeyVault(store, lab.Document);
         vault.Adopt(lab);
 
         var options = new ConsoleOptions
         {
-            DataDirectory = directory,
+            DataDirectory = dataDirectory,
             Port = port,
             BeaconPort = BeaconPort,
             BindAddress = IPAddress.Loopback,
@@ -110,7 +135,7 @@ internal sealed class TestConsole : IAsyncDisposable
         await Session.DisposeAsync();
         try
         {
-            System.IO.Directory.Delete(Directory, recursive: true);
+            System.IO.Directory.Delete(DataDirectory, recursive: true);
         }
         catch (IOException)
         {

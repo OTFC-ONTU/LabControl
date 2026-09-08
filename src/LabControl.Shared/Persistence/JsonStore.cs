@@ -29,11 +29,26 @@ public static class JsonStore
     }
 
     /// <summary>
+    /// The suffix of the file <see cref="Save{T}"/> writes before the atomic replace. One left
+    /// behind is a save that never finished; the document beside it is the last good one.
+    /// </summary>
+    public const string TemporarySuffix = ".tmp";
+
+    /// <summary>The temporary file <see cref="Save{T}"/> uses for a document path.</summary>
+    public static string TemporaryPathFor(string path) => path + TemporarySuffix;
+
+    /// <summary>
     /// SHA-256 of a document's text, lowercase hex. Used to tell whether the backup on record
     /// still matches <c>lab-key.lck</c> (D-25).
     /// </summary>
-    public static string Fingerprint(string json) =>
-        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json)));
+    public static string Fingerprint(string json) => Fingerprint(System.Text.Encoding.UTF8.GetBytes(json));
+
+    /// <summary>SHA-256 of a file's exact bytes, lowercase hex: what "the same document" means on disk.</summary>
+    public static string Fingerprint(ReadOnlySpan<byte> bytes) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+
+    /// <summary><see cref="Fingerprint(ReadOnlySpan{byte})"/> of a file on disk.</summary>
+    public static string FingerprintFile(string path) => Fingerprint(File.ReadAllBytes(path));
 
     /// <summary>Parses a document from text, migrating it forward or refusing it.</summary>
     /// <exception cref="SchemaVersionException">Written by a newer build.</exception>
@@ -87,7 +102,7 @@ public static class JsonStore
             Directory.CreateDirectory(directory);
         }
 
-        var temporary = path + ".tmp";
+        var temporary = TemporaryPathFor(path);
         File.WriteAllText(temporary, Serialize(document, migrations));
         RestrictPermissions(temporary, ownerOnly);
 

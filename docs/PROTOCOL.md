@@ -4,14 +4,15 @@ All console↔agent traffic is gRPC over HTTP/2 + TLS. Contracts live in
 `src/LabControl.Shared/Protos/*.proto` and are the single source of truth; this
 document explains intent and flows. **Update this file whenever a .proto changes.**
 
-**Planned M5 boundary (`D-53`).** Several labs may be saved on a teacher device, but
-only the selected lab may advertise or hold agent/file/video/control connections.
-Switching must close the old session before activating the next and prevent stale
-messages/results from crossing lab or originating-console boundaries. Each profile
-keeps its lab-scoped identity. Separate teacher authorization, revocation across renewal
-and takeover without comparing unsynchronized clocks require a documented compatible
-protocol design during M5. No new message or wire format is introduced by this plan;
-the frozen subset below remains mandatory. Classroom control is M6, catalog/polish M7.
+**M5 boundary (`D-53`; designed 2026-09-08, `D-55`…`D-60`, being implemented).** Several
+labs may be saved on a teacher device, but only the selected lab may advertise or hold
+agent/file/video/control connections. Switching closes the old session before activating
+the next and prevents stale messages/results from crossing lab or originating-console
+boundaries. Each profile keeps its lab-scoped identity. Teacher authorization, revocation
+across renewal and take-over without comparing unsynchronised clocks are specified in
+*M5 additions* under *Versioning* and in *Files exchanged offline* below; the only wire
+change is one additive, informational `Welcome` field, and the frozen subset remains
+mandatory. Classroom control is M6, catalog/polish M7.
 
 ## Ports and identifiers (`LabControl.Shared/Defaults.cs`)
 
@@ -79,6 +80,8 @@ Consequences:
   `take` value is honoured once, so a console rebroadcasting the same value for 30 s does
   not cause a re-dial loop, and two consoles pressing the button alternately simply move
   the room back and forth — never split a PC between them.
+  This "newer than the link" comparison sets the taker's clock against the agent's; M5
+  replaces it with an arrival-order rule on the agent's clock alone (`D-58`, *M5 additions*).
 - Consoles listen on the beacon port too. A verified beacon from another instance of the
   same lab is recorded in `lab.json` `instances[]` and drives the *other teacher machine*
   banner; a beacon that fails verification is dropped exactly as an agent would drop it.
@@ -146,11 +149,16 @@ Because agents reach the console at whatever address DHCP handed out today, **ne
 checks a hostname**. Identity is carried in a subject alternative name URI that both sides
 parse (`D-24`):
 
-| Certificate | Subject alternative name |
-|---|---|
-| lab authority | `labcontrol://<lab_id>/authority` |
-| console instance | `labcontrol://<lab_id>/console/<instance_id>` |
-| agent | `labcontrol://<lab_id>/agent/<agent_id>/<number>` |
+| Certificate | Subject alternative name | Subject OU (M5, `D-56`) |
+|---|---|---|
+| lab authority | `labcontrol://<lab_id>/authority` | — |
+| console instance (administrator) | `labcontrol://<lab_id>/console/<instance_id>` | `LabControl Console` |
+| teacher device | `labcontrol://<lab_id>/console/<instance_id>` | `LabControl Teacher` |
+| agent | `labcontrol://<lab_id>/agent/<agent_id>/<number>` | — |
+
+The teacher device's SAN is deliberately identical to a console's: every agent already in
+the field parses it as a console and links to it. The role is read from the subject OU
+(`LabName.Access`); agents older than M5 treat both as full consoles (see *M5 additions*).
 
 A peer is accepted when the certificate chains to the pinned CA, its URI names **this**
 lab, its role is the one expected on that side of the connection, and its serial is not in
@@ -198,6 +206,14 @@ on the say-so of a TLS peer alone: an entry that does not verify against the pin
 dropped and logged. Because entries are self-authenticating, the list has no version and
 no owner — every party keeps the union of what it has seen, in any order, which is what
 lets several teacher machines revoke independently (`D-21`).
+
+M5 (`D-56`) adds a **pseudo-serial** in the same signed form: `instance:<instance_id>`
+withdraws a teacher device across certificate renewal — an M5 verifier refuses a console
+peer whose SAN instance id has such an entry, whatever its leaf serial. Agents older than
+M5 store the entry inertly and carry it on like any other. An M5 agent answers *every*
+`Revocation` it applies with a fresh `RevocationState`, which is how the console records
+per PC which entries were delivered (`RevocationSerialsSeen`) and shows a pending status
+for the rest.
 
 ### `Job` — every action is a job
 
@@ -600,6 +616,54 @@ after every `Welcome`, so a console that (re)connects sees the current state at 
 console shows `user`, marks the tile *locked*, warns when `helper_alive` turns false, and
 logs LOGON / LOGOFF / LOCK / UNLOCK as informational events.
 
+## Files exchanged offline: `.lclab`, `.lcreq`, `.lcgrant` (M5, `D-56`)
+
+These never cross the wire; they travel on a USB stick, by e-mail or in a chat, and are
+the whole of the teacher-device authorization flow. Each is a JSON document written by
+`JsonStore` (snake_case, `schema_version` first) in one **signed envelope**:
+
+```
+{ schema_version, kind, lab_id, lab_name,
+  payload:   base64 of the UTF-8 JSON payload bytes,
+  signature: base64, ECDSA P-256 / SHA-256, IEEE P1363 (64 bytes),
+             over  domain || payload bytes  (the UpdateManifest pattern, D-52) }
+```
+
+| Kind | Extension | Domain | Signed by | Verified against |
+|---|---|---|---|---|
+| lab file | `.lclab` | `labcontrol/lab-file/v1\0` | the lab CA key | the CA certificate inside the file on first import; the pinned CA on re-import |
+| device request | `.lcreq` | `labcontrol/device-request/v1\0` | the device's own key (self-signed PKCS#10 CSR) | the CSR's self-signature |
+| device grant | `.lcgrant` | `labcontrol/device-grant/v1\0` | the lab CA key | the pinned CA of the profile it targets |
+
+Payloads:
+
+- **`.lclab`** — `lab_id`, `lab_name`, `issued_at_unix`, `issued_by_instance_id`,
+  `issued_by_instance_name`, `authority` (DER of the public CA), `authority_fingerprint`,
+  `snapshot_version` (monotonic per issuing console), `roster[]` `{agent_id, number,
+  hostname, mac, last_ip, certificate_serial, certificate_not_after_unix}`, `layout[]`
+  `{number, column, row}`, `revocations[]` (signed entries as on the wire, so they are
+  self-authenticating), optional `scripts` (a `ScriptsDocument`, imported only into a
+  profile without one). Produced only by *Export lab file…*.
+- **`.lcreq`** — `lab_id`, `instance_id`, `instance_name`, `requested_access: teacher`,
+  `created_at_unix`, `csr` (PKCS#10 from the device's pending key, `CN` = instance name),
+  `console_version`. Re-running the request on the device regenerates the same file from
+  the same key.
+- **`.lcgrant`** — `lab_id`, `instance_id`, `certificate` (DER: SAN
+  `labcontrol://<lab>/console/<instance>`, `OU=LabControl Teacher`, 365 days), the beacon
+  `endorsement` over `lab | inst | base64(pub)` (`D-24`), `issued_at_unix`, `expires_unix`,
+  `snapshot` (a full `.lclab` payload). The device accepts it only if the instance id and
+  public key match its pending request and the leaf validates as a console of this lab.
+
+**What they must never contain** — a test serialises each and asserts the absence of: the
+`LabKeyDocument`, any holder or recovery wrapping, the CA private key; the
+`EnrollmentDocument` or any enrollment code; any `instance.json` or private key (a `.lcreq`
+carries only the CSR's public half); package binaries; logs. A `.lcbak` is the one file
+that carries the lab key, and it stays the administrator's backup (`D-26`, `D-54`).
+
+A corrupt, unsigned, wrongly signed or newer-schema file is refused with a reason and
+changes nothing; re-importing an older `.lclab` never rolls back revocations, deletes a PC
+this console has seen linked, downgrades access or replaces the device identity.
+
 ## Versioning
 
 `Hello` also carries `lab_id` and the agent's certificate serial, so a console that has
@@ -618,6 +682,43 @@ number until then.
 record already holds — a different `agent_id`, the same sticker — is the same PC after a
 reinstall. The old record is replaced, not kept beside the new one, and the console
 records an event naming both agent ids and the old certificate serial.
+
+### M5 additions (being implemented, `D-55`…`D-60`)
+
+Recorded from the design on 2026-09-08; the portion that lands each item is in ROADMAP
+M5, and the `.proto` change below must be reflected here again in the commit that makes it.
+
+1. **`Welcome.console_access = 6`** — `enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0;
+   ADMINISTRATOR = 1; TEACHER = 2; }`. Additive and informational: the authoritative role
+   is the subject OU of the console leaf the agent already validated; the field lets an
+   agent name the access level in events without re-parsing the certificate. Agents that
+   do not know the field ignore it.
+2. **Role in the certificate table** (above): `OU=LabControl Console` versus
+   `OU=LabControl Teacher` with an unchanged SAN. Agents older than M5 treat both as
+   consoles — a teacher console can, until the next agent push, replay an
+   administrator-signed update bundle to such an agent; this is documented, not negotiated.
+3. **Revocation**: the `instance:<instance_id>` pseudo-serial; an M5 agent answers every
+   applied `Revocation` with `RevocationState`, and the console keeps a per-PC delivered
+   list and a pending status. No message change.
+4. **`Job`**: an M5 agent refuses `self_update` and `rekey` on a link whose console has
+   teacher access — `JobResult{ok: false, message: "refused: this console has teacher
+   access"}` plus the event `job.refused_by_role`, before any manifest is pulled. The
+   agent's renewal loop is not run on a teacher link. **`JobResult` ownership**: an M5
+   agent records the delivering console's `instance_id` (from `Welcome`) in its ledger and
+   drains a kept result only to a link with that instance id; any other console receives
+   the result only when it re-sends the job after its own `Welcome`, which it already does
+   for jobs it had in flight. No field change; the frozen subset is untouched.
+5. **Beacon `take`**: honoured when the `(inst, take)` token is unhonoured, the beacon
+   arrived after the link was established on the agent's own clock, and `take` is within
+   `TakeOverWindow + BeaconMaxSkew` of the beacon's own `ts`. The taker's timestamp is
+   never compared with the agent's link time. No field change.
+6. **Versioning**: an M5 console accepts every older agent as before and shows the
+   *update available* badge; the two behaviours it cannot get from an older agent —
+   role-based refusal of `self_update`/`rekey` and result binding to the delivering
+   instance — are listed on the tile as reasons to update, not as connection failures.
+   An older console meeting an M5 agent sees an `instance:` entry as an odd serial and a
+   `Welcome` field it did not send; both are harmless.
+7. **Files exchanged offline** — the section above.
 
 ### The frozen subset
 

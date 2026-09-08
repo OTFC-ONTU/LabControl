@@ -29,6 +29,14 @@ student services or changing student-account/system settings on the teacher's de
 Classroom control is now M6 and catalog/polish M7.
 See M5 in [the roadmap](docs/ROADMAP.md).
 
+**Downgrading to a pre-M5 build.** An M5 console keeps each lab in
+`labs/<lab_id>/` under its data directory (`~/.labcontrol/` or `%APPDATA%\LabControl\`).
+To run an older build on the same lab, copy `labs/<lab_id>/*` back to the data root;
+the old build reads it, but on its next save it drops the schema-2 `lab.json` fields it
+does not know. The next launch of an M5 build notices the root differs from its saved
+copy, moves the root files to `migration-conflict-<timestamp>/` and opens the saved
+lab — nothing is deleted, but the two copies have to be reconciled by hand.
+
 Built with .NET 10 + Avalonia + gRPC. See [`CLAUDE.md`](CLAUDE.md) for the detailed
 project brief, [`AGENTS.md`](AGENTS.md) for Codex instructions and the shared agent
 documentation contract, and [`docs/`](docs/) for architecture, protocol, installer

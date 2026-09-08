@@ -83,6 +83,33 @@ public sealed class BackupTests
     }
 
     [Fact]
+    public void A_backup_whose_sealed_scripts_or_enrollment_come_from_a_newer_build_is_refused_by_name()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var lab = TestLab.Create();
+        var machines = new LabDocument { LabId = lab.LabId, LabName = lab.LabName };
+
+        var newerScripts = new ScriptsDocument { SchemaVersion = Defaults.ScriptsSchemaVersion + 1, LabId = lab.LabId };
+        var scripts = LabBackup.Parse(LabBackup.Serialize(LabBackup.Export(lab, machines, new Dictionary<string, string>(), "me", now, scripts: newerScripts)), "s.lcbak");
+        var refusedScripts = Assert.Throws<SchemaVersionException>(() => LabBackup.Open(scripts, lab));
+        Assert.Contains(Defaults.ScriptsFileName, refusedScripts.DocumentName, StringComparison.Ordinal);
+        Assert.Equal(Defaults.ScriptsSchemaVersion + 1, refusedScripts.FileVersion);
+
+        var newerEnrollment = new EnrollmentDocument { SchemaVersion = Defaults.EnrollmentSchemaVersion + 1, LabId = lab.LabId };
+        var enrollment = LabBackup.Parse(LabBackup.Serialize(LabBackup.Export(lab, machines, new Dictionary<string, string>(), "me", now, enrollment: newerEnrollment)), "e.lcbak");
+        var refusedEnrollment = Assert.Throws<SchemaVersionException>(() => LabBackup.Open(enrollment, lab));
+        Assert.Contains(Defaults.EnrollmentFileName, refusedEnrollment.DocumentName, StringComparison.Ordinal);
+        Assert.Equal(Defaults.EnrollmentSchemaVersion + 1, refusedEnrollment.FileVersion);
+
+        // Current versions of both still open, stamped with the version this build writes.
+        var fine = LabBackup.Parse(LabBackup.Serialize(LabBackup.Export(lab, machines, new Dictionary<string, string>(), "me", now,
+            new EnrollmentDocument { LabId = lab.LabId }, new ScriptsDocument { LabId = lab.LabId })), "ok.lcbak");
+        var payload = LabBackup.Open(fine, lab);
+        Assert.Equal(Defaults.ScriptsSchemaVersion, payload.Scripts!.SchemaVersion);
+        Assert.Equal(Defaults.EnrollmentSchemaVersion, payload.Enrollment!.SchemaVersion);
+    }
+
+    [Fact]
     public void A_backup_from_a_newer_build_is_refused_by_name()
     {
         var now = DateTimeOffset.UtcNow;

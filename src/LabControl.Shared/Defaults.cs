@@ -262,14 +262,41 @@ public static class Defaults
         [LabFileExtension, BackupFileExtension, DeviceGrantFileExtension, DeviceRequestFileExtension];
 
     /// <summary>
+    /// The largest document the console opens (D-59 item 5). Every one of
+    /// <see cref="ConsoleDocumentExtensions"/> is a JSON text of a few kilobytes — a backup
+    /// with a full roster and a script library is the biggest, and stays far under this. The
+    /// cap is what stops a named pipe, a device node or a gigabyte of junk handed over by a
+    /// file manager from being read into memory on the way to an import.
+    /// </summary>
+    public const long ConsoleDocumentMaxBytes = 8L * 1024 * 1024;
+
+    /// <summary>
     /// The single-instance endpoint (D-59 item 5): <c>labcontrol-console-&lt;hash&gt;</c>, where the
     /// hash is the first 16 hex digits of SHA-256 over the data directory — a Windows named
-    /// pipe of that name, or a Unix socket of that name plus <see cref="SingleInstanceSocketExtension"/>.
+    /// pipe of that name, or a Unix socket <see cref="SingleInstanceSocketPrefix"/><c>&lt;hash&gt;</c>
+    /// <see cref="SingleInstanceSocketExtension"/> inside this user's private socket directory.
     /// Two <c>--data</c> directories get two endpoints.
     /// </summary>
     public const string SingleInstanceNamePrefix = "labcontrol-console-";
     public const string SingleInstanceSocketExtension = ".sock";
     public const int SingleInstanceNameHashLength = 16;
+
+    /// <summary>
+    /// The per-user directory the Unix socket lives in, created with mode 0700 under
+    /// <c>$XDG_RUNTIME_DIR</c> or the temp directory: <c>labcontrol-&lt;uid&gt;</c>. The socket
+    /// itself is <see cref="SingleInstanceSocketPrefix"/><c>&lt;hash&gt;</c>, shorter than the
+    /// pipe name because <c>sun_path</c> holds only 104 bytes on macOS and the temp directory
+    /// there is already 48 of them.
+    /// </summary>
+    public const string SingleInstanceDirectoryPrefix = "labcontrol-";
+    public const string SingleInstanceSocketPrefix = "console-";
+
+    /// <summary>
+    /// The most documents one forwarded launch may carry (D-59 item 5). A teacher selects a
+    /// handful of files in Finder; anything past this is a mistake or an attempt to make the
+    /// console do work for whoever can reach the socket, and the whole batch is refused.
+    /// </summary>
+    public const int SingleInstanceMaxOpenPaths = 64;
 
     /// <summary>
     /// The pseudo-serial that revokes a teacher device across renewals (D-56 item 6):

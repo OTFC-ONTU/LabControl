@@ -78,8 +78,10 @@ internal static class Program
 
         try
         {
-            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
-            return 0;
+            // The lifetime's exit code, not a flat 0: a launch the data directory refuses
+            // (App shows why and shuts down with 1) must not look to a script like a console
+            // that ran and quit normally.
+            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
         {

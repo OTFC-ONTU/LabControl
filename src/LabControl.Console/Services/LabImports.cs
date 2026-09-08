@@ -115,7 +115,9 @@ public sealed class LabImports
 
     private async Task<ImportFileResult> ImportBackupAsync(string path)
     {
-        var backup = ConsoleBootstrap.ReadBackup(path);
+        // Off the UI thread: reading and parsing is a file the console did not write, and the
+        // window may not freeze while a slow disk (or a stick pulled mid-read) answers.
+        var backup = await Task.Run(() => ConsoleBootstrap.ReadBackup(path));
 
         // An administrator profile is refused before asking for a secret; a teacher profile
         // is upgraded from the backup (D-56 item 3), keeping its instance and history.
@@ -149,7 +151,7 @@ public sealed class LabImports
     /// </summary>
     private async Task<ImportFileResult> ImportRequestAsync(string path)
     {
-        var request = DeviceAccess.ReadRequest(path);
+        var request = await Task.Run(() => DeviceAccess.ReadRequest(path));
         var profile = _bootstrap.Profiles.Find(request.LabId);
         if (profile is null || !Devices.CanApprove(request.LabId))
         {

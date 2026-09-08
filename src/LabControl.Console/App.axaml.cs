@@ -142,11 +142,14 @@ public partial class App : Application
         // that cannot be opened costs only that convenience; the console still runs.
         try
         {
-            _instance = SingleInstance.Listen(options.DataDirectory, action => Dispatcher.UIThread.Post(action), _loggers.CreateLogger<SingleInstance>());
+            _instance = SingleInstance.Listen(options.DataDirectory, _lock, action => Dispatcher.UIThread.Post(action), _loggers.CreateLogger<SingleInstance>());
             _instance.FilesArrived += OnFilesArrived;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
+            // Deliberately every exception: the endpoint is a convenience, and no way of
+            // failing to open it — an unusable socket directory, a path longer than
+            // sun_path, a name someone else holds — may cost the console its startup.
             _log.LogWarning(ex, "The single-instance endpoint could not be opened; a second launch will be refused instead of forwarded");
         }
 
@@ -165,12 +168,11 @@ public partial class App : Application
                     return;
                 }
 
-                var paths = files.Files.Select(item => item.TryGetLocalPath()).OfType<string>().ToList();
+                IReadOnlyList<string> paths = files.Files.Select(item => item.TryGetLocalPath()).OfType<string>().ToList();
                 if (_firstActivation)
                 {
                     _firstActivation = false;
-                    var arguments = Program.Arguments.Select(TryFullPath).OfType<string>().ToHashSet(StringComparer.Ordinal);
-                    paths.RemoveAll(path => arguments.Contains(Path.GetFullPath(path)));
+                    paths = ConsoleOptions.WithoutArgumentEcho(paths, Program.Arguments);
                 }
 
                 OnFilesArrived(paths);
@@ -258,7 +260,10 @@ public partial class App : Application
         var viewModel = new LabChooserViewModel(_bootstrap, _controller, chooser, action => Dispatcher.UIThread.Post(action), _log);
         chooser.DataContext = viewModel;
         viewModel.QuitRequested += () => _desktop.Shutdown();
-        viewModel.CreateRequested += () => _ = CreateLabAsync(chooser, viewModel);
+        viewModel.CreateRequested += () => CreateLabAsync(chooser, viewModel);
+        // Files that arrived while the chooser was importing a batch of its own, or running
+        // the create wizard, go as soon as it is free again.
+        viewModel.BecameIdle += () => _ = PumpFilesAsync();
         chooser.Closed += (_, _) =>
         {
             viewModel.Detach();
@@ -342,21 +347,11 @@ public partial class App : Application
 
     // ------------------------------------------------------------------ documents to open
 
-    private static string? TryFullPath(string argument)
-    {
-        try
-        {
-            return Path.GetFullPath(argument);
-        }
-        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
-        {
-            return null;
-        }
-    }
-
     /// <summary>
-    /// Documents from the command line, a forwarded launch or a file activation. An empty
-    /// list is a bare second launch: the console comes to the front and nothing is imported.
+    /// Documents from the command line, a forwarded launch, a file activation or a drop on a
+    /// window. An empty list is a bare second launch: the console comes to the front and
+    /// nothing is imported. Every one of those routes ends here, so batches are imported one
+    /// at a time and two unlock dialogs can never stack over the same profile store.
     /// </summary>
     private void OnFilesArrived(IReadOnlyList<string> files)
     {
@@ -367,12 +362,54 @@ public partial class App : Application
 
         if (files.Count == 0)
         {
-            ((Window?)_main ?? _chooser)?.Activate();
+            BringToFront();
             return;
         }
 
         _pendingFiles.AddRange(files);
         _ = PumpFilesAsync();
+    }
+
+    /// <summary>
+    /// What a second launch with nothing to open asks for: this console, in front. The
+    /// application itself is raised first — on macOS a process whose windows are all hidden
+    /// stays behind the Finder however often a window is activated — and then whichever
+    /// window is up. With no window at all (startup, or a lab opening) raising the
+    /// application is all there is to do, and it is still worth doing.
+    /// </summary>
+    private void BringToFront()
+    {
+        if (this.TryGetFeature<IActivatableLifetime>() is { } activatable)
+        {
+            try
+            {
+                activatable.TryLeaveBackground();
+            }
+            catch (Exception ex)
+            {
+                _log?.LogDebug(ex, "The application could not be brought out of the background");
+            }
+        }
+
+        if (((Window?)_main ?? _chooser ?? _desktop?.MainWindow) is not { } window)
+        {
+            return;
+        }
+
+        try
+        {
+            if (window.WindowState == WindowState.Minimized)
+            {
+                window.WindowState = WindowState.Normal;
+            }
+
+            window.Show();
+            window.Activate();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            _log?.LogDebug(ex, "The window could not be brought to the front");
+        }
     }
 
     /// <summary>
@@ -510,7 +547,9 @@ public partial class App : Application
         var viewModel = new MainViewModel(session, _bootstrap, main, action => Dispatcher.UIThread.Post(action)) { IsConnecting = connecting };
         main.DataContext = viewModel;
         viewModel.DisconnectRequested += () => _ = DisconnectAsync(main, viewModel, session);
-        main.FilesDropped += paths => _ = ImportOnMainAsync(main, paths);
+        // A drop on the main window goes through the same queue as a forwarded launch: one
+        // import batch at a time, whatever asked for it.
+        main.FilesDropped += OnFilesArrived;
         main.Closing += (_, e) =>
         {
             // The close button on the main window is Disconnect (M5 §5): back to the chooser,
@@ -625,10 +664,18 @@ public partial class App : Application
     // ------------------------------------------------------------------ shutdown
 
     /// <summary>
-    /// Releases everything without holding the UI thread: an activation in flight is
-    /// cancelled (its prompt closed), the active lab is released in the fixed order, the log
-    /// flushed, the lock dropped; then the shutdown that was held is let through. A release
-    /// that takes longer than the budget is abandoned rather than hung on.
+    /// Releases everything without holding the UI thread: the endpoint stops answering, an
+    /// activation in flight is cancelled (its prompt closed), the active lab is released in
+    /// the fixed order, the log flushed, the lock dropped; then the shutdown that was held is
+    /// let through. A release that takes longer than the budget is abandoned rather than hung
+    /// on, and every remaining step runs even if one of them throws — a console that cannot
+    /// quit is worse than one that quits untidily.
+    /// <para>
+    /// The endpoint goes first, before the ten-second wait on the controller. A launch that
+    /// reached it during that wait used to be acknowledged, exit 0, and have its file dropped
+    /// by <see cref="OnFilesArrived"/> — the teacher's document silently gone. Now it is
+    /// refused, and the launcher starts its own console.
+    /// </para>
     /// </summary>
     private async Task StopAsync()
     {
@@ -638,41 +685,47 @@ public partial class App : Application
         }
 
         _stopping = true;
-        _mainViewModel?.Detach();
-
-        var controller = _controller;
-        _controller = null;
-        if (controller is not null)
+        try
         {
-            try
+            if (_instance is { } instance)
             {
-                await controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+                _instance = null;
+                instance.BeginStopping();
+                try
+                {
+                    await instance.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    _log?.LogDebug(ex, "The single-instance endpoint did not close cleanly");
+                }
             }
-            catch (Exception ex)
+
+            _mainViewModel?.Detach();
+
+            var controller = _controller;
+            _controller = null;
+            if (controller is not null)
             {
-                _log?.LogWarning(ex, "The active lab was not released cleanly on shutdown");
+                try
+                {
+                    await controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+                }
+                catch (Exception ex)
+                {
+                    _log?.LogWarning(ex, "The active lab was not released cleanly on shutdown");
+                }
             }
         }
-
-        if (_instance is { } instance)
+        finally
         {
-            _instance = null;
-            try
-            {
-                await instance.DisposeAsync();
-            }
-            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
-            {
-                _log?.LogDebug(ex, "The single-instance endpoint did not close cleanly");
-            }
+            Log.CloseAndFlush();
+            _loggers?.Dispose();
+            _lock?.Dispose();
+            _lock = null;
+
+            _stopped = true;
+            _desktop?.Shutdown();
         }
-
-        Log.CloseAndFlush();
-        _loggers?.Dispose();
-        _lock?.Dispose();
-        _lock = null;
-
-        _stopped = true;
-        _desktop?.Shutdown();
     }
 }

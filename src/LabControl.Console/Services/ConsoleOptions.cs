@@ -141,8 +141,16 @@ public sealed class ConsoleOptions
 
     /// <summary>
     /// The one rule for a document the console is asked to open, on the command line or over
-    /// the single-instance endpoint: it exists as a file and carries a known extension.
-    /// <paramref name="fullPath"/> is the resolved absolute path.
+    /// the single-instance endpoint: it carries a known extension and is an ordinary file of
+    /// a plausible size. <paramref name="fullPath"/> is the resolved absolute path.
+    /// <para>
+    /// The size test is what keeps the console alive: <see cref="File.Exists"/> is also true
+    /// of a named pipe or a character device, and reading one of those never returns. Every
+    /// document here is a JSON text of a few kilobytes, while a FIFO, a device node and an
+    /// empty file all report length 0 — so a length between one byte and
+    /// <see cref="Defaults.ConsoleDocumentMaxBytes"/> is both the honest rule and the guard.
+    /// A symbolic link is resolved first, so linking to a FIFO does not slip past.
+    /// </para>
     /// </summary>
     public static bool TryValidateFile(string path, out string fullPath, out string error)
     {
@@ -170,14 +178,74 @@ public sealed class ConsoleOptions
             return false;
         }
 
-        if (!File.Exists(fullPath))
+        try
         {
-            error = $"'{path}' does not exist";
+            var file = new FileInfo(fullPath);
+            if (!file.Exists || Directory.Exists(fullPath))
+            {
+                error = $"'{path}' does not exist";
+                return false;
+            }
+
+            if (File.ResolveLinkTarget(fullPath, returnFinalTarget: true) is { } target)
+            {
+                if (target is DirectoryInfo || !target.Exists)
+                {
+                    error = $"'{path}' does not exist";
+                    return false;
+                }
+
+                file = target as FileInfo ?? new FileInfo(target.FullName);
+            }
+
+            var length = file.Length;
+            if (length <= 0)
+            {
+                error = $"'{path}' is empty or is not an ordinary file";
+                return false;
+            }
+
+            if (length > Defaults.ConsoleDocumentMaxBytes)
+            {
+                error = $"'{path}' is {length} bytes; this console opens documents up to {Defaults.ConsoleDocumentMaxBytes} bytes";
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            error = $"'{path}' could not be read: {ex.Message}";
             return false;
         }
 
         error = string.Empty;
         return true;
+    }
+
+    /// <summary>
+    /// The first file activation on macOS, minus what AppKit echoed back (D-59 item 5):
+    /// LaunchServices reports the process's own command-line arguments as opened files, so a
+    /// document named on the command line would otherwise be imported twice — once from
+    /// <see cref="FilesToOpen"/> and once from the activation. Comparison is on full paths and
+    /// case-insensitive, because that is how the file systems this runs on behave; a later
+    /// open of the same file is a real request and is not filtered.
+    /// </summary>
+    public static IReadOnlyList<string> WithoutArgumentEcho(IEnumerable<string> paths, IEnumerable<string> arguments)
+    {
+        var echoed = arguments.Select(TryFullPath).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return [.. paths.Where(path => TryFullPath(path) is not { } full || !echoed.Contains(full))];
+    }
+
+    /// <summary>The absolute form of <paramref name="path"/>, or <c>null</c> when it is not a path at all.</summary>
+    public static string? TryFullPath(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            return null;
+        }
     }
 
     public const string Usage =

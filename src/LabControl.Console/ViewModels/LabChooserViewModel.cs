@@ -116,6 +116,12 @@ public sealed partial class LabChooserViewModel : ObservableObject
     private readonly Action<Action> _post;
     private readonly Action<ActivationStatus> _onStatus;
     private readonly ILogger? _log;
+
+    /// <summary>One import batch at a time, whoever asked for it (D-59 item 5).</summary>
+    private readonly SemaphoreSlim _imports = new(1, 1);
+
+    /// <summary>How many file flows are open; the busy flag drops when the last one ends, not the first.</summary>
+    private int _fileFlows;
     private bool _detached;
 
     public LabChooserViewModel(ConsoleBootstrap bootstrap, ActiveLabController controller, IDialogs dialogs, Action<Action> post, ILogger? log = null)
@@ -161,8 +167,50 @@ public sealed partial class LabChooserViewModel : ObservableObject
 
     /// <summary>An activation is under way: buttons wait, the list stays.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBusy))]
     [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand), nameof(AddLabsCommand), nameof(CreateLabCommand), nameof(AuthorizeCommand), nameof(RenewCertificateCommand))]
-    public partial bool IsBusy { get; set; }
+    public partial bool IsActivating { get; set; }
+
+    /// <summary>
+    /// A file flow owns the chooser: an import batch (the picker, a drop, or files a second
+    /// launch forwarded) or the create wizard. Held across all of them so a second batch
+    /// cannot start a second import — two unlock dialogs over one profile store — while the
+    /// first is still asking the teacher for a passphrase.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBusy))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand), nameof(AddLabsCommand), nameof(CreateLabCommand), nameof(AuthorizeCommand), nameof(RenewCertificateCommand))]
+    public partial bool IsBusyWithFiles { get; set; }
+
+    /// <summary>The chooser is working: an activation, an import batch or the create wizard.</summary>
+    public bool IsBusy => IsActivating || IsBusyWithFiles;
+
+    /// <summary>The chooser finished an import batch or the create wizard: whatever queued behind it may go now.</summary>
+    public event Action? BecameIdle;
+
+    /// <summary>A file flow starts: the picker, a batch, the create wizard. Flows nest, so the flag is counted.</summary>
+    private void EnterFileFlow()
+    {
+        _fileFlows++;
+        IsBusyWithFiles = true;
+    }
+
+    private void LeaveFileFlow()
+    {
+        if (--_fileFlows <= 0)
+        {
+            _fileFlows = 0;
+            IsBusyWithFiles = false;
+        }
+    }
+
+    partial void OnIsBusyWithFilesChanged(bool value)
+    {
+        if (!value)
+        {
+            BecameIdle?.Invoke();
+        }
+    }
 
     [ObservableProperty]
     public partial bool HasLabs { get; set; }
@@ -175,8 +223,8 @@ public sealed partial class LabChooserViewModel : ObservableObject
 
     public bool HasFailure => FailedLabId is not null;
 
-    /// <summary>The window runs the create wizard; the view model only asks.</summary>
-    public event Action? CreateRequested;
+    /// <summary>The window runs the create wizard; the view model only asks, and stays busy until it is done.</summary>
+    public event Func<Task>? CreateRequested;
 
     public event Action? QuitRequested;
 
@@ -214,19 +262,19 @@ public sealed partial class LabChooserViewModel : ObservableObject
         switch (status.State)
         {
             case ActivationState.Activating:
-                IsBusy = true;
+                IsActivating = true;
                 Error = string.Empty;
                 FailedLabId = null;
                 Status = Strings.Format("Chooser.Opening", NameOf(status.LabId));
                 break;
 
             case ActivationState.Deactivating:
-                IsBusy = true;
+                IsActivating = true;
                 Status = Strings.Format("Chooser.Leaving", NameOf(status.LabId));
                 break;
 
             case ActivationState.Failed:
-                IsBusy = false;
+                IsActivating = false;
                 Status = string.Empty;
                 Error = Strings.Format("Chooser.OpenFailed", NameOf(status.LabId), status.Error ?? string.Empty);
                 FailedLabId = status.LabId;
@@ -234,7 +282,7 @@ public sealed partial class LabChooserViewModel : ObservableObject
                 break;
 
             default:
-                IsBusy = false;
+                IsActivating = false;
                 Status = string.Empty;
                 FailedLabId = null;
                 Refresh();
@@ -319,11 +367,19 @@ public sealed partial class LabChooserViewModel : ObservableObject
 
         if (target.IsAdministrator)
         {
-            var requests = await _dialogs.PickOpenFilesAsync(Strings.Get("Device.AuthorizeTitle"),
-                [new FileFilter(Strings.Get("Request.FileType"), ["*" + Shared.Defaults.DeviceRequestFileExtension])]);
-            if (requests.Count > 0)
+            EnterFileFlow();
+            try
             {
-                await ImportFilesAsync(requests);
+                var requests = await _dialogs.PickOpenFilesAsync(Strings.Get("Device.AuthorizeTitle"),
+                    [new FileFilter(Strings.Get("Request.FileType"), ["*" + Shared.Defaults.DeviceRequestFileExtension])]);
+                if (requests.Count > 0)
+                {
+                    await RunImportAsync(requests);
+                }
+            }
+            finally
+            {
+                LeaveFileFlow();
             }
 
             return;
@@ -456,31 +512,84 @@ public sealed partial class LabChooserViewModel : ObservableObject
         }
     }
 
+    /// <summary><i>Add labs…</i>: the picker and the batch it chose are one busy stretch, so nothing else imports underneath.</summary>
     [RelayCommand(CanExecute = nameof(CanAct))]
     private async Task AddLabsAsync()
     {
-        var paths = await _dialogs.PickOpenFilesAsync(Strings.Get("Chooser.AddLabsTitle"), Imports.Filters);
-        if (paths.Count > 0)
+        EnterFileFlow();
+        try
         {
-            await ImportFilesAsync(paths);
+            var paths = await _dialogs.PickOpenFilesAsync(Strings.Get("Chooser.AddLabsTitle"), Imports.Filters);
+            if (paths.Count > 0)
+            {
+                await RunImportAsync(paths);
+            }
+        }
+        finally
+        {
+            LeaveFileFlow();
         }
     }
 
-    /// <summary>Imports a batch (the picker or a drop), shows one row per file and refreshes the list. Nothing activates.</summary>
+    /// <summary>
+    /// Imports a batch (the picker, a drop, or files a second launch forwarded), shows one row
+    /// per file and refreshes the list. Nothing activates. Batches are serialized here: an
+    /// import asks for passphrases, and a second batch that started underneath the first would
+    /// stack two unlock dialogs over one profile store.
+    /// </summary>
     public async Task<IReadOnlyList<ImportFileResult>> ImportFilesAsync(IEnumerable<string> paths)
     {
-        var results = await Imports.ImportAsync(paths);
-        Refresh();
-        if (results.Count > 0)
+        EnterFileFlow();
+        try
         {
-            await _dialogs.ShowImportResultsAsync(results);
+            return await RunImportAsync(paths);
         }
-
-        return results;
+        finally
+        {
+            LeaveFileFlow();
+        }
     }
 
+    /// <summary>One batch, alone: the caller owns <see cref="IsBusyWithFiles"/>, the semaphore owns the order.</summary>
+    private async Task<IReadOnlyList<ImportFileResult>> RunImportAsync(IEnumerable<string> paths)
+    {
+        await _imports.WaitAsync();
+        try
+        {
+            var results = await Imports.ImportAsync(paths);
+            Refresh();
+            if (results.Count > 0)
+            {
+                await _dialogs.ShowImportResultsAsync(results);
+            }
+
+            return results;
+        }
+        finally
+        {
+            _imports.Release();
+        }
+    }
+
+    /// <summary><i>Create a lab…</i>: the app runs the wizard, and the chooser is busy — no import may start behind it — until it returns.</summary>
     [RelayCommand(CanExecute = nameof(CanAct))]
-    private void CreateLab() => CreateRequested?.Invoke();
+    private async Task CreateLabAsync()
+    {
+        if (CreateRequested is not { } create || IsBusy)
+        {
+            return;
+        }
+
+        EnterFileFlow();
+        try
+        {
+            await create();
+        }
+        finally
+        {
+            LeaveFileFlow();
+        }
+    }
 
     [RelayCommand]
     private void Quit() => QuitRequested?.Invoke();

@@ -1,5 +1,7 @@
 using System.IO.Pipes;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -9,6 +11,13 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LabControl.Console.Services;
+
+/// <summary>
+/// The endpoint cannot be used at all — a path longer than <c>sun_path</c>, a socket
+/// directory that is not this user's private one. Retrying will not help, so a forwarder
+/// reports it instead of waiting out its budget.
+/// </summary>
+public sealed class EndpointUnusableException(string message, Exception? inner = null) : IOException(message, inner);
 
 /// <summary>What the forwarder got back: whether a running console took the files, and which ones it kept.</summary>
 public sealed record ForwardOutcome(bool Delivered, IReadOnlyList<string> Accepted, IReadOnlyList<string> Rejected, string Error)
@@ -20,17 +29,29 @@ public sealed record ForwardOutcome(bool Delivered, IReadOnlyList<string> Accept
 /// One console per data directory, and every later launch hands its documents to the first
 /// (M5, D-59 item 5). The process holding <see cref="ConsoleLock"/> listens on an endpoint
 /// named after the directory — a Windows named pipe <c>labcontrol-console-&lt;hash&gt;</c>
-/// restricted to the current user, or a Unix socket of that name (mode 0600) under
-/// <c>$XDG_RUNTIME_DIR</c> or the user's temp directory — and a launch that cannot take the
-/// lock connects there instead, sends one UTF-8 JSON line
+/// restricted to the current user, or a Unix socket <c>console-&lt;hash&gt;.sock</c> (mode 0600)
+/// inside this user's private socket directory — and a launch that cannot take the lock
+/// connects there instead, sends one UTF-8 JSON line
 /// <c>{"schema_version":1,"open":["/abs/path", …]}</c>, waits for the acknowledgement line
 /// and exits. The hash is the first 16 hex digits of SHA-256 over the directory, so two
 /// <c>--data</c> directories have two endpoints and never see each other.
 /// <para>
-/// The lock decides who serves: a stale socket file left by a crashed console cannot belong
-/// to anyone once the lock has been taken, so <see cref="Listen"/> removes it. A forwarder
-/// that finds no listener (the lock is held but the socket is gone, or the console is still
-/// starting) retries until its timeout and then reports that nothing was delivered.
+/// The lock decides who serves: a stale socket left by a crashed console cannot belong to
+/// anyone once the lock has been taken, so <see cref="Listen"/> — which takes that lock as an
+/// argument rather than assuming it — removes it. A forwarder that finds no listener (the
+/// lock is held but the socket is gone, or the console is still starting) retries until its
+/// timeout and then reports that nothing was delivered.
+/// </para>
+/// <para>
+/// Where the socket lives is a security decision, not a convenience: it sits in
+/// <c>labcontrol-&lt;uid&gt;</c> under <c>$XDG_RUNTIME_DIR</c> or the temp directory, a
+/// directory created with mode 0700 and re-checked (real directory, not a symbolic link,
+/// still 0700) by the server before it binds and by every client before it connects. A
+/// world-writable <c>/tmp</c> is then not enough to pre-create the path, to read the
+/// teacher's document names, or to make the lock holder's <c>unlink</c> fail on the sticky
+/// bit. The bind-to-chmod window on the socket itself is closed by that directory, and each
+/// accepted connection is additionally checked to come from this user
+/// (<c>LOCAL_PEERCRED</c>/<c>SO_PEERCRED</c>).
 /// </para>
 /// </summary>
 public sealed class SingleInstance : IAsyncDisposable
@@ -46,15 +67,23 @@ public sealed class SingleInstance : IAsyncDisposable
     private static readonly TimeSpan ClientBudget = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ConnectRetry = TimeSpan.FromMilliseconds(200);
 
+    /// <summary>Mode 0700: the socket directory belongs to this user and to nobody else.</summary>
+    private const UnixFileMode PrivateDirectory = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
+    /// <summary>Two paths name the same file case-insensitively on Windows and case-sensitively elsewhere.</summary>
+    private static readonly StringComparer PathComparer =
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     private readonly Action<Action> _post;
     private readonly ILogger _log;
     private readonly CancellationTokenSource _stop = new();
     private readonly Socket? _socket;
     private readonly string? _socketPath;
     private readonly Task _loop;
+    private volatile bool _stopping;
     private int _disposed;
 
-    private SingleInstance(string name, string endpoint, Socket? socket, string? socketPath, Action<Action> post, ILogger log)
+    private SingleInstance(string name, string endpoint, Socket? socket, NamedPipeServerStream? pipe, string? socketPath, Action<Action> post, ILogger log)
     {
         Name = name;
         Endpoint = endpoint;
@@ -62,71 +91,67 @@ public sealed class SingleInstance : IAsyncDisposable
         _socketPath = socketPath;
         _post = post;
         _log = log;
-        _loop = OperatingSystem.IsWindows() ? ServePipesAsync() : ServeSocketAsync();
+        _loop = pipe is not null ? ServePipesAsync(pipe) : ServeSocketAsync();
     }
 
-    /// <summary><c>labcontrol-console-&lt;hash&gt;</c>: the pipe name, or the socket file's stem.</summary>
+    /// <summary><c>labcontrol-console-&lt;hash&gt;</c>: the pipe name, or the endpoint's identity in a log line.</summary>
     public string Name { get; }
 
     /// <summary>The pipe name on Windows; the socket file's full path elsewhere.</summary>
     public string Endpoint { get; }
 
     /// <summary>
-    /// Documents another launch asked this console to open, validated (existing files with a
-    /// known extension, as full paths) and raised through the poster given to
-    /// <see cref="Listen"/> — the UI thread in the app. An empty list is a bare second launch
-    /// with nothing to open: the console should just come to the front.
+    /// Documents another launch asked this console to open, validated (existing regular files
+    /// with a known extension and a sane size, as full paths) and raised through the poster
+    /// given to <see cref="Listen"/> — the UI thread in the app. An empty list is a bare
+    /// second launch with nothing to open: the console should just come to the front.
     /// </summary>
     public event Action<IReadOnlyList<string>>? FilesArrived;
 
-    public static string NameFor(string dataDirectory)
-    {
-        var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dataDirectory));
-        if (OperatingSystem.IsWindows())
-        {
-            // Windows paths name the same directory in any case; the socket name must agree.
-            normalized = normalized.ToLowerInvariant();
-        }
-
-        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
-        return Defaults.SingleInstanceNamePrefix + hash[..Defaults.SingleInstanceNameHashLength];
-    }
+    public static string NameFor(string dataDirectory) => Defaults.SingleInstanceNamePrefix + HashOf(dataDirectory);
 
     /// <summary>Where the endpoint lives for <paramref name="dataDirectory"/>: the pipe name, or the socket path.</summary>
     public static string EndpointFor(string dataDirectory) =>
         OperatingSystem.IsWindows()
             ? NameFor(dataDirectory)
-            : Path.Combine(SocketDirectory(), NameFor(dataDirectory) + Defaults.SingleInstanceSocketExtension);
+            : Path.Combine(SocketDirectory(), Defaults.SingleInstanceSocketPrefix + HashOf(dataDirectory) + Defaults.SingleInstanceSocketExtension);
 
-    /// <summary><c>$XDG_RUNTIME_DIR</c> when it is set and exists (a per-user tmpfs on Linux), else the user's temp directory.</summary>
+    /// <summary>
+    /// This user's private socket directory: <c>labcontrol-&lt;uid&gt;</c> under
+    /// <c>$XDG_RUNTIME_DIR</c> when it is set and exists (a per-user tmpfs on Linux), else
+    /// under the user's temp directory. The uid is in the name because that temp directory
+    /// may be a shared, world-writable <c>/tmp</c>.
+    /// </summary>
     public static string SocketDirectory()
     {
         var runtime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
-        if (!string.IsNullOrWhiteSpace(runtime) && Directory.Exists(runtime))
-        {
-            return runtime;
-        }
-
-        return Path.GetTempPath();
+        var root = !string.IsNullOrWhiteSpace(runtime) && Directory.Exists(runtime) ? runtime : Path.GetTempPath();
+        return Path.Combine(root, Defaults.SingleInstanceDirectoryPrefix + (OperatingSystem.IsWindows() ? "0" : CurrentUserId().ToString()));
     }
 
     /// <summary>
-    /// Starts serving for <paramref name="dataDirectory"/>. The caller holds that directory's
-    /// <see cref="ConsoleLock"/>, which is what makes a socket file already there stale rather
-    /// than someone else's. <paramref name="post"/> runs <see cref="FilesArrived"/> where the
-    /// app wants it (the UI thread).
+    /// Starts serving for <paramref name="dataDirectory"/>. <paramref name="heldLock"/> is
+    /// that directory's <see cref="ConsoleLock"/>, held by the caller: it is what makes a
+    /// socket already at the path stale rather than someone else's, and it is passed rather
+    /// than assumed so the rule cannot be forgotten. <paramref name="post"/> runs
+    /// <see cref="FilesArrived"/> where the app wants it (the UI thread).
     /// </summary>
-    /// <exception cref="IOException">The endpoint could not be created (an unwritable socket directory, a name in use by a different user).</exception>
-    public static SingleInstance Listen(string dataDirectory, Action<Action> post, ILogger? log = null)
+    /// <exception cref="IOException">The endpoint could not be created (a socket directory that is not private, a path longer than <c>sun_path</c>, a name already in use).</exception>
+    public static SingleInstance Listen(string dataDirectory, ConsoleLock heldLock, Action<Action> post, ILogger? log = null)
     {
+        ArgumentNullException.ThrowIfNull(heldLock);
         log ??= NullLogger.Instance;
         var name = NameFor(dataDirectory);
-        var endpoint = EndpointFor(dataDirectory);
         if (OperatingSystem.IsWindows())
         {
-            return new SingleInstance(name, endpoint, null, null, post, log);
+            // The first instance is created here, not inside the loop: a squatted name or a
+            // refused ACL is this call's IOException, not a faulted background task.
+            return new SingleInstance(name, name, null, CreatePipe(name), null, post, log);
         }
 
+        var endpoint = EndpointFor(dataDirectory);
+        EnsurePrivateSocketDirectory(Path.GetDirectoryName(endpoint)!, log);
+        var address = UnixEndPointFor(endpoint);
         try
         {
             if (File.Exists(endpoint))
@@ -138,9 +163,7 @@ public sealed class SingleInstance : IAsyncDisposable
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             try
             {
-                socket.Bind(new UnixDomainSocketEndPoint(endpoint));
-                File.SetUnixFileMode(endpoint, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-                socket.Listen(8);
+                socket.Bind(address);
             }
             catch
             {
@@ -148,22 +171,50 @@ public sealed class SingleInstance : IAsyncDisposable
                 throw;
             }
 
-            return new SingleInstance(name, endpoint, socket, endpoint, post, log);
+            try
+            {
+                // The directory is 0700, so nothing else can reach the socket between bind and
+                // chmod; the mode is belt and braces. A chmod that fails leaves no usable
+                // socket behind for the next launch to connect to.
+                File.SetUnixFileMode(endpoint, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                socket.Listen(8);
+            }
+            catch
+            {
+                socket.Dispose();
+                TryDelete(endpoint);
+                throw;
+            }
+
+            return new SingleInstance(name, endpoint, socket, null, endpoint, post, log);
         }
-        catch (SocketException ex)
+        catch (Exception ex) when (ex is SocketException or UnauthorizedAccessException)
         {
             throw new IOException($"The single-instance socket {endpoint} could not be opened: {ex.Message}", ex);
         }
     }
 
     /// <summary>
+    /// The endpoint answers nothing from now on: a launch that reaches it is told the console
+    /// is going away and starts its own instead of having its files acknowledged and dropped.
+    /// The app calls this — and disposes the endpoint — before anything else in its shutdown.
+    /// </summary>
+    public void BeginStopping() => _stopping = true;
+
+    /// <summary>
     /// Hands <paramref name="files"/> to the console serving <paramref name="dataDirectory"/>.
     /// Connecting is retried until <paramref name="timeout"/> — the other console may still be
-    /// between taking its lock and opening its endpoint. Nothing here throws: a missing or
-    /// unanswering server is a <see cref="ForwardOutcome"/> with <c>Delivered == false</c>.
+    /// between taking its lock and opening its endpoint. Nothing here throws: a missing,
+    /// unanswering or departing server is a <see cref="ForwardOutcome"/> with
+    /// <c>Delivered == false</c>, and the caller starts a console of its own.
     /// </summary>
     public static async Task<ForwardOutcome> ForwardAsync(string dataDirectory, IReadOnlyList<string> files, TimeSpan timeout, CancellationToken cancellation = default)
     {
+        if (files.Count > Defaults.SingleInstanceMaxOpenPaths)
+        {
+            return ForwardOutcome.NotDelivered($"a launch may hand over at most {Defaults.SingleInstanceMaxOpenPaths} files at a time, not {files.Count}");
+        }
+
         var endpoint = EndpointFor(dataDirectory);
         var deadline = DateTime.UtcNow + timeout;
         string lastError;
@@ -177,7 +228,7 @@ public sealed class SingleInstance : IAsyncDisposable
                     return ForwardOutcome.NotDelivered($"no console is serving {endpoint}");
                 }
 
-                var request = JsonSerializer.Serialize(new OpenRequest { SchemaVersion = SchemaVersion, Open = files.ToList() }, Wire) + "\n";
+                var request = JsonSerializer.Serialize(new OpenRequest { SchemaVersion = SchemaVersion, Open = [.. files] }, Wire) + "\n";
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(request), cancellation);
                 await stream.FlushAsync(cancellation);
 
@@ -199,7 +250,11 @@ public sealed class SingleInstance : IAsyncDisposable
             {
                 return ForwardOutcome.NotDelivered("cancelled");
             }
-            catch (Exception ex) when (ex is IOException or SocketException or JsonException or TimeoutException or UnauthorizedAccessException)
+            catch (EndpointUnusableException ex)
+            {
+                return ForwardOutcome.NotDelivered(ex.Message);
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or JsonException or TimeoutException or UnauthorizedAccessException or ArgumentException)
             {
                 lastError = ex.Message;
             }
@@ -242,8 +297,17 @@ public sealed class SingleInstance : IAsyncDisposable
             }
         }
 
+        var directory = Path.GetDirectoryName(endpoint)!;
+        var address = UnixEndPointFor(endpoint);
         while (true)
         {
+            // Somebody else's directory at our path is not a console that is still starting:
+            // it is a trap, and nothing of the teacher's is written into it.
+            if (Directory.Exists(directory) && !SocketDirectoryIsPrivate(directory, out var why))
+            {
+                throw new EndpointUnusableException(why);
+            }
+
             if (!File.Exists(endpoint))
             {
                 if (DateTime.UtcNow >= deadline)
@@ -258,13 +322,13 @@ public sealed class SingleInstance : IAsyncDisposable
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             try
             {
-                await socket.ConnectAsync(new UnixDomainSocketEndPoint(endpoint), cancellation);
+                await socket.ConnectAsync(address, cancellation);
                 return new NetworkStream(socket, ownsSocket: true);
             }
             catch (SocketException) when (DateTime.UtcNow < deadline)
             {
                 // The file is there but nobody accepts: a console still starting, or a
-                // stale file the lock holder is about to replace. Try again shortly.
+                // stale socket the lock holder is about to replace. Try again shortly.
                 socket.Dispose();
                 await Task.Delay(ConnectRetry, cancellation);
             }
@@ -278,6 +342,147 @@ public sealed class SingleInstance : IAsyncDisposable
                 socket.Dispose();
                 throw;
             }
+        }
+    }
+
+    // ------------------------------------------------------------------ the endpoint's home
+
+    private static string HashOf(string dataDirectory)
+    {
+        var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dataDirectory));
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows paths name the same directory in any case; the endpoint name must agree.
+            normalized = normalized.ToLowerInvariant();
+        }
+
+        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
+        return hash[..Defaults.SingleInstanceNameHashLength];
+    }
+
+    /// <summary>
+    /// Creates the socket directory with mode 0700 and proves it is ours before anything binds
+    /// in it. There is no portable way to read a directory's owner from .NET, so ownership is
+    /// established by what only an owner can do: a directory that is 0700 and that we may
+    /// still chmod and write into belongs to this user (or to root, whose cooperation is
+    /// assumed by every other part of the system anyway).
+    /// </summary>
+    [UnsupportedOSPlatform("windows")]
+    private static void EnsurePrivateSocketDirectory(string directory, ILogger log)
+    {
+        try
+        {
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory, PrivateDirectory);
+                log.LogInformation("Created the private single-instance socket directory {Path}", directory);
+            }
+
+            if (new DirectoryInfo(directory).LinkTarget is not null)
+            {
+                throw new EndpointUnusableException($"{directory} is a symbolic link; the single-instance socket needs a real private directory");
+            }
+
+            if (File.GetUnixFileMode(directory) != PrivateDirectory)
+            {
+                // Only the owner may chmod, so this both tightens a loose directory of ours
+                // and refuses one somebody else created at the same path.
+                File.SetUnixFileMode(directory, PrivateDirectory);
+            }
+
+            if (!SocketDirectoryIsPrivate(directory, out var why))
+            {
+                throw new EndpointUnusableException(why);
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            throw new EndpointUnusableException($"The single-instance socket directory {directory} is not usable: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>A real directory, not a link, with mode 0700 — checked by the server before binding and by every client before connecting.</summary>
+    [UnsupportedOSPlatform("windows")]
+    private static bool SocketDirectoryIsPrivate(string directory, out string error)
+    {
+        error = string.Empty;
+        try
+        {
+            var info = new DirectoryInfo(directory);
+            if (!info.Exists)
+            {
+                error = $"{directory} does not exist";
+                return false;
+            }
+
+            if (info.LinkTarget is not null)
+            {
+                error = $"{directory} is a symbolic link, not this user's private socket directory";
+                return false;
+            }
+
+            var mode = File.GetUnixFileMode(directory);
+            if (mode != PrivateDirectory)
+            {
+                error = $"{directory} is {mode} and not this user's private socket directory (0700 expected)";
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = $"{directory} could not be checked: {ex.Message}";
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The address for <paramref name="path"/>, refusing a path longer than the platform's
+    /// <c>sun_path</c> (104 bytes on macOS, 108 on Linux, both including the terminator)
+    /// before <see cref="UnixDomainSocketEndPoint"/> throws an argument exception at it.
+    /// </summary>
+    private static UnixDomainSocketEndPoint UnixEndPointFor(string path)
+    {
+        // sun_path holds 104 bytes on macOS and 108 on Linux, the terminator included.
+        var limit = OperatingSystem.IsMacOS() ? 103 : 107;
+        var length = Encoding.UTF8.GetByteCount(path);
+        if (length > limit)
+        {
+            throw new EndpointUnusableException($"The single-instance socket path {path} is {length} bytes long; this system allows {limit}");
+        }
+
+        try
+        {
+            return new UnixDomainSocketEndPoint(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or SocketException)
+        {
+            throw new EndpointUnusableException($"The single-instance socket path {path} cannot be used: {ex.Message}", ex);
+        }
+    }
+
+    private static NamedPipeServerStream CreatePipe(string name)
+    {
+        try
+        {
+            return new NamedPipeServerStream(name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            throw new IOException($"The single-instance pipe {name} could not be created: {ex.Message}", ex);
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
         }
     }
 
@@ -297,37 +502,33 @@ public sealed class SingleInstance : IAsyncDisposable
             {
                 return;
             }
-            catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+            catch (Exception ex)
             {
                 if (_stop.IsCancellationRequested)
                 {
                     return;
                 }
 
-                _log.LogWarning(ex, "The single-instance socket stopped accepting");
+                _log.LogWarning(ex, "The single-instance socket stopped accepting; a second launch will be refused instead of forwarded");
                 return;
+            }
+
+            if (!PeerIsThisUser(client, out var peer))
+            {
+                _log.LogWarning("A single-instance connection from another user was dropped ({Peer})", peer);
+                client.Dispose();
+                continue;
             }
 
             _ = HandleAsync(new NetworkStream(client, ownsSocket: true));
         }
     }
 
-    private async Task ServePipesAsync()
+    private async Task ServePipesAsync(NamedPipeServerStream first)
     {
-        while (!_stop.IsCancellationRequested)
+        var pipe = first;
+        while (true)
         {
-            NamedPipeServerStream pipe;
-            try
-            {
-                pipe = new NamedPipeServerStream(Endpoint, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
-                    PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-            }
-            catch (IOException ex)
-            {
-                _log.LogWarning(ex, "The single-instance pipe {Name} could not be created", Endpoint);
-                return;
-            }
-
             try
             {
                 await pipe.WaitForConnectionAsync(_stop.Token);
@@ -337,22 +538,39 @@ public sealed class SingleInstance : IAsyncDisposable
                 await pipe.DisposeAsync();
                 return;
             }
-            catch (IOException ex)
+            catch (Exception ex)
             {
                 _log.LogWarning(ex, "The single-instance pipe {Name} stopped accepting", Endpoint);
                 await pipe.DisposeAsync();
                 return;
             }
 
+            // The pipe instance is handed to the client; the next one waits for the next launch.
             _ = HandleAsync(pipe);
+            if (_stop.IsCancellationRequested)
+            {
+                return;
+            }
+
+            try
+            {
+                pipe = CreatePipe(Endpoint);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "The single-instance pipe {Name} could not be re-created; a second launch will be refused instead of forwarded", Endpoint);
+                return;
+            }
         }
     }
 
     /// <summary>One client: a request line in, validation, the event, an acknowledgement line out.</summary>
     private async Task HandleAsync(Stream stream)
     {
-        using var budget = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
-        budget.CancelAfter(ClientBudget);
+        // The budget is deliberately not linked to _stop: a client whose request is already in
+        // flight when the console starts shutting down is answered with the refusal below
+        // rather than left to guess from a closed connection.
+        using var budget = new CancellationTokenSource(ClientBudget);
         try
         {
             await using (stream)
@@ -381,6 +599,13 @@ public sealed class SingleInstance : IAsyncDisposable
     /// <summary>Validates one request line the way the command line is validated, and raises <see cref="FilesArrived"/> for what passed.</summary>
     private OpenAcknowledgement Consider(string line)
     {
+        if (_stopping)
+        {
+            // Nothing can be imported any more: say so, so the launcher starts its own console
+            // instead of exiting 0 on files this process is about to drop.
+            return new OpenAcknowledgement { Error = "the console is shutting down" };
+        }
+
         OpenRequest? request;
         try
         {
@@ -401,10 +626,23 @@ public sealed class SingleInstance : IAsyncDisposable
             return new OpenAcknowledgement { Error = $"schema_version {request.SchemaVersion} is newer than this console's {SchemaVersion}" };
         }
 
+        var open = request.Open ?? [];
+        if (open.Count > Defaults.SingleInstanceMaxOpenPaths)
+        {
+            return new OpenAcknowledgement { Error = $"a launch may hand over at most {Defaults.SingleInstanceMaxOpenPaths} files at a time, not {open.Count}" };
+        }
+
         var accepted = new List<string>();
         var rejected = new List<string>();
-        foreach (var path in request.Open ?? [])
+        var seen = new HashSet<string>(PathComparer);
+        foreach (var path in open)
         {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                rejected.Add("an empty file name");
+                continue;
+            }
+
             if (!Path.IsPathRooted(path))
             {
                 // The forwarder resolved its paths already; a relative one would resolve
@@ -413,13 +651,15 @@ public sealed class SingleInstance : IAsyncDisposable
                 continue;
             }
 
-            if (ConsoleOptions.TryValidateFile(path, out var full, out var error))
-            {
-                accepted.Add(full);
-            }
-            else
+            if (!ConsoleOptions.TryValidateFile(path, out var full, out var error))
             {
                 rejected.Add(error);
+                continue;
+            }
+
+            if (seen.Add(full))
+            {
+                accepted.Add(full);
             }
         }
 
@@ -456,6 +696,54 @@ public sealed class SingleInstance : IAsyncDisposable
         }
     }
 
+    // ------------------------------------------------------------------ who is on the other end
+
+    /// <summary>
+    /// The connected peer runs as this user. macOS answers <c>LOCAL_PEERCRED</c> with a
+    /// <c>struct xucred</c> and Linux answers <c>SO_PEERCRED</c> with a <c>struct ucred</c>;
+    /// the two disagree about everything except the uid, which both put at offset 4. A kernel
+    /// that answers neither leaves the 0700 directory as the guard and the connection is
+    /// allowed — the check is defence in depth, not the only door.
+    /// </summary>
+    private bool PeerIsThisUser(Socket client, out string peer)
+    {
+        peer = "unknown";
+        if (OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
+        const int SolLocalOnMac = 0;
+        const int LocalPeerCred = 1;
+        const int SolSocketOnLinux = 1;
+        const int SoPeerCred = 17;
+        try
+        {
+            Span<byte> answer = stackalloc byte[96];
+            var level = OperatingSystem.IsMacOS() ? SolLocalOnMac : SolSocketOnLinux;
+            var option = OperatingSystem.IsMacOS() ? LocalPeerCred : SoPeerCred;
+            var length = client.GetRawSocketOption(level, option, answer);
+            if (length < 8)
+            {
+                return true;
+            }
+
+            var uid = BitConverter.ToUInt32(answer[4..8]);
+            peer = $"uid {uid}";
+            return uid == CurrentUserId();
+        }
+        catch (Exception ex) when (ex is SocketException or PlatformNotSupportedException or ObjectDisposedException)
+        {
+            _log.LogDebug(ex, "The peer credentials of a single-instance client could not be read; the 0700 socket directory is the guard");
+            return true;
+        }
+    }
+
+    private static uint CurrentUserId() => OperatingSystem.IsWindows() ? 0 : GetEuid();
+
+    [DllImport("libc", EntryPoint = "geteuid")]
+    private static extern uint GetEuid();
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
@@ -463,6 +751,7 @@ public sealed class SingleInstance : IAsyncDisposable
             return;
         }
 
+        BeginStopping();
         await _stop.CancelAsync();
         _socket?.Dispose();
         try
@@ -475,16 +764,7 @@ public sealed class SingleInstance : IAsyncDisposable
 
         if (_socketPath is not null)
         {
-            try
-            {
-                File.Delete(_socketPath);
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
+            TryDelete(_socketPath);
         }
 
         _stop.Dispose();
@@ -494,7 +774,8 @@ public sealed class SingleInstance : IAsyncDisposable
     {
         public int SchemaVersion { get; set; }
 
-        public List<string>? Open { get; set; }
+        /// <summary>A hostile or careless client may send nulls inside the list; the element type says so.</summary>
+        public List<string?>? Open { get; set; }
     }
 
     private sealed class OpenAcknowledgement

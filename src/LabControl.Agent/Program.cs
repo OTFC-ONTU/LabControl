@@ -62,6 +62,31 @@ internal static class Program
             return Provisioner.Run(args, installLog.CreateLogger("install"), Usage);
         }
 
+        if (args.Contains(Defaults.RollbackSwitch, StringComparer.OrdinalIgnoreCase)
+            || args.Contains(Defaults.RollbackDeadlineSwitch, StringComparer.OrdinalIgnoreCase))
+        {
+            using var recoveryLog = ConfigureLogging(interactive: false, verbose);
+            var logger = recoveryLog.CreateLogger("rollback");
+            try
+            {
+                var switchIndex = Array.FindIndex(args, argument =>
+                    argument.Equals(Defaults.RollbackSwitch, StringComparison.OrdinalIgnoreCase)
+                    || argument.Equals(Defaults.RollbackDeadlineSwitch, StringComparison.OrdinalIgnoreCase));
+                if (switchIndex + 1 >= args.Length || args[switchIndex + 1].Length is 0 or > 4096)
+                    throw new InvalidOperationException("Recovery requires its scheduled update job identity.");
+                var expectedJobId = Uri.UnescapeDataString(args[switchIndex + 1]);
+                UpdateRecovery.RollBack(args.Contains(Defaults.RollbackDeadlineSwitch, StringComparer.OrdinalIgnoreCase),
+                    line => logger.LogInformation("{Line}", line), expectedJobId);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError("Update recovery failed: {Message}", ex.Message);
+                return 1;
+            }
+            finally { await Log.CloseAndFlushAsync(); }
+        }
+
         if (args.Contains(Defaults.RestartServiceSwitch, StringComparer.OrdinalIgnoreCase))
         {
             // Spawned by the outgoing agent after a push (AgentUpdater, D-33); it has no console,

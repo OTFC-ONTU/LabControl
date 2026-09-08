@@ -9,7 +9,7 @@ namespace LabControl.Console.Tests;
 /// <summary>
 /// Discovery over real UDP on this machine: agents find the console by its beacon, and
 /// <i>Take over the lab</i> moves every PC from one console to the other (ARCHITECTURE
-/// §3.7.2). These bind the real beacon port, shared with anything else on the machine.
+/// §3.7.2). These use a process-specific UDP port, isolated from an open desktop console.
 /// </summary>
 public sealed class BeaconTests
 {
@@ -19,7 +19,7 @@ public sealed class BeaconTests
         await using var a = await TestConsole.CreateLabAsync("Console A");
         var codes = a.IssueCodes(3);
 
-        using var listener = new BeaconListener();
+        using var listener = new BeaconListener(TestConsole.BeaconPort);
         var agents = new List<TestAgent>();
         try
         {
@@ -79,7 +79,7 @@ public sealed class BeaconTests
         await using var theirs = await TestConsole.CreateLabAsync("Theirs");
         var code = ours.IssueCodes(1)[0];
 
-        using var listener = new BeaconListener();
+        using var listener = new BeaconListener(TestConsole.BeaconPort);
         await using var agent = TestAgent.Install(ours, 1, code, pinHost: false);
 
         var dials = 0;

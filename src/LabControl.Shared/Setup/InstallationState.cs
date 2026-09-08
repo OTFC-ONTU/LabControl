@@ -33,6 +33,8 @@ public sealed class InstallationState(string dataDirectory)
     {
         _creationStartedThisRun = false;
         var state = Read();
+        if (state is { RemovalReady: true } or { StudentRemovalPending: true } or { StudentRemoved: true })
+            throw new InvalidOperationException("Removal has started. Finish removal before installing again.");
         if (state is null)
         {
             if (existingInstallation && createStudentAccount is null)
@@ -40,6 +42,7 @@ public sealed class InstallationState(string dataDirectory)
             state = new InstallationDocument
             {
                 InstallationId = Guid.NewGuid().ToString("d"),
+                SettingsInitializationPending = !existingInstallation,
                 CreateStudentAccount = createStudentAccount ?? true,
             };
         }
@@ -47,6 +50,72 @@ public sealed class InstallationState(string dataDirectory)
             state.CreateStudentAccount = selected;
         Save(state);
         return state;
+    }
+
+    /// <summary>Only the fresh-install intent can authorize retrying journal creation.
+    /// Call after the protected journal has been created and validated, before settings.</summary>
+    public void MarkRemovalReady()
+    {
+        var state = RequireState();
+        if (state.StudentRemovalPending)
+            throw new InvalidOperationException("Finish the previously authorized student removal before deleting ownership history.");
+        state.RemovalReady = true;
+        Save(state);
+    }
+
+    public void BeginInstallDirectoryCreation(bool directoryExists)
+    {
+        var state = RequireState();
+        if (state.InstallDirectoryOwned) return;
+        if (directoryExists) throw new InvalidOperationException("The installation directory existed before ownership was recorded; preserve it for review.");
+        state.InstallDirectoryOwned = true;
+        Save(state);
+    }
+
+    public void BeginStudentRemoval(string currentSid)
+    {
+        var state = RequireState();
+        RequireManagedStudent(currentSid);
+        state.StudentRemovalPending = true;
+        Save(state);
+    }
+
+    public void CompleteStudentRemoval()
+    {
+        var state = RequireState();
+        if (!state.StudentRemovalPending) throw new InvalidOperationException("Student removal was not recorded.");
+        state.StudentRemoved = true;
+        state.StudentRemovalPending = false;
+        Save(state);
+    }
+
+    public string RecordHiddenAdministrator(string sid)
+    {
+        var state = RequireState();
+        if (state.CreateStudentAccount != true || state.CreatedStudentSid is null || !IsLocalAccountSid(sid) || sid == state.CreatedStudentSid)
+            throw new InvalidOperationException("Only the setup administrator can be selected for visibility settings.");
+        if (state.HiddenAdministratorSid is { } saved && saved != sid)
+            throw new InvalidOperationException("The recorded administrator visibility target cannot change during repair.");
+        state.HiddenAdministratorSid = sid;
+        Save(state);
+        return sid;
+    }
+
+    public void SelectNumber(int number)
+    {
+        var state = RequireState();
+        if (number < 1 || number > Defaults.MaxStudentPcs || state.Number is { } saved && saved != number)
+            throw new InvalidOperationException("Repair must retain the installed PC number.");
+        state.Number = number;
+        Save(state);
+    }
+
+    public void CompleteSettingsInitialization()
+    {
+        var state = RequireState();
+        if (!state.SettingsInitializationPending) return;
+        state.SettingsInitializationPending = false;
+        Save(state);
     }
 
     /// <param name="currentSid">SID resolved by Windows for the configured account name,
@@ -117,6 +186,10 @@ public sealed class InstallationState(string dataDirectory)
     {
         if (!Guid.TryParseExact(state.InstallationId, "D", out var id) || id == Guid.Empty
             || state.CreateStudentAccount is null
+            || state.Number is < 1 or > Defaults.MaxStudentPcs
+            || (state.StudentRemovalPending && state.StudentRemoved)
+            || ((state.StudentRemovalPending || state.StudentRemoved) && state.CreatedStudentSid is null)
+            || (state.HiddenAdministratorSid is { } admin && (state.CreatedStudentSid is null || !IsLocalAccountSid(admin) || admin == state.CreatedStudentSid))
             || (state.CreatedStudentSid is not null && (!IsLocalAccountSid(state.CreatedStudentSid) || state.StudentCreationPending)))
             throw new InvalidDataException("Installation history is invalid; account ownership cannot be established.");
     }

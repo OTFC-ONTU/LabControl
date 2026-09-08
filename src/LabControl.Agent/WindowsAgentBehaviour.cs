@@ -18,6 +18,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
     private readonly DateTimeOffset _bootedAt = WindowsInventory.BootTime();
     private readonly ScriptRunner _scripts;
     private readonly AgentUpdater _updater;
+    private readonly UpdateTrialMonitor _trialMonitor;
+    private readonly SetupReadinessMonitor _readinessMonitor;
 
     public WindowsAgentBehaviour(DirectoryAgentStore store, ILogger log)
     {
@@ -25,7 +27,9 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         _log = log;
         Link = new AgentLink(store, this, log);
         _scripts = new ScriptRunner(Link, log);
-        _updater = new AgentUpdater(Link, log);
+        _updater = new AgentUpdater(Link, log, store.Authority);
+        _trialMonitor = new UpdateTrialMonitor(Link, log);
+        _readinessMonitor = new SetupReadinessMonitor(Link);
 
         Link.Linked += (_, name) => _log.LogInformation("{Pc}: linked to {Console}", Link.Name, name);
         Link.Unlinked += reason => _log.LogInformation("{Pc}: unlinked — {Reason}", Link.Name, reason);
@@ -52,7 +56,13 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
     {
         hello.AgentVersion = Program.InstalledVersion;
         hello.BootTimeUnix = _bootedAt.ToUnixTimeSeconds();
-        hello.UpdateState = new UpdateState { Phase = UpdateState.Types.Phase.Stable };
+        try { hello.UpdateState = UpdateTrialMonitor.Describe(Program.InstalledVersion); }
+        catch (Exception ex)
+        {
+            _log.LogWarning("Could not read update state: {Message}", ex.Message);
+            hello.UpdateState = new UpdateState { Phase = UpdateState.Types.Phase.Unspecified,
+                Reason = "Update history is temporarily unavailable; the agent will retry." };
+        }
     }
 
     public Inventory? DescribeInventory()
@@ -87,6 +97,9 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
 
             case Job.Types.Kind.RunScript:
                 return await _scripts.RunAsync(job, report, token);
+
+            case Job.Types.Kind.SendFile:
+                return await new HandoutRunner(Link).RunAsync(job, report, token);
 
             case Job.Types.Kind.SelfUpdate:
                 // The minimal push-and-restart (D-33). On success this never returns: the
@@ -165,6 +178,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        await _readinessMonitor.DisposeAsync();
+        await _trialMonitor.DisposeAsync();
         await Link.DisposeAsync();
         _store.Dispose();
     }

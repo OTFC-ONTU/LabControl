@@ -25,7 +25,8 @@ public sealed class SetupPayload
 
     public static SetupPayload Open(string directory)
     {
-        var payloadDirectory = Directory.Exists(Path.Combine(directory, Defaults.PayloadDirectoryName))
+        var payloadDirectory = !File.Exists(Path.Combine(directory, Defaults.SetupFileName))
+                               && Directory.Exists(Path.Combine(directory, Defaults.PayloadDirectoryName))
             ? Path.Combine(directory, Defaults.PayloadDirectoryName)
             : directory;
 
@@ -37,6 +38,8 @@ public sealed class SetupPayload
         }
 
         var document = JsonStore.Load<SetupPayloadDocument>(path, SetupPayloadDocument.Migrations);
+        if (document.ConsolePort is < 1 or > 65535)
+            throw new InvalidDataException("The payload console port must be between 1 and 65535.");
         var authority = X509CertificateLoader.LoadCertificateFromFile(Path.Combine(payloadDirectory, Defaults.CaCertificateFileName));
         return new SetupPayload(path, document, authority);
     }
@@ -54,5 +57,17 @@ public sealed class SetupPayload
         Document.UsedEnrollmentCodes.Add(code);
         JsonStore.Save(_path, Document, SetupPayloadDocument.Migrations);
         return code;
+    }
+
+    /// <summary>Advance only after successful installation; read again to retain the
+    /// enrollment code consumed by the installer instance.</summary>
+    public void AdvanceNumber(int installedNumber)
+    {
+        if (installedNumber < 1 || installedNumber > Defaults.MaxStudentPcs)
+            throw new ArgumentOutOfRangeException(nameof(installedNumber));
+        var current = JsonStore.Load<SetupPayloadDocument>(_path, SetupPayloadDocument.Migrations);
+        current.NextNumber = Math.Min(installedNumber + 1, Defaults.MaxStudentPcs);
+        JsonStore.Save(_path, current, SetupPayloadDocument.Migrations);
+        Document.NextNumber = current.NextNumber;
     }
 }

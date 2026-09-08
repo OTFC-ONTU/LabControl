@@ -1,5 +1,15 @@
 # Installer (`LabControl.Setup`)
 
+Windows `Setup.exe` embeds the same application icon as the teacher console, from
+`src/LabControl.Console/Assets/labcontrol.ico`. Its setup and reboot dialogs use that
+embedded icon too. The installed standalone uninstaller retains it because it is a
+copy of Setup; no loose icon file is required on the USB or student PC.
+
+
+This document describes student-PC Setup and, in the final section, the separate
+lightweight teacher-console packaging planned for M5 (`D-54`). Teacher installation
+does not run the student preparation pipeline below.
+
 Goal: **plug in the USB stick, run one file as the local admin, answer one question
 (PC number), walk to the next PC — with the default options.** Everything else is automatic and idempotent —
 running it again on an already-configured PC repairs the installation instead of
@@ -30,24 +40,29 @@ one answer. Untick it to test on a home PC using an existing Windows account.
   including when account creation is off. Track prior values for safe removal below.
   A home-PC install is still an elevated installation of the real agent.
 
-The current Setup executable remains a skeleton. The shared account-state portion is
+The M4 Setup executable is now being integrated (`D-52`); it is not yet Windows-verified. The shared account-state portion is
 built (`D-45`): `InstallationState` persists `installation.json` with the mode,
 installation id, pending creation flag and created SID. Its decisions are tested on the
 Mac. The Windows preparation component is also built (`D-46`), but the executable
-pipeline does not invoke it yet and it does not configure sign-in.
+pipeline invokes account preparation and the newer ordered sign-in component.
 
 Setup must hold an exclusive installation lock and establish the private data-directory
 ACL before using this journal. Save creation intent before a create-new account call;
 record only the SID returned by that successful call, before changing sign-in settings.
 An existing account after an interrupted creation is an ownership conflict, never adopted
-by name. A missing legacy journal requires an explicit account-mode choice. Off preserves
-any earlier ownership record but disables managed-profile operations and account removal.
+by name. The account component requires an explicit mode when legacy history is missing;
+this does not authorize the executable to adopt an existing installation. M4 Setup supports
+clean installation and repair of installer-owned installations only, and refuses unowned
+legacy dev installs even with account creation off. Legacy migration is outside M4 by the
+owner's decision of 2026-09-08. On supported installations, account-off preserves any earlier
+ownership record but disables managed-profile operations and account removal.
 An unreadable, malformed or future journal fails closed. The protected original-settings
 journal core is built (`D-47`, below); the first two machine registry adapters are built
-(`D-48`), as are the three AC power-plan timeout adapters (`D-49`). Remaining settings
-and sign-in backup/restore adapters are pending.
+(`D-48`), as are the three AC power-plan timeout adapters (`D-49`), the active-hours
+tuple (`D-50`) and the LSA sign-in secret adapter (`D-51`). Remaining settings
+and the Winlogon backup/restore sequence are integrated in D-52, with Windows runtime verification still required.
 
-`AccountSetupScope.Open()` is the future pipeline's account-step entry point: require
+`AccountSetupScope.Open()` is the pipeline's protected-state entry point: require
 an elevated administrator, create fresh data storage with SYSTEM/Administrators-only
 ACLs, refuse reparse points or existing untrusted storage, and hold `setup.lock` with
 exclusive sharing until the scope closes. It never makes an unprotected old ownership
@@ -71,15 +86,15 @@ behavior and ACL/lock enforcement still require VM verification.
 
 `SetupSettingsJournal` is built and tested on the Mac. `AccountSetupScope` provides
 initialization, apply and restore methods while holding the installation lock. The
-future pipeline must initialize it once for a positively identified fresh installation,
+pipeline initializes it once for a positively identified fresh installation,
 before changing any settings; never initialize it to replace missing repair/removal
 history. Missing, invalid, future or mismatched history refuses settings operations.
 
 `setup-settings.json` contains a schema version and ciphertext only. The encrypted
 contents have their own schema version and installation id. Windows uses machine-scope
 DPAPI with a separate purpose and this installation id as entropy; the existing private
-ACL remains essential. Original sign-in secrets, when the native adapters are built,
-will use this store rather than plaintext JSON or logs. Temporary files also contain only
+ACL remains essential. The LSA adapter uses this store for original sign-in secrets;
+remaining sign-in adapters must do the same rather than use plaintext JSON or logs. Temporary files also contain only
 ciphertext; plaintext serialization buffers are cleared after protection/decryption.
 
 A setting adapter is defined by code, with a stable id and canonical typed bytes (null
@@ -97,8 +112,8 @@ Changing a recorded desired value or reapplying after restoration also requires 
 explicit migration/reinstall flow, not silently replacing the original baseline.
 
 This is the journal component, not a working installer/uninstaller. The two registry
-policies and AC power-plan timeouts below are built; LSA, firewall, remaining power/settings
-adapters and pipeline integration remain pending. Those
+policies and AC power-plan timeouts below are built; firewall, remaining power/settings
+adapters and executable integration are being completed in D-52. Those
 adapters must preserve native types, recheck identity/concurrent changes, omit values from
 errors and gate account/sign-in operations on the saved account mode. DPAPI and native
 behavior still require VM verification; no real Windows settings were changed here.
@@ -117,9 +132,9 @@ absence from zero. Keys must already exist in 64-bit HKLM; the adapter neither c
 nor removes parent keys. It rereads on the writable key handle immediately before a
 mutation, flushes and verifies read-back. This guard detects observed concurrent changes,
 but is not an atomic transaction against another administrator or Group Policy; the
-future pipeline must report conflicts and must not promise isolation from those writers.
+pipeline must report conflicts and must not promise isolation from those writers.
 
-No CLI invokes these methods yet. Mac tests cover the typed bridge, journal round trip,
+The development pipeline invokes these policies. Mac tests cover the typed bridge, journal round trip,
 existing acceptable policies and conflict handling. Windows verification remains:
 both registry views, absent/DWORD/unsupported-type originals, permission failures,
 apply/repair/restore from a snapshot and interference from another writer. This does not
@@ -147,12 +162,142 @@ ambiguous under D-47 and is not silently adopted. Repeated restoration checks fo
 edits before activating. Already-correct, unowned settings are not activated.
 
 These checks are optimistic: another administrator can still race the last check and
-native call, and Group Policy may override effective behavior. No CLI invokes these
-methods yet. Windows verification must cover both architectures, all three timeouts,
+native call, and Group Policy may override effective behavior. The development pipeline invokes these
+methods; Windows verification is pending. Windows verification must cover both architectures, all three timeouts,
 battery values unchanged, switch/delete scheme conflicts, missing settings, native access
 and activation failures, apply/repair/remove from a VM snapshot, interrupted restoration,
-and actual idle behavior after activation. Hibernation, NIC/WoL and update-policy adapters
-remain pending alongside the Setup executable pipeline.
+and actual idle behavior after activation. Hibernation and NIC/WoL adapters
+are implemented for integration in D-52; Windows verification remains pending.
+
+### Windows Update active hours (D-50)
+
+`AccountSetupScope.ApplyUpdateActiveHours` / `RestoreUpdateActiveHours` connect the
+protected journal to a fixed Windows registry adapter. The desired tuple is
+`SetActiveHours=1`, `ActiveHoursStart=7`, `ActiveHoursEnd=20`. All three values form one
+ownership record: a later edit to any member preserves the whole tuple on repair/removal.
+Absent values and all original DWORD bits round-trip; other native types are refused.
+
+The adapter uses 64-bit HKLM under the existing Windows policy parent. It may create
+only the fixed WindowsUpdate leaf; restoration removes originally absent values but
+leaves the key, including any unrelated values/subkeys. A missing key reads as three
+absent values. Reads check the tuple twice; each write checks the complete expected tuple
+before and after mutation. Range values precede enabling; restoration of a disabled or
+absent policy starts with the enable flag. A partial write is not transactional and is
+preserved for review; a pending restore can finish automatically only when the complete
+original tuple is already present or the complete applied tuple still matches.
+
+This changes neither update availability nor notification/deadline policies. Registry
+read-back does not guarantee effective restart behavior in the presence of other update
+policies, Group Policy or MDM. No CLI invokes the adapter yet. Windows VM verification
+must cover missing/existing keys, absent/DWORD/unsupported values, both architectures,
+apply/repair/removal, another writer changing one member, partial-write failures, access
+failures, unrelated key contents preserved, and effective active hours after reboot.
+
+### LSA sign-in secret (D-51)
+
+`AccountSetupScope.ApplyStudentSignInSecret` / `RestoreStudentSignInSecret` return null
+when saved account creation is off, without consulting SAM, LSA or the settings journal.
+When on, they require the local student's recorded SID to match. Missing/replaced accounts
+and missing history are refused. The native boundary repeats account checks around writes.
+
+`StudentSignInSecret` journals a versioned UTF-16LE snapshot of the fixed LSA
+`DefaultPassword` secret, distinguishing absent and empty. Native read errors never mean
+absence. The store rechecks the previous value on the same policy handle, writes through
+`LsaStorePrivateData`, and verifies read-back. Later edits and ambiguous interrupted
+applies are preserved. Owned byte buffers are cleared after use, including LSA memory;
+original secrets reach disk only through the existing DPAPI-protected journal.
+
+The standalone secret component is not called independently by the executable. The
+integrated D-52 sign-in tuple coordinates existing autologon, identity, countdown and
+LSA state with disable-first, enable-last ordering.
+Changing only a password while another account's autologon remains enabled is not a safe
+installation sequence. The adapter does not activate accounts or enable autologon itself.
+Windows checks must cover absent/empty/nonempty originals, both architectures, access
+denied, missing and replaced accounts, opt-out/repair/removal, external secret changes,
+interrupted writes, ciphertext-only disk storage, and the eventual full sign-in round trip
+from a VM snapshot. SAM and LSA checks are optimistic, not a cross-system transaction.
+
+## Executable integration under verification (D-52)
+
+The Windows Forms setup screen shows the PC number and checked-by-default account option.
+`--number` supports unattended testing, with `--no-student` / `--create-student` as explicit
+mode choices; saved mode and number survive repair. `--dry-run` prints the plan without
+creating journals or changing native state. The manifest requests elevation. Setup and its
+Windows Desktop runtime are self-contained. The Setup service/settings paths stop on a
+conflict and preserve the journals for review; native runtime acceptance is still pending.
+
+A machine-wide mutex supplements `AccountSetupScope` during executable operations and
+cleanup. Fresh settings initialization is recorded before creating its protected journal,
+so interruption does not authorize replacing missing legacy history. The Program Files
+root carries a matching `installation-id` marker, and every used descendant must have
+trusted ownership and no untrusted write access. A creation intent alone cannot authorize
+adopting or deleting an existing directory. The service DisplayName atomically carries the installation
+identity; its active path must match `app/current`, including after an update.
+
+New adapters cover hostname, full-property firewall rules, Defender's exact parent-path
+exclusion, hibernation native/registry state, supported standardized NIC settings,
+privacy/Edge first-run policies, OneDrive sign-in notifications and original-admin visibility. NIC changes wait for reboot;
+unknown hardware features are reported as unsupported, not guessed. In particular, generic
+magic-packet-only enforcement uses the advertised writable Boolean in
+`MSNdis_DeviceWakeOnMagicPacketOnly`, bound to the exact physical PNP instance. The Windows
+schema is verified; actual hardware mutation remains unverified. Power-management enable
+is applied before dependent wake controls, and restoration reverses dependency order.
+Enrollment uses a uniquely selected physical Ethernet MAC (prefer the sole active wired
+adapter); repair updates an older generic MAC with the owned agent stopped. Ambiguity is
+reported instead of selecting a virtual or wireless wake target. Setup logs NIC name,
+interface GUID, PNP identity, MAC and available driver provider/version. Hibernation metadata behavior must be
+verified on the target Windows build. Third-party antivirus names produce a warning naming
+the directory to exclude. Account-on privacy/Edge/OneDrive notification policies also affect other users and are
+disclosed before installation; account-off skips them. OneDrive `DisableNewAccountDetection` suppresses existing-credential sign-in toast/activity
+notifications without disabling manual sync; it does not suppress every OneDrive prompt. The original administrator SID is recorded for restoration by a different
+operator, and hiding follows student activation. Before hiding, Setup journals and sets
+`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\CredUI\EnumerateAdministrators`
+to DWORD `0` so UAC requests an explicit username and password. This affects all users;
+account-off skips it. Uninstall restores the administrator tile before restoring the exact
+previous nullable DWORD, preserving later edits and keeping credential entry available
+if tile restoration conflicts. Setup does not enable/disable UAC. Native testing found
+that hiding the sole administrator without this companion policy leaves only a No button;
+the corrected UAC fields and separate manual Winlogon route still need native proof.
+
+Setup stores a bounded, nonsecret `setup-readiness.json` in the private agent data
+directory. It contains fixed antivirus/network advisory codes, not arbitrary messages or
+credentials. The agent publishes a snapshot on reconnect and within ten seconds of a
+repair changing it. The teacher console caches these advisories for offline tiles, shows
+actionable issues in amber and renders plain-language details in the tooltip/event list.
+Unverified physical wake remains an informational advisory. The installer's green result
+certifies local files, identity and service checks; it does not assert that the teacher
+console is reachable or that BIOS/UEFI and the physical LAN can wake the PC.
+
+The actual sign-in tuple includes REG_SZ Winlogon enable/user/domain/plaintext-password,
+LSA secret and absent/DWORD/REG_SZ `AutoLogonCount`. The latter is removed while managed
+autologon is active and restored with its original type. Disable first, replace identity and
+credentials, enable last; a changed tuple or uncertain partial write is a conflict. The
+plaintext password value is removed, not used to store the configured student credential.
+
+`--rekey` stages new trust in a separate DPAPI-purpose transaction, preserves agent id and
+number, and can finish a staged operation without the USB. While staging exists the agent
+refuses to open mixed trust. Removal uses the protected records and retains unresolved
+history; accounts/profiles stay unless explicit owned-account deletion was requested and
+confirmed. Installed apps retains a private retry worker under
+`C:\ProgramData\LabControl Removal\<installationId>` until cleanup succeeds. The
+ReadOnly attributes copied from installation media are cleared only on verified owned
+copy/removal targets; source media and personal files are not modified. The
+nonsecret completion receipt permits retry if only some final journals were deleted;
+unexpected new contents or a different installation are refused. Worker cleanup that
+requires reboot is reported explicitly. Active update probation blocks removal before
+stopping the service, under a shared update/removal lock.
+
+Password fallback is built for the two specified local-policy fields, with private
+`secedit` exports and protected original values. It runs only after a classified policy
+rejection while creating a new disabled account on a non-domain PC. Other creation errors
+never relax policy. Native fallback/restore verification remains pending.
+
+The optional profile ZIP accepts only Desktop/Documents documents and images (128 entries,
+2 MiB/file, 16 MiB total, 200-character paths). It seeds future profiles using add-only
+files on the Default profile's volume. Hives, executables, AppData and links are refused.
+The protected file journal and a private root-bound plan permit USB-free restoration of
+unchanged additions. Existing profiles are preserved, including when the template is first
+supplied during repair. This is a document seed, not a full golden Windows profile image.
 
 ## Building the USB payload (on the console)
 
@@ -219,7 +364,7 @@ makes re-runs safe. `--dry-run` prints the plan only; `--number 7` skips the pro
    certificate itself is obtained from the console at the agent's first connection
    (`EnrollmentService.Enroll`, `docs/PROTOCOL.md`) — Setup does **not** need the console
    to be running or reachable. Until then the agent is installed but unenrolled, and says
-   so in its log. Issuing the certificate needs the lab key unlocked on the console
+   so in its log. The generated English-primary USB instructions put console/key preparation before the first PC install. Issuing the certificate needs the lab key unlocked on the console
    (`D-24`), so after the round with the stick the teacher opens *Enrol PCs* in the console
    and types the passphrase once; a PC that connects before that is told to try again
    later and does, on its own. This step is the shared routine `AgentProvisioning`, also
@@ -308,14 +453,31 @@ matches what Setup applied; preserve later user changes and report conflicts. Ne
 remove a pre-existing firewall rule or exclusion. Journal sensitive sign-in state only
 in its designed protected store, never in plaintext or setup logs. If ownership/history
 is missing, leave accounts and uncertain settings intact and report what remains.
+Windows acceptance found that automatic student logon also populates `AutoLogonSID`.
+Fresh setup therefore journals its original absent-or-REG_SZ value separately, sets the
+recorded managed SID before enabling automatic logon, and restores it after the main
+Winlogon/LSA tuple. Unsupported registry types are refused. Older tuple-only ownership
+history has no recoverable SID baseline: repair/removal preserves that SID and reports
+the limitation instead of adopting its current value as the original. Account-off mode
+does not access either setting.
 
 Keep user accounts, profiles, personal files and installed applications by default.
 `--remove-student` or an explicit unchecked removal option may delete only the account
 and profile proven to have been created by this installation (track its SID), with a
 clear data-deletion confirmation. Never delete a pre-existing account, even if named
 `student`. With account creation off, removal leaves all account/sign-in settings alone.
-Uninstall does not reverse scripts, package installations or other remotely requested jobs.
+An interrupted, explicitly confirmed student removal resumes from its recorded SID on the
+next uninstall, including Installed apps. Pending account removal prevents deletion of the
+ownership journal. Template restoration skips SAM and profile access when the protected
+journal has no pending template work, including after the owned account was deleted or
+an early installation failed before creating it. Pending template changes still require
+the recorded SID. Interactive failures remain visible in a dialog; console diagnostics and
+exit codes are retained. Uninstall does not reverse scripts, package installations or other remotely requested jobs.
 The console may retain an offline PC entry, removable using its existing Remove action.
+
+If Windows already has a different PC-name change waiting for restart, Setup reports
+that restart is required before creating files or ownership journals. This also applies
+when an earlier uninstall restored the old name and the PC has not yet rebooted.
 
 `Setup.exe` with no args on an installed PC = repair (all `Check()`s pass → only
 mismatches are fixed, service restarted). If the stick carries a newer version than
@@ -325,7 +487,8 @@ your hand. It is the fallback, not the normal route: the normal route is
 `Job{self_update}` from the console.
 
 `Setup.exe --rekey` replaces only the trust material: a new `ca.crt` is pinned, a new
-keypair and enrollment code are used, everything else — the `student` account, the
+keypair and enrollment code are used, and the replacement payload's console host/port
+become the enrollment route (an absent host restores discovery). Everything else — the `student` account, the
 installed software, the power settings, the PC number **and the `agent_id`** — is left
 alone. (A full reinstall, by contrast, gets a new `agent_id`; the console recognises the
 PC by its number and replaces the old record, `D-25`.) It takes about
@@ -348,3 +511,79 @@ and the lab has to be re-issued (`docs/ARCHITECTURE.md` §3.6, last row).
   surface (`tests/LabControl.Setup.Tests`).
 - Full run on `PC-00` (the designated test PC) or a Windows VM snapshot that can be
   reverted between runs.
+
+## Teacher-console installation (planned M5, D-54)
+
+Goal: install the interactive console, add several teacher lab files or administrator
+`.lcbak` backups, and select a room. The same console serves both roles; importing a
+backup adds a normal selectable lab with administrator authority. There is no separate
+server product or system service to provision. The server starts with the selected lab
+inside the console and stops when disconnected or closed.
+
+Distribute the .NET runtime and application native assets for each currently supported teacher target
+(`win-x64`, `osx-arm64`, `linux-x64`) so installation works without internet or a runtime
+download. Linux still needs compatible system libraries; record tested distributions,
+versions and prerequisites, with local prerequisite packages where needed for offline
+installation. Packaging is planned, not implemented; choose/document the build tooling in
+M5 and keep the ordinary solution build/test workflow intact.
+
+| Platform | Installation and desktop integration |
+|---|---|
+| Windows | Simple installer copying the console to its application directory; Start-menu entry, optional desktop shortcut, Installed apps/uninstall registration and lab-file/`.lcbak` opening |
+| macOS | `.app` bundle distributed in a `.dmg`, copied to Applications (user Applications where appropriate); bundle registration for both file types |
+| Linux | Self-contained desktop package/install flow with a launcher, file-type opening and documented removal; no requirement to publish every distribution's native package format |
+
+Prefer per-user installation where supported. The base installer lays down app files
+and app-owned desktop registrations. It does not install Agent/Session, Windows services,
+daemons, scheduled tasks or automatic control at login, and does not change accounts,
+autologon, hostname, power/NIC settings or student policies. The student antivirus
+exclusion policy does not apply to the teacher installer. OS firewall/network or privacy
+consent needed for LAN operation and later capture is handled through the supported
+platform flow with a clear explanation; do not disable protections to avoid prompts.
+The console hosts Kestrel and receives incoming connections: Windows needs inbound TCP
+`Defaults.ConsolePort` (47800) and UDP `Defaults.BeaconPort` (47801) for discovery of
+other consoles, scoped to the intended LAN/network profile. A network-setup action may
+need elevation even when file installation does not. Keep the executable path stable
+across updates, preserve existing firewall rules, and remove only rules this installation
+owns. A denied prompt/policy needs an actionable diagnostic, not a false success.
+
+The current publishing script creates executable directories; it does not make desktop
+packages. On macOS create a real bundle with stable identifier, `Info.plist`, icons,
+version and file-type declarations. Under the current no-paid-signing policy (`D-15`),
+document and test the actual unsigned/ad-hoc distribution path and supported user
+approval flow. SmartScreen/Gatekeeper may still prompt or block; a `.dmg` alone does
+not confer trust. Do not disable OS security or quietly make paid signing/notarization a
+prerequisite; a later change to that distribution policy needs a recorded decision.
+
+The installer contains no lab keys, backups or teacher credentials. The application
+handles file import/unlock into its protected stores; installers never receive secrets
+through command arguments or logs. File associations for both formats invoke the same
+*Add labs…* flow and forward to an already running app. Opening a file imports it without
+acquiring its room or creating a second active session. Files can also be selected in
+bulk inside the app, so associations are a convenience rather than the sole entry point.
+Implement the application-side command-line/document activation and same-user instance
+forwarding before claiming file support; the current parser only handles developer
+options. Quote paths safely, accept multi-file opening and preserve the user's default
+handler choice. The process receiving forwarded files validates them as ordinary imports.
+
+Upgrade/repair replaces app files and owned registrations after closing the application;
+preserve saved labs, device identities, protected keys and history. Do not copy the
+student agent's service-restart/rollback machinery. Removal deletes app-owned binaries
+and registrations, retains user lab data by default, and leaves external backup files
+and all student installations intact. Offer local data/credential deletion only as an
+explicit separate choice; it must not revoke other devices or delete the lab itself.
+Reinstallation must reopen retained profiles without another import.
+That guarantee applies to the same device and OS account, with the protected store
+retained. Verify Keychain/DPAPI/libsecret or file-fallback access after changing the app
+binary; copying user files to another device/account is not credential migration.
+On macOS app-bundle removal alone does not run a custom uninstaller; provide the explicit
+local-data cleanup action inside the app before removal, and document retained data.
+
+Acceptance in ROADMAP M5 covers clean offline installation, launch, both file types,
+upgrade/repair/reinstall/removal and the one-active-lab invariant on all three platforms.
+Verify LAN connectivity separately from installation, including the platform's required
+network permissions. M6 verifies capture/broadcast permissions when that feature exists.
+
+Packaging references: [Avalonia macOS deployment](https://docs.avaloniaui.net/docs/deployment/macos),
+[Windows Firewall rules](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/rules),
+[.NET Linux prerequisites](https://learn.microsoft.com/en-us/dotnet/core/install/linux-scripted-manual#dependencies).

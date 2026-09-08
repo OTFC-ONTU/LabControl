@@ -27,15 +27,16 @@ public sealed class MachineRegistrySetting(MachineRegistryPolicy policy, IMachin
         _ => throw new ArgumentOutOfRangeException(nameof(policy))
     };
 
-    public SettingChangeResult Apply(SetupSettingsJournal journal) =>
-        journal.ApplyFromCurrent(this, current => Encode(policy switch
+    public SetupCheck Check(SetupSettingsJournal journal) => journal.Check(this, Desired);
+    public SettingChangeResult Apply(SetupSettingsJournal journal) => journal.ApplyFromCurrent(this, Desired);
+    private byte[]? Desired(byte[]? current) => Encode(policy switch
         {
             MachineRegistryPolicy.FastStartup => 0u,
             // Preserve an existing services-and-accessibility policy.
             MachineRegistryPolicy.SoftwareSas => current is not null
                 && current.AsSpan().SequenceEqual(Encode(3)) ? 3u : 1u,
             _ => throw new ArgumentOutOfRangeException(nameof(policy))
-        }));
+        });
 
     public byte[]? Read()
     {

@@ -12,6 +12,49 @@ public sealed class InstallationStateTests : IDisposable
     private InstallationState Open() => new(_directory);
 
     [Fact]
+    public void Repair_cannot_resume_an_installation_after_removal_was_authorized()
+    {
+        var state = Open();
+        state.Configure(false, false);
+        state.MarkRemovalReady();
+        Assert.Throws<InvalidOperationException>(() => state.Configure(true));
+        Assert.True(state.Read()!.RemovalReady);
+    }
+
+    [Fact]
+    public void Pending_authorized_student_removal_survives_restart_and_blocks_history_cleanup()
+    {
+        var state = Open();
+        state.Configure(false);
+        state.BeginStudentCreation(null);
+        state.CompleteStudentCreation(OwnedSid);
+        state.BeginStudentRemoval(OwnedSid);
+        var retry = Open();
+        Assert.True(retry.Read()!.StudentRemovalPending);
+        Assert.Equal(OwnedSid, retry.RequireManagedStudent(OwnedSid));
+        Assert.Throws<InvalidOperationException>(() => retry.RequireManagedStudent(ReplacementSid));
+        Assert.Throws<InvalidOperationException>(() => retry.MarkRemovalReady());
+        Assert.False(retry.Read()!.RemovalReady);
+        retry.CompleteStudentRemoval();
+        retry.MarkRemovalReady();
+        Assert.True(Open().Read()!.RemovalReady);
+        Assert.True(Open().Read()!.StudentRemoved);
+    }
+
+    [Fact]
+    public void Repair_cannot_reenable_an_account_while_its_removal_is_pending()
+    {
+        var state = Open();
+        state.Configure(false);
+        state.BeginStudentCreation(null);
+        state.CompleteStudentCreation(OwnedSid);
+        state.BeginStudentRemoval(OwnedSid);
+        Assert.Throws<InvalidOperationException>(() => state.Configure(true, true));
+        state.CompleteStudentRemoval();
+        Assert.Throws<InvalidOperationException>(() => state.Configure(true, true));
+    }
+
+    [Fact]
     public void Fresh_default_is_on_but_repair_preserves_explicit_opt_out()
     {
         var state = Open();

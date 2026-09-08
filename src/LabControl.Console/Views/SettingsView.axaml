@@ -109,6 +109,7 @@
         <TextBlock Text="{loc:Localize Enroll.PcCount}" VerticalAlignment="Center" />
         <NumericUpDown Value="{Binding PayloadPcCount}" Minimum="1" Maximum="30" Increment="1" FormatString="0" Width="110" />
         <Button Content="{loc:Localize Enroll.WritePayload}" Command="{Binding WritePayloadCommand}" />
+        <Button Content="{loc:Localize Enroll.BuildUsb}" Command="{Binding BuildUsbInstallerCommand}" />
       </StackPanel>
       <CheckBox IsChecked="{Binding VoidEarlierCodes}" Content="{Binding UnusedCodes, StringFormat={loc:Localize Enroll.VoidEarlier}}" IsVisible="{Binding !!UnusedCodes}" />
       <TextBlock Text="{Binding PayloadHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />

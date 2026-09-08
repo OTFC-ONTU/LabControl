@@ -24,3 +24,6 @@ packages/**/*.msi
 packages/**/*.zip
 packages/**/*.7z
 usb/
+
+# Windows acceptance fixture outputs (large, machine-specific)
+tools/windows-tests/out/

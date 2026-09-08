@@ -138,6 +138,14 @@ footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
 <p>All console↔agent traffic is gRPC over HTTP/2 + TLS. Contracts live in
 <code>src/LabControl.Shared/Protos/*.proto</code> and are the single source of truth; this
 document explains intent and flows. <strong>Update this file whenever a .proto changes.</strong></p>
+<p><strong>Planned M5 boundary (<code>D-53</code>).</strong> Several labs may be saved on a teacher device, but
+only the selected lab may advertise or hold agent/file/video/control connections.
+Switching must close the old session before activating the next and prevent stale
+messages/results from crossing lab or originating-console boundaries. Each profile
+keeps its lab-scoped identity. Separate teacher authorization, revocation across renewal
+and takeover without comparing unsynchronized clocks require a documented compatible
+protocol design during M5. No new message or wire format is introduced by this plan;
+the frozen subset below remains mandatory. Classroom control is M6, catalog/polish M7.</p>
 <h2 id="ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (<code>LabControl.Shared/Defaults.cs</code>)<a class="anchor" href="#ports-and-identifiers-labcontrol.shareddefaults.cs" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
 <thead>
@@ -592,7 +600,7 @@ everything else; the PC is the producer.</p>
 <ul>
 <li><code>VideoFrame { agent_id, seq, at_unix_ms, width, height, mode, repeated Rect dirty, bytes jpeg, keyframe, codec, quality }</code>. <code>width</code>/<code>height</code> are always the size of the <strong>screen</strong> the frame comes
 from; the JPEG itself may be smaller (a thumbnail, or a full-mode delta). <code>codec</code> is
-<code>&quot;jpeg&quot;</code> in this build (<code>Defaults.VideoCodecJpeg</code>); H.264 is an M6 option behind the same
+<code>&quot;jpeg&quot;</code> in this build (<code>Defaults.VideoCodecJpeg</code>); H.264 is an M7 option behind the same
 envelope (<code>D-11</code>). <code>quality</code> is what this frame was encoded at (0 from an agent older
 than <code>D-37</code>), so the console can show it.</li>
 <li><strong>Control.</strong> The console sends <code>VideoControl { active, mode, frames_per_second, quality, request_keyframe, max_bits_per_second }</code> on the <code>Link</code> stream: a thumbnail control to every
@@ -749,7 +757,7 @@ helper from a previous service instance, or an impostor). The service answers wi
 prompt. A helper silent for <code>HelperSilenceTimeout</code> (10 s) is killed and restarted; an
 <code>Event</code> from the helper is relayed to the console unchanged. When the pipe closes the helper
 exits at once; when the helper exits the service respawns it (D-30). <code>Overlay</code> is answered
-with a <code>session.not_in_this_build</code> warning until M5.</p>
+with a <code>session.not_in_this_build</code> warning until M6.</p>
 <p><strong>Input over the pipe (M3 portion 3, <code>D-36</code>).</strong> Every <code>Input</code> from the console except
 <code>CTRL_ALT_DEL</code> is written down the pipe as it is (fire-and-forget, like the controls); the
 helper queues it (<code>Defaults.InputQueueLength</code>, the newest dropped when full) for an input
@@ -868,7 +876,7 @@ small on purpose (<code>D-33</code>):</p>
 <tr>
 <td><code>version</code></td>
 <td>a version directory name, e.g. <code>0.1.0+1a2b3c4d</code></td>
-<td>the directory under <code>app\</code> the build lands in; a pushed development build is the version number plus the first 8 hex digits of <code>agent.exe</code>'s SHA-256, so two builds of the same number never collide</td>
+<td>the directory under <code>app\</code> the build lands in; a pushed development build is the version number plus the first 8 hex digits of the domain-separated digest of both executable names and hashes (D-52), so helper-only changes receive a new build identity</td>
 </tr>
 <tr>
 <td><code>ref</code></td>
@@ -883,7 +891,7 @@ small on purpose (<code>D-33</code>):</p>
 <tr>
 <td><code>signature</code></td>
 <td>base64</td>
-<td><strong>M4</strong>: the lab key's signature over the manifest bytes, verified against the pinned CA certificate — not against the TLS session that carried it (<code>D-19</code>)</td>
+<td>Required by the M4 agent: the lab key signature over the domain-prefixed manifest bytes, verified against the pinned CA (<code>D-52</code>)</td>
 </tr>
 </tbody>
 </table></div>
@@ -894,6 +902,14 @@ small on purpose (<code>D-33</code>):</p>
   int32  probation_seconds;       // M4: 0 = the default, 600
 }
 </code></pre>
+<p>The signature uses ECDSA P-256 / SHA-256 with IEEE P1363 encoding (64 bytes), Base64
+in the job argument. Signed bytes are ASCII <code>labcontrol/update-manifest/v1\0</code> followed
+by the exact serialized manifest bytes. Verification occurs before file staging or execution,
+including same-version requests that might prune files. An absent or invalid signature is
+refused. The signed minimum version is numeric (2–4 components); build metadata is ignored.
+A hardened M4 agent needs a signing-capable console for updates; old agents ignore the
+additive signature argument and retain their old bootstrap behavior. Ordinary connections
+and frozen-subset message layouts remain compatible. No new protobuf field was added.</p>
 <p>The agent pulls the manifest, checks it against the job (version, file names, sizes,
 hashes, the two required executables — <code>UpdateBundle</code>), pulls every file under its own hash
 into <code>ProgramData\LabControl\update\&lt;version&gt;\</code>, runs the new <code>agent.exe --version</code> once
@@ -910,8 +926,32 @@ agent is stopped mid-job and releases the job id without a result, the console k
 in flight (its inactivity timeout is 5 minutes) and re-sends it on the next link, and the new
 version answers <em>Running <code>&lt;version&gt;</code> now</em> because the job's <code>version</code> is its own. The same
 rule makes pushing a build that is already running a harmless success. While answering, the
-new version removes every version directory other than <code>app\current</code> and <code>app\previous</code>.</p>
+new version preserves trial directories until probation ends. <code>Hello.update_state</code> reports
+<code>ON_PROBATION</code> or <code>ROLLED_BACK</code>; the existing <code>Event</code> envelope carries <code>update.stable</code>
+when ten continuous linked minutes complete, refreshing the live tile. The monitor also
+retries terminal-state publication once per connection and durable job/state identity:
+<code>update.stable</code> refreshes an already-stable record, and Warning <code>update.rolled_back</code> carries
+only the validated failed version as its message. Consoles localize that version into a
+restoration notice and update the existing live tile. This repairs a transient unspecified
+Hello when external rollback still held the journal lock while restarting the service.
+<code>ROLLBACK_PENDING</code> never produces a completed-restoration event. A successful job
+acknowledges the restart, not completion of probation.</p>
 <p>The <code>UpdateAgent</code> message in the proto is reserved for M4 and not used by the M2 form.</p>
+<p>A failed manifest signature or compatibility check also emits a Warning <code>Event</code> with
+code <code>update.refused</code> and a fixed plain-language message. The failed <code>JobResult</code> retains
+the specific validation reason; the event never includes manifest fields or bytes.</p>
+<p>Setup advisories use the existing <code>Event</code> envelope with code <code>setup.readiness</code>. Its
+message is a bounded schema-1 JSON snapshot containing only fixed codes:
+<code>antivirus.third_party</code>, <code>antivirus.inventory_unavailable</code>, <code>network.wol_unverified</code>,
+<code>network.configuration_warning</code>, and <code>report.unavailable</code>. The agent sends it on reconnect
+and when its protected installer report changes (polled every ten seconds). The console
+validates and translates these codes; it never displays raw JSON as teacher instructions.
+A valid snapshot replaces previous advisories and is cached in the optional
+<code>MachineRecord.SetupReadinessCodes</code> field for offline tiles. Invalid or newer snapshots
+do not clear older warnings. Missing reports from legacy agents do not certify readiness.
+Unverified physical wake is informational; configuration/antivirus/report errors need
+attention. This event does not change the frozen protocol subset or prove connectivity
+beyond the connection carrying it.</p>
 <p><code>Hello.update_state</code> tells the console where a PC stands — <code>STABLE</code>, <code>ON_PROBATION</code> (with
 the deadline) or <code>ROLLED_BACK</code> (with the version that failed and the reason in plain
 language) — so a failed rollout is visible in the lab view rather than buried in a log on
@@ -919,7 +959,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-07 23:34 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-08 08:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

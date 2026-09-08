@@ -329,7 +329,7 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void Logoff() => CreateJobs(Job.Types.Kind.Logoff);
 
-    /// <summary>Development-only (D-33): a published agent build to the selected PCs, which install it side by side and restart.</summary>
+    /// <summary>Signs and pushes a published agent build to selected PCs for side-by-side installation.</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task PushBuildAsync()
     {
@@ -339,6 +339,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (!await EnsureUnlockedAsync(Strings.Get("Unlock.ReasonUpdate"))) return;
         var targets = Selected.Select(t => t.AgentId).ToArray();
         if (targets.Length > 0)
         {

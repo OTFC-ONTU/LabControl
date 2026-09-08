@@ -6,10 +6,23 @@
     <RootNamespace>LabControl.Setup</RootNamespace>
     <AssemblyName>Setup</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../LabControl.Console/Assets/labcontrol.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="../LabControl.Console/Assets/labcontrol.ico" LogicalName="LabControl.Setup.AppIcon" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\LabControl.Agent\ServiceControl.cs" Link="Recovery\ServiceControl.cs" />
+    <Compile Include="..\LabControl.Agent\UpdateRecovery.cs" Link="Recovery\UpdateRecovery.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Windows.CsWin32" PrivateAssets="all" />
+    <PackageReference Include="System.Management" />
     <ProjectReference Include="..\LabControl.Shared\LabControl.Shared.csproj" />
   </ItemGroup>
 

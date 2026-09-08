@@ -41,6 +41,9 @@ public sealed class DirectoryAgentStore : IAgentStore, IDisposable
     /// <summary>Reopens an installed PC.</summary>
     public static DirectoryAgentStore Open(string directory, KeyProtection? protection = null)
     {
+        if (File.Exists(Path.Combine(directory, Defaults.TrustRekeyFileName))
+            || System.IO.Directory.Exists(Path.Combine(directory, Defaults.TrustRekeyFileName)))
+            throw new InvalidOperationException("Trust replacement is pending. Run Setup --rekey again to complete it before starting the agent.");
         protection ??= KeyProtection.None;
 
         var config = JsonStore.Load<AgentConfigDocument>(Path.Combine(directory, Defaults.AgentConfigFileName), AgentConfigDocument.Migrations);

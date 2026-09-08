@@ -90,6 +90,18 @@ public sealed partial class MachineTileViewModel : ObservableObject
     public partial string AgentVersion { get; set; } = string.Empty;
 
     [ObservableProperty]
+    public partial string UpdateNote { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ReadinessNote { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ReadinessAttention { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool UpdateNeedsAttention { get; set; }
+
+    [ObservableProperty]
     public partial string Address { get; set; } = string.Empty;
 
     [ObservableProperty]
@@ -187,6 +199,23 @@ public sealed partial class MachineTileViewModel : ObservableObject
         Hostname = machine.Hostname;
         LoggedOnUser = machine.LoggedOnUser ?? string.Empty;
         AgentVersion = machine.AgentVersion ?? string.Empty;
+        var readiness = (machine.SetupReadinessCodes ?? []).Where(LabControl.Shared.Setup.SetupReadiness.IsKnown).Distinct().ToArray();
+        ReadinessNote = string.Join("\n", readiness.Select(code => Strings.Get("Readiness." + code)));
+        ReadinessAttention = string.Join("\n", readiness.Where(LabControl.Shared.Setup.SetupReadiness.NeedsAttention)
+            .Select(code => Strings.Get("Readiness." + code)));
+        if (connection is not null)
+        {
+            var update = connection.UpdateState;
+            UpdateNeedsAttention = update.Phase is LabControl.Shared.Protocol.UpdateState.Types.Phase.OnProbation
+                or LabControl.Shared.Protocol.UpdateState.Types.Phase.RolledBack;
+            UpdateNote = update.Phase switch
+            {
+                LabControl.Shared.Protocol.UpdateState.Types.Phase.Stable => Strings.Get("Tile.UpdateStable"),
+                LabControl.Shared.Protocol.UpdateState.Types.Phase.OnProbation => Strings.Get("Tile.UpdateProbation"),
+                LabControl.Shared.Protocol.UpdateState.Types.Phase.RolledBack => Strings.Format("Tile.UpdateRolledBack", update.FailedVersion),
+                _ => string.Empty,
+            };
+        }
         Address = machine.LastIp ?? string.Empty;
         CertificateSerial = machine.CertificateSerial;
         NeedsRenewal = machine.CertificateNotAfterUnix > 0 &&

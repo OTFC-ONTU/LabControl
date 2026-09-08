@@ -34,7 +34,7 @@ public sealed class SelfUpdateTests
     }
 
     [Fact]
-    public void A_flat_build_folder_is_read_hashed_and_named_after_its_agent_exe()
+    public void A_flat_build_folder_is_read_hashed_and_named_after_the_complete_bundle()
     {
         var folder = TempFolder();
         try
@@ -44,7 +44,8 @@ public sealed class SelfUpdateTests
             Assert.True(AgentBuild.TryLoad(folder, "0.1.0", out var build, out var error), error);
 
             var agentHash = FileHash.Sha256HexOfFile(Path.Combine(folder, Defaults.AgentExecutableName));
-            Assert.Equal("0.1.0+" + agentHash[..Defaults.BuildIdLength], build.Version);
+            Assert.StartsWith("0.1.0+", build.Version);
+            Assert.Equal("0.1.0+".Length + Defaults.BuildIdLength, build.Version.Length);
             Assert.True(InstallLayout.IsValidVersion(build.Version));
             Assert.Equal("0.1.0", InstallLayout.BaseVersionOf(build.Version));
 
@@ -56,6 +57,7 @@ public sealed class SelfUpdateTests
             Assert.Equal(300_000 + "session helper bytes".Length, build.TotalBytes);
 
             var manifest = UpdateManifest.Parser.ParseFrom(build.Manifest);
+            Assert.Equal("0.0.0", manifest.MinInstalledVersion);
             Assert.Equal(build.Version, manifest.Version);
             Assert.Equal(build.Files.Select(f => (f.Name, f.Size, f.Sha256)), manifest.Files.Select(f => (f.RelativePath, f.Size, f.Sha256)));
             Assert.Equal(FileHash.Sha256Hex(build.Manifest), build.ManifestSha256);
@@ -65,6 +67,24 @@ public sealed class SelfUpdateTests
         {
             Directory.Delete(folder, recursive: true);
         }
+    }
+
+    [Fact]
+    public void A_helper_only_fix_has_a_distinct_version_and_unchanged_base_preflight()
+    {
+        var folder = TempFolder();
+        try
+        {
+            WriteBuild(folder);
+            Assert.True(AgentBuild.TryLoad(folder, "0.1.0", out var original, out _));
+            File.WriteAllText(Path.Combine(folder, Defaults.SessionExecutableName), "fixed session helper");
+            Assert.True(AgentBuild.TryLoad(folder, "0.1.0", out var fixedHelper, out _));
+            Assert.Equal(original.Files[0].Sha256, fixedHelper.Files[0].Sha256);
+            Assert.NotEqual(original.Version, fixedHelper.Version);
+            Assert.Equal(InstallLayout.BaseVersionOf(original.Version), InstallLayout.BaseVersionOf(fixedHelper.Version));
+            Assert.True(InstallLayout.IsValidVersion("0.1.0+" + original.Files[0].Sha256[..Defaults.BuildIdLength]));
+        }
+        finally { Directory.Delete(folder, recursive: true); }
     }
 
     [Fact]

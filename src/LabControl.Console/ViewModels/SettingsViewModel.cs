@@ -6,6 +6,7 @@ using LabControl.Console.Services;
 using LabControl.Shared;
 using LabControl.Shared.Identity;
 using LabControl.Shared.Persistence;
+using LabControl.Shared.Setup;
 
 namespace LabControl.Console.ViewModels;
 
@@ -393,6 +394,28 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     // ------------------------------------------------------------------ enrolment
+
+    [RelayCommand]
+    private async Task BuildUsbInstallerAsync()
+    {
+        var buildFolder = await _dialogs.PickFolderAsync(Strings.Get("Enroll.BuildFolder"));
+        if (buildFolder is null) return;
+        try
+        {
+            var builder = new UsbInstallerBuilder(buildFolder, Version);
+            var folder = await _dialogs.PickFolderAsync(Strings.Get("Enroll.BuildUsb"));
+            if (folder is null) return;
+            builder.ValidateDestination(Path.Combine(folder, Defaults.PayloadDirectoryName));
+            var target = _session.WritePayload(folder, Math.Clamp(PayloadPcCount, 1, Defaults.MaxStudentPcs), VoidEarlierCodes);
+            await Task.Run(() => builder.Build(target));
+            LastMessage = Strings.Format("Enroll.InstallerWritten", target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            await _dialogs.ShowMessageAsync(Strings.Get("Enroll.BuildUsb"), ex.Message);
+        }
+        Refresh();
+    }
 
     [RelayCommand]
     private async Task WritePayloadAsync()

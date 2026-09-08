@@ -15,6 +15,30 @@ namespace LabControl.Shared.Tests;
 public sealed class ProvisioningTests
 {
     [Fact]
+    public void Successful_number_advance_preserves_a_code_consumed_by_another_payload_instance()
+    {
+        using var lab = TestLab.Create();
+        var stick = TempDirectory();
+        try
+        {
+            WritePayload(lab, stick, codes: ["AAAA-1111", "BBBB-2222"]);
+            var prompt = SetupPayload.Open(stick);
+            using var promptAuthority = prompt.Authority;
+            var installer = SetupPayload.Open(stick);
+            using var installerAuthority = installer.Authority;
+            _ = installer.TakeCode();
+            prompt.AdvanceNumber(7);
+            var saved = JsonStore.Load<SetupPayloadDocument>(Path.Combine(stick, Defaults.SetupFileName), SetupPayloadDocument.Migrations);
+            Assert.Equal(8, saved.NextNumber);
+            Assert.Equal(["BBBB-2222"], saved.EnrollmentCodes);
+            Assert.Equal(["AAAA-1111"], saved.UsedEnrollmentCodes);
+            prompt.AdvanceNumber(Defaults.MaxStudentPcs);
+            Assert.Equal(Defaults.MaxStudentPcs, prompt.Document.NextNumber);
+        }
+        finally { Directory.Delete(stick, recursive: true); }
+    }
+
+    [Fact]
     public void Install_takes_a_code_pins_the_authority_and_writes_the_configuration()
     {
         using var lab = TestLab.Create();

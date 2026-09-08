@@ -9,9 +9,15 @@ public interface IStudentAccountSystem
     string CreateDisabledStudent();
 }
 
+public sealed class StudentPasswordPolicyException : InvalidOperationException
+{
+    public StudentPasswordPolicyException() : base("Local password policy rejected the disabled student account.") { }
+}
+
 /// <summary>Prepare account ownership under Setup's private-directory/exclusive-lock scope.
 /// Activation, group configuration and sign-in belong to later journaled setup steps.</summary>
-public sealed class StudentAccountProvisioning(InstallationState state, IStudentAccountSystem system)
+public sealed class StudentAccountProvisioning(InstallationState state, IStudentAccountSystem system,
+    Action? preparePasswordPolicy = null)
 {
     public StudentAccountAction Prepare(bool existingInstallation, bool? createStudentAccount = null)
     {
@@ -26,7 +32,15 @@ public sealed class StudentAccountProvisioning(InstallationState state, IStudent
         if (action == StudentAccountAction.AlreadyManaged) return action;
 
         state.BeginStudentCreation(currentSid);
-        var createdSid = system.CreateDisabledStudent();
+        string createdSid;
+        try { createdSid = system.CreateDisabledStudent(); }
+        catch (StudentPasswordPolicyException) when (preparePasswordPolicy is not null)
+        {
+            // Only a positively classified password-policy failure permits this fallback.
+            // A concurrent account creation must still fail create-new on the second call.
+            preparePasswordPolicy();
+            createdSid = system.CreateDisabledStudent();
+        }
         // A failed save deliberately leaves a disabled, unowned account. Never roll back
         // by deleting a name: another account might have replaced it meanwhile.
         state.CompleteStudentCreation(createdSid);

@@ -31,12 +31,28 @@ public sealed class PushBuildTests
     }
 
     [Fact]
+    public async Task A_locked_lab_key_refuses_update_before_offering_any_files()
+    {
+        var folder = WriteBuild();
+        await using var console = await TestConsole.CreateLabAsync();
+        try
+        {
+            Assert.True(AgentBuild.TryLoad(folder, "0.1.0", out var build, out var error), error);
+            console.Session.Vault.Lock();
+            Assert.Throws<InvalidOperationException>(() => console.Session.PushAgentBuild([], build));
+            Assert.Equal(0, console.Session.Files.Count);
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
     public async Task A_pushed_build_is_pulled_verified_and_confirmed_by_the_new_version()
     {
         var folder = WriteBuild();
         await using var console = await TestConsole.CreateLabAsync();
         await using var pc = TestAgent.Install(console, 6, console.IssueCodes(1)[0]).Start();
         Assert.True(await Wait.UntilAsync(() => pc.Link.State == LinkState.Linked));
+        pc.Behaviour.Version = "0.1.0";
 
         try
         {
@@ -57,7 +73,7 @@ public sealed class PushBuildTests
 
                 using var manifestBytes = new MemoryStream();
                 await pc.Link.PullFileAsync(request.ManifestReference, request.ManifestSha256, manifestBytes, CancellationToken.None);
-                Assert.True(UpdateBundle.TryRead(manifestBytes.ToArray(), request, out var manifest, out problem), problem);
+                Assert.True(UpdateBundle.TryReadVerified(manifestBytes.ToArray(), request, console.Session.Authority, pc.Behaviour.Version, out var manifest, out problem), problem);
 
                 foreach (var file in manifest.Files)
                 {
@@ -102,6 +118,7 @@ public sealed class PushBuildTests
         await using var console = await TestConsole.CreateLabAsync();
         await using var pc = TestAgent.Install(console, 7, console.IssueCodes(1)[0]).Start();
         Assert.True(await Wait.UntilAsync(() => pc.Link.State == LinkState.Linked));
+        pc.Behaviour.Version = "0.1.0";
 
         try
         {

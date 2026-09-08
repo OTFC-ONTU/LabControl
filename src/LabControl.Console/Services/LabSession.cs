@@ -153,11 +153,11 @@ public sealed class LabSession : IAsyncDisposable
         _log.LogInformation("Console '{Name}' ({Instance}) serving lab '{Lab}' on {Bind}:{Port}",
             Instance.InstanceName, Instance.InstanceId, LabName, Options.BindAddress, Port);
 
-        _broadcaster = new BeaconBroadcaster(Instance, Port, Options.BindAddress, _clock);
+        _broadcaster = new BeaconBroadcaster(Instance, Port, Options.BindAddress, _clock, Options.BeaconPort);
         _broadcaster.Failed += message => Events.Warning("beacon.send_failed", message);
         _broadcaster.Start();
 
-        _listener = new BeaconListener();
+        _listener = new BeaconListener(Options.BeaconPort);
         _listener.Received += OnBeaconReceived;
         _listener.Failed += message => Events.Warning("beacon.listen_failed", message);
         _listener.Start();
@@ -725,17 +725,24 @@ public sealed class LabSession : IAsyncDisposable
 
             case AgentMessage.PayloadOneofCase.Event:
                 var reported = message.Event;
+                var eventText = reported.Code == SetupReadiness.EventCode
+                    ? ReadinessPresentation.EventText(reported.Message)
+                    : reported.Code == UpdateTerminalReport.RolledBackCode
+                        ? Localization.Strings.Get("Update.RollbackReported") + (InstallLayout.IsValidVersion(reported.Message)
+                            ? " " + Localization.Strings.Format("Tile.UpdateRolledBack", reported.Message) : "")
+                        : reported.Code == UpdateTerminalReport.StableCode ? Localization.Strings.Get("Tile.UpdateStable") : reported.Message;
                 Events.Add(reported.Severity switch
                 {
                     Event.Types.Severity.Error => EventSeverity.Error,
                     Event.Types.Severity.Warning => EventSeverity.Warning,
                     _ => EventSeverity.Info,
-                }, reported.Code.Length > 0 ? reported.Code : "agent.event", $"{who}: {reported.Message}", connection.AgentId, connection.Number);
+                }, reported.Code.Length > 0 ? reported.Code : "agent.event", $"{who}: {eventText}", connection.AgentId, connection.Number);
 
                 // A capture or input problem is state the tile and the single-PC window show
                 // (M3 portion 3), not only a line in the log.
                 if (connection.ApplyEvent(reported))
                 {
+                    if (reported.Code == LabControl.Shared.Setup.SetupReadiness.EventCode) SaveLabSoon();
                     MachinesChanged?.Invoke();
                 }
 
@@ -841,20 +848,25 @@ public sealed class LabSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// The development-only <i>Push agent build</i> action (ROADMAP M2 portion 4, D-33):
-    /// offers the build's files and its manifest through <c>PullFile</c> and sends a
+    /// Signs the build manifest with the unlocked lab key, offers its files through
+    /// <c>PullFile</c> and sends a
     /// <c>self_update</c> job per PC. The result comes from the <b>new</b> version after the
     /// service restart, so the job's inactivity timeout is generous.
     /// </summary>
     public IReadOnlyList<JobRecord> PushAgentBuild(IEnumerable<string> agentIds, AgentBuild build)
     {
+        if (!Vault.Use(key => UpdateManifestSignature.Sign(key, build.Manifest), out var signature))
+        {
+            throw new InvalidOperationException("Unlock the lab key before signing an agent update.");
+        }
+
         foreach (var file in build.Files)
         {
             Files.OfferFile(file.Path);
         }
 
         var manifest = Files.OfferBytes(build.Manifest, $"manifest-{build.Version}");
-        var request = new SelfUpdateRequest(build.Version, manifest.Reference, manifest.Sha256);
+        var request = new SelfUpdateRequest(build.Version, manifest.Reference, manifest.Sha256, signature);
         _log.LogInformation("pushing agent build {Version} from {Folder} ({Bytes} bytes)", build.Version, build.Folder, build.TotalBytes);
         return CreateJobs(agentIds, Job.Types.Kind.SelfUpdate, request.ToArgs(), Defaults.SelfUpdateJobTimeout);
     }

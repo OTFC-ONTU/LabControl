@@ -13,6 +13,11 @@ The first lab has **14** PCs, but nothing may assume that number: the software i
 to move to other labs, so it is designed and load-tested for **up to 30** student PCs
 and one console. The count comes from `lab.json`, never from a constant.
 
+This picture is one active lab. Planned M5 adds several saved lab profiles per teacher
+device, selected one at a time (§3.9, `D-53`); inactive rooms have no live session. Each
+room retains its own identity and mostly stable roster. Different teachers may use
+different rooms concurrently; one console never controls two rooms concurrently.
+
 Assumptions to verify on site before M1 (put results in DECISIONS.md D-10):
 - Wi-Fi and the wired hub are the **same IP subnet / same L2 broadcast domain**
   (no "AP isolation" / guest network on the router). Required for UDP discovery
@@ -79,8 +84,9 @@ able to open the lab if he is ill on an exam day. Holders are added and removed 
 console (adding one needs an existing holder's passphrase; removing one drops that
 holder's wrapping and does not require the removed person's cooperation — note that a
 removed holder who kept an *old copy* of the file can still open that old copy, which is
-why revocation of what the key has signed, not re-wrapping, is the answer to a departed
-colleague). Every
+why removing a wrapping cannot withdraw that person's CA authority. Revoking one leaf
+also cannot prevent a retained CA key from issuing another. Planned M5 separates
+ordinary classroom access from CA ownership (§3.9, `D-53`)). Every
 holder is equal — there is no "owner" wrapping that outranks the others — and the list of
 holder *names* is stored in the clear so you can see who can open the lab without opening
 it yourself.
@@ -168,6 +174,11 @@ was itself a credential.)
    stolen laptop stops working as soon as the lab has seen the new console.
 
 ### 3.7 Several teacher machines, one at a time
+
+The following is the current single-lab/full-owner model and its intended handover
+behavior. M5 extends it with saved lab profiles and separate ordinary teacher access
+(§3.9). The audit gaps in device revocation, ownership reporting, enrollment-code copies
+and clock-dependent takeover are M5 acceptance work, not verified guarantees here.
 
 Replacement is the disaster case. The everyday case is **alternation**: the owner drives
 the lab from a MacBook on some days, a colleague drives it from the Windows PC at the
@@ -278,7 +289,71 @@ The console shows one banner — *"N certificates need renewing — unlock the l
 both cases, so the yearly and five-yearly chores are the same gesture as enrolment. A
 leaf never outlives the authority that signed it.
 
+### 3.9 Saved labs and one active room (planned M5, D-53)
+
+The teacher imports several lab files once and selects a room for each lesson from
+*My labs*. A room's `lab_id` and pinned authority are stable; neither its file name nor
+its IP address is its identity. Each lab holds up to 30 PCs, independently of the number
+of saved profiles. Import does not connect. Startup shows the chooser; selecting a lab
+activates it, *Disconnect* returns to the chooser, and selecting another lab releases
+the old session before starting the new one. No app restart or daily backup restore.
+Administrators use the same chooser: *Add labs…* accepts `.lcbak` backups directly,
+including multi-file and mixed imports, and adds administrator profiles after unlocking
+each archive. The backup is not limited to disaster recovery (`D-54`).
+
+The registry contains only saved metadata for inactive rooms. Each profile owns its
+trust, device identity, roster/layout, scripts/catalog and job history. Active networking,
+video buffers and input belong to a single disposable session. On departure stop old
+beacons, streams and connection attempts, invalidate old UI actions/callbacks, and never
+accept peers from an inactive lab. Import/refresh is transactional per file, deduplicated
+by identity and cannot downgrade trust/revocations or erase local outcomes. Existing
+single-lab data migrates without re-enrolling student PCs or replacing its identity.
+
+A **lab file** is a versioned, authenticated room/access distribution artifact. It
+carries public trust and a roster/layout snapshot and supports initial authorization of
+the teacher's device, batched for several labs and usable without internet. Ordinary
+teacher files do not contain the CA private key, recovery material or student enrollment
+codes. Each device needs its own revocable identity; a copied file is not a reason to
+share one private key across teachers. Exact file format and the offline authorization
+exchange must be specified before implementation. This is a new flow, not a rename of
+the existing `.lcbak` file: that archive remains a full administrator backup and also
+serves as an input for adding a switchable lab. Access level is per profile. Importing
+a backup for an existing teacher profile upgrades access after explicit unlock while
+preserving its identity/history; importing a teacher file does not downgrade it. Switching
+never restores the archive again or unlocks its CA: routine control uses the local device
+identity, privileged actions require the lab-key unlock, and departure locks that key.
+An existing full-owner copy cannot be downgraded by relabeling it; retained CA keys keep
+their authority. The migration UI must explain this limit.
+
+The administrator retains issuance, enrollment and update-signing authority. Device
+revocation must remain effective across leaf renewal once delivered to agents; show
+pending propagation for unreachable PCs. Stale admin backups must not silently restore
+spent enrollment codes as usable. Do not claim immediate global revocation on an isolated
+LAN with disconnected devices, or require a continuously running owner/server for lessons.
+Adding a backup for switching does not automatically activate its pending enrollment
+codes; retain history and use an explicit recovery/issuer-coordination flow (`D-54`).
+Independent offline CA owners cannot promise global single-use from local journals alone.
+Teacher files require a concrete initial device-authorization flow; public metadata
+alone cannot grant a device a signed identity. Existing valid access needs no owner
+present for daily switching, while expired/revoked access has a separate recovery path.
+
+Switching an idle lab targets a responsive saved mosaic within 2 seconds and connection
+of all reachable running agents within 15 seconds on a supported healthy LAN. Running
+scripts/transfers/updates require explicit safe departure handling and retained result
+ownership; keeping an inactive lab secretly connected is not a solution. M6 extends the
+same contract to lock/broadcast/exam policy expiry and work collection. Truthful room
+ownership and takeover resilient to allowed clock skew are M5 requirements. Detailed
+acceptance and failure drills are in ROADMAP M5; none of this section is implemented yet.
+The timing goals assume graceful idle departure and already authorized access/network
+permissions; first import, OS consent and dead-peer timeout recovery are measured
+separately. Desktop packaging also requires network readiness and application-side file
+activation, as documented in INSTALLER and D-54.
+
 ## 4. Data on the console
+
+The layout below is the current single-lab profile. M5 will add a local registry and
+isolated per-lab profiles (§3.9), with a migration preserving this data. Paths and new
+format constants will be specified in `Defaults.cs` during implementation.
 
 `~/.labcontrol/` (macOS/Linux) or `%APPDATA%\LabControl\` (Windows):
 
@@ -332,8 +407,8 @@ it holds no password or profile path. Matching SID evidence gates account/profil
 The Windows preparation component now connects this journal to local SAM creation
 (`D-46`): `AccountSetupScope` enforces private storage and an exclusive file lock, then
 `StudentAccountProvisioning` records intent before `WindowsStudentAccountSystem` creates
-a disabled account and verifies its SID. It is not yet called by Setup’s executable
-pipeline. The protected original-settings journal core is now built (`D-47`):
+a disabled account and verifies its SID. The M4 executable integration now calls this
+component before final membership/activation. The protected original-settings journal core is now built (`D-47`):
 `SetupSettingsJournal` stores original/applied values and operation phases in encrypted
 `setup-settings.json`, bound to the installation id with machine-scope DPAPI by
 `AccountSetupScope`. It restores only confirmed changes whose values still match,
@@ -344,9 +419,18 @@ types are preserved by refusal; no account/sign-in keys are included. AC power t
 are also built (`D-49`): snapshots include the active scheme GUID, fixed sleep/display/disk
 settings and original seconds. Optional journal activation confirms the native refresh
 before completion, including interrupted restoration. A changed active scheme is a
-conflict; Setup never follows it by editing another scheme. Other settings/sign-in
-adapters, activation and group configuration remain pending; existing dev installations
-gain no ownership evidence from these components.
+conflict; Setup never follows it by editing another scheme. Windows Update active hours
+are built (`D-50`) as one enable/start/end tuple: edits to any member preserve all three.
+The native adapter may create the fixed policy leaf, never deletes the tree, and detects
+observed races around each value write. Partial writes require review; read-back alone
+does not prove effective restart behavior. The LSA autologon secret adapter is built
+(`D-51`): saved account mode gates all access, matching recorded SID gates native reads
+and writes, and the DPAPI journal preserves original absent/empty/raw UTF-16 state.
+The integrated sign-in sequence uses a larger protected Winlogon/LSA tuple (`D-52`),
+with disable-first and enable-last ordering; the standalone secret adapter is not mixed
+into that sequence. Membership and activation, hostname/firewall/NIC/Defender/hibernation
+and selected session policies are now implemented for integration. Existing development
+installations gain no ownership by name. Windows runtime acceptance remains pending.
 
 ```
 C:\Program Files\LabControl\   app\<version>\  agent.exe, session.exe — one directory per
@@ -356,10 +440,15 @@ C:\Program Files\LabControl\   app\<version>\  agent.exe, session.exe — one di
                                app\current     names the version the service runs
                                app\previous    names the version to roll back to
                                setup.exe       kept for repair
+                               Uninstall.exe   standalone removal without USB or console
 C:\ProgramData\LabControl\     agent.json  {schema_version, agent_id, number, lab_id,
                                             ca_cert (public), mac, console_host?}
                                agent.key   the PC's own private key, DPAPI-protected (machine scope)
                                agent.crt   the PC's certificate, signed by the lab CA
+                               installation.json   recorded installer ownership and account mode
+                               setup-settings.json DPAPI-protected original-settings journal
+                               setup-readiness.json fixed nonsecret antivirus/network advisories
+                               update-trial.json   durable external probation/recovery state
                                update\     staging area for an incoming version bundle,
                                            emptied once the new version proves itself (§7)
                                logs\       rolling agent log (7 days)
@@ -403,7 +492,7 @@ limitation. Source files must remain unchanged and available until all jobs comp
 | Feature | Mechanism |
 |---|---|
 | Screen mosaic | Session helper captures via DXGI Desktop Duplication (GDI `BitBlt` fallback, `D-35`), downscales to 320 px wide, JPEG q50, ≤ 2 fps per PC and only when the screen changed → frames up the named pipe to the service, which relays them as one small `PushVideo` stream per PC, asked for by the console right after `Welcome` and relayed down the same pipe. The console keeps one persistent picture per PC (`ScreenStore`) and the tile draws it (PROTOCOL "Video", `D-34`). |
-| Full view + control | Double-click a tile: the console sends `VideoControl{full}` to that one PC and gets native-resolution dirty-rectangle JPEG deltas (bounding box per frame, keyframe every 5 s or on request) up to 20 fps under a 24 Mbit/s cap; closing the window goes back to the thumbnail. With *Control* on, the window's mouse and keyboard become `Input` messages — text as Unicode, shortcuts and command keys by physical position — relayed by the service down the helper's pipe to `SendInput` on the input desktop; Ctrl+Alt+Del is `SendSAS` from the service (PROTOCOL "Input", `D-36`). Optional H.264 via Media Foundation later (ROADMAP M6). |
+| Full view + control | Double-click a tile: the console sends `VideoControl{full}` to that one PC and gets native-resolution dirty-rectangle JPEG deltas (bounding box per frame, keyframe every 5 s or on request) up to 20 fps under a 24 Mbit/s cap; closing the window goes back to the thumbnail. With *Control* on, the window's mouse and keyboard become `Input` messages — text as Unicode, shortcuts and command keys by physical position — relayed by the service down the helper's pipe to `SendInput` on the input desktop; Ctrl+Alt+Del is `SendSAS` from the service (PROTOCOL "Input", `D-36`). Optional H.264 via Media Foundation later (ROADMAP M7). |
 | Wake-on-LAN | Console sends magic packet (UDP broadcast `:9`, plus directed to `last_ip`). MAC comes from enrollment. Installer enables WoL on the NIC and disables Fast Startup/hibernation (they break WoL on Windows). |
 | Shutdown / reboot / logoff | Agent: `InitiateSystemShutdownEx` with `SE_SHUTDOWN_NAME`, immediate and forced (the result leaves 2 s before the call, `D-32`); log off with `WTSLogoffSession` on the interactive session — `ExitWindowsEx` would only log off session 0. |
 | Run script | Agent pulls the script through `PullFile` (`D-31`) and runs `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File …` or `cmd.exe /d /c …` as SYSTEM (default) or **as the student in the student's session** (`as: user`: the user's token from `WTSQueryUserToken`, `CreateProcessAsUser` with pipes the service reads — not through the helper, which is SYSTEM). stdout/stderr streamed line by line, exit code in the result, the whole process tree killed after `timeout_s` of silence (`D-32`). |
@@ -526,13 +615,13 @@ The console consequently never *refuses* an agent for being old. It marks the ti
 The session helper is a child process and is never locked, so it is simply replaced and
 respawned along with the service.
 
-**What exists since M2** (`D-33`): steps 2 and 3 without the signature, plus the rule that
-the new version reports the result — the console's development action *Push agent build…*
-sends a published `agent.exe` + `session.exe`; the agent pulls them under their hashes,
-runs the new `agent.exe --version` once as a preflight, installs side by side, repoints the
-service and has it restarted by `agent.exe --restart-service` from the outgoing version.
-Steps 4 and 5 — probation, rollback, the scheduled task — are M4; until then a build that
-starts and then crashes leaves the PC offline with the previous version still on disk.
+**M4 integration (`D-52`).** Manifest signing, pinned-CA verification, the durable trial
+journal, external task/service recovery and the live fleet state are implemented. A task
+is bound to its exact job; the deadline includes two service-restart waits beyond the ten
+continuous linked minutes. Acceptance resets recovery to ordinary repeated service restart
+and clears the matching task/markers. A previous agent without this code still performs
+its first bootstrap push with the older M2 behavior. Windows crash/no-link acceptance is
+pending and must not be inferred from the shared state-machine tests.
 
 ### 7.3 Updating the console
 
@@ -550,6 +639,15 @@ than engineered around.
 
 ## 8. Console UI (Avalonia)
 
+- **Desktop installation (planned M5, D-54)**: simple self-contained teacher packages
+  copy/register the application, launchers and lab-file/backup opening. They install no
+  agent service, background server or student-machine preparation. The gRPC server
+  remains embedded in the interactive console; see INSTALLER's teacher-console section.
+- **My labs and active-room selector (planned M5)**: bulk-add lab files, choose exactly
+  one room, switch or disconnect without restarting. Inactive entries show cached
+  metadata, not live presence; the active room is named beside every set of controls.
+  The same import accepts administrator backups, showing access level per lab; file
+  associations forward to this import flow rather than opening another control session.
 - **Lab view**: one tile per PC in a grid mirroring the physical room layout (drag to
   arrange; saved in `lab.json`). Tile = live thumbnail + number + status (online /
   offline / sleeping / locked / in exam mode / broadcasting) + logged-on user. The grid
@@ -575,7 +673,7 @@ than engineered around.
   draft and selection. The editor has line numbers, token highlighting and local parse
   diagnostics (PowerShell; basic checks only for cmd), and blocks parse errors on run.
   Missing built-in application scripts can be imported explicitly (`D-39`).
-- **Packages** panel (M6): manage the catalog; "Install on all missing".
+- **Packages** panel (M7): manage the catalog; "Install on all missing".
 - **Settings**: lab key (export backup, reprint the recovery code, change the
   passphrase), teacher machines (this one, others seen, *Take over*, revoke behind a
   confirmation — §3.7), enrollment codes,
@@ -612,7 +710,8 @@ students themselves.
 
 ## 10. Non-goals
 
-Multi-lab, two consoles *sharing* one lab at the same time (§3.7.2 — alternating teacher
+Simultaneous control of multiple labs from one console (saved profiles and sequential
+switching are planned M5), two consoles *sharing* one lab at the same time (§3.7.2 — alternating teacher
 machines are in scope, a split room is tolerated, a shared room is not), cloud relay, mobile
 console, Linux/macOS student agents
 (possible later; keep `LabControl.Agent` behind an `IPlatformAgent` seam but do not

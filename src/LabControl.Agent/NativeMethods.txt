@@ -71,3 +71,12 @@ SERVICE_CONTROL_STOP
 
 // Ctrl+Alt+Del on the student's PC: the secure attention sequence from a service (SecureAttention, D-36)
 SendSAS
+
+// Managed student handout token and the user's real Desktop
+NetUserGetInfo
+NetApiBufferFree
+LogonUser
+SHGetKnownFolderPath
+USER_INFO_23
+NERR_UserNotFound
+GetUserProfileDirectory

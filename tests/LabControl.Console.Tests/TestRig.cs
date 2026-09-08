@@ -19,6 +19,16 @@ namespace LabControl.Console.Tests;
 /// </summary>
 internal sealed class TestConsole : IAsyncDisposable
 {
+    // Each test process uses a separate discovery port, so an open desktop console
+    // cannot consume the loopback datagrams on macOS. All test labs still share UDP.
+    public static readonly int BeaconPort = ReserveBeaconPort();
+
+    private static int ReserveBeaconPort()
+    {
+        using var socket = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        return ((IPEndPoint)socket.Client.LocalEndPoint!).Port;
+    }
+
     public const int Iterations = 1_000;
     public const string HolderName = "Viacheslav";
     public const string Passphrase = "correct horse battery staple";
@@ -82,6 +92,7 @@ internal sealed class TestConsole : IAsyncDisposable
         {
             DataDirectory = directory,
             Port = port,
+            BeaconPort = BeaconPort,
             BindAddress = IPAddress.Loopback,
             DevelopmentAgentCertificateLifetime = agentCertificateLifetime,
         };

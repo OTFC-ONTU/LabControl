@@ -133,6 +133,46 @@ internal static class UserProcessLauncher
         }
     }
 
+    /// <summary>Starts the document shell as the exact managed user, without inheriting
+    /// service handles. A session change cannot redirect the launch to a personal account.</summary>
+    public static unsafe void OpenDocument(uint sessionId, string expectedSid, string document)
+    {
+        HANDLE token = default;
+        if (!PInvoke.WTSQueryUserToken(sessionId, ref token))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "The student session ended before the document could open.");
+        try
+        {
+            using var identity = new System.Security.Principal.WindowsIdentity((nint)token.Value);
+            ManagedStudentAccess.RequireStandardIdentity(identity, expectedSid);
+            void* environment;
+            if (!PInvoke.CreateEnvironmentBlock(&environment, token, false))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "The student environment could not be loaded.");
+            try
+            {
+                var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                    LabControl.Shared.Defaults.WindowsExplorerExecutableName);
+                var command = ($"\"{executable}\" \"{document}\"\0").ToCharArray();
+                var desktop = "winsta0\\default";
+                var directory = Path.GetDirectoryName(document)!;
+                fixed (char* exe = executable)
+                fixed (char* args = command)
+                fixed (char* desk = desktop)
+                fixed (char* cwd = directory)
+                {
+                    var startup = new STARTUPINFOW { cb = (uint)sizeof(STARTUPINFOW), lpDesktop = desk };
+                    PROCESS_INFORMATION info;
+                    if (!PInvoke.CreateProcessAsUser(token, exe, args, null, null, false,
+                        PROCESS_CREATION_FLAGS.CREATE_UNICODE_ENVIRONMENT, environment, cwd, &startup, &info))
+                        throw new Win32Exception(Marshal.GetLastWin32Error(), "The document shell could not start as the student.");
+                    PInvoke.CloseHandle(info.hThread);
+                    PInvoke.CloseHandle(info.hProcess);
+                }
+            }
+            finally { PInvoke.DestroyEnvironmentBlock(environment); }
+        }
+        finally { PInvoke.CloseHandle(token); }
+    }
+
     private static unsafe (SafeFileHandle Read, SafeFileHandle Write) Pipe()
     {
         var attributes = new SECURITY_ATTRIBUTES

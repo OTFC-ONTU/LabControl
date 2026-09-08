@@ -27,6 +27,14 @@ public interface ISetupSettingActivation
     void Activate(byte[]? expected);
 }
 
+/// <summary>Opt-in only for atomic create-new resources carrying this installation's
+/// unguessable identity in the same native creation operation. Equality alone is not proof.
+/// This read-only check must verify the complete native identity and configuration.</summary>
+public interface ISetupOwnedCreation
+{
+    bool ConfirmsOwnedCreation(byte[] expected);
+}
+
 /// <summary>Write-ahead journal under Setup's private-directory/exclusive-lock scope.
 /// All contents are protected before disk I/O. Missing history is an error, not an empty
 /// baseline; initialize once before a positively identified fresh setup changes anything.</summary>
@@ -36,10 +44,43 @@ public sealed class SetupSettingsJournal(
 {
     public string FilePath { get; } = Path.Combine(dataDirectory, Defaults.SetupSettingsFileName);
 
+    public void Validate() => _ = Load();
+
+    /// <summary>Detect missing companion metadata without exposing protected setting values.</summary>
+    public bool HasEntries(string prefix)
+    {
+        ValidateId(prefix);
+        return Load().Entries.Any(entry => entry.Id.StartsWith(prefix, StringComparison.Ordinal));
+    }
+    public IReadOnlyList<string> SettingIds() => Load().Entries.Select(entry => entry.Id).ToArray();
+    public IReadOnlyList<string> PendingRestorationIds() => Load().Entries
+        .Where(entry => entry.Phase != SettingChangePhase.Restored).Select(entry => entry.Id).ToArray();
+
     public void InitializeNew()
     {
         ValidateInstallationId();
         Save(new JournalData { SchemaVersion = Defaults.SetupSettingsSchemaVersion, InstallationId = installationId, Entries = [] }, overwrite: false);
+    }
+
+    /// <summary>Read-only planning with the same ownership rules as Apply. Native
+    /// activation is intentionally left to Apply even for confirmed persisted values.</summary>
+    public SetupCheck Check(ISetupSetting setting, Func<byte[]?, byte[]?> selectDesired)
+    {
+        ValidateId(setting.Id);
+        var data = Load();
+        var entry = data.Entries.SingleOrDefault(e => e.Id == setting.Id);
+        var current = setting.Read();
+        var desired = selectDesired(current?.ToArray());
+        if (entry is null)
+            return new(Equal(current, desired) ? SetupStepStatus.AlreadyDone : SetupStepStatus.Needed);
+        if (!Equal(entry.Applied, desired) || entry.Phase is SettingChangePhase.PendingRestore or SettingChangePhase.Restored)
+            return new(SetupStepStatus.Conflict, "Saved ownership does not permit this change.");
+        if (entry.Phase == SettingChangePhase.Applied)
+            return new(Equal(current, entry.Applied) ? SetupStepStatus.AlreadyDone : SetupStepStatus.Conflict,
+                Equal(current, entry.Applied) ? "" : "A later change was preserved.");
+        if (ConfirmsCreation(setting, entry, current)) return new(SetupStepStatus.Needed);
+        return new(Equal(current, entry.Original) ? SetupStepStatus.Needed : SetupStepStatus.Conflict,
+            Equal(current, entry.Original) ? "" : "An interrupted change requires review.");
     }
 
     public SettingChangeResult Apply(ISetupSetting setting, byte[]? desired) =>
@@ -62,6 +103,12 @@ public sealed class SetupSettingsJournal(
             {
                 if (!Equal(current, entry.Applied)) return SettingChangeResult.Conflict;
                 Activate(setting, entry.Applied);
+                return SettingChangeResult.AlreadyApplied;
+            }
+            if (ConfirmsCreation(setting, entry, current))
+            {
+                entry.Phase = SettingChangePhase.Applied;
+                Save(data);
                 return SettingChangeResult.AlreadyApplied;
             }
             // A write may have happened before the completion record was saved. Equality
@@ -100,7 +147,12 @@ public sealed class SetupSettingsJournal(
             }
             return SettingChangeResult.Restored;
         }
-        if (entry.Phase == SettingChangePhase.PendingApply) return SettingChangeResult.Conflict;
+        if (entry.Phase == SettingChangePhase.PendingApply)
+        {
+            if (!ConfirmsCreation(setting, entry, setting.Read())) return SettingChangeResult.Conflict;
+            entry.Phase = SettingChangePhase.Applied;
+            Save(data);
+        }
         var current = setting.Read();
         if (Equal(current, entry.Original))
         {
@@ -120,6 +172,11 @@ public sealed class SetupSettingsJournal(
         Save(data);
         return SettingChangeResult.Restored;
     }
+
+    private static bool ConfirmsCreation(ISetupSetting setting, SettingEntry entry, byte[]? current) =>
+        entry.Phase == SettingChangePhase.PendingApply && entry.Original is null && entry.Applied is not null
+        && Equal(current, entry.Applied) && setting is ISetupOwnedCreation owned
+        && owned.ConfirmsOwnedCreation(entry.Applied.ToArray()) && Equal(setting.Read(), entry.Applied);
 
     private JournalData Load()
     {

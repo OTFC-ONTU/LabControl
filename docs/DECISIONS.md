@@ -85,7 +85,7 @@ first visit: router model, subnet, whether AP isolation is on, NIC models of the
 ## D-11 — JPEG tiles first, H.264 later
 Context: H.264 via Media Foundation on the agent is doable but adds a decoding
 dependency on the console (FFmpeg/ffmpeg.autogen or platform codecs) for three OSes.
-Decision: dirty-rect JPEG tiles (SkiaSharp both ends) in M3; H.264 as an M6 option
+Decision: dirty-rect JPEG tiles (SkiaSharp both ends) in M3; H.264 as an M7 option
 behind the same envelope, and only if M3's measurements demand it.
 
 ## D-13 — The lab is a private CA; the teacher machine is replaceable
@@ -190,6 +190,10 @@ Rejected: hard-coding 14 (immediate rewrite when the software moves); designing 
 now (a materially harder streaming problem for a lab that does not exist).
 
 ## D-21 — Several teacher machines take turns; two at once is tolerated, never shared
+
+Scope update: planned `D-53` / M5 adds several saved rooms per device and separates
+ordinary teacher access from full lab ownership. This entry records the original
+single-lab design; its takeover/ownership-reporting and revocation gaps are M5 work.
 
 Context: the lab is taught by more than one person. The owner uses a MacBook; a colleague
 uses the Windows PC at the teacher's desk. `D-13` made the teacher machine *replaceable*,
@@ -620,7 +624,7 @@ loop in a service); polling only (works, but a lock would show up to 2 s late an
 event's `kind` would have to be guessed); notification only (a lost notification leaves the
 tile wrong until the next change); the helper as the pipe server (the service would have
 to find the right instance, and a helper that died mid-connect leaves a dangling name);
-letting the helper survive logoff (a SYSTEM process does — but the per-user state M5's
+letting the helper survive logoff (a SYSTEM process does — but the per-user state M6's
 whitelist will keep belongs to one logon); a per-launch shared secret on the command line
 instead of `CurrentUserOnly` (visible to administrators, and unnecessary).
 
@@ -679,7 +683,7 @@ Decisions:
 
 1. **Shutdown and reboot are immediate and forced** (owner's choice, 2026-09-05):
    `InitiateSystemShutdownEx` with a zero timeout and `bForceAppsClosed`, so a hung program
-   never keeps a PC on. Warning the class is Lock / Broadcast's job in M5, not a system
+   never keeps a PC on. Warning the class is Lock / Broadcast's job in M6, not a system
    dialog. The privilege (`SE_SHUTDOWN_NAME`) is enabled *before* the job answers, so a PC
    that cannot shut down says so in the result; the call itself happens
    `Defaults.PowerJobDelay` (2 s) later, after the `JobResult` has left, and a failure at
@@ -786,7 +790,7 @@ Decisions:
    file its name, size and SHA-256), offered like a script; each binary is then pulled under
    its own hash. M4 adds a `signature` argument over the same manifest bytes and nothing
    else changes shape. The `UpdateAgent` message in the proto is left unused and reserved.
-2. **A pushed build is named `<version>+<first 8 hex digits of agent.exe's SHA-256>`**, for
+2. **A pushed build is named `<version>+<first 8 hex digits of the bundle digest>`** (extended from agent-only hashing by D-52), for
    example `0.1.0+1a2b3c4d`. `VersionPrefix` does not change with every build, two builds of
    `0.1.0` must land side by side, and a running binary cannot be overwritten; semver build
    metadata is made for this. An installed agent reports the name of the directory it runs
@@ -915,7 +919,7 @@ Decisions:
 6. **SkiaSharp moves into `LabControl.Shared`**, pinned to the version Avalonia 12.1.2
    ships (3.119.4) so the console carries one native Skia. The codec, the geometry, the
    persistent picture and the pacer are pure code used by three producers (simulator,
-   helper, and the console's own capture for M5's broadcast) and one consumer; the
+   helper, and the console's own capture for M6's broadcast) and one consumer; the
    simulator draws with it too. `Shared` therefore allows unsafe code for the two places
    that hand SkiaSharp a pointer into a buffer they must not copy.
 7. **Per-PC caps, not a lab-wide budget, in this portion.** 512 kbit/s for thumbnails and 8
@@ -1074,7 +1078,7 @@ Decisions:
    whether it is comfortable; thumbnails keep their 512 kbit/s each. The console sends
    the cap in every full `VideoControl`, so the number lives in `Defaults` on the console
    side and needs no agent push. Next levers, in order, if scrolling still misses 15 fps:
-   a lower full-mode quality for large frames, then H.264 (`D-11`, M6).
+   a lower full-mode quality for large frames, then H.264 (`D-11`, M7).
 9. **Reasons on the tile come from the PC's own events.** The connection keeps the last
    `capture.<reason>` and `input.<reason>` until `…recovered`, plus `session_id` from
    `SessionState`; the tile prefers the PC's reason (*no user session*, *session helper not
@@ -1115,7 +1119,7 @@ Decisions:
 4. **`VideoFrame.quality`** says what each frame was encoded at, so the status line under
    the picture shows *q55 auto* or *q60* — the teacher sees the lever move. An agent that
    predates the field sends 0 and the console shows *quality —*.
-5. **This is the second lever `D-36` item 11 named; H.264 stays the third** (`D-11`, M6)
+5. **This is the second lever `D-36` item 11 named; H.264 stays the third** (`D-11`, M7)
    and now has its number to beat: measured on `PC-10` with build 0.1.4, *Auto* settles
    at q40–50 while scrolling Edge and holds 14–18 fps at 24 Mbit/s, and *Low* is readable.
 
@@ -1583,6 +1587,383 @@ API references: [PowerWriteACValueIndex](https://learn.microsoft.com/en-us/windo
 [PowerGetActiveScheme](https://learn.microsoft.com/en-us/windows/win32/api/powersetting/nf-powersetting-powergetactivescheme),
 [PowerSetActiveScheme](https://learn.microsoft.com/en-us/windows/win32/api/powersetting/nf-powersetting-powersetactivescheme).
 
+## D-50 — Journal the Windows Update active-hours tuple as one policy
+
+Context: installer step 7 requests active hours 07–20 without disabling updates.
+Three independent ownership records could restore a mixture of Setup and user choices.
+
+1. `UpdateActiveHoursSetting` journals enable/start/end together with versioned,
+   canonical absent-or-DWORD slots. Original DWORD bits are preserved even outside the
+   normal hour range. A change to any member makes the whole policy a conflict.
+2. `WindowsUpdateActiveHoursStore` addresses only the three fixed policy names in
+   64-bit HKLM; paths, names and desired hours are in `Defaults`. Unsupported native
+   types and failed reads are refused before mutation. The existing Windows policy
+   parent is required. The fixed WindowsUpdate leaf can be created when missing;
+   removal restores values but retains the leaf, which may now contain others' settings.
+   An empty key and a missing key are equivalent only for these three values.
+3. Read the tuple twice, then recheck the entire expected tuple before and after each
+   mutation on the same writable handle. Write start/end before enabling; restore a
+   disabled or absent enable flag before restoring the range. These writes are not
+   atomic: partial apply/restore failures remain explicit conflicts unless a pending
+   restore has already reached the complete original tuple. Never guess ownership or
+   overwrite another writer's edits to repair a partial write.
+4. Use the existing encrypted journal and scope. Account mode does not gate machine
+   update policy. No update-disable, notification suppression, scheduled restart or
+   competing policy is changed. Registry read-back is not proof of effective Windows
+   Update behavior; Group Policy, MDM and deadlines may override active hours. This
+   standalone LAN installer uses the registry without introducing management infrastructure.
+5. This completes a settings component, not the executable installation pipeline.
+   No CLI calls it yet. Windows execution and the home-PC round trip remain pending.
+
+Validation: Mac tests cover tuple restoration, absent and unusual originals, unowned
+correct settings, edits to each member, interrupted apply/restore, malformed snapshots,
+missing history and native failures (20 new cases, all passed). Build passed with zero
+warnings and self-contained Setup publishes passed for win-x64 and win-arm64. The full
+suite passed 410/412: the existing two BeaconTests failed while a running console shared
+the discovery port; diagnostics heard its beacons instead of the test consoles.
+Windows checks are in INSTALLER.md. No new NuGet package or protocol field.
+
+Source: [Microsoft: manage device restarts after updates](https://learn.microsoft.com/en-us/windows/deployment/update/waas-restart).
+
+## D-51 — Gate the LSA autologon secret on recorded student ownership
+
+Context: D-47 can protect prior sign-in state, but Setup still needs a native adapter
+for the LSA password required by installer step 8. This slice does not enable autologon.
+
+1. `StudentSignInSecret` checks saved account mode before SAM, LSA or settings-journal
+   access. Off returns a skipped (null) result. On requires the current local student
+   SID to match recorded creation evidence, including before each native read/write.
+   Missing ownership/settings history fails closed; there is no name-based adoption.
+2. Journal only the code-defined `DefaultPassword` LSA secret. A version byte precedes
+   raw UTF-16LE data; null is absence, an empty payload is a present empty secret.
+   Preserve original code units, including embedded nulls; never round-trip through a
+   null-terminated managed string. Reject malformed lengths/formats.
+3. `WindowsStudentSignInSecretStore` uses CsWin32 `LsaOpenPolicy`,
+   `LsaRetrievePrivateData` and `LsaStorePrivateData` on the local machine. Read requests
+   only private-information access; write additionally requests create-secret access.
+   Only STATUS_OBJECT_NAME_NOT_FOUND means absence. A null store argument deletes the
+   secret; an empty value uses a non-null native string and buffer.
+4. Re-read the expected secret on the same policy handle immediately before writing,
+   recheck account identity and verify native read-back. Guard failures include no values
+   or native exception details. This is optimistic checking, not atomic isolation from
+   other SAM/LSA writers. D-47 retains ambiguous interrupted applies and later edits;
+   a pending restore can complete when the original is already present.
+5. Clear adapter-owned managed read/write buffers and returned native secret bytes
+   before freeing them. Journal copies remain transient managed data under D-47; only
+   DPAPI-protected ciphertext is persisted, including temporary files. No plaintext
+   registry password or diagnostic output is introduced.
+6. Expose apply/restore through `AccountSetupScope`, but no executable calls it yet.
+   The future sign-in pipeline must disable/coordinate existing autologon before changing
+   its secret, journal Winlogon identity/enable values, enable only after complete setup,
+   and restore in a safe order. This adapter alone must not be used as a complete
+   autologon setup step. Account activation and group configuration remain pending.
+
+Validation: Mac tests cover absent/empty/Unicode originals, opt-out without native access,
+missing/replaced accounts, missing journals, later edits, read/write failures, interrupted
+apply/restore, malformed native bytes and clearing owned buffers. Native LSA/DPAPI and
+actual sign-in need a Windows VM snapshot. All 18 new tests passed; the full suite passed
+428/430 with the same two existing UDP discovery failures alongside the running console.
+Final build and self-contained Setup publishes for win-x64 and win-arm64 passed.
+No new dependency or protocol field.
+
+Sources: [LsaRetrievePrivateData](https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-lsaretrieveprivatedata),
+[LsaStorePrivateData](https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-lsastoreprivatedata).
+
+## D-52 — Integrate M4 with guarded native ownership and external recovery
+
+Context: D-45 through D-51 established components. M4 requires runnable deployment,
+removal, Windows handouts and recovery, with independent review of failure boundaries.
+This decision records the implementation being integrated; Windows acceptance is pending.
+
+Owner scope decision, 2026-09-08: M4 provides clean installation and repair of owned
+installations. Unowned legacy development installations remain refused; implementing a
+legacy migration flow is outside M4. This does not change the fresh-install account checkbox
+or permit adopting an existing account by name.
+
+1. The update signature is Base64 ECDSA P-256 / SHA-256, 64-byte IEEE P1363, over
+   ASCII `labcontrol/update-manifest/v1\0` followed by the exact protobuf manifest bytes.
+   The pinned CA verifies it before staging or execution. The signed minimum installed
+   numeric version is checked without build metadata; no unsigned fallback is allowed.
+   A signing-capable console is required to update a hardened agent. Old agents continue
+   to accept new consoles, but their first bootstrap push still uses their old behavior.
+2. `UpdateTrial` flushes a process-locked journal before native switching. The outgoing
+   known-good executable handles crash recovery and a SYSTEM scheduled deadline task;
+   both callbacks name the exact update job. Acceptance requires ten continuous linked
+   minutes measured monotonically. The absolute deadline adds two service-restart waits
+   for startup. Interrupted rollback retries; terminal cleanup resets service recovery
+   to repeated restarts, removes the matching task and clears trial markers under the lock.
+   Old callbacks cannot affect a later trial. Agent update staging is serialized and holds
+   the same private Setup lock as install/removal/rekey, including service-switch preparation. Hello reports probation/rollback, and the
+   `update.stable` event refreshes the live fleet view after acceptance.
+3. The complete Winlogon identity/enable/plaintext-password/countdown plus LSA secret is
+   one protected setting. Disable first, change credentials/countdown, enable last.
+   `AutoLogonCount` preserves absent, DWORD and REG_SZ originals and is removed while
+   managed autologon is active. User edits to any member preserve the entire tuple.
+   Native Windows acceptance also observed `AutoLogonSID` populated with the student SID
+   after logon. A separate protected `student.autologon-sid` record retains its exact
+   absent-or-REG_SZ baseline without changing existing tuple serialization. Fresh setup
+   applies the recorded managed SID before the tuple; removal restores the tuple first,
+   then this SID. Later SID edits conflict, and unsupported registry types are refused.
+   A tuple-only older journal cannot establish the original SID: repair/removal neither
+   reads nor adopts that value, and reports the missing-baseline limitation. Account-off
+   skips both records. Pending SID-only work is included in partial-install removal.
+   Standard Users membership is verified by SID before and after explicit activation.
+4. Hostname snapshots track the pending name so reboot is not an external edit. Firewall
+   rules are create-only, compare complete supported properties, and preserve collisions.
+   Defender adds/removes only the fixed installation exclusion. An absent provider may be
+   skipped only with registered third-party antivirus and no pending owned exclusion;
+   denied access and write failures remain actionable failures. Hibernation includes
+   native file state and typed metadata; unsupported changes conflict. NIC snapshots bind
+   interface GUID, PNP identity and native setting identity. Only advertised standardized
+   features are changed; unsupported magic-only behavior is reported rather than guessed.
+   NIC changes wait for reboot. Machine privacy/Edge/OneDrive notification policies apply only in account-on
+   mode, but their effect on other users is disclosed. Admin hiding follows student
+   activation and records the original local administrator SID for later restoration.
+   Visibility restoration binds that recorded administrator SID and its unchanged journaled
+   tuple independently of whether the managed student still exists or was replaced. It
+   never reads or changes the replacement student, grants privileges, or adopts accounts;
+   account-off mode still skips all visibility access. Hiding retains the strict managed
+   student/activation guards. Administrator rename or later visibility edits remain conflicts.
+   Native acceptance found that hiding the sole administrator can remove UAC credential
+   fields. Before hiding, a separate protected `student.admin-credential-prompt` DWORD
+   tuple sets `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\CredUI\EnumerateAdministrators`
+   to `0`, bound to the recorded local administrator SID. Microsoft documents that this
+   setting requires explicit username/password entry instead of administrator enumeration:
+   [CredentialsUI policy](https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-credentialsui#enumerateadministrators).
+   Setup discloses this machine-wide effect. Uninstall unhides the unchanged owned tile
+   before restoring the exact nullable DWORD baseline; a visibility conflict retains the
+   credential-entry policy. Account-off never accesses either setting. `EnableLUA` and
+   other UAC security policies remain unchanged. Native verification of restored credential
+   fields and the separate manual Winlogon route is required; a registry readback alone is not proof.
+5. Setup uses a Windows Forms number/checkbox dialog and an elevation manifest; the
+   Windows Desktop framework is published self-contained, with no per-PC runtime install.
+   A machine-wide mutex supplements the private file lock across cleanup. The fresh
+   settings-initialization intent makes a crash between journal creation and confirmation
+   recoverable without treating missing legacy history as empty. An installation-id
+   marker and protected descendant ACLs prove the binary directory's ownership.
+   The service's atomically created, installation-specific DisplayName survives signed version changes;
+   its ImagePath must still match the recorded active version. Only adapters with an explicit
+   atomic-creation proof may resolve pending journal creation from exact desired bytes;
+   ordinary settings retain the fail-closed ambiguous-write rule. Binary roots appear by
+   same-volume rename from a bounded installation-ID staging directory; Installed apps
+   registration uses an installation-ID sibling key and atomic `RegRenameKey`. USB upgrades use the same
+   external recovery machinery. Later native edits are preserved during removal.
+6. Rekey stages new trust in a separate DPAPI-protected transaction, retaining agent id,
+   number and unrelated settings. It adopts the validated replacement payload's console
+   host/port, including clearing an old pin when the new payload selects discovery;
+   pending-enrollment idempotency includes this route. Fixed trust files may roll forward only from recorded
+   original or staged bytes. The agent refuses mixed trust until Setup finishes recovery.
+7. Windows handouts resolve the managed SID and its real Desktop. Download staging is
+   private; final file operations run under that user's token, with hash verification,
+   reparse refusal and atomic replacement. Delivery and opening reject administrator
+   tokens, including UAC-filtered tokens with a deny-only Administrators SID. Opening uses a matching interactive user token,
+   never a SYSTEM shell. Redirected/out-of-profile desktops and unavailable profiles are
+   refused. A logged-out profile may require one initial user sign-in.
+8. USB construction copies an explicit executable allowlist beside the public enrollment
+   payload; it cannot copy a backup or private key by copying an entire directory.
+   USB and network bundles share an identity derived from SHA-256 of the UTF-8 domain
+   `LabControl.AgentBundle.v1`, a NUL, then ordinal-name-sorted executable name / NUL /
+   lowercase SHA-256 / NUL pairs. Its first eight hex digits follow the base version.
+   This includes `session.exe`: a helper-only fix must not take the updater's already-running
+   shortcut. Existing agent-only version directories remain readable; staged executable
+   preflight still compares the numeric base version. No wire format changes are needed.
+   In-process discovery tests use their own UDP port so a desktop console cannot consume
+   their loopback packets. Production discovery keeps the default port.
+
+9. A password-policy rejection of create-new may invoke the journaled local fallback
+   only in account-on mode on a positively verified non-domain PC. A private `secedit`
+   export reads the minimum-length/complexity tuple; a fresh two-field template changes
+   only that tuple, then reads it back. Removal restores it even if account creation never
+   completed; later edits conflict. General account errors never trigger policy changes.
+10. Optional profile templates are add-only Desktop/Documents document/image ZIPs for
+    future profiles, not arbitrary Windows profile copies. Bounds are 128 entries, 2 MiB
+    per file, 16 MiB total and 200-character paths. Executables, hives, AppData and links
+    are refused. A private plan binds the resolved Default profile root and hashes;
+    staged files move on the same volume. Removal deletes only unchanged files and empty
+    owned directories. Existing student and personal profiles are never overwritten.
+    Restoration checks pending protected template entries before querying SAM or resolving
+    the Default profile. An install that never created the account and a retry after
+    completed template restoration therefore need no account access; actual pending
+    template work still requires the matching managed SID and intact path plan.
+11. Removal keeps a private retry executable and Installed apps entry through cleanup.
+    Its nonsecret completion receipt authorizes only final deletion for the same recorded
+    installation; a different installation or unexpected recreated file blocks it. The
+    remaining executable/receipt are removed on reboot. An active update is refused under
+    the same trial lock held through service removal; only the exact terminal task is deleted.
+    After ownership and path checks, copying/removal clears only inherited ReadOnly media
+    attributes on owned targets, including the private retry worker before delayed deletion.
+    Read-only ISO copies exposed this native cleanup failure; links and unexpected contents
+    after the completion receipt still cause refusal.
+12. The default reboot dialog counts down 30 seconds, with a visible Later choice. Successful
+    installation advances the USB number without overwriting the consumed enrollment code.
+13. Wake addressing comes from a positively identified physical Ethernet GUID/MAC pair,
+    cross-checked against the IP Helper wired-interface type (some Wi-Fi drivers report
+    the generic Win32 Ethernet adapter type). Wireless, tunnel and other interface types
+    are excluded from both wake selection and NIC configuration.
+    Selection prefers exactly one active wired adapter. Ambiguity never silently chooses a virtual
+    adapter. Repair stops the owned service before updating a previously generic MAC.
+    Advertised power-management enable precedes dependent wake controls; restore reverses
+    this dependency order even for older journals. Magic-only enforcement uses the exact
+    advertised writable WMI Boolean, never guessed vendor bits. Hardware/driver inventory
+    and unsupported controls remain visible; Windows read-back cannot certify BIOS/S5 wake.
+14. Task Scheduler XML uses UTF-16LE, verified with the production native registration
+    path. Persisted recovery deadlines and XML share the same rounded-up whole UTC second.
+    Missing-task cleanup accepts the native mapped file-not-found exception; cleanup errors
+    cannot hide the original failure to arm recovery. No service switch precedes a
+    successfully armed external recovery path.
+15. Installer readiness uses a bounded fixed-code snapshot in private agent data, carried
+    by the existing Event envelope on reconnect and change. The console translates codes
+    and persists the latest valid snapshot for offline tiles; malformed/newer payloads
+    never clear known warnings or render arbitrary JSON. Repair clears resolved warnings
+    without requiring a restart. Local settings checks do not certify physical wake.
+
+Validation is tracked in ROADMAP M4. Native VM tests and milestone close-out remain
+required; successful compilation is not evidence of native behavior.
+
+Sources: [service recovery](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc742019(v=ws.11)),
+[scheduled tasks](https://learn.microsoft.com/en-us/windows/win32/taskschd/schtasks),
+[autologon count](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-shell-setup-autologon-logoncount),
+[known-folder user tokens](https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shgetknownfolderpath),
+[local-policy export](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/secedit-export),
+[OneDrive notification policy](https://learn.microsoft.com/en-us/sharepoint/use-group-policy#hide-toast-and-activity-center-notifications-that-prompt-users-to-sign-in-to-the-onedrive-sync-app-with-existing-credentials).
+
+## D-53 — Lab files and one active room per teacher console (planned M5)
+
+Extension: `D-54` explicitly permits administrator backups in the same lab selector
+and adds teacher-console packaging with the platform and lifecycle review constraints.
+
+Context (2026-09-08): the owner teaches successive lessons in different computer labs
+and wants to import all lab files at once, then simply choose the room. Room membership
+is mostly stable; teacher/device allocation changes during the day. The existing backup
+import supports another owner device for one lab, but repeatedly restoring backups is
+not a room selector. The preceding audit also exposed the distinction between classroom
+access and possession of the CA private key.
+
+Decisions:
+
+1. **Insert M5 before classroom control.** M5 delivers lab files, teacher access and fast
+   switching. Former M5 becomes M6 (broadcast/lock/exam); former M6 becomes M7
+   (catalog/localization/polish). M0–M4 keep their numbers and completion state. This
+   entry records approved planning scope, not completed implementation.
+2. **One app, several saved labs, one active session.** Bulk file selection/drop adds
+   rooms to *My labs*. Import never acquires a room. Startup shows the chooser with the
+   last-used room highlighted; selecting a room activates it, and the same selector
+   switches without restart or repeated authorization. Inactive labs have saved metadata
+   only, with no beacons, agent links, screen streams or background connection attempts.
+   Different teachers can use different rooms simultaneously; one console cannot use
+   two rooms at once. The mostly stable roster is a useful offline snapshot, not a reason
+   to remove the existing refresh from authenticated agent connections.
+3. **A routine lab file is not an administrator backup.** Keep full `.lcbak` recovery
+   compatible and visibly privileged. Ordinary lab files contain authenticated room
+   metadata/public trust and support device authorization without distributing CA private
+   keys, recovery material or enrollment codes. First-time authorization must support
+   batching and isolated-LAN/offline use; daily selection needs no secret entry. Devices
+   get distinct revocable identities, not copies of one shared console key. The concrete
+   extension, signed envelope and authorization exchange are to be specified during M5,
+   before code; do not add a cloud or permanently running server to solve issuance.
+4. **Preserve identity and isolate data.** Deduplicate imports by lab id and authority.
+   Per-lab trust, keys, roster, layout, jobs/logs, scripts and catalog cannot bleed across
+   rooms, even when each contains PC-01. Import updates are atomic per file; corrupt or
+   older files cannot destroy working profiles, revoke unrelated access or roll back
+   revocations. Migrate the existing profile without changing its identity or touching
+   student PCs. Removing a saved room is local, not classroom deletion or agent uninstall.
+5. **Release before acquiring.** Serialize switches, close old links/streams and revoke
+   stale UI callbacks before enabling the next room. Target <=2 seconds to the responsive
+   cached destination view and <=15 seconds for reachable running agents on a healthy
+   supported LAN during idle switches. Missing PCs do not block. Running operations
+   need explicit safe departure choices and retained ownership of results; do not kill
+   update recovery or silently deliver a previous teacher's output to the next one.
+   M6 must honor the same boundary for restrictions, expiry and work collection.
+6. **Close the relevant access/handover audit gaps.** Ordinary teacher access does not
+   authorize CA issuance, enrollment or update signing. Identify/revoke a device across
+   certificate renewal, tolerate allowed clock skew in takeover, and distinguish unknown
+   or offline PCs from positively observed ownership. Revocation is effective once
+   delivered; unreachable agents have an explicit pending state. Administrator recovery
+   must not silently re-enable spent/voided enrollment codes from an old copy. Existing
+   holders of the full CA key retain that power even after a wrapping or leaf is removed;
+   changing a file label is not a downgrade, and migration must disclose this limit.
+
+Rejected: opening one live console/session per saved room (wastes resources and risks
+commands to the wrong room); repeated backup restore or command-line profile switching
+between lessons (slow, destructive-looking UX); handing ordinary teachers renamed full
+backups (retains unrestricted CA authority); automatic timetable-based room acquisition
+and continuous cross-room discovery (unneeded scope and background work). Full real-time
+synchronization of scripts, catalogs and job histories between teachers remains out of
+scope; room-file refresh and locally retained per-lab state are sufficient for this plan.
+
+Validation: ROADMAP M5 defines bulk-import, compatibility, access, resource and multi-device
+acceptance drills. No implementation or new dependency is introduced by this decision.
+
+## D-54 — Administrator backup onboarding and lightweight console installation (planned M5)
+
+Context (2026-09-08): the owner clarified that administrators must bulk-add backups and
+switch rooms just like teachers, and requested simple installers for teacher devices.
+They also requested a review of the whole M5 plan against the actual application, rather
+than treating "just copy files" as a proven installation design.
+
+Decisions:
+
+1. **Both file types use one workflow.** *Add labs…* accepts teacher files, `.lcbak`
+   backups or mixed batches. After password/recovery unlock, a backup creates a saved
+   administrator profile, usable by the same chooser without conversion or repeated
+   restoration. Distinguish authority per lab. A backup import can upgrade an existing
+   teacher profile without duplicating the room or losing its stable device id/history;
+   explicit credential renewal is allowed when needed. Teacher-file refresh cannot
+   silently downgrade administrator access. Routine switching uses the device identity;
+   CA operations still need unlock, and leaving a room locks its CA key.
+2. **Package an interactive app, not a student service.** Windows gets a simple desktop
+   installer/removal entry, macOS an app bundle/DMG, Linux a documented desktop install
+   flow. Include the runtime/application assets, launchers and both file associations.
+   No Agent/Session service, daemon, scheduled task, account/autologon or student policy
+   preparation. Do not add an always-on server: Kestrel belongs to the selected session.
+3. **Copying is only one step.** Network readiness requires appropriate LAN permissions
+   (inbound console TCP and discovery UDP), potentially elevation for scoped firewall
+   setup. Native Linux prerequisites need a tested platform matrix and an offline supply
+   path. A macOS bundle needs stable identity/metadata; preserve D-15's signing policy
+   and test/document actual OS launch approval rather than promising no warnings. Keep
+   stable installed paths and do not disable protections or apply student AV exclusions.
+4. **Opening documents is application work too.** Registering extensions is insufficient:
+   implement document/argument activation and same-user instance forwarding, safely
+   handling multi-file paths and validating each import. An already running app receives
+   files without another control session or automatic room acquisition. Preserve the
+   user's default-handler choice. Installation packages themselves contain no lab data
+   or secrets and never perform backup unlock.
+5. **Update and removal preserve user data.** Replace app files only after safe close;
+   keep profiles, history and OS-protected keys by default. Remove owned registrations
+   and any owned network rules, preserving others. Local-data cleanup is a separate
+   explicit action (inside the app for macOS bundle removal), never deletion of external
+   backups or student installations. Verify upgrade/reinstall on the same account/device;
+   an OS-bound key is not portable just because its metadata directory was copied.
+6. **Correct M5's assumptions before implementation.** Current `App`/bootstrap assume one
+   full-owner lab; publishing creates binaries, and the CLI has no document-open support.
+   Refactor profiles and session lifecycle, implement a concrete offline device-key
+   request/approval flow before promising teacher authorization from a file, and measure
+   switching with valid access/permissions. The 2/15-second goals concern graceful idle
+   switching, not first authorization, OS prompts, update probation or failure detection
+   after a dead laptop. Preserve the frozen protocol path for administrator-led agent
+   migration; explicitly negotiate any capabilities needed by new access controls.
+7. **Backup import is not concurrent enrollment recovery.** Keep legacy enrollment
+   history, but do not automatically activate imported pending codes merely to add a
+   switchable room. Define one issuer per enrollment batch or equivalent coordination
+   for explicit recovery. Disconnected independent CA owners cannot enforce global
+   one-time redemption using separate local journals; do not claim old copies cease to
+   work through local metadata changes. This restriction does not prevent administrators
+   from controlling rooms or generating new enrollment batches through the defined flow.
+
+Rejected: treating backups as recovery-only files that administrators must convert;
+putting teacher-console installation through Windows student Setup; equating
+self-contained publish with a desktop package or unrestricted network access;
+an installer that duplicates lab secrets or runs the console as SYSTEM.
+
+Validation: M5 now includes mixed import and authority-upgrade cases, desktop lifecycle,
+key retention, document activation, denied-network recovery and the clean-platform
+matrix. This is a documentation/design review, not verification of unbuilt installers.
+No new packaging dependency or paid signing requirement is selected here.
+
+Sources: [Avalonia macOS packaging](https://docs.avaloniaui.net/docs/deployment/macos),
+[Windows Firewall rules](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/rules),
+[Linux runtime dependencies](https://learn.microsoft.com/en-us/dotnet/core/install/linux-scripted-manual#dependencies).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the
@@ -1710,7 +2091,7 @@ project cannot notice on its own).
 | Microsoft.Windows.CsWin32 | Agent, Agent.Session, Setup | Win32 P/Invoke source generator; names listed in `NativeMethods.txt`, never a hand-written `DllImport` (M2) |
 | Vortice.Direct3D11, Vortice.DXGI | Agent.Session | DXGI Desktop Duplication and the D3D11 staging texture it is read through (M3, D-35); the maintained successor of SharpDX |
 | Microsoft.Extensions.Hosting.WindowsServices | Agent | Windows service hosting (M2) |
-| System.Management | Agent, Setup | WMI (profiles, NIC properties) |
+| System.Management | Setup | WMI (profiles, NIC properties) |
 | YamlDotNet | Console | package catalog |
 | Serilog.Extensions.Logging, Serilog.Sinks.Console, Serilog.Sinks.File | all | logging |
 | xunit.v3 | tests | testing; it hosts its own Microsoft.Testing.Platform runner, so no VSTest packages are needed (D-18) |

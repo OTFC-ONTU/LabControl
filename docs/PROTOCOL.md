@@ -4,6 +4,15 @@ All console↔agent traffic is gRPC over HTTP/2 + TLS. Contracts live in
 `src/LabControl.Shared/Protos/*.proto` and are the single source of truth; this
 document explains intent and flows. **Update this file whenever a .proto changes.**
 
+**Planned M5 boundary (`D-53`).** Several labs may be saved on a teacher device, but
+only the selected lab may advertise or hold agent/file/video/control connections.
+Switching must close the old session before activating the next and prevent stale
+messages/results from crossing lab or originating-console boundaries. Each profile
+keeps its lab-scoped identity. Separate teacher authorization, revocation across renewal
+and takeover without comparing unsynchronized clocks require a documented compatible
+protocol design during M5. No new message or wire format is introduced by this plan;
+the frozen subset below remains mandatory. Classroom control is M6, catalog/polish M7.
+
 ## Ports and identifiers (`LabControl.Shared/Defaults.cs`)
 
 | Constant | Value | Notes |
@@ -400,7 +409,7 @@ everything else; the PC is the producer.
 - `VideoFrame { agent_id, seq, at_unix_ms, width, height, mode, repeated Rect dirty, bytes jpeg,
   keyframe, codec, quality }`. `width`/`height` are always the size of the **screen** the frame comes
   from; the JPEG itself may be smaller (a thumbnail, or a full-mode delta). `codec` is
-  `"jpeg"` in this build (`Defaults.VideoCodecJpeg`); H.264 is an M6 option behind the same
+  `"jpeg"` in this build (`Defaults.VideoCodecJpeg`); H.264 is an M7 option behind the same
   envelope (`D-11`). `quality` is what this frame was encoded at (0 from an agent older
   than `D-37`), so the console can show it.
 - **Control.** The console sends `VideoControl { active, mode, frames_per_second, quality,
@@ -538,7 +547,7 @@ helper from a previous service instance, or an impostor). The service answers wi
 prompt. A helper silent for `HelperSilenceTimeout` (10 s) is killed and restarted; an
 `Event` from the helper is relayed to the console unchanged. When the pipe closes the helper
 exits at once; when the helper exits the service respawns it (D-30). `Overlay` is answered
-with a `session.not_in_this_build` warning until M5.
+with a `session.not_in_this_build` warning until M6.
 
 **Input over the pipe (M3 portion 3, `D-36`).** Every `Input` from the console except
 `CTRL_ALT_DEL` is written down the pipe as it is (fire-and-forget, like the controls); the
@@ -644,10 +653,10 @@ small on purpose (`D-33`):
 
 | arg | values | meaning |
 |---|---|---|
-| `version` | a version directory name, e.g. `0.1.0+1a2b3c4d` | the directory under `app\` the build lands in; a pushed development build is the version number plus the first 8 hex digits of `agent.exe`'s SHA-256, so two builds of the same number never collide |
+| `version` | a version directory name, e.g. `0.1.0+1a2b3c4d` | the directory under `app\` the build lands in; a pushed development build is the version number plus the first 8 hex digits of the domain-separated digest of both executable names and hashes (D-52), so helper-only changes receive a new build identity |
 | `ref` | SHA-256, hex | the `PullFile` reference of the serialized `UpdateManifest` |
 | `sha256` | hex | verified on the PC before the manifest is read |
-| `signature` | base64 | **M4**: the lab key's signature over the manifest bytes, verified against the pinned CA certificate — not against the TLS session that carried it (`D-19`) |
+| `signature` | base64 | Required by the M4 agent: the lab key signature over the domain-prefixed manifest bytes, verified against the pinned CA (`D-52`) |
 
 ```
 UpdateManifest {
@@ -657,6 +666,15 @@ UpdateManifest {
   int32  probation_seconds;       // M4: 0 = the default, 600
 }
 ```
+
+The signature uses ECDSA P-256 / SHA-256 with IEEE P1363 encoding (64 bytes), Base64
+in the job argument. Signed bytes are ASCII `labcontrol/update-manifest/v1\0` followed
+by the exact serialized manifest bytes. Verification occurs before file staging or execution,
+including same-version requests that might prune files. An absent or invalid signature is
+refused. The signed minimum version is numeric (2–4 components); build metadata is ignored.
+A hardened M4 agent needs a signing-capable console for updates; old agents ignore the
+additive signature argument and retain their old bootstrap behavior. Ordinary connections
+and frozen-subset message layouts remain compatible. No new protobuf field was added.
 
 The agent pulls the manifest, checks it against the job (version, file names, sizes,
 hashes, the two required executables — `UpdateBundle`), pulls every file under its own hash
@@ -675,9 +693,35 @@ agent is stopped mid-job and releases the job id without a result, the console k
 in flight (its inactivity timeout is 5 minutes) and re-sends it on the next link, and the new
 version answers *Running `<version>` now* because the job's `version` is its own. The same
 rule makes pushing a build that is already running a harmless success. While answering, the
-new version removes every version directory other than `app\current` and `app\previous`.
+new version preserves trial directories until probation ends. `Hello.update_state` reports
+`ON_PROBATION` or `ROLLED_BACK`; the existing `Event` envelope carries `update.stable`
+when ten continuous linked minutes complete, refreshing the live tile. The monitor also
+retries terminal-state publication once per connection and durable job/state identity:
+`update.stable` refreshes an already-stable record, and Warning `update.rolled_back` carries
+only the validated failed version as its message. Consoles localize that version into a
+restoration notice and update the existing live tile. This repairs a transient unspecified
+Hello when external rollback still held the journal lock while restarting the service.
+`ROLLBACK_PENDING` never produces a completed-restoration event. A successful job
+acknowledges the restart, not completion of probation.
 
 The `UpdateAgent` message in the proto is reserved for M4 and not used by the M2 form.
+
+A failed manifest signature or compatibility check also emits a Warning `Event` with
+code `update.refused` and a fixed plain-language message. The failed `JobResult` retains
+the specific validation reason; the event never includes manifest fields or bytes.
+
+Setup advisories use the existing `Event` envelope with code `setup.readiness`. Its
+message is a bounded schema-1 JSON snapshot containing only fixed codes:
+`antivirus.third_party`, `antivirus.inventory_unavailable`, `network.wol_unverified`,
+`network.configuration_warning`, and `report.unavailable`. The agent sends it on reconnect
+and when its protected installer report changes (polled every ten seconds). The console
+validates and translates these codes; it never displays raw JSON as teacher instructions.
+A valid snapshot replaces previous advisories and is cached in the optional
+`MachineRecord.SetupReadinessCodes` field for offline tiles. Invalid or newer snapshots
+do not clear older warnings. Missing reports from legacy agents do not certify readiness.
+Unverified physical wake is informational; configuration/antivirus/report errors need
+attention. This event does not change the frozen protocol subset or prove connectivity
+beyond the connection carrying it.
 
 `Hello.update_state` tells the console where a PC stands — `STABLE`, `ON_PROBATION` (with
 the deadline) or `ROLLED_BACK` (with the version that failed and the reason in plain

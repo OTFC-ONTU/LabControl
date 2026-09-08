@@ -33,6 +33,9 @@ public sealed class MachineRecord
 
     public long LastSeenUnix { get; set; }
 
+    /// <summary>Last authenticated Setup advisory snapshot, retained while offline.</summary>
+    public string[] SetupReadinessCodes { get; set; } = [];
+
     public string? AgentVersion { get; set; }
 
     public int ProtocolVersion { get; set; }

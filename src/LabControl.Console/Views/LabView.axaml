@@ -20,6 +20,8 @@
             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
             <TextBlock Text="{Binding StatusText}" />
             <TextBlock Text="{Binding Hostname}" />
+            <TextBlock Text="{Binding UpdateNote}" />
+            <TextBlock Text="{Binding ReadinessNote}" MaxWidth="380" TextWrapping="Wrap" />
             <TextBlock Text="{Binding Address}" />
             <TextBlock Text="{Binding AgentVersion, StringFormat={loc:Localize Tile.AgentVersionFormat}}" />
             <TextBlock Text="{Binding CertificateSerial, StringFormat={loc:Localize Tile.SerialFormat}}" />
@@ -43,6 +45,8 @@
               <TextBlock Text="{Binding StatusText}" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis" />
             </StackPanel>
             <StackPanel Spacing="1" Margin="8,6" VerticalAlignment="Bottom">
+              <TextBlock Text="{Binding ReadinessAttention}" FontSize="11" Foreground="DarkOrange" TextTrimming="CharacterEllipsis" IsVisible="{Binding !!ReadinessAttention.Length}" />
+              <TextBlock Text="{Binding UpdateNote}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding UpdateNeedsAttention}" />
               <TextBlock Text="{Binding PictureNote}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding !!PictureNote.Length}" />
               <TextBlock Text="{loc:Localize Tile.RenewalDue}" FontSize="11" Foreground="DarkOrange" IsVisible="{Binding NeedsRenewal}" />
             </StackPanel>

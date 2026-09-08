@@ -14,6 +14,7 @@ public sealed class BeaconBroadcaster : IDisposable
 {
     private readonly ConsoleInstance _instance;
     private readonly int _port;
+    private readonly int _beaconPort;
     private readonly IPAddress? _bindTo;
     private readonly Func<DateTimeOffset> _clock;
     private readonly CancellationTokenSource _stopping = new();
@@ -23,8 +24,10 @@ public sealed class BeaconBroadcaster : IDisposable
     private Task? _loop;
     private DateTimeOffset? _takeOverAt;
 
-    public BeaconBroadcaster(ConsoleInstance instance, int port, IPAddress? bindTo = null, Func<DateTimeOffset>? clock = null)
+    public BeaconBroadcaster(ConsoleInstance instance, int port, IPAddress? bindTo = null, Func<DateTimeOffset>? clock = null, int beaconPort = Defaults.BeaconPort)
     {
+        if (beaconPort is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(beaconPort));
+        _beaconPort = beaconPort;
         _instance = instance;
         _port = port;
         _bindTo = bindTo;
@@ -129,14 +132,14 @@ public sealed class BeaconBroadcaster : IDisposable
             try
             {
                 var datagram = _instance.CreateBeacon(route.Host.ToString(), _port, now, take).ToDatagram();
-                await socket.SendToAsync(datagram, SocketFlags.None, new IPEndPoint(route.Broadcast, Defaults.BeaconPort));
+                await socket.SendToAsync(datagram, SocketFlags.None, new IPEndPoint(route.Broadcast, _beaconPort));
 
                 if (!IPAddress.Loopback.Equals(route.Broadcast))
                 {
                     // A broadcast is not always delivered back to sockets on the sending
                     // machine; a copy on loopback is what lets a FakeAgent on the console's
                     // own computer hear it. The beacon still names the network address.
-                    await socket.SendToAsync(datagram, SocketFlags.None, new IPEndPoint(IPAddress.Loopback, Defaults.BeaconPort));
+                    await socket.SendToAsync(datagram, SocketFlags.None, new IPEndPoint(IPAddress.Loopback, _beaconPort));
                 }
             }
             catch (Exception ex) when (ex is SocketException or InvalidOperationException or ObjectDisposedException)

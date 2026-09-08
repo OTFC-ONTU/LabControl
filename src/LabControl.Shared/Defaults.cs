@@ -6,6 +6,13 @@ namespace LabControl.Shared;
 /// </summary>
 public static class Defaults
 {
+    public const string SetupReadinessFileName = "setup-readiness.json";
+    public const int SetupReadinessMaxBytes = 4096;
+    public static readonly TimeSpan SetupReadinessPollInterval = TimeSpan.FromSeconds(10);
+    public const string PasswordPolicyWorkDirectoryPrefix = "password-policy-";
+    public const string SetupComputerSystemWmiNamespace = @"root\cimv2";
+    public const string SetupComputerSystemWmiClass = "Win32_ComputerSystem";
+    public static readonly TimeSpan SetupPasswordPolicyTimeout = TimeSpan.FromMinutes(2);
     /// <summary>
     /// Wire protocol version reported in <c>Hello</c>; bump on a breaking change. It does
     /// <b>not</b> gate the connection: the console accepts an older agent, marks it outdated
@@ -263,6 +270,19 @@ public static class Defaults
 
     /// <summary>Command line that makes the agent repoint the service back at the previous version.</summary>
     public const string RollbackSwitch = "--rollback";
+    public const long SetupMinimumFreeBytes = 2L * 1024 * 1024 * 1024;
+    public const string InstallDirectoryIdentityFileName = "installation-id";
+    public const string SetupProcessMutexName = @"Global\LabControl.Setup";
+    public const string UninstallCleanupDirectoryPrefix = "LabControl-removal-";
+    public const string FinishUninstallSwitch = "--finish-uninstall";
+    public const string SetupUninstallRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\LabControl";
+    public const string SetupServiceRegistryKey = @"SYSTEM\CurrentControlSet\Services\LabControl";
+    public const string ServiceDescription = "LabControl classroom management agent";
+    public const string UpdateTrialFileName = "update-trial.json";
+    public const string UpdateTrialLockFileName = "update-trial.lock";
+    public const string UpdateRollbackTaskName = "LabControl Update Rollback";
+    public const string UpdateRollbackTaskFileName = "update-rollback-task.xml";
+    public const string RollbackDeadlineSwitch = "--rollback-deadline";
 
     /// <summary>
     /// Command line that stops the <see cref="ServiceName"/> service and starts it again. The
@@ -330,8 +350,16 @@ public static class Defaults
     public const string InstallationFileName = "installation.json";
     public const string SetupLockFileName = "setup.lock";
     public const string SetupSettingsFileName = "setup-settings.json";
+    public const string AutoLogonSecretName = "DefaultPassword";
     public const string FastStartupPolicyKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\Power";
     public const string FastStartupPolicyValue = "HiberbootEnabled";
+    public const string WindowsUpdatePolicyParentKey = @"SOFTWARE\Policies\Microsoft\Windows";
+    public const string WindowsUpdatePolicySubKey = "WindowsUpdate";
+    public const string UpdateActiveHoursEnabledValue = "SetActiveHours";
+    public const string UpdateActiveHoursStartValue = "ActiveHoursStart";
+    public const string UpdateActiveHoursEndValue = "ActiveHoursEnd";
+    public const uint SetupActiveHoursStart = 7;
+    public const uint SetupActiveHoursEnd = 20;
     public const uint SetupSleepAcSeconds = 0;
     public const uint SetupDisplayAcSeconds = 20 * 60;
     public const uint SetupDiskAcSeconds = 0;
@@ -453,7 +481,56 @@ public static class Defaults
 
     public const string CmdExecutable = "cmd.exe";
 
+    // ---------------------------------------------------------------- machine setup
+
+    public const string ActiveComputerNameRegistryKey = @"SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName";
+    public const string PendingComputerNameRegistryKey = @"SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName";
+    public const string ComputerNameRegistryValue = "ComputerName";
+    public const string TcpipParametersRegistryKey = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters";
+    public const string PendingDnsHostnameRegistryValue = "NV Hostname";
+    public const string SetupFirewallPolicyProgId = "HNetCfg.FwPolicy2";
+    public const string SetupFirewallRuleProgId = "HNetCfg.FWRule";
+    public const string SetupFirewallGroup = "LabControl";
+    public const string SetupDiscoveryFirewallRule = "LabControl Discovery";
+    public const string SetupEchoFirewallRule = "LabControl Echo";
+
+    public const string NicWmiNamespace = @"root\cimv2";
+    public const string NicAdvancedWmiNamespace = @"root\StandardCimv2";
+    public const string NicPowerWmiNamespace = @"root\wmi";
+    public const string NicAdapterWmiClass = "Win32_NetworkAdapter";
+    public const string NicDriverWmiClass = "Win32_PnPSignedDriver";
+    public const string NicAdvancedWmiClass = "MSFT_NetAdapterAdvancedPropertySettingData";
+    public const string NicWakeWmiClass = "MSPower_DeviceWakeEnable";
+    public const string NicPowerWmiClass = "MSPower_DeviceEnable";
+    public const string NicMagicOnlyWmiClass = "MSNdis_DeviceWakeOnMagicPacketOnly";
+    public const string NicPowerEnableProperty = "Enable";
+    public const string NicMagicOnlyEnableProperty = "EnableWakeOnMagicPacketOnly";
+    public const string NicClassRegistryKey = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}";
+    public const string NicInterfaceRegistryValue = "NetCfgInstanceId";
+    public const string NicPnpRegistryValue = "DeviceInstanceID";
+    public const string NicMagicRegistryValue = "*WakeOnMagicPacket";
+    public const string NicEeeRegistryValue = "*EEE";
+    public const string NicPatternRegistryValue = "*WakeOnPattern";
+
     // ---------------------------------------------------------------- student account
+
+    public const string StudentPrivacyPolicyRegistryKey = @"SOFTWARE\Policies\Microsoft\Windows\OOBE";
+    public const string StudentPrivacyPolicyRegistryValue = "DisablePrivacyExperience";
+    public const string StudentEdgePolicyRegistryKey = @"SOFTWARE\Policies\Microsoft\Edge";
+    public const string StudentEdgePolicyRegistryValue = "HideFirstRunExperience";
+    public const string StudentOneDrivePolicyRegistryKey = @"SOFTWARE\Policies\Microsoft\OneDrive";
+    public const string StudentOneDrivePolicyRegistryValue = "DisableNewAccountDetection";
+    public const string AdministratorVisibilitySubKey = @"SpecialAccounts\UserList";
+    public const string AdministratorCredentialRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\CredUI";
+    public const string AdministratorCredentialRegistryValue = "EnumerateAdministrators";
+
+    public const string WinlogonRegistryKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon";
+    public const string AutoAdminLogonValue = "AutoAdminLogon";
+    public const string AutoLogonCountValue = "AutoLogonCount";
+    public const string AutoLogonSidValue = "AutoLogonSID";
+    public const string AutoLogonUserValue = "DefaultUserName";
+    public const string AutoLogonDomainValue = "DefaultDomainName";
+    public const string AutoLogonPasswordValue = "DefaultPassword";
 
     public const string StudentAccountName = "student";
 
@@ -615,4 +692,39 @@ public static class Defaults
     /// </summary>
     public const string MaterialsFolderName = "Materials";
     public const string MaterialsRelativePath = @"Desktop\" + MaterialsFolderName;
+
+    public const string SetupExecutableName = "Setup.exe";
+    public const string UninstallExecutableName = "Uninstall.exe";
+    public const string UsbBinariesDirectoryName = "payload";
+    public const string UsbInstructionsFileName = "INSTALL.txt";
+    public const string TrustRekeyFileName = "trust-rekey.json";
+    public const string UninstallRecoveryRootDirectory = @"C:\ProgramData\LabControl Removal";
+    public const string UninstallCleanupReceiptFileName = "cleanup.json";
+
+    public const string DefenderWmiNamespace = @"root\Microsoft\Windows\Defender";
+    public const string DefenderPreferenceClass = "MSFT_MpPreference";
+    public const string DefenderExclusionPathProperty = "ExclusionPath";
+    public const string SecurityCenterWmiNamespace = @"root\SecurityCenter2";
+    public const string AntivirusProductClass = "AntiVirusProduct";
+    public const string DefenderReportingRelativePath = @"Windows Defender\MsMpEng.exe";
+    public const string HibernationRegistryKey = @"SYSTEM\CurrentControlSet\Control\Power";
+    public const string HibernateEnabledValue = "HibernateEnabled";
+    public const string HibernationFileTypeValue = "HiberFileType";
+    public const string HibernationFileSizeValue = "HiberFileSizePercent";
+    public const string PowerConfigurationExecutableName = "powercfg.exe";
+    public static readonly TimeSpan SetupWmiTimeout = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan SetupPowerCommandTimeout = TimeSpan.FromSeconds(60);
+    public static readonly Guid StudentDesktopKnownFolderId = new("B4BFCC3A-DB2C-424C-B029-7FE99A87C641");
+    public const string WindowsExplorerExecutableName = "explorer.exe";
+    public const string HandoutStagingDirectoryName = "handouts";
+    public const string ProfileTemplateArchiveFileName = "profile-template.zip";
+    public const string ProfileTemplatePlanFileName = "profile-template.json";
+    public const string ProfileTemplateStagingDirectoryName = "profile-template-staging";
+    public const string ProfileTemplateDesktopDirectoryName = "Desktop";
+    public const string ProfileTemplateDocumentsDirectoryName = "Documents";
+    public const int ProfileTemplateMaxEntries = 128;
+    public const int ProfileTemplateMaxFileBytes = 2 * 1024 * 1024;
+    public const int ProfileTemplateMaxTotalBytes = 16 * 1024 * 1024;
+    public const int ProfileTemplateMaxPathCharacters = 200;
+    public const string SetupInstallStagingSuffix = ".setup-staging";
 }

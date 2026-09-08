@@ -21,4 +21,9 @@ public static class MachineKeyProtection
     public static KeyProtection Dpapi { get; } = new(
         bytes => ProtectedData.Protect(bytes, Entropy, DataProtectionScope.LocalMachine),
         bytes => ProtectedData.Unprotect(bytes, Entropy, DataProtectionScope.LocalMachine));
+
+    private static readonly byte[] RekeyEntropy = Encoding.UTF8.GetBytes("labcontrol/trust-rekey");
+    public static KeyProtection RekeyJournal { get; } = new(
+        bytes => ProtectedData.Protect(bytes, RekeyEntropy, DataProtectionScope.LocalMachine),
+        bytes => ProtectedData.Unprotect(bytes, RekeyEntropy, DataProtectionScope.LocalMachine));
 }

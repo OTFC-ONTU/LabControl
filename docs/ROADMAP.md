@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestones **M0 … M6**. Each one is independently demonstrable: at the end of a
+Milestones **M0 … M7**. Each one is independently demonstrable: at the end of a
 milestone there is something the teacher (or the developer on the Mac) can actually run
 and look at, not just code that compiles. Milestones are ordered by *risk first, value
 second* — the genuinely uncertain parts (the trust model, the Windows service + session
@@ -18,19 +18,23 @@ implement.
 | **M1** | Lab identity, link and presence | **done 2026-09-05** | M0 |
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
-| **M4** | Deployment: USB installer, files, self-update | **in progress — portion 1 built; portion 2: resumable file transport and per-PC batch logs built on the Mac (2026-09-07), handout UI and simulator delivery built; portion 3 account journal, Windows preparation, protected settings journal and machine registry/AC power-plan adapters built, executable pipeline pending (`D-38`, `D-41`…`D-49`)** | M3 |
-| **M5** | Classroom control: broadcast, lock, exam mode | not started | M4 |
-| **M6** | Software catalog, localization, polish | not started | M5 |
+| **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
+| **M5** | Lab files, teacher access and fast switching between rooms | not started — planned 2026-09-08 (`D-53`) | M4 |
+| **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
+| **M7** | Software catalog, localization, polish | not started | M6 |
 
 Update the **State** column (`not started` / `in progress` / `done <date>`) in the same
 change that finishes the work, and regenerate the HTML mirror (see
 [Documentation workflow](#documentation-workflow)).
 
-> **Why seven milestones and not six.** The original plan had software installation in
+> **Why eight milestones.** M5 was inserted on 2026-09-08 at the owner's request:
+> teachers carry several labs on one device and select one for each lesson (`D-53`).
+> Former M5 (classroom control) is now M6; former M6 (catalog/polish) is now M7.
+> The original plan had software installation in
 > M4. The owner has confirmed the catalog starts **empty** and his lab's PCs are already
 > provisioned, so package management moved behind the lesson-time features that are used
 > every week. What matters for packages is not a prefilled catalog but a comfortable way
-> to *add* an installer — that is the M6 acceptance criterion.
+> to *add* an installer — that is the M7 acceptance criterion.
 
 ## Definition of done — applies to every milestone
 
@@ -506,7 +510,7 @@ built on it (owner's decision, 2026-09-05, `D-31`).
   the development action *Push agent build…*: a folder with the published `agent.exe` and
   `session.exe` (side by side, or `publish-all.sh`'s `artifacts/<rid>/` layout) and the
   version number; the dialog hashes the files and shows the version directory name the PC
-  will get, `<number>+<8 hex of agent.exe's hash>`. `LabSession.PushAgentBuild` offers the
+  will get, `<number>+<8 hex of the executable bundle digest>` (D-52 extends the original agent-only identity). `LabSession.PushAgentBuild` offers the
   two files and an `UpdateManifest` through `PullFile` and sends a `self_update` job with
   `version`, `ref`, `sha256` (`SelfUpdateRequest`). On the PC `AgentUpdater` pulls the
   manifest, checks it (`UpdateBundle`), pulls each file into
@@ -758,7 +762,7 @@ to answer Windows questions (`D-34`).
   1 MB/s is three or four of those. The cap is 24 Mbit/s now (`D-36` item 11), a
   console-only change since the control carries it. To measure again on `PC-10`: fps
   while scrolling Edge with the new cap; if it is still under 15 the next lever is the
-  quality (q75 → q60 halves the bytes) and after that H.264 (`D-11`, M6 — these are
+  quality (q75 → q60 halves the bytes) and after that H.264 (`D-11`, M7 — these are
   the numbers it asked for). Still to check: Ukrainian text, ⌘C/⌘V, CPU and memory of
   `session.exe` over an hour.
   *Second run (2026-09-07 16:45):* text types, and scrolling Edge under the 24 Mbit/s cap
@@ -789,12 +793,17 @@ to answer Windows questions (`D-34`).
 **Goal.** The lab can actually be rolled out: walk to each PC once with a USB stick, and
 never walk again — including when the teacher machine is replaced.
 
+**Installation scope (owner decision 2026-09-08).** Clean installation and repair of
+installer-owned installations only. Unowned legacy dev installs are refused; migration
+from them is outside M4. Clean means no earlier LabControl installation, not an empty
+Windows user profile: the account-off path continues to preserve existing personal accounts.
+
 **Deliverables**
 
 - `LabControl.Setup` exactly as specified in `docs/INSTALLER.md`: `ISetupStep` pipeline,
   `--dry-run`, `--number`, `--uninstall`, `--rekey`, idempotent re-runs, `setup.log`,
   green summary, reboot prompt, Defender exclusion, third-party-antivirus detection.
-- **Optional student account and standalone uninstall (planned, D-40).** On the PC-number
+- **Optional student account and standalone uninstall (D-40).** On the PC-number
   screen, *Create student account and enable automatic sign-in* is checked on a fresh
   install. Unticking it installs the agent for testing with an existing Windows session,
   without changing accounts, passwords, password policy, automatic sign-in or profile
@@ -806,7 +815,8 @@ never walk again — including when the teacher machine is replaced.
   **secret-free** payload of `docs/INSTALLER.md`: public CA certificate + a batch of
   single-use enrollment codes.
 - File transfer both directions: `PullFile` and `PushFile`, hash-verified, resuming after
-  a reconnect. Its first consumer is `install_package` — the reason the channel exists.
+  a reconnect. Preserve the general private-staging channel for the planned M7
+  `install_package` consumer; package execution moved with the catalog, as recorded above.
 - **Send files to students** (`D-23`): `send_file` lands in `Materials` on the `student`
   desktop, optional *open after delivery* through the helper, one job per file, a batch
   entry in the jobs panel expanding to per-file, per-PC rows; *Send files…* on the toolbar.
@@ -862,7 +872,9 @@ never walk again — including when the teacher machine is replaced.
   `Materials` on every `student` desktop within a minute, the `.docx` opens on every
   screen when *open after delivery* is ticked, a second send of the same file replaces the
   first without a duplicate, and a `.exe` sent this way lands as a file and is not run.
-  Immediately afterwards an `install_package` job on the same PCs still works unchanged.
+  Private-staging transfers must remain available after handouts. The originally listed
+  `install_package` regression belongs to M7, where that job is introduced; no current
+  Windows package handler is claimed by M4.
 - `self_update` upgrades every agent, and they reconnect on the new version.
 - **The deliberately broken release.** Push a bundle whose agent exits on start to all 14
   PCs. Every one of them is back on the previous version and online **without anyone
@@ -892,7 +904,60 @@ agent, the fleet view — on the VM with the deliberately broken release. The or
 console-only work first (nothing new to prove on Windows) and the two Windows-heavy
 portions last, each with its own VM day.
 
-**Progress.**
+**Integration in progress (2026-09-08, D-52).** The owner requested completion of all M4,
+with parallel implementation and independent criticism. New code now covers signed update
+manifests, a durable external rollback trial, the USB builder and console action, Windows
+managed handouts, ordered sign-in and activation, hostname/firewall/Defender/hibernation/NIC
+adapters, session policies and executable setup/removal/rekey integration. The two existing
+UDP test failures are addressed by a separate in-process test port.
+
+**Verification ledger (isolated fixtures; milestone still in progress).**
+
+| Area | Verified evidence | Still required |
+| --- | --- | --- |
+| Mac build and tests | `dotnet test`: **673/673, no skips**. All nine targets from `tools/publish-all.sh` published; two existing Avalonia constructor warnings. | Recheck only after further source changes. |
+| Windows settings | ARM64 clone: **17 read-only probes**, **8 actual apply/restore round trips**, exact original-byte comparison (Fast Startup, SAS, three AC timeouts, active hours, two firewall rules). | Hibernation was already off; actual physical NIC writes and shutdown wake are not proved by this VM. |
+| Fresh classroom install | Actual initial dialog: checked account default, one PC number; install and reboot into standard `student`. Five template checks proved actual file editability, copy/edit/rename/delete and read-only Default originals, with original hashes restored. | Corrected administrator sign-in/UAC accessibility and the physical fresh-PC run. |
+| Account-off and removal | Install, repair, reboot, full USB probation, rekey, standalone uninstall and restored hostname; account/profile/sign-in fingerprints preserved. Rekey reached a fresh lab; a second rekey changed console port while retaining identity and resumed actual thumbnails. Further native removal retained the student in one clone and deleted the owned student after a loaded-profile refusal/ordinary retry in another. Both exercised the fixed ReadOnly cleanup; an existing-student collision preserved a new baseline exactly. An earlier partial install was removed with all three retained-user fingerprints unchanged; a second partial stopped at the foreign firewall rule and preserved it before an explicitly recorded fixture cleanup/repair. | Complete the home-PC capture/control/script loop in account-off mode (Windows currently has no signed-in user). |
+| Files and session | Real TLS loopback: **14 × 500 MiB**, independent destination hashes, one interrupted/resumed peer. Windows: 20-MiB DOCX and PDF delivered without duplicates and editable by the standard student. Network user-session script and pointer input passed. Modified handouts were replaced without duplicates; PDF opened in Edge under the recorded student token. An actual executable delivery with Open=true passed a process observer with a verified positive control and zero launches. | Physical 14-PC LAN throughput and Word opening. The VM's PDF association is Edge; no Word opening is claimed. |
+| Signed updates | Full 10-minute USB and network success probation, including the final `d27bc649` build: stable state, finalized recovery, exact SCM path and all three retained-user fingerprints verified. Actual crashing service recovered after the fourth SCM failure; actual alive-but-unlinked service recovered by the unchanged 12-minute task. Wrong-key manifest refused without switching, with visible `update.refused` event. Repeated deadline recovery also verified durable finalization and correct console failed-version status. | Complete the physical fleet drills. |
+| Administrator maintenance | A native UAC test exposed missing credential fields when the sole administrator was hidden. Setup now journals and verifies explicit credential entry before hiding; repair applied the policy without changing agent version. | Corrected UI and manual sign-in remain unverified because the Mac screen is locked. The clone's original `EnableLUA=0` was restored after a separate temporary test condition; Setup does not change that security policy. |
+| Physical lab | Installer reports supported NIC changes, selected wired MAC and persistent readiness advisories. | All 14 PCs, backup-only console migration, fresh-PC setup, real LAN transfers and shutdown Wake-on-LAN. A virtual NIC is not hardware acceptance. |
+
+The network tests found and corrected native Task Scheduler XML encoding (UTF-16LE),
+exact deadline rounding and missing-task cleanup. The first no-link recovery restored the
+service but exposed a console-state race; the terminal reporter now retries after the
+recovery journal lock clears. The repeat showed both durable recovery finalization and
+the console's correct `rolled_back` failed-version state. A final review also corrected template restoration during removal: with no pending
+template entries, it no longer queries a not-yet-created or already-deleted student.
+Five regression cases cover both retry paths and preserve SID checks for actual work.
+A disposable console's normal idle key lock also delayed
+a fresh enrollment; the fixture now exposes explicit unlock, and the generated USB
+instructions put console/key preparation before the first PC installation.
+
+Native removal exposed two further issues: ISO-derived ReadOnly installer copies stopped
+final cleanup, and Windows populated `AutoLogonSID` during actual student autologon.
+The cleanup now handles ReadOnly only inside verified owned paths. Fresh sign-in setup
+journals the original SID value separately; earlier tuple-only test journals cannot
+reconstruct that original and explicitly report the limitation. ReadOnly cleanup passed in both clones after a recorded test-only replacement of the
+private retry worker; remaining installed ReadOnly files were deleted by production code.
+A subsequent fresh GUI install using the fixed installer passed actual student autologon,
+explicit removal, loaded-profile refusal, logoff and ordinary retry. All three fresh
+baseline fingerprints (accounts, profiles and Winlogon/LSA) matched exactly, including
+AutoLogonSID restoration. Service, installation/data roots, uninstall registration and
+the owned profile were absent; this fresh cycle needed no worker replacement or manual
+attribute changes.
+After the final reboot, the original hostname was restored and the temporary cleanup
+worker was absent.
+
+Remaining before completion: finish the pending Windows observations above and record the
+physical-lab criteria. Neither macOS compilation nor isolated-VM success substitutes for
+those checks. Clean installation remains the scope; unowned legacy-install migration is
+not part of M4.
+
+**Earlier implementation history.** The dated entries below record each slice at the time
+it was built. Their then-pending integration steps are superseded by the verification
+ledger above; they are not a second current checklist.
 
 - *Portion 2 handout dispatch and simulator delivery built (2026-09-07, D-44).*
   *Send files…* selects multiple local files, with optional document opening, and creates
@@ -966,6 +1031,31 @@ portions last, each with its own VM day.
   remain pending.
   Next: remaining native settings/sign-in adapters, account group verification/activation,
   then the executable install/repair/removal flow and Windows handout delivery.
+- *Portion 3 Windows Update active-hours adapter built (2026-09-08, D-50).*
+  A single protected enable/start/end tuple requests 07–20 without disabling updates.
+  Repair/removal preserves the entire policy after a later member edit. Native writes
+  guard all three values; partial failures remain conflicts. Missing policy leaves can
+  be created, but restoration never deletes a registry tree. Mac tests cover journal
+  round trips, conflicts and interrupted writes. Windows execution and effective restart
+  behavior need VM verification; no CLI invokes the component yet.
+  Validation: build passed with zero warnings, all 20 new tests passed; the complete
+  suite passed 410/412. The two existing BeaconTests failed discovery while a running
+  console advertised on the shared UDP port (the diagnostic heard that console, not
+  the test consoles). Setup self-contained publishes passed for win-x64 and win-arm64.
+  Next: remaining native settings/sign-in adapters, account group verification/activation,
+  then the executable install/repair/removal flow and Windows handout delivery.
+- *Portion 3 LSA sign-in secret adapter built (2026-09-08, D-51).*
+  The protected journal now bridges the fixed LSA autologon secret. Account mode off
+  skips all native access; mode on requires recorded SID ownership. Original absent,
+  empty and UTF-16 values are preserved; later edits and uncertain applies conflict.
+  Native code rechecks expected data, verifies writes and clears owned secret buffers.
+  No CLI invokes the component. Windows LSA/DPAPI execution and actual sign-in remain
+  pending; next are ordered Winlogon setup/restoration, account group verification and
+  activation, remaining machine adapters and executable integration.
+  Validation: all 18 new tests passed; full suite 428/430, with the same two existing
+  UDP BeaconTests failing alongside the running console. Final build had zero warnings
+  (the first compile also reported the two known Avalonia window warnings).
+  Self-contained Setup publishes passed for win-x64 and win-arm64.
 - *Portion 2 started (2026-09-07, D-41).* `PullFile` now resumes at the last fully
   written chunk after a link reconnect, with a bounded inactivity timeout and a full-file
   SHA-256 check. Fixed terminal metadata for empty files and exact 64 KiB multiples.
@@ -1029,7 +1119,238 @@ portions last, each with its own VM day.
 
 ---
 
-## M5 — Classroom control: broadcast, lock, exam mode
+## M5 — Lab files, teacher access and fast switching between rooms
+
+**Goal.** A teacher imports the files for all their rooms in one operation, then selects
+the room for the current lesson. The roster of each room is mostly stable; the dynamic
+part is which teacher/device uses which room. One console has **at most one active lab**.
+Changing rooms must not require a restart, repeatedly restoring a backup, visiting
+student PCs or waiting for unreachable PCs. The same workflow supports administrators
+adding their `.lcbak` backups as lab profiles. Simple teacher-console installation is
+also part of this milestone (`D-54`). This is planned work, not an existing capability.
+
+**Teacher workflow**
+
+1. Install the teacher console using the simple desktop installer/package. The
+   administrator creates each lab once and exports its lab file. Teachers and
+   administrators use the same *Add labs…* with multiple file selection (or drop files
+   into the app): teacher lab files, administrator `.lcbak` backups, or a mixed batch.
+   Any first-time device authorization is batched during this setup, not repeated at
+   the beginning of lessons. Backups are unlocked during import with their passphrase
+   or recovery code, then added with an explicit *Administrator* access label. No
+   conversion to a teacher file is required. The UI separates *Add an existing lab*
+   from *Create a lab*.
+2. Imported labs remain in a local *My labs* list: room/name, expected PC count, access
+   status and last-used time. Importing does not activate a lab. No live availability
+   claim is made for an inactive lab; the list uses saved metadata only.
+3. Select a room to open its mosaic. The active lab is always named prominently beside
+   the controls. The same selector changes rooms during the day; routine switching
+   requires no passphrase and no re-import. Launch opens the chooser with the last-used
+   lab highlighted, without silently acquiring a room.
+4. *Disconnect* releases the current room and returns to the list. Removing a lab from
+   this device removes its local profile/access only; it never uninstalls agents,
+   deletes the classroom or revokes other teachers.
+
+**Deliverables**
+
+- **Lab files distinct from administrator backups.** A versioned, authenticated lab
+  file carries `lab_id`, a human-readable room/name, public trust, a roster/layout
+  snapshot and the material needed for the authorized teacher-device onboarding flow.
+  Ordinary distribution must not carry the CA private key, recovery material or student
+  enrollment codes. Any access secret is protected in transit and moved into the local
+  designed store on import. Each device obtains its own revocable identity; importing
+  the same room on several devices must not clone a shared private identity. The exact
+  extension and authorization exchange are implementation decisions to document before
+  coding; the acceptance requirement is one batched onboarding workflow, fully offline
+  capable. Existing `.lcbak` archives remain full administrator backups and are also
+  accepted directly by *Add labs…*: importing one adds a switchable administrator
+  profile to the same list. Their recovery purpose and format remain compatible; there
+  is no separate application, recovery-only restriction or repeated restore when
+  selecting that room. Preserve the existing device identity on re-import; mint a new
+  one only when adding this lab to a new device. Switching uses the local identity and
+  does not unlock the CA; enrollment, signing and other privileged actions still do.
+  A public room description alone is not authorization: specify a batched offline
+  request/approval exchange using device-generated keys, or an equally explicit secure
+  provisioning flow, before implementing teacher files. Show *Needs authorization* until
+  it completes. Existing valid access enables later switching without administrator
+  presence; expired/revoked access needs a separate renewal/recovery flow.
+- **Simple teacher-console installers/packages (`D-54`).** Supply offline-capable,
+  self-contained distribution for the supported teacher platforms: a Windows installer
+  with Start-menu entry, optional desktop shortcut and Installed apps removal; a macOS
+  `.app` in a `.dmg` with Applications installation; a Linux desktop package/install
+  flow with launcher and removal instructions. Final packaging tools are implementation
+  choices. Copy/register the console and its required runtime/native assets; register
+  file-opening support for teacher lab files and `.lcbak` backups. Opening files routes
+  them into the existing console's import flow and does not start another active lab.
+  No student Agent/Session service, background daemon, scheduled task, startup control
+  session, student account, autologon or student-machine policy tuning is installed.
+  The embedded server runs only with the interactive console and selected lab. Use
+  per-user installation where supported; OS network/privacy permissions are explained
+  at the point of use, without disabling firewall/antivirus or granting broad exclusions.
+  Updates/repair preserve lab profiles and credentials; removal deletes app-owned
+  binaries/registrations and retains user lab data by default. Data/key deletion is a
+  separate explicit choice and never deletes external backups or student installations.
+  Packaging must include a stable application identity/path, macOS bundle metadata and
+  actual file-activation handling in the app, not only OS registrations. Windows LAN
+  access needs inbound TCP `ConsolePort` and UDP `BeaconPort`; provide a scoped network
+  setup/diagnostic flow, requesting elevation only if an OS rule change requires it.
+  Installation alone does not imply firewall permission. On Linux specify tested distro
+  versions and native-library prerequisites; self-contained .NET does not remove those.
+  Offline prerequisites must be present or supplied locally. Document/test the current
+  unsigned distribution path and its SmartScreen/Gatekeeper prompts (`D-15`); do not
+  promise warning-free installation or silently require purchased signing credentials.
+- **Bulk import and safe refresh.** Match by `lab_id` and pinned authority, not file name,
+  display name, IP or PC number. Re-import updates the existing room without duplicates,
+  replacing its device identity or overwriting local job history. Older snapshots cannot
+  roll back revocations or erase newly learned PCs. Same-named rooms with different ids
+  remain distinguishable; the same id with different trust is rejected. Corrupt,
+  unauthorized or unsupported-version files leave existing profiles intact and produce
+  a per-file result without preventing other valid files from importing. Persist each
+  accepted import atomically; no requirement for all files to succeed as one transaction.
+  A valid backup for an existing teacher profile upgrades that same profile to
+  administrator access after explicit import/unlock, without duplicate rooms or loss of
+  its local identity/history. A later teacher-file import never silently downgrades an
+  administrator profile; access level is per lab, not global across the application.
+  Preserving device identity means keeping its stable id and history; an explicitly
+  authorized certificate refresh may still be required when its access changes.
+- **Profiles isolated by lab.** Trust, credentials, machine records, layout, grants,
+  jobs, logs, scripts and catalog state are scoped by `lab_id`; PC-01 in two rooms cannot
+  collide. Keep the known roster for offline display and Wake-on-LAN, while validated
+  agent connections still refresh inventory and discover legitimate roster changes.
+  No timetable, automatic room reassignment or continuous roster synchronization is
+  needed. Migrate the current single-lab installation to one profile without changing
+  its lab or device identity, requiring student re-enrollment or losing local data.
+- **One active session with bounded switching.** Stop old discovery advertisements,
+  agent links, screen streams, input and background connection attempts before activating
+  the next lab. Dispose old frame buffers and session workers; inactive labs retain
+  metadata on disk, not live sessions. Reject inactive-lab peers at the active server.
+  Serialize rapid selections; stale callbacks, open PC windows and queued commands must
+  never act on the next room. Multiple windows/another launch against the same app
+  profile cannot bypass the one-active-lab rule. A failed activation leaves an explicit
+  disconnected/retry state, not two partially active labs.
+- **Safe departure and results.** Ordinary idle switching is immediate. Surface any
+  running scripts, transfers or update probation before leaving; explain which can be
+  stopped safely and which must complete, with an explicit wait/cancel/leave choice only
+  where valid. Never abort an update unsafely or keep its lab secretly connected. Bind
+  operations and cached results to their originating lab and console; preserve outcomes
+  for later reconnect, and never send an old teacher's output to the next teacher.
+  Pending interactive commands must not unexpectedly replay on a later lesson. M6 must
+  extend this departure contract to lock, broadcast and exam policies with their existing
+  independent expiry/restoration guarantees.
+- **Teacher handover and access.** Keep the existing one-controller-per-PC invariant.
+  Switching away releases the room for another teacher; selecting an occupied room
+  shows a truthful status and an explicit *Take over* action. Repair the audit gaps:
+  handover must tolerate allowed clock skew, offline PCs must not be reported as known
+  to be held elsewhere, and every authorized device must be identifiable and revocable
+  across certificate renewal. Separate classroom access from CA ownership; an ordinary
+  teacher cannot enroll PCs, issue identities or sign agent updates. Define renewal and
+  revocation propagation without an always-on server, including an honest pending status
+  for unreachable agents. Enrollment remains administrator-owned; copied backups must
+  not silently resurrect spent/voided codes as globally usable enrollment authority.
+  Adding a backup for switching must not automatically enable its pending enrollment
+  codes. Keep their history for recovery, but separate ordinary room import from explicit
+  administrator enrollment recovery. Strict global single-use cannot be promised across
+  disconnected independent CA owners: define one issuing authority per enrollment batch
+  or equivalent coordination, and test that path without claiming old offline copies
+  are remotely erased. This does not limit the administrator's ordinary room control.
+
+**Implementation reality and sequencing**
+
+The reviewed build publishes executable directories (`tools/publish-all.sh`), not desktop
+installers or a macOS app bundle. `Program` currently accepts development options, not
+document-open activation; `App` starts one `LabSession` immediately and bootstrap assumes
+a local `LabKeyVault`. M5 therefore needs application lifecycle/import refactoring and
+a teacher profile that can operate without a CA key. File registration alone cannot
+implement any of these flows. Existing `.lcbak` import writes into one data directory and
+mints a new instance; reuse its cryptography, not those destructive replacement semantics
+for an existing profile. Preserve the original profile if migration is interrupted.
+
+Treat installation as three separately verified outcomes: app files installed, desktop
+launch/file opening works, and LAN connection works. The app is an ordinary user process
+hosting Kestrel, not a service, but still needs network permission. macOS packaging needs
+bundle identity/metadata; updates may affect OS keychain/privacy access. Test key access
+after upgrade/reinstall on the same OS account, including Linux's file fallback. Retained
+files alone do not make OS-bound keys portable to another user/device: use backup or
+device authorization there. Check denied permissions and existing file associations;
+do not overwrite a user's chosen default handler by force.
+
+Before the switcher is treated as complete, prove isolated sessions and result ownership,
+then the offline access/renewal contract, then desktop integration. Maintain administrator
+access to older agents for migration; document capability negotiation for any new teacher
+authorization requirements, without weakening them or breaking the frozen update path.
+The 2/15-second goals below apply after completed import and valid permissions/access,
+with graceful idle departure. They exclude initial authorization, cold OS prompts and
+noninterruptible jobs. Abrupt laptop loss/network failure has a separately measured
+reconnect bound (the current heartbeat timeout alone is 20 seconds), not a false 15-second
+guarantee. Test the isolated-subnet/UDP discovery assumptions rather than promising
+cross-VLAN discovery, Internet access or recovery from arbitrary firewall policy.
+
+**Acceptance criteria**
+
+- Install and launch from the teacher package on clean supported Windows, macOS and
+  Linux environments from the documented OS/native-prerequisite matrix, with no
+  separately installed .NET and no internet. Verify launcher
+  and file-opening registration; open multiple lab files/backups while the console is
+  running and confirm a single import flow with no second active room. No student
+  service, account or preparation settings appear. Exercise upgrade, repair/reinstall
+  and removal: existing profiles/keys survive by default, and reinstall restores their
+  use. Verify required LAN permissions with a real agent; screen/privacy permission
+  acceptance for broadcast remains M6. Successful copying alone is not connectivity proof.
+  Test denied LAN access and its guided recovery, unsigned-package launch prompts, paths
+  containing spaces/non-ASCII characters, file activation on first and subsequent launch,
+  and retained key access under the same OS account after app replacement.
+- Bulk-import three independent labs, each with up to 30 simulated PCs, in one workflow.
+  Restart the console: all three remain listed, none is active until selected, and the
+  original input files/USB are no longer needed. Complete initial authorization offline.
+- Import several `.lcbak` backups together, then a mixed batch of backups and teacher
+  files. An administrator switches A → B → A using the same selector, one active lab
+  and the same performance targets as a teacher, with no repeated restore or unlock
+  for routine control. A wrong backup password affects only that file. Re-import and
+  teacher-to-administrator upgrade preserve identity/history and produce no duplicate;
+  teacher access to another lab remains limited. Administrative actions still require
+  unlocking that lab's key, and every inactive lab's CA key is locked on departure.
+- On the development Mac, switching an idle lab shows the destination's saved mosaic
+  and responsive controls within **2 seconds**. On a healthy supported LAN, all already
+  running reachable agents of that lab connect within **15 seconds**. Unreachable PCs
+  remain visibly offline and never extend the switch indefinitely. These are acceptance
+  targets to measure, not claims about current performance; ongoing noninterruptible
+  work is explicitly reported separately.
+- Switch A → B → C → A at least 20 times with 30 agents per lab, also making rapid
+  repeated selections and switching during capture/control. Observe no old-lab beacons,
+  links or video after departure, no input delivered to the wrong room and no growing
+  accumulation of frame buffers/workers. Inactive-lab traffic is rejected even if both
+  rooms share a subnet. Up to 30 is the limit **per active lab**, not across saved profiles.
+- Two teacher devices alternate between two labs; different teachers may use different
+  labs at the same time, while each device controls only one. Demonstrate Mac → Windows
+  → Mac handover without student reinstallation or daily secret entry; verify discovery
+  on the real lab LAN as well as with FakeAgent. Test takeover with ±30 s clock skew and
+  distinguish offline, unknown and positively observed ownership states.
+- The administrator can withdraw one ordinary device's access without affecting other
+  teachers or labs. Re-importing its old lab file cannot bypass withdrawal after agents
+  have learned it; renewal cannot restore revoked access. Explain the propagation limit
+  for disconnected agents. Show that a teacher file cannot mint a fresh privileged
+  identity, enroll a PC or sign an update.
+- Duplicate, old, corrupt and same-name/different-id imports, expired access and a crash
+  during import/switch preserve other profiles and local history. A legacy `.lcbak`
+  restore remains supported for the administrator, without silently downgrading trust
+  or revocation state. Reusing an enrollment code through a second stale admin copy is
+  refused or requires an explicit safe recovery flow, never silently issues twice.
+- Switch during a script, a resumed transfer and update probation; confirm the departure
+  choices, preserved result ownership and eventual visible outcome. Queued commands
+  cannot leak into another lab or execute unexpectedly on a later lesson.
+
+**Not in scope.** Simultaneous control of several labs by one console, a shared live view
+between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs
+between labs on each lesson, grading or an exam-content platform.
+
+**Rough size.** Large. Desktop packaging, bulk import and the chooser are the visible
+parts; isolating session lifecycle, access and recovery is the main work. Build
+profiles/import first, switching second, then access/handover hardening, desktop
+packaging and the multi-device acceptance drills.
+
+---
+
+## M6 — Classroom control: broadcast, lock, exam mode
 
 **Goal.** The features used in every lesson.
 
@@ -1059,6 +1380,9 @@ portions last, each with its own VM day.
   *recently refused names* list in the console; a tile badge and `InternetState` reporting.
 - Fail-safe machinery for all of the above: state persisted on the agent, an absolute
   hard limit, and "restore first, then re-apply" on service start.
+- Extend M5's lab-departure flow to active broadcast, lock and exam policies: explain
+  what ends or continues under its bounded lifetime, preserve work collection ownership,
+  and never leave an inactive lab's streams or control session running.
 - **Profile reset**: full (log off `student`, delete the profile via `Win32_UserProfile`,
   reboot into a pristine auto-logon) and light (wipe Desktop / Documents / Downloads).
 
@@ -1096,7 +1420,7 @@ resolver are the risky parts.
 
 ---
 
-## M6 — Software catalog, localization, polish
+## M7 — Software catalog, localization, polish
 
 **Goal.** Everything that makes the system pleasant to own for one person with no IT
 department. The catalog ships **empty** — the deliverable is the ease of filling it.
@@ -1194,17 +1518,20 @@ Kept here so the reasoning is not lost.
 | Question | Answer | Where it landed |
 |---|---|---|
 | Is the teacher machine fixed? | No. Several teacher machines take turns (MacBook some days, the Windows desk PC on others); one drives the lab at a time; the software must also move to other labs; needs a security scheme for replacement | `D-13`, `D-21`, ARCHITECTURE §3, M1 |
+| Can a teacher use different rooms during the day? | Yes. Bulk-import lab files once, then choose one active lab; room rosters are mostly stable, teacher/device allocation changes | `D-53`, ARCHITECTURE §3.9, M5 |
+| Can administrators switch using backups? | Yes. Add `.lcbak` files directly, including mixed batches, to the same lab list; preserve administrator authority with key unlock only for privileged actions | `D-54`, M5 |
+| How is the teacher console installed? | Simple offline desktop packages/installers for Windows, macOS and Linux: app files, launchers and lab/backup file registration; no student service or preparation | `D-54`, INSTALLER teacher-console section, M5 |
 | Code signing? | None available; accept warnings and add an antivirus exclusion | `D-15`, INSTALLER step 6a |
-| Which packages on day one? | None. The catalog ships empty; what matters is a comfortable way to add installers later | `D-16` context, M6 |
-| Do installers need downloading? | No. The lab's software is already installed; testing will use an arbitrary program later | M6 |
-| Exam mode? | Yes, and every restriction is an independent switch | `D-16`, ARCHITECTURE §6.1, M5 |
+| Which packages on day one? | None. The catalog ships empty; what matters is a comfortable way to add installers later | `D-16` context, M7 |
+| Do installers need downloading? | No. The lab's software is already installed; testing will use an arbitrary program later | M7 |
+| Exam mode? | Yes, and every restriction is an independent switch | `D-16`, ARCHITECTURE §6.1, M6 |
 | Lab size? | Design and load-test for up to 30 PCs | `D-17` |
 | Where to test the real agent? | Both a Windows VM (fast, destructive tests) and `PC-00` in the lab (WoL, capture, performance) | M2 |
 | Can someone else open the lab key? | Yes — multiple named key holders, each with their own passphrase | `D-13`, ARCHITECTURE §3.2, M1 |
 | Two consoles at once? | Not a mode, but it must not break: two live consoles split the room, never share a PC, and either can *Take over*. A shared room is out of scope | `D-21`, ARCHITECTURE §3.7 |
-| What does *collect work* take? | One dedicated folder, chosen when the exam is set up — not the whole desktop | `D-16`, M5 |
-| How precise is the whitelist? | Executable names only; no following of child processes | `D-16`, M5 |
-| Internet control outside exams? | Yes: *open* / *whitelist* (hostnames, wildcards) / *blocked*, standalone with a duration and a hard limit, and the same thing as the exam's internet switch | `D-22`, ARCHITECTURE §6.2, M5 |
+| What does *collect work* take? | One dedicated folder, chosen when the exam is set up — not the whole desktop | `D-16`, M6 |
+| How precise is the whitelist? | Executable names only; no following of child processes | `D-16`, M6 |
+| Internet control outside exams? | Yes: *open* / *whitelist* (hostnames, wildcards) / *blocked*, standalone with a duration and a hard limit, and the same thing as the exam's internet switch | `D-22`, ARCHITECTURE §6.2, M6 |
 | Sending files to students? | Yes — but the file channel exists first for installing software without a USB walk, and that flow stays untouched; handouts land in `Materials` on the student desktop | `D-23`, ARCHITECTURE §6, M4 |
 | How does LabControl update itself? | Side-by-side version directories, a bundle signed by the lab key, 10-minute probation and a rollback driven from outside the agent; the console is updated by replacing its binary | `D-19`, ARCHITECTURE §7, M2 + M4 |
 | How do old agents and new consoles coexist? | A frozen protocol subset (`Hello`, `Heartbeat`, `Job{self_update}`, `JobResult`); an old agent is never refused, only marked outdated | `D-19`, PROTOCOL *Versioning*, M1 |
@@ -1216,6 +1543,7 @@ remaining unknowns are physical facts about the room, in the on-site checklist.
 
 ## Out of scope for v1
 
-Multi-lab management from one console, two consoles *sharing* one lab at the same time
+Simultaneous multi-lab control from one console (saved labs and sequential switching
+are M5), two consoles *sharing* one lab at the same time
 (alternating teacher machines are in scope, `D-21`), cloud relay, mobile console, Linux/macOS student agents, grading or LMS integration,
 student-initiated help requests, session recording.

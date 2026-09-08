@@ -15,6 +15,9 @@ public sealed class ConsoleOptions
 
     public int Port { get; init; } = Defaults.ConsolePort;
 
+    /// <summary>In-process test seam; production discovery uses the shared default port.</summary>
+    public int BeaconPort { get; init; } = Defaults.BeaconPort;
+
     /// <summary>The address the gRPC server binds to and the beacon names; <c>Any</c> = every interface.</summary>
     public IPAddress BindAddress { get; init; } = IPAddress.Any;
 

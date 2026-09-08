@@ -8,14 +8,15 @@ namespace LabControl.Shared.Jobs;
 /// The arguments of a <c>self_update</c> job (PROTOCOL, <c>self_update</c>; D-33), parsed
 /// and validated once so the console builds them and the agent reads them through the same
 /// names. The job itself stays tiny — it is part of the frozen subset (D-19) — and carries
-/// only the version being offered and how to fetch the <c>UpdateManifest</c>; the manifest
-/// names the files, and every file travels through <c>PullFile</c> under its own hash.
+/// the version being offered, how to fetch the <c>UpdateManifest</c>, and its lab signature.
+/// The manifest names the files, which travel through <c>PullFile</c> under their hashes.
 /// </summary>
-public sealed record SelfUpdateRequest(string Version, string ManifestReference, string ManifestSha256)
+public sealed record SelfUpdateRequest(string Version, string ManifestReference, string ManifestSha256, string ManifestSignature = "")
 {
     public const string VersionKey = "version";
     public const string ReferenceKey = "ref";
     public const string Sha256Key = "sha256";
+    public const string SignatureKey = "signature";
 
     /// <summary>The wire form: every value spelled the one way the agent parses.</summary>
     public Dictionary<string, string> ToArgs() => new(StringComparer.Ordinal)
@@ -23,6 +24,7 @@ public sealed record SelfUpdateRequest(string Version, string ManifestReference,
         [VersionKey] = Version,
         [ReferenceKey] = ManifestReference,
         [Sha256Key] = ManifestSha256,
+        [SignatureKey] = ManifestSignature,
     };
 
     /// <summary>Reads a job's arguments; a job this build cannot apply is refused with the reason.</summary>
@@ -55,7 +57,8 @@ public sealed record SelfUpdateRequest(string Version, string ManifestReference,
             return false;
         }
 
-        request = new SelfUpdateRequest(version.Trim(), reference.Trim(), sha256.ToLowerInvariant());
+        request = new SelfUpdateRequest(version.Trim(), reference.Trim(), sha256.ToLowerInvariant(),
+            job.Args.TryGetValue(SignatureKey, out var signature) ? signature : string.Empty);
         return true;
     }
 }

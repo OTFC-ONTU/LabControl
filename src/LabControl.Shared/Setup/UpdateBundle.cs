@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using Google.Protobuf;
 using LabControl.Shared.Files;
 using LabControl.Shared.Jobs;
@@ -17,6 +18,43 @@ public static class UpdateBundle
     /// <summary>The files every version directory must hold; a bundle without them is refused.</summary>
     public static readonly IReadOnlyList<string> RequiredFiles = [Defaults.AgentExecutableName, Defaults.SessionExecutableName];
 
+    /// <summary>Authenticates before parsing or authorizing any executable download.</summary>
+    public static bool TryReadVerified(ReadOnlySpan<byte> manifestBytes, SelfUpdateRequest request,
+        X509Certificate2 authority, string installedVersion, out UpdateManifest manifest, out string error)
+    {
+        manifest = null!;
+        error = string.Empty;
+        if (!UpdateManifestSignature.Verify(authority, manifestBytes, request.ManifestSignature))
+        {
+            error = "the manifest has no valid signature from this lab's pinned authority";
+            return false;
+        }
+        if (!TryRead(manifestBytes, request, out var parsed, out error)) return false;
+        if (!TryVersion(parsed.MinInstalledVersion, out var minimum) || !TryVersion(installedVersion, out var installed))
+        {
+            error = "the minimum or installed version is not a supported numeric version";
+            return false;
+        }
+        if (installed < minimum)
+        {
+            error = $"this update requires installed version {parsed.MinInstalledVersion} or newer";
+            return false;
+        }
+        // A lab-signed older build remains available as an intentional recovery update.
+        // The minimum describes compatibility, not an anti-downgrade policy.
+        manifest = parsed;
+        return true;
+    }
+
+    private static bool TryVersion(string text, out Version version)
+    {
+        version = null!;
+        if (!InstallLayout.IsValidVersion(text) || !Version.TryParse(InstallLayout.BaseVersionOf(text), out var parsed)) return false;
+        version = new Version(parsed.Major, parsed.Minor, Math.Max(0, parsed.Build), Math.Max(0, parsed.Revision));
+        return true;
+    }
+
+    /// <summary>Structural parsing only. Installation callers must use TryReadVerified.</summary>
     public static bool TryRead(ReadOnlySpan<byte> manifestBytes, SelfUpdateRequest request, out UpdateManifest manifest, out string error)
     {
         manifest = null!;

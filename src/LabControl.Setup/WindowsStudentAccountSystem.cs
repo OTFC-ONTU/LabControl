@@ -9,7 +9,7 @@ using Windows.Win32.NetworkManagement.NetManagement;
 namespace LabControl.Setup;
 
 /// <summary>Local SAM only; null server never follows a domain account with the same name.
-/// No password-policy fallback until the original-settings journal can restore it.</summary>
+/// Reports policy rejection separately; the caller owns any journaled policy fallback.</summary>
 internal sealed class WindowsStudentAccountSystem : IStudentAccountSystem
 {
     public string? FindStudentSid() => ReadStudent()?.Sid;
@@ -35,6 +35,7 @@ internal sealed class WindowsStudentAccountSystem : IStudentAccountSystem
             };
             uint parameter = 0;
             var status = PInvoke.NetUserAdd(default, 1, (byte*)&info, &parameter);
+            if ((uint)status is 1325 or 2245) throw new StudentPasswordPolicyException();
             if (status != 0) throw Failure("Creating the disabled student account", (uint)status);
         }
 
@@ -68,5 +69,5 @@ internal sealed class WindowsStudentAccountSystem : IStudentAccountSystem
 
     // Only operation and numeric status: never include API inputs or the password.
     private static Win32Exception Failure(string operation, uint status) =>
-        new(unchecked((int)status), $"{operation} failed (Windows status {status}). Account and password policy were not changed by a fallback.");
+        new(unchecked((int)status), $"{operation} failed (Windows status {status}).");
 }

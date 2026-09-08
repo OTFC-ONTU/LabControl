@@ -1,6 +1,6 @@
 # LabControl
 
-Classroom fleet control for a single computer lab: **one teacher console
+Classroom fleet control for one active computer lab: **one teacher console
 (macOS / Windows / Linux)** managing **14 Windows student PCs** on the same LAN —
 live screen mosaic with remote control, Wake-on-LAN / shutdown / reboot, silent
 software installs and scripts on all PCs at once, teacher-screen broadcast, screen lock,
@@ -17,6 +17,18 @@ authority, not the laptop's certificate, so moving the console to another comput
 macOS, Windows or Linux — means importing one encrypted backup file, and no student PC is
 touched. The software is designed for labs of up to 30 PCs, not just the first one's 14.
 
+**Planned M5 — several saved labs, one active room.** Teachers will add files for all
+their labs at once, then select the room for each lesson without restarting the app or
+re-importing a backup. Inactive rooms will have no background connections or video.
+Routine teacher lab files will be distinct from administrator recovery backups; this
+workflow is not implemented yet. Administrators will be able to add `.lcbak` backups
+directly to the same list and switch rooms with their administrator access preserved.
+M5 also includes simple offline console installers/packages for Windows, macOS and
+Linux: application files, launchers and opening both file types, without installing
+student services or changing student-account/system settings on the teacher's device.
+Classroom control is now M6 and catalog/polish M7.
+See M5 in [the roadmap](docs/ROADMAP.md).
+
 Built with .NET 10 + Avalonia + gRPC. See [`CLAUDE.md`](CLAUDE.md) for the detailed
 project brief, [`AGENTS.md`](AGENTS.md) for Codex instructions and the shared agent
 documentation contract, and [`docs/`](docs/) for architecture, protocol, installer
@@ -30,7 +42,7 @@ and roadmap.
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | What gets built, in what order, and how each milestone is judged done |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components, processes, data flow, threat model |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | gRPC services, discovery, video encoding, job lifecycle |
-| [`docs/INSTALLER.md`](docs/INSTALLER.md) | Exactly what the USB installer does on a student PC |
+| [`docs/INSTALLER.md`](docs/INSTALLER.md) | Student USB Setup and planned lightweight teacher-console installation |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why each choice was made, and what was rejected |
 
 The same documents are mirrored as a small self-contained website in
@@ -77,12 +89,18 @@ teacher's mouse and keyboard to the PC (text as Unicode, so Ukrainian typed on t
 Ukrainian on the PC), with *Ctrl+Alt+Del* raised by the service; it awaits its run on
 `PC-10`.
 
-**Send files…** prepares a batch of handouts for the selected PCs. This step currently
-works with **FakeAgent**: files are really downloaded and verified into `Materials` under
-each simulated PC's data directory; opening is simulated. Windows delivery is pending
-managed student-account support. Keep the source files available and unchanged until all
-jobs finish. Existing files are replaced only after verification; executables are never
-opened automatically. The Jobs panel shows a separate result for every file on every PC.
+**M4 deployment is being integrated** (`D-52`). USB building, signed updates with
+external recovery, Windows handout delivery and Setup/removal/rekey code are under test.
+Isolated Windows install, file delivery and recovery checks have passed; remaining
+removal, administrator-access and physical-lab acceptance is tracked in
+[the roadmap](docs/ROADMAP.md).
+
+**Send files…** prepares a batch for the selected PCs. The Windows path now requires an
+installer-owned student SID and a usable local profile; it never substitutes a personal
+profile. Keep source files available until jobs finish. Files are hash-verified before
+replacement; optional opening uses the student's interactive token. The Jobs panel shows
+a separate result for every file and PC. Delivery, replacement and PDF opening under the
+standard student token have passed on the VM; Word and the physical fleet remain to verify.
 
 In **Jobs**, select any result row and click **Export batch logs…** to save a ZIP
 with results and output for every PC in that group action. Running and offline PCs
@@ -170,14 +188,14 @@ get `win-x64`. `tools/publish-all.sh` produces both.
    `C:\ProgramData\LabControl\logs\session-<date>.log`; `session.exe --probe` from an
    elevated prompt prints what a process in the session sees. A standard user cannot end
    `session.exe` and cannot read the logs.
-7. **Push the next build from the console** (M2 portion 4) instead of re-running
-   `dev-install.cmd`: publish, select the PC, *Push agent build…*, choose the folder with
-   `agent.exe` and `session.exe` (or `artifacts/win-arm64` straight from `publish-all.sh`)
-   and press *Push*. The Jobs panel shows the files being pulled and the restart; the PC is
-   back within a minute with the tile reading `agent 0.1.0+<build id>` and the job ending
-   *Running … now (was …)*. Both version directories stay under `app\`; older ones are
-   removed. There is no rollback yet (M4): if a pushed build fails to start, install a good
-   one with `dev-install.cmd`.
+7. **Network updates now use the M4 signed recovery flow.** For M4 acceptance, use a
+   clean, installer-owned installation from [the USB Setup instructions](docs/INSTALLER.md);
+   Setup does not migrate the unowned development installation described above. Unlock
+   the console's lab key, select the PC, choose *Push agent build…*, select the published
+   Windows agent/session pair and press *Push*. The console signs the bundle and displays
+   per-PC update state. Acceptance requires ten continuous minutes connected on the new
+   build. An actual crashing or unlinked release has been verified to recover automatically
+   to the previous version on the isolated VM; see the roadmap for fleet acceptance.
 
 Requires the .NET 10 SDK and nothing else. The `net10.0-windows` projects compile on
 macOS and Linux too (they just cannot run there), so a broken Windows build is caught

@@ -28,8 +28,9 @@ public sealed class PowerPlanSetting(PowerPlanPolicy policy, IPowerPlanSystem sy
         _ => throw new ArgumentOutOfRangeException(nameof(policy))
     };
 
-    public SettingChangeResult Apply(SetupSettingsJournal journal) =>
-        journal.ApplyFromCurrent(this, current => Encode(Decode(current) with
+    public SetupCheck Check(SetupSettingsJournal journal) => journal.Check(this, Desired);
+    public SettingChangeResult Apply(SetupSettingsJournal journal) => journal.ApplyFromCurrent(this, Desired);
+    private byte[] Desired(byte[]? current) => Encode(Decode(current) with
         {
             Seconds = policy switch
             {
@@ -38,7 +39,7 @@ public sealed class PowerPlanSetting(PowerPlanPolicy policy, IPowerPlanSystem sy
                 PowerPlanPolicy.Disk => Defaults.SetupDiskAcSeconds,
                 _ => throw new ArgumentOutOfRangeException(nameof(policy))
             }
-        }));
+        });
 
     public byte[] Read()
     {

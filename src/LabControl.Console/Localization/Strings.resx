@@ -311,8 +311,23 @@ exit 0
   <data name="Files.Selected" xml:space="preserve"><value>{0} file(s) selected.</value></data>
   <data name="Files.Targets" xml:space="preserve"><value>Send handouts to {0} selected PC(s)</value></data>
   <data name="Files.Description" xml:space="preserve"><value>Files go to Materials on the student desktop. A file with the same name is replaced after verification. Offline PCs receive the jobs when they reconnect while this console remains open. Keep the source files available and unchanged until delivery finishes.</value></data>
-  <data name="Files.Availability" xml:space="preserve"><value>Available in the simulator. Windows delivery is awaiting managed student account support; current Windows agents report that this job is unsupported.</value></data>
+  <data name="Files.Availability" xml:space="preserve"><value>Windows delivery requires a verified managed student account created by Setup. Personal accounts are preserved. Opening requires the managed student to be signed in.</value></data>
   <data name="Files.OpenHint" xml:space="preserve"><value>Only supported documents and images may open. Programs, scripts and shortcuts are delivered without being run. Opening is simulated on FakeAgent.</value></data>
   <data name="Files.Queued" xml:space="preserve"><value>Queued {0} file delivery job(s). See Jobs for each PC’s result.</value></data>
   <data name="Files.Failed" xml:space="preserve"><value>Could not queue the handouts: {0}</value></data>
+  <data name="Unlock.ReasonUpdate" xml:space="preserve"><value>Unlock the lab key to sign this agent update.</value></data>
+  <data name="Enroll.BuildUsb" xml:space="preserve"><value>Build USB installer…</value></data>
+  <data name="Enroll.BuildFolder" xml:space="preserve"><value>Choose the published Windows build folder</value></data>
+  <data name="Enroll.InstallerWritten" xml:space="preserve"><value>USB installer ready in {0}. Run Setup.exe on each Windows PC.</value></data>
+  <data name="Tile.UpdateStable" xml:space="preserve"><value>Update stable</value></data>
+  <data name="Tile.UpdateProbation" xml:space="preserve"><value>Update on probation</value></data>
+  <data name="Tile.UpdateRolledBack" xml:space="preserve"><value>Rolled back {0}</value></data>
+  <data name="Readiness.antivirus.third_party" xml:space="preserve"><value>Other antivirus detected. If commands or updates fail, check its permissions for LabControl.</value></data>
+  <data name="Readiness.antivirus.inventory_unavailable" xml:space="preserve"><value>Setup could not check installed antivirus. Check protection settings if commands or updates fail.</value></data>
+  <data name="Readiness.network.wol_unverified" xml:space="preserve"><value>Wake-on-LAN still needs a shutdown and wake test on this PC; firmware and wired network support are required.</value></data>
+  <data name="Readiness.network.configuration_warning" xml:space="preserve"><value>Setup could not confirm all network adapter settings. Check this PC before relying on Wake-on-LAN.</value></data>
+  <data name="Readiness.report.unavailable" xml:space="preserve"><value>Installation readiness report could not be read. Run USB repair to check this PC.</value></data>
+  <data name="Readiness.NoWarnings" xml:space="preserve"><value>Setup reports no installation warnings. This is not a network or Wake-on-LAN test.</value></data>
+  <data name="Readiness.InvalidReport" xml:space="preserve"><value>The PC sent an unreadable installation readiness report. Previous warnings were retained.</value></data>
+  <data name="Update.RollbackReported" xml:space="preserve"><value>The previous agent version was restored.</value></data>
 </root>

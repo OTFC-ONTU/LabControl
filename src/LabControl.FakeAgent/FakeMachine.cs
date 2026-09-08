@@ -294,7 +294,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         {
             using var buffer = new MemoryStream();
             await Link.PullFileAsync(request.ManifestReference, request.ManifestSha256, buffer, token);
-            if (!UpdateBundle.TryRead(buffer.ToArray(), request, out manifest, out var problem))
+            if (!UpdateBundle.TryReadVerified(buffer.ToArray(), request, _store.Authority, _version, out manifest, out var problem))
             {
                 return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"The update was refused: {problem}." };
             }

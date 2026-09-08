@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Google.Protobuf;
 using LabControl.Shared.Files;
 using LabControl.Shared.Protocol;
@@ -30,7 +31,7 @@ public sealed class AgentBuild
 
     /// <summary>
     /// The version directory name on the PC: the version number plus the first
-    /// <see cref="Defaults.BuildIdLength"/> hex digits of <c>agent.exe</c>'s SHA-256, so that
+    /// <see cref="Defaults.BuildIdLength"/> hex digits of a domain-separated digest of both executable names and SHA-256 hashes, so that
     /// two builds of the same version number — the normal case while developing — land side
     /// by side, and pushing the very same build twice is recognised as such.
     /// </summary>
@@ -57,10 +58,16 @@ public sealed class AgentBuild
     /// before installing anything. Returns <c>false</c> with a plain-language reason when the
     /// folder is not a build.
     /// </summary>
-    public static bool TryLoad(string folder, string baseVersion, out AgentBuild build, out string error)
+    public static bool TryLoad(string folder, string baseVersion, out AgentBuild build, out string error, string minimumInstalledVersion = "0.0.0")
     {
         build = null!;
         error = string.Empty;
+
+        if (!System.Version.TryParse(minimumInstalledVersion, out _) || !InstallLayout.IsValidVersion(minimumInstalledVersion))
+        {
+            error = "The minimum installed version must be a numeric version.";
+            return false;
+        }
 
         baseVersion = baseVersion.Trim();
         if (!InstallLayout.IsValidVersion(baseVersion) || baseVersion.Contains('+'))
@@ -99,9 +106,13 @@ public sealed class AgentBuild
             files.Add(new AgentBuildFile(Path.GetFileName(path), path, info.Length, FileHash.Sha256HexOfFile(path)));
         }
 
-        var version = baseVersion + "+" + files[0].Sha256[..Defaults.BuildIdLength];
+        // Hash the whole executable bundle: helper-only fixes must not look already installed.
+        // Fixed names cannot contain NUL, making these field separators unambiguous.
+        var identity = "LabControl.AgentBundle.v1\0" + string.Concat(files.OrderBy(file => file.Name, StringComparer.Ordinal)
+            .Select(file => file.Name + "\0" + file.Sha256 + "\0"));
+        var version = baseVersion + "+" + FileHash.Sha256Hex(Encoding.UTF8.GetBytes(identity))[..Defaults.BuildIdLength];
 
-        var manifest = new UpdateManifest { Version = version };
+        var manifest = new UpdateManifest { Version = version, MinInstalledVersion = minimumInstalledVersion };
         foreach (var file in files)
         {
             manifest.Files.Add(new UpdateFile { RelativePath = file.Name, Size = file.Size, Sha256 = file.Sha256 });

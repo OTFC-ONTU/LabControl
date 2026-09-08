@@ -224,6 +224,38 @@ public sealed class SetupSettingsJournalTests : IDisposable
         Assert.Null(error.InnerException);
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public void Interrupted_atomic_owned_creation_requires_proof_for_repair_and_removal(bool proof, bool removal)
+    {
+        var setting = new OwnedCreation { Proof = proof };
+        Assert.Throws<IOException>(() => Open().Apply(setting, Bytes("owned")));
+        Assert.Equal(proof ? SetupStepStatus.Needed : SetupStepStatus.Conflict,
+            Open().Check(setting, _ => Bytes("owned")).Status);
+        Assert.Equal(proof ? (removal ? SettingChangeResult.Restored : SettingChangeResult.AlreadyApplied) : SettingChangeResult.Conflict,
+            removal ? Open().Restore(setting) : Open().Apply(setting, Bytes("owned")));
+        Assert.Equal(proof && removal ? null : Bytes("owned"), setting.Value);
+        Assert.Equal(proof && removal ? 2 : 1, setting.Writes);
+    }
+
+    private sealed class OwnedCreation : ISetupSetting, ISetupOwnedCreation
+    {
+        public string Id => "test.owned-resource";
+        public bool Proof { get; set; }
+        public byte[]? Value { get; private set; }
+        public int Writes { get; private set; }
+        public byte[]? Read() => Value?.ToArray();
+        public bool ConfirmsOwnedCreation(byte[] expected) => Proof && expected.AsSpan().SequenceEqual(Value);
+        public void Write(byte[]? value)
+        {
+            Value = value?.ToArray();
+            if (++Writes == 1) throw new IOException("Crash after atomic native creation.");
+        }
+    }
+
     private static byte[]? Bytes(string? value) => value is null ? null : Encoding.UTF8.GetBytes(value);
 
     private byte[] Encrypt(byte[] plaintext)

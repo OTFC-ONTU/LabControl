@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Security.Cryptography.X509Certificates;
 using System.Diagnostics;
 using LabControl.Shared;
 using LabControl.Shared.Jobs;
@@ -10,30 +11,32 @@ using Microsoft.Extensions.Hosting.WindowsServices;
 
 namespace LabControl.Agent;
 
-/// <summary>
-/// The minimal push-and-restart of M2 (ROADMAP M2, ARCHITECTURE §7.2 steps 2–3, D-33):
-/// pull the manifest and every file it names into <c>ProgramData\LabControl\update\</c>,
-/// verify each hash, run the new <c>agent.exe --version</c> once to prove it runs here and
-/// says what the bundle claims, move it into <c>app\&lt;version&gt;\</c>, write
-/// <c>app\previous</c> and <c>app\current</c>, repoint the service and have it restarted.
-/// No signature, no probation, no rollback — those are M4. The outgoing agent never sends a
-/// <c>JobResult</c>: it is stopped mid-job, the console re-sends the job to the new version,
-/// and the new version answers because it <i>is</i> the version the job names. Anything
-/// that fails before the restart is undone and reported by the outgoing agent.
-/// </summary>
+/// <summary>Verifies lab-signed manifests and executable hashes, installs a new version,
+/// arms external probation recovery, then restarts the service. A re-sent job confirms
+/// the running version while the independent monitor decides whether probation passed.</summary>
 internal sealed class AgentUpdater
 {
+    private static readonly SemaphoreSlim OperationGate = new(1, 1);
     private readonly AgentLink _link;
+    private readonly X509Certificate2 _authority;
     private readonly ILogger _log;
     private readonly InstallLayout _layout = InstallLayout.Default;
 
-    public AgentUpdater(AgentLink link, ILogger log)
+    public AgentUpdater(AgentLink link, ILogger log, X509Certificate2 authority)
     {
         _link = link;
+        _authority = authority;
         _log = log;
     }
 
     public async Task<JobResult> RunAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
+    {
+        if (!await OperationGate.WaitAsync(0, token)) return Fail(job, "Another update operation is running.");
+        try { return await RunCoreAsync(job, report, token); }
+        finally { OperationGate.Release(); }
+    }
+
+    private async Task<JobResult> RunCoreAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
     {
         if (!SelfUpdateRequest.TryParse(job, out var request, out var error))
         {
@@ -41,23 +44,6 @@ internal sealed class AgentUpdater
         }
 
         var running = Program.InstalledVersion;
-
-        // ---- the re-sent job after the restart, or the same build pushed twice
-
-        if (string.Equals(request.Version, running, StringComparison.Ordinal))
-        {
-            var previous = _layout.ReadPrevious();
-            var pruned = PruneOldVersions(running, previous);
-            var message = previous is null || previous == running
-                ? $"Running {running} now."
-                : $"Running {running} now (was {previous}; app\\previous still names it).";
-            if (pruned.Count > 0)
-            {
-                message += $" Removed older version director{(pruned.Count == 1 ? "y" : "ies")}: {string.Join(", ", pruned)}.";
-            }
-
-            return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = message };
-        }
 
         var executable = Environment.ProcessPath;
         if (executable is null || _layout.VersionOf(executable) is null)
@@ -73,8 +59,11 @@ internal sealed class AgentUpdater
         {
             using var buffer = new MemoryStream();
             await _link.PullFileAsync(request.ManifestReference, request.ManifestSha256, buffer, token);
-            if (!UpdateBundle.TryRead(buffer.ToArray(), request, out manifest, out var problem))
+            if (!UpdateBundle.TryReadVerified(buffer.ToArray(), request, _authority, running, out manifest, out var problem))
             {
+                // Fixed teacher-facing event: never echo signed or untrusted manifest fields here.
+                _link.Report(Event.Types.Severity.Warning, "update.refused",
+                    "The update failed signature or compatibility validation. The running version was kept; see the job result.");
                 return Fail(job, $"The update was refused: {problem}.");
             }
         }
@@ -82,6 +71,46 @@ internal sealed class AgentUpdater
         {
             return Fail(job, ex.Message);
         }
+
+        // Share the installer lock through every filesystem/service mutation. Service
+        // cancellation does not await detached jobs, so uninstall must exclude them.
+        FileStream installationLease;
+        try
+        {
+            token.ThrowIfCancellationRequested();
+            installationLease = new FileStream(Path.Combine(Defaults.AgentDataDirectory, Defaults.SetupLockFileName),
+                FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch (IOException) { return Fail(job, "Setup, removal or another privileged operation is running."); }
+        using var heldInstallationLease = installationLease;
+        token.ThrowIfCancellationRequested();
+
+        // ---- the re-sent job after the restart, or the same build pushed twice
+
+        if (string.Equals(request.Version, running, StringComparison.Ordinal))
+        {
+            var trial = new UpdateTrial(Defaults.AgentDataDirectory).Read();
+            if (trial is not null && trial.Version == running && trial.Phase == UpdateTrialPhase.OnProbation)
+                return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0,
+                    Message = $"Running {running} on probation until {trial.Deadline:u}; external rollback is armed." };
+            var previous = _layout.ReadPrevious();
+            var pruned = PruneOldVersions(running, previous);
+            var message = previous is null || previous == running
+                ? $"Running {running} now."
+                : $"Running {running} now (was {previous}; app\\previous still names it).";
+            if (pruned.Count > 0)
+            {
+                message += $" Removed older version director{(pruned.Count == 1 ? "y" : "ies")}: {string.Join(", ", pruned)}.";
+            }
+
+            return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = message };
+        }
+
+        var pendingTrial = new UpdateTrial(Defaults.AgentDataDirectory).Read();
+        if (pendingTrial?.Phase is UpdateTrialPhase.OnProbation or UpdateTrialPhase.RollbackPending)
+            return Fail(job, "Another update is still on probation or awaiting rollback.");
+        if (Directory.Exists(_layout.VersionDirectory(request.Version)))
+            return Fail(job, "That version directory already exists; use a distinct build version to preserve recovery files.");
 
         // ---- the files, into the staging directory
 
@@ -174,6 +203,17 @@ internal sealed class AgentUpdater
 
         // ---- markers and the service
 
+        token.ThrowIfCancellationRequested();
+        try
+        {
+            UpdateRecovery.Arm(job.Id, request.Version, running, executable, message => _log.LogWarning("{Message}", message));
+        }
+        catch (Exception ex)
+        {
+            TryDelete(target);
+            return Fail(job, $"Could not arm external update recovery: {ex.Message}. The running version was kept.");
+        }
+
         var previousMarker = _layout.ReadPrevious();
         var newExecutable = _layout.AgentExecutable(request.Version);
 
@@ -184,14 +224,14 @@ internal sealed class AgentUpdater
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Revert(running, previousMarker, executable, target);
+            Revert(job.Id, running, previousMarker, executable, target);
             return Fail(job, $"Could not write app\\current and app\\previous: {ex.Message}. Nothing was changed.");
         }
 
         var repoint = ServiceControl.SetBinaryPath(newExecutable);
         if (repoint is not null)
         {
-            Revert(running, previousMarker, executable, target);
+            Revert(job.Id, running, previousMarker, executable, target);
             return Fail(job, $"Could not repoint the service: {repoint}. Nothing was changed.");
         }
 
@@ -201,7 +241,7 @@ internal sealed class AgentUpdater
         var spawn = ServiceControl.SpawnRestart(executable);
         if (spawn is not null)
         {
-            Revert(running, previousMarker, executable, target);
+            Revert(job.Id, running, previousMarker, executable, target);
             return Fail(job, $"{spawn}. The service was pointed back at {running}; nothing was changed.");
         }
 
@@ -218,7 +258,7 @@ internal sealed class AgentUpdater
         }
 
         _log.LogError("{Pc}: the service was not restarted within {Seconds:0} s; putting {Running} back", _link.Name, Defaults.ServiceRestartWait.TotalSeconds, running);
-        Revert(running, previousMarker, executable, target);
+        Revert(job.Id, running, previousMarker, executable, target);
         return Fail(job, $"The service was not restarted within {Defaults.ServiceRestartWait.TotalSeconds:0} s. It was pointed back at {running} and the new version removed; look at the agent log on the PC.");
     }
 
@@ -263,32 +303,36 @@ internal sealed class AgentUpdater
         return new Preflight(version, null);
     }
 
-    private void Revert(string running, string? previousMarker, string runningExecutable, string newDirectory)
+    private void Revert(string jobId, string running, string? previousMarker, string runningExecutable, string newDirectory)
     {
-        var repoint = ServiceControl.SetBinaryPath(runningExecutable);
-        if (repoint is not null)
-        {
-            _log.LogError("{Pc}: could not point the service back at {Executable}: {Problem}", _link.Name, runningExecutable, repoint);
-        }
-
         try
         {
-            _layout.WriteCurrent(running);
-            if (previousMarker is null)
+            var trial = new UpdateTrial(Defaults.AgentDataDirectory);
+            var restored = trial.RollBack(DateTimeOffset.UtcNow, true, state =>
             {
-                _layout.ClearPrevious();
-            }
-            else
+                if (state.Previous != running)
+                    throw new InvalidOperationException("The pending update does not belong to this running version.");
+                var repoint = ServiceControl.SetBinaryPath(runningExecutable);
+                if (repoint is not null)
+                    throw new IOException("Could not restore the service binary path: " + repoint);
+                _layout.WriteCurrent(running);
+                if (previousMarker is null) _layout.ClearPrevious();
+                else _layout.WritePrevious(previousMarker);
+            }, jobId);
+            // Never delete an executable while the service still points to it, or
+            // after a concurrent recovery changed the trial identity. A failed callback
+            // leaves RollbackPending for the external task to finish.
+            if (restored)
             {
-                _layout.WritePrevious(previousMarker);
+                TryDelete(newDirectory);
+                if (trial.Read() is { } state) UpdateRecovery.FinalizeTerminal(state);
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
-            _log.LogError(ex, "{Pc}: could not restore app\\current / app\\previous: {Message}", _link.Name, ex.Message);
+            _log.LogError("{Pc}: update rollback is incomplete; keeping both executables for external recovery: {Message}",
+                _link.Name, ex.Message);
         }
-
-        TryDelete(newDirectory);
     }
 
     /// <summary>Removes every version directory but the running one and <c>app\previous</c>, so pushes do not pile up (D-33).</summary>

@@ -144,6 +144,10 @@ footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
 <p>The first lab has <strong>14</strong> PCs, but nothing may assume that number: the software is meant
 to move to other labs, so it is designed and load-tested for <strong>up to 30</strong> student PCs
 and one console. The count comes from <code>lab.json</code>, never from a constant.</p>
+<p>This picture is one active lab. Planned M5 adds several saved lab profiles per teacher
+device, selected one at a time (§3.9, <code>D-53</code>); inactive rooms have no live session. Each
+room retains its own identity and mostly stable roster. Different teachers may use
+different rooms concurrently; one console never controls two rooms concurrently.</p>
 <p>Assumptions to verify on site before M1 (put results in DECISIONS.md D-10):</p>
 <ul>
 <li>Wi-Fi and the wired hub are the <strong>same IP subnet / same L2 broadcast domain</strong>
@@ -261,8 +265,9 @@ able to open the lab if he is ill on an exam day. Holders are added and removed 
 console (adding one needs an existing holder's passphrase; removing one drops that
 holder's wrapping and does not require the removed person's cooperation — note that a
 removed holder who kept an <em>old copy</em> of the file can still open that old copy, which is
-why revocation of what the key has signed, not re-wrapping, is the answer to a departed
-colleague). Every
+why removing a wrapping cannot withdraw that person's CA authority. Revoking one leaf
+also cannot prevent a retained CA key from issuing another. Planned M5 separates
+ordinary classroom access from CA ownership (§3.9, <code>D-53</code>)). Every
 holder is equal — there is no &quot;owner&quot; wrapping that outranks the others — and the list of
 holder <em>names</em> is stored in the clear so you can see who can open the lab without opening
 it yourself.</p>
@@ -342,6 +347,10 @@ time (§3.7). The revocation list is pushed to every agent when it connects, so 
 stolen laptop stops working as soon as the lab has seen the new console.</li>
 </ol>
 <h3 id="several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time<a class="anchor" href="#several-teacher-machines-one-at-a-time" aria-label="Link to this section">#</a></h3>
+<p>The following is the current single-lab/full-owner model and its intended handover
+behavior. M5 extends it with saved lab profiles and separate ordinary teacher access
+(§3.9). The audit gaps in device revocation, ownership reporting, enrollment-code copies
+and clock-dependent takeover are M5 acceptance work, not verified guarantees here.</p>
 <p>Replacement is the disaster case. The everyday case is <strong>alternation</strong>: the owner drives
 the lab from a MacBook on some days, a colleague drives it from the Windows PC at the
 teacher's desk on others, and both machines keep their console installed permanently.
@@ -519,7 +528,64 @@ voided), otherwise the backup — and the main window stays shut until it is don
 <p>The console shows one banner — <em>&quot;N certificates need renewing — unlock the lab key&quot;</em> — for
 both cases, so the yearly and five-yearly chores are the same gesture as enrolment. A
 leaf never outlives the authority that signed it.</p>
+<h3 id="saved-labs-and-one-active-room-planned-m5-d-53">3.9 Saved labs and one active room (planned M5, D-53)<a class="anchor" href="#saved-labs-and-one-active-room-planned-m5-d-53" aria-label="Link to this section">#</a></h3>
+<p>The teacher imports several lab files once and selects a room for each lesson from
+<em>My labs</em>. A room's <code>lab_id</code> and pinned authority are stable; neither its file name nor
+its IP address is its identity. Each lab holds up to 30 PCs, independently of the number
+of saved profiles. Import does not connect. Startup shows the chooser; selecting a lab
+activates it, <em>Disconnect</em> returns to the chooser, and selecting another lab releases
+the old session before starting the new one. No app restart or daily backup restore.
+Administrators use the same chooser: <em>Add labs…</em> accepts <code>.lcbak</code> backups directly,
+including multi-file and mixed imports, and adds administrator profiles after unlocking
+each archive. The backup is not limited to disaster recovery (<code>D-54</code>).</p>
+<p>The registry contains only saved metadata for inactive rooms. Each profile owns its
+trust, device identity, roster/layout, scripts/catalog and job history. Active networking,
+video buffers and input belong to a single disposable session. On departure stop old
+beacons, streams and connection attempts, invalidate old UI actions/callbacks, and never
+accept peers from an inactive lab. Import/refresh is transactional per file, deduplicated
+by identity and cannot downgrade trust/revocations or erase local outcomes. Existing
+single-lab data migrates without re-enrolling student PCs or replacing its identity.</p>
+<p>A <strong>lab file</strong> is a versioned, authenticated room/access distribution artifact. It
+carries public trust and a roster/layout snapshot and supports initial authorization of
+the teacher's device, batched for several labs and usable without internet. Ordinary
+teacher files do not contain the CA private key, recovery material or student enrollment
+codes. Each device needs its own revocable identity; a copied file is not a reason to
+share one private key across teachers. Exact file format and the offline authorization
+exchange must be specified before implementation. This is a new flow, not a rename of
+the existing <code>.lcbak</code> file: that archive remains a full administrator backup and also
+serves as an input for adding a switchable lab. Access level is per profile. Importing
+a backup for an existing teacher profile upgrades access after explicit unlock while
+preserving its identity/history; importing a teacher file does not downgrade it. Switching
+never restores the archive again or unlocks its CA: routine control uses the local device
+identity, privileged actions require the lab-key unlock, and departure locks that key.
+An existing full-owner copy cannot be downgraded by relabeling it; retained CA keys keep
+their authority. The migration UI must explain this limit.</p>
+<p>The administrator retains issuance, enrollment and update-signing authority. Device
+revocation must remain effective across leaf renewal once delivered to agents; show
+pending propagation for unreachable PCs. Stale admin backups must not silently restore
+spent enrollment codes as usable. Do not claim immediate global revocation on an isolated
+LAN with disconnected devices, or require a continuously running owner/server for lessons.
+Adding a backup for switching does not automatically activate its pending enrollment
+codes; retain history and use an explicit recovery/issuer-coordination flow (<code>D-54</code>).
+Independent offline CA owners cannot promise global single-use from local journals alone.
+Teacher files require a concrete initial device-authorization flow; public metadata
+alone cannot grant a device a signed identity. Existing valid access needs no owner
+present for daily switching, while expired/revoked access has a separate recovery path.</p>
+<p>Switching an idle lab targets a responsive saved mosaic within 2 seconds and connection
+of all reachable running agents within 15 seconds on a supported healthy LAN. Running
+scripts/transfers/updates require explicit safe departure handling and retained result
+ownership; keeping an inactive lab secretly connected is not a solution. M6 extends the
+same contract to lock/broadcast/exam policy expiry and work collection. Truthful room
+ownership and takeover resilient to allowed clock skew are M5 requirements. Detailed
+acceptance and failure drills are in ROADMAP M5; none of this section is implemented yet.
+The timing goals assume graceful idle departure and already authorized access/network
+permissions; first import, OS consent and dead-peer timeout recovery are measured
+separately. Desktop packaging also requires network readiness and application-side file
+activation, as documented in INSTALLER and D-54.</p>
 <h2 id="data-on-the-console">4. Data on the console<a class="anchor" href="#data-on-the-console" aria-label="Link to this section">#</a></h2>
+<p>The layout below is the current single-lab profile. M5 will add a local registry and
+isolated per-lab profiles (§3.9), with a migration preserving this data. Paths and new
+format constants will be specified in <code>Defaults.cs</code> during implementation.</p>
 <p><code>~/.labcontrol/</code> (macOS/Linux) or <code>%APPDATA%\LabControl\</code> (Windows):</p>
 <pre><code>lab-key.lck       the lab certificate authority, encrypted (§3.2). The one file that
                   must survive. Never leaves this directory unencrypted.
@@ -565,8 +631,8 @@ it holds no password or profile path. Matching SID evidence gates account/profil
 The Windows preparation component now connects this journal to local SAM creation
 (<code>D-46</code>): <code>AccountSetupScope</code> enforces private storage and an exclusive file lock, then
 <code>StudentAccountProvisioning</code> records intent before <code>WindowsStudentAccountSystem</code> creates
-a disabled account and verifies its SID. It is not yet called by Setup’s executable
-pipeline. The protected original-settings journal core is now built (<code>D-47</code>):
+a disabled account and verifies its SID. The M4 executable integration now calls this
+component before final membership/activation. The protected original-settings journal core is now built (<code>D-47</code>):
 <code>SetupSettingsJournal</code> stores original/applied values and operation phases in encrypted
 <code>setup-settings.json</code>, bound to the installation id with machine-scope DPAPI by
 <code>AccountSetupScope</code>. It restores only confirmed changes whose values still match,
@@ -577,9 +643,18 @@ types are preserved by refusal; no account/sign-in keys are included. AC power t
 are also built (<code>D-49</code>): snapshots include the active scheme GUID, fixed sleep/display/disk
 settings and original seconds. Optional journal activation confirms the native refresh
 before completion, including interrupted restoration. A changed active scheme is a
-conflict; Setup never follows it by editing another scheme. Other settings/sign-in
-adapters, activation and group configuration remain pending; existing dev installations
-gain no ownership evidence from these components.</p>
+conflict; Setup never follows it by editing another scheme. Windows Update active hours
+are built (<code>D-50</code>) as one enable/start/end tuple: edits to any member preserve all three.
+The native adapter may create the fixed policy leaf, never deletes the tree, and detects
+observed races around each value write. Partial writes require review; read-back alone
+does not prove effective restart behavior. The LSA autologon secret adapter is built
+(<code>D-51</code>): saved account mode gates all access, matching recorded SID gates native reads
+and writes, and the DPAPI journal preserves original absent/empty/raw UTF-16 state.
+The integrated sign-in sequence uses a larger protected Winlogon/LSA tuple (<code>D-52</code>),
+with disable-first and enable-last ordering; the standalone secret adapter is not mixed
+into that sequence. Membership and activation, hostname/firewall/NIC/Defender/hibernation
+and selected session policies are now implemented for integration. Existing development
+installations gain no ownership by name. Windows runtime acceptance remains pending.</p>
 <pre><code>C:\Program Files\LabControl\   app\&lt;version&gt;\  agent.exe, session.exe — one directory per
                                                installed version, kept side by side (D-19);
                                                a pushed build is named 0.1.0+1a2b3c4d — the
@@ -587,10 +662,15 @@ gain no ownership evidence from these components.</p>
                                app\current     names the version the service runs
                                app\previous    names the version to roll back to
                                setup.exe       kept for repair
+                               Uninstall.exe   standalone removal without USB or console
 C:\ProgramData\LabControl\     agent.json  {schema_version, agent_id, number, lab_id,
                                             ca_cert (public), mac, console_host?}
                                agent.key   the PC's own private key, DPAPI-protected (machine scope)
                                agent.crt   the PC's certificate, signed by the lab CA
+                               installation.json   recorded installer ownership and account mode
+                               setup-settings.json DPAPI-protected original-settings journal
+                               setup-readiness.json fixed nonsecret antivirus/network advisories
+                               update-trial.json   durable external probation/recovery state
                                update\     staging area for an incoming version bundle,
                                            emptied once the new version proves itself (§7)
                                logs\       rolling agent log (7 days)
@@ -639,7 +719,7 @@ limitation. Source files must remain unchanged and available until all jobs comp
 </tr>
 <tr>
 <td>Full view + control</td>
-<td>Double-click a tile: the console sends <code>VideoControl{full}</code> to that one PC and gets native-resolution dirty-rectangle JPEG deltas (bounding box per frame, keyframe every 5 s or on request) up to 20 fps under a 24 Mbit/s cap; closing the window goes back to the thumbnail. With <em>Control</em> on, the window's mouse and keyboard become <code>Input</code> messages — text as Unicode, shortcuts and command keys by physical position — relayed by the service down the helper's pipe to <code>SendInput</code> on the input desktop; Ctrl+Alt+Del is <code>SendSAS</code> from the service (PROTOCOL &quot;Input&quot;, <code>D-36</code>). Optional H.264 via Media Foundation later (ROADMAP M6).</td>
+<td>Double-click a tile: the console sends <code>VideoControl{full}</code> to that one PC and gets native-resolution dirty-rectangle JPEG deltas (bounding box per frame, keyframe every 5 s or on request) up to 20 fps under a 24 Mbit/s cap; closing the window goes back to the thumbnail. With <em>Control</em> on, the window's mouse and keyboard become <code>Input</code> messages — text as Unicode, shortcuts and command keys by physical position — relayed by the service down the helper's pipe to <code>SendInput</code> on the input desktop; Ctrl+Alt+Del is <code>SendSAS</code> from the service (PROTOCOL &quot;Input&quot;, <code>D-36</code>). Optional H.264 via Media Foundation later (ROADMAP M7).</td>
 </tr>
 <tr>
 <td>Wake-on-LAN</td>
@@ -839,13 +919,13 @@ the PC itself, with nobody in the room.</li>
 </ol>
 <p>The session helper is a child process and is never locked, so it is simply replaced and
 respawned along with the service.</p>
-<p><strong>What exists since M2</strong> (<code>D-33</code>): steps 2 and 3 without the signature, plus the rule that
-the new version reports the result — the console's development action <em>Push agent build…</em>
-sends a published <code>agent.exe</code> + <code>session.exe</code>; the agent pulls them under their hashes,
-runs the new <code>agent.exe --version</code> once as a preflight, installs side by side, repoints the
-service and has it restarted by <code>agent.exe --restart-service</code> from the outgoing version.
-Steps 4 and 5 — probation, rollback, the scheduled task — are M4; until then a build that
-starts and then crashes leaves the PC offline with the previous version still on disk.</p>
+<p><strong>M4 integration (<code>D-52</code>).</strong> Manifest signing, pinned-CA verification, the durable trial
+journal, external task/service recovery and the live fleet state are implemented. A task
+is bound to its exact job; the deadline includes two service-restart waits beyond the ten
+continuous linked minutes. Acceptance resets recovery to ordinary repeated service restart
+and clears the matching task/markers. A previous agent without this code still performs
+its first bootstrap push with the older M2 behavior. Windows crash/no-link acceptance is
+pending and must not be inferred from the shared state-machine tests.</p>
 <h3 id="updating-the-console">7.3 Updating the console<a class="anchor" href="#updating-the-console" aria-label="Link to this section">#</a></h3>
 <p>The console is an interactive application on the teacher's own machine, so its binary is
 replaced the ordinary way: quit, replace the self-contained publish, start. There is no
@@ -859,6 +939,15 @@ once; this is a one-time <code>xattr -d com.apple.quarantine</code>, documented 
 than engineered around.</p>
 <h2 id="console-ui-avalonia">8. Console UI (Avalonia)<a class="anchor" href="#console-ui-avalonia" aria-label="Link to this section">#</a></h2>
 <ul>
+<li><strong>Desktop installation (planned M5, D-54)</strong>: simple self-contained teacher packages
+copy/register the application, launchers and lab-file/backup opening. They install no
+agent service, background server or student-machine preparation. The gRPC server
+remains embedded in the interactive console; see INSTALLER's teacher-console section.</li>
+<li><strong>My labs and active-room selector (planned M5)</strong>: bulk-add lab files, choose exactly
+one room, switch or disconnect without restarting. Inactive entries show cached
+metadata, not live presence; the active room is named beside every set of controls.
+The same import accepts administrator backups, showing access level per lab; file
+associations forward to this import flow rather than opening another control session.</li>
 <li><strong>Lab view</strong>: one tile per PC in a grid mirroring the physical room layout (drag to
 arrange; saved in <code>lab.json</code>). Tile = live thumbnail + number + status (online /
 offline / sleeping / locked / in exam mode / broadcasting) + logged-on user. The grid
@@ -884,7 +973,7 @@ right, <em>Run on selected PCs</em> sending the editor's text to the lab view's 
 draft and selection. The editor has line numbers, token highlighting and local parse
 diagnostics (PowerShell; basic checks only for cmd), and blocks parse errors on run.
 Missing built-in application scripts can be imported explicitly (<code>D-39</code>).</li>
-<li><strong>Packages</strong> panel (M6): manage the catalog; &quot;Install on all missing&quot;.</li>
+<li><strong>Packages</strong> panel (M7): manage the catalog; &quot;Install on all missing&quot;.</li>
 <li><strong>Settings</strong>: lab key (export backup, reprint the recovery code, change the
 passphrase), teacher machines (this one, others seen, <em>Take over</em>, revoke behind a
 confirmation — §3.7), enrollment codes,
@@ -968,16 +1057,17 @@ college's job), a student on a phone hotspot (the internet controls of §6.2 cov
 lab's wire, not the student's pocket), and network attackers on the lab LAN beyond the
 students themselves.</p>
 <h2 id="non-goals">10. Non-goals<a class="anchor" href="#non-goals" aria-label="Link to this section">#</a></h2>
-<p>Multi-lab, two consoles <em>sharing</em> one lab at the same time (§3.7.2 — alternating teacher
+<p>Simultaneous control of multiple labs from one console (saved profiles and sequential
+switching are planned M5), two consoles <em>sharing</em> one lab at the same time (§3.7.2 — alternating teacher
 machines are in scope, a split room is tolerated, a shared room is not), cloud relay, mobile
 console, Linux/macOS student agents
 (possible later; keep <code>LabControl.Agent</code> behind an <code>IPlatformAgent</code> seam but do not
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-09-07 23:34 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-08 08:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#three-separate-identities">3.1 Three separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#three-separate-identities">3.1 Three separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl3"><a href="#saved-labs-and-one-active-room-planned-m5-d-53">3.9 Saved labs and one active room (planned M5, D-53)</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>
 </body>
 </html>

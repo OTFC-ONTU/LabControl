@@ -22,6 +22,7 @@ public sealed class AgentConnection
     {
         _abort = abort;
         Hello = hello;
+        UpdateState = hello.UpdateState?.Clone() ?? new UpdateState();
         Machine = machine;
         CertificateSerial = certificateSerial;
         RemoteAddress = remoteAddress;
@@ -30,6 +31,8 @@ public sealed class AgentConnection
     }
 
     public Hello Hello { get; }
+
+    public UpdateState UpdateState { get; private set; }
 
     public MachineRecord Machine { get; }
 
@@ -90,6 +93,30 @@ public sealed class AgentConnection
     public bool ApplyEvent(Event reported)
     {
         var code = reported.Code;
+        if (code == LabControl.Shared.Setup.SetupReadiness.EventCode)
+        {
+            try
+            {
+                var snapshot = LabControl.Shared.Setup.SetupReadiness.Parse(reported.Message);
+                if ((Machine.SetupReadinessCodes ?? []).SequenceEqual(snapshot.Codes)) return false;
+                Machine.SetupReadinessCodes = snapshot.Codes;
+                return true;
+            }
+            catch (Exception ex) when (ex is System.IO.InvalidDataException or System.Text.Json.JsonException
+                or LabControl.Shared.Persistence.SchemaVersionException) { return false; }
+        }
+        if (code == LabControl.Shared.Setup.UpdateTerminalReport.RolledBackCode)
+        {
+            if (!LabControl.Shared.Setup.InstallLayout.IsValidVersion(reported.Message)) return false;
+            var changed = UpdateState.Phase != UpdateState.Types.Phase.RolledBack || UpdateState.FailedVersion != reported.Message;
+            UpdateState = new UpdateState { Phase = UpdateState.Types.Phase.RolledBack, FailedVersion = reported.Message };
+            return changed;
+        }
+        if (code == "update.stable")
+        {
+            UpdateState = new UpdateState { Phase = UpdateState.Types.Phase.Stable };
+            return true;
+        }
         if (code.StartsWith("capture.", StringComparison.Ordinal))
         {
             var reason = code["capture.".Length..];

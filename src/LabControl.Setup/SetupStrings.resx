@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Title" xml:space="preserve"><value>LabControl Setup</value></data>
+  <data name="Number" xml:space="preserve"><value>PC number</value></data>
+  <data name="CreateStudent" xml:space="preserve"><value>Create student account and enable automatic sign-in</value></data>
+  <data name="Changes" xml:space="preserve"><value>Setup installs the classroom agent, names this PC, configures firewall discovery, power and Wake-on-LAN, and adds a Defender exclusion. With student creation enabled, privacy, browser first-run and OneDrive sign-in notifications are suppressed by machine policy, including for other users. Administrator elevation asks for a username and password before the administrator tile is hidden; this machine policy affects all users. Local password length/complexity policy may be relaxed if required to create the student. Previous settings are recorded for removal. Personal accounts and files are preserved.</value></data>
+  <data name="Install" xml:space="preserve"><value>Install / repair</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Reboot" xml:space="preserve"><value>Installation completed. Reboot now to apply the computer name and power settings?</value></data>
+  <data name="RebootCountdown" xml:space="preserve"><value>Installation completed. Windows will restart in {0} seconds to apply the computer name and power settings. Choose Later to keep working and restart manually.</value></data>
+  <data name="RebootNow" xml:space="preserve"><value>Restart now</value></data>
+  <data name="RebootLater" xml:space="preserve"><value>Later</value></data>
+  <data name="UsbNumberNotSaved" xml:space="preserve"><value>Installation completed, but the next PC number could not be saved to the USB drive. Select the number manually on the next PC.</value></data>
+  <data name="Completed" xml:space="preserve"><value>Installation verified. LabControl is ready; restart Windows to apply pending settings.</value></data>
+  <data name="Failed" xml:space="preserve"><value>Installation did not finish. The console window and setup.log in the LabControl data directory identify the failed step. Recorded changes were kept so repair or removal can retry.</value></data>
+  <data name="RemoveStudent" xml:space="preserve"><value>Delete the student account and its entire profile created by this installation? This permanently deletes the student's files.</value></data>
+  <data name="Uninstall" xml:space="preserve"><value>Remove LabControl from this computer? Personal accounts and files will be kept. Recorded settings will be restored when they have not been edited later.</value></data>
+  <data name="Unknown" xml:space="preserve"><value>unknown</value></data>
+  <data name="NicInventory" xml:space="preserve"><value>[Network] {0}; interface {1}; hardware {2}; MAC {3}; driver {4} {5}</value></data>
+  <data name="WakeInventoryUnavailable" xml:space="preserve"><value>[Warning] Windows could not read all Ethernet hardware capabilities. Review the Network steps in setup.log and the network driver settings.</value></data>
+  <data name="WakeAdapter" xml:space="preserve"><value>[Wake-on-LAN] Physical Ethernet: {0}, MAC {1}. The console will use this address after the agent restarts.</value></data>
+  <data name="WakeAdapterUnavailable" xml:space="preserve"><value>[Warning] Wake-on-LAN has no unambiguous physical Ethernet target ({0}). Check the Ethernet connection and disable unused adapters before running repair.</value></data>
+  <data name="WakeNeedsAttention" xml:space="preserve"><value>[Warning] Wake-on-LAN needs attention: some hardware capabilities could not be configured. Review the Network steps above and setup.log. Restart Windows, enable Wake-on-LAN in BIOS/UEFI, then test wake from shutdown using the teacher console on the same LAN.</value></data>
+  <data name="WakeWindowsConfigured" xml:space="preserve"><value>[Wake-on-LAN] Supported Windows settings verified. Restart Windows, enable Wake-on-LAN in BIOS/UEFI, then test wake from shutdown using the teacher console on the same LAN. Physical wake has not been tested by Setup.</value></data>
+  <data name="PushConfigured" xml:space="preserve"><value>[Network updates] Agent service, discovery firewall rules and service recovery are configured. Keep the teacher console running on this LAN; unlock its lab key and send an agent update from the console. Acceptance requires ten continuous minutes of connection, with automatic recovery if the new agent fails.</value></data>
+  <data name="UninstallFailed" xml:space="preserve"><value>Removal did not finish. Review the console message and retry from Installed apps after resolving the problem. Ownership history was retained; any previously confirmed student removal will resume on retry.</value></data>
+  <data name="OperationFailed" xml:space="preserve"><value>Setup could not complete this operation. Review the console message before retrying. Unresolved ownership history was preserved.</value></data>
+  <data name="StudentRemovalResuming" xml:space="preserve"><value>Resuming student removal previously confirmed for this installation.</value></data>
+  <data name="SignInSidBaselineUnknown" xml:space="preserve"><value>[Warning] This installation did not record the original Windows automatic sign-in SID. AutoLogonSID is preserved; its original value cannot be restored automatically. Other recorded sign-in settings retain their protected restoration history.</value></data>
+  <data name="PendingHostnameChange" xml:space="preserve"><value>Windows is waiting for a previous PC name change. Restart Windows, then run Setup again.</value></data>
+</root>

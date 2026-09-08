@@ -223,7 +223,8 @@ public sealed class ActiveLabController : IAsyncDisposable
                     if (_remintPrompt is not null && await _remintPrompt(opened, token).ConfigureAwait(false))
                     {
                         token.ThrowIfCancellationRequested();
-                        var reminted = _bootstrap.Remint(opened.Vault, opened.Document);
+                        // Only an administrator profile is ever asked to re-mint; a teacher leaf is renewed through a request.
+                        var reminted = _bootstrap.Remint(opened.Vault!, opened.Document);
                         instance.Dispose();
                         instance = reminted;
                         _log.LogInformation("Console leaf of lab {LabId} re-minted; new serial {Serial}", labId, instance.CertificateSerial);
@@ -286,7 +287,7 @@ public sealed class ActiveLabController : IAsyncDisposable
                 }
                 else
                 {
-                    opened?.Vault.Dispose();
+                    opened?.Vault?.Dispose();
                     instance?.Dispose();
                 }
 

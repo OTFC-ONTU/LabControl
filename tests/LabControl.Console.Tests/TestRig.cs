@@ -67,7 +67,7 @@ internal sealed class TestConsole : IAsyncDisposable
     {
         var directory = TempDirectory();
         var document = JsonStore.Parse<LabKeyDocument>(
-            JsonStore.Serialize(existing.Session.Vault.Document, LabKeyDocument.Migrations), Defaults.LabKeyFileName, LabKeyDocument.Migrations);
+            JsonStore.Serialize(existing.Session.Vault!.Document, LabKeyDocument.Migrations), Defaults.LabKeyFileName, LabKeyDocument.Migrations);
 
         Assert.True(LabKey.TryUnlock(document, Passphrase, out var lab));
 
@@ -80,6 +80,52 @@ internal sealed class TestConsole : IAsyncDisposable
 
         return new TestConsole(directory, await OpenAsync(directory, lab, instanceName, null, port), null);
     }
+
+    /// <summary>
+    /// A teacher device for an existing lab (M5, D-56): the administrator exports a lab file,
+    /// this device imports it, writes its request, the administrator approves it on its
+    /// running session, the grant is imported here, and the lab opens without a key.
+    /// </summary>
+    public static async Task<TestConsole> JoinAsTeacherAsync(TestConsole admin, string instanceName, int port = 0)
+    {
+        var directory = TempDirectory();
+        var files = TempDirectory();
+        var adminBootstrap = admin.Bootstrap;
+        var labFile = Path.Combine(files, "room.lclab");
+        Assert.True(adminBootstrap.TryExportLabFile(admin.Session, labFile, out var error), error);
+
+        var bootstrap = new ConsoleBootstrap(new ConsoleOptions
+        {
+            DataDirectory = directory,
+            Port = port,
+            BeaconPort = BeaconPort,
+            BindAddress = IPAddress.Loopback,
+        }, TestLogging.Factory, () => new FileSecretProtector());
+        var imports = new LabImports(bootstrap, _ => Task.FromResult<BackupSecret?>(null), instanceName, TestLogging.Factory.CreateLogger("imports"));
+
+        var added = Assert.Single(await imports.ImportAsync([labFile]));
+        Assert.True(added.Ok, added.Message);
+        var labId = admin.Session.LabId;
+
+        var requestPath = Path.Combine(files, imports.Devices.SuggestRequestFileName(labId));
+        imports.Devices.WriteRequest(labId, requestPath);
+
+        var adminDevices = new DeviceAccess(adminBootstrap, id => string.Equals(id, labId, StringComparison.OrdinalIgnoreCase) ? admin.Session : null);
+        var lab = admin.Session.Vault!.Peek() ?? throw new InvalidOperationException("the administrator's key must be unlocked to approve");
+        var approved = adminDevices.ApproveRequest(requestPath, lab);
+
+        var granted = Assert.Single(await imports.ImportAsync([approved.GrantPath]));
+        Assert.True(granted.Ok, granted.Message);
+
+        var opened = bootstrap.OpenExisting(labId);
+        Assert.Null(opened.Vault);
+        var session = bootstrap.Build(opened, opened.Instance);
+        await session.StartAsync();
+        return new TestConsole(directory, session, null);
+    }
+
+    /// <summary>A bootstrap over this console's data directory, with the file keystore tests use.</summary>
+    public ConsoleBootstrap Bootstrap => new(Session.Options, TestLogging.Factory, () => new FileSecretProtector());
 
     private static async Task<LabSession> OpenAsync(string dataDirectory, LabKey lab, string instanceName, TimeSpan? agentCertificateLifetime, int port)
     {
@@ -280,7 +326,7 @@ internal sealed class TestAgent : IAsyncDisposable
     {
         var agent = Install(console, number, code: null);
         var csr = LabCertificates.CreateSigningRequest(agent.Store.Key, "test");
-        var lab = console.Session.Vault.Peek() ?? throw new InvalidOperationException("the test lab key must be unlocked to issue");
+        var lab = console.Session.Vault!.Peek() ?? throw new InvalidOperationException("the test lab key must be unlocked to issue");
         using var certificate = LabCertificates.IssueAgentFromCsr(lab.Authority, lab.LabId, agent.AgentId, number, csr, DateTimeOffset.UtcNow, lifetime);
         agent.Store.InstallCertificate(agent.Store.Key, certificate);
         return agent;

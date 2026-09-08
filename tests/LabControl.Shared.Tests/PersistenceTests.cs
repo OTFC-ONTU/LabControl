@@ -182,26 +182,34 @@ public sealed class PersistenceTests
     }
 
     [Fact]
-    public void Every_persisted_format_starts_at_version_one_and_only_lab_json_has_moved_on()
+    public void Every_persisted_format_starts_at_version_one_and_only_lab_and_enrollment_json_have_moved_on()
     {
         SchemaMigrations[] chains =
         [
             LabControl.Shared.Identity.LabKeyDocument.Migrations,
             InstanceDocument.Migrations,
-            EnrollmentDocument.Migrations,
             AgentConfigDocument.Migrations,
             ProfilesDocument.Migrations,
+            AccessDocument.Migrations,
+            LabFileDocument.Migrations,
+            DeviceRequestDocument.Migrations,
+            DeviceGrantDocument.Migrations,
         ];
 
         Assert.All(chains, chain => Assert.Equal(1, chain.CurrentVersion));
 
-        // lab.json is the first format past version 1 (M5, D-55): its chain must walk a
-        // version-1 file forward rather than leave a gap (D-20).
+        // lab.json (M5, D-55) and enrollment.json (D-60) are past version 1: their chains
+        // must walk a version-1 file forward rather than leave a gap (D-20).
         Assert.Equal(2, LabDocument.Migrations.CurrentVersion);
         var root = (JsonObject)JsonNode.Parse($"{{\"{Defaults.SchemaVersionFieldName}\":1,\"lab_id\":\"x\"}}")!;
         var upgraded = LabDocument.Migrations.Upgrade(Defaults.LabFileName, root);
         Assert.Equal(2, upgraded[Defaults.SchemaVersionFieldName]!.GetValue<int>());
         Assert.Equal("x", upgraded["lab_id"]!.GetValue<string>());
+
+        Assert.Equal(2, EnrollmentDocument.Migrations.CurrentVersion);
+        var enrollment = (JsonObject)JsonNode.Parse($"{{\"{Defaults.SchemaVersionFieldName}\":1,\"lab_id\":\"x\",\"codes\":[]}}")!;
+        var enrollmentUpgraded = EnrollmentDocument.Migrations.Upgrade(Defaults.EnrollmentFileName, enrollment);
+        Assert.Equal(2, enrollmentUpgraded[Defaults.SchemaVersionFieldName]!.GetValue<int>());
     }
 
     [Fact]

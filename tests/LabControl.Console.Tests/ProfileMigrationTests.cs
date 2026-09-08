@@ -156,16 +156,16 @@ public sealed class ProfileMigrationTests
         var opened = bootstrap.OpenExisting(labId);
         try
         {
-            Assert.Equal(labId, opened.Vault.LabId);
+            Assert.Equal(labId, opened.Vault!.LabId);
             Assert.Equal(instanceId, opened.Instance.InstanceId);
             Assert.Equal(moved, opened.Store.Directory);
-            Assert.True(opened.Vault.TryUnlock(Passphrase));
+            Assert.True(opened.Vault!.TryUnlock(Passphrase));
             Assert.Equal("from-the-macbook", Assert.Single(opened.Store.LoadScripts()!.Scripts).Name);
             Assert.Equal("ABCDEFGHJKMNPQRSTVWX", Assert.Single(opened.Store.LoadEnrollment(labId).Codes).Code);
         }
         finally
         {
-            opened.Vault.Dispose();
+            opened.Vault!.Dispose();
             opened.Instance.Dispose();
         }
     }
@@ -484,14 +484,14 @@ public sealed class ProfileMigrationTests
             var openedB = reopened.OpenExisting(legacy.LabId);
             try
             {
-                Assert.Equal("Room A", openedA.Vault.LabName);
-                Assert.Equal("Room 214", openedB.Vault.LabName);
+                Assert.Equal("Room A", openedA.Vault!.LabName);
+                Assert.Equal("Room 214", openedB.Vault!.LabName);
             }
             finally
             {
-                openedA.Vault.Dispose();
+                openedA.Vault!.Dispose();
                 openedA.Instance.Dispose();
-                openedB.Vault.Dispose();
+                openedB.Vault!.Dispose();
                 openedB.Instance.Dispose();
             }
         }
@@ -640,7 +640,7 @@ public sealed class ProfileMigrationTests
             }
             finally
             {
-                opened.Vault.Dispose();
+                opened.Vault!.Dispose();
                 opened.Instance.Dispose();
             }
         }
@@ -711,15 +711,15 @@ public sealed class ProfileMigrationTests
             var openedB = new ConsoleBootstrap(OptionsFor(second), TestLogging.Factory).OpenExisting();
             try
             {
-                Assert.Equal("Room A", openedA.Vault.LabName);
-                Assert.Equal("Room B", openedB.Vault.LabName);
+                Assert.Equal("Room A", openedA.Vault!.LabName);
+                Assert.Equal("Room B", openedB.Vault!.LabName);
                 Assert.Throws<InvalidDataException>(() => new ConsoleBootstrap(OptionsFor(first), TestLogging.Factory).OpenExisting(labB));
             }
             finally
             {
-                openedA.Vault.Dispose();
+                openedA.Vault!.Dispose();
                 openedA.Instance.Dispose();
-                openedB.Vault.Dispose();
+                openedB.Vault!.Dispose();
                 openedB.Instance.Dispose();
             }
         }

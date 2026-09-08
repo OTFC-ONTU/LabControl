@@ -56,6 +56,12 @@ public sealed class ConsoleChannel : IDisposable
     /// <summary>Why the console's certificate was refused, in plain language; <c>null</c> if it was accepted.</summary>
     public string? Refusal { get; private set; }
 
+    /// <summary>The validated console identity, with its access level from the subject OU (M5, D-56 item 5); <c>null</c> until accepted, and again after a refusal.</summary>
+    public LabName? PeerName { get; private set; }
+
+    /// <summary>The normalized serial of the console leaf that was accepted; <c>null</c> otherwise. A revocation naming it ends the link (D-56 item 6).</summary>
+    public string? PeerSerial { get; private set; }
+
     public static ConsoleChannel Open(
         string host,
         int port,
@@ -73,9 +79,14 @@ public sealed class ConsoleChannel : IDisposable
         if (_trust.TryValidate(leaf, LabRole.Console, _revocations, out var name, out var failure))
         {
             Refusal = null;
+            PeerName = name;
+            PeerSerial = LabCertificates.SerialOf(leaf!);
             return true;
         }
 
+        // A renegotiation that fails must not leave the previous peer's name standing.
+        PeerName = null;
+        PeerSerial = null;
         Refusal = $"the console's certificate was refused: {LabTrust.Describe(failure, name)}";
         return false;
     }

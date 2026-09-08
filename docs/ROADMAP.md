@@ -19,7 +19,7 @@ implement.
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
-| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–2 built and reviewed 2026-09-08 (profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import), migration tried on a copy of the live data; portion 3 next; real-Mac switch timing under investigation** | M4 |
+| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–3 built and reviewed 2026-09-08 (profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes), migration tried on a copy of the live data, portion 3 smoke-tested on two copies; portion 4 next; real-Mac switch timing under investigation** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
@@ -1444,7 +1444,66 @@ contract, then desktop integration (`D-54` item 6).
   it, and it is expected to disappear with the signed packaged app (portion 7) — to be
   re-measured. *Trial against a copy of the live data*: the chooser appeared with the lab
   row (administrator, 14 PCs), nothing listening until *Open*; the owner had exercised
-  *Open* → *Disconnect* → *Open* on the copy earlier. Portion 3 is next.
+  *Open* → *Disconnect* → *Open* on the copy earlier.
+- *Portion 3 (built, security-reviewed and fixed 2026-09-08, on the Mac).* Lab files,
+  offline device authorization, teacher mode and dormant codes (`D-56`, `D-60`). The
+  signed envelope (`SignedEnvelopeDocument`: `kind`, `lab_id`, `lab_name` in the clear,
+  base64 `payload`, P1363 `signature` over domain || payload bytes; domains
+  `labcontrol/lab-file/v1\0`, `labcontrol/device-request/v1\0`,
+  `labcontrol/device-grant/v1\0`) — a wrong kind for the extension, a tampered byte, a
+  signature made under another domain or a newer `schema_version` is refused and changes
+  nothing. `.lclab` (`LabFilePayload`: authority DER + fingerprint, `snapshot_version`,
+  roster, layout, revocations, optional scripts) with a test proving it carries no key,
+  wrapping, recovery material, enrollment code or private material; the pinned authority
+  is compared byte for byte on re-import. Merge as implemented (`LabFile`): an older
+  snapshot contributes only its revocations ("older snapshot; nothing rolled back"), a PC
+  this console has seen linked is only filled in, never rewritten, a serial revoked
+  locally blocks re-adding, the layout comes only from a newer snapshot, scripts go only
+  into an empty library, the access level is never downgraded, the same `lab_id` under a
+  different authority is refused. Request/grant (`DeviceAuthorization`): the pending key
+  lives under the keystore reference `instance-<id>-pending`
+  (`AccessDocument.PendingKeyReference`), the CSR self-signature is verified, P-256 only,
+  the name is bounded (`Defaults.MaxInstanceNameLength` = 64); `Approve` refuses a
+  request naming an existing id unless that record is a teacher device — never this
+  machine, an administrator or an unknown record (`LabRegistry.RecordAuthorization` is
+  the registry guard; the review found the administrator's own id could otherwise be
+  hijacked) — and refuses a renewal that presents the already-certified key
+  (`InstanceRecord.PublicKeyFingerprint`); grant import checks the instance id, key
+  equality, the chain, `OU=LabControl Teacher` and the endorsement, and the new key is
+  protected and saved before the old items are forgotten. Role: `LabName.Access` from
+  exactly one single-valued OU (`LabControl Console` → `Administrator`,
+  `LabControl Teacher` → `Teacher`, anything else → `Unknown`); the SAN is unchanged, so
+  pre-M5 agents link to teacher consoles; agents refuse `self_update`/`rekey` with the
+  event `job.refused_by_role` and skip renewal unless the validated peer
+  (`ConsoleChannel.PeerName`, `AgentLink.LinkedConsoleAccess`) is `Administrator`.
+  Teacher sessions have a null `LabSession.Vault` (`LabSession.Access` = `Teacher`):
+  `Enroll`/`Renew` answer `Closed` naming the administrator; push, revoke, USB payload,
+  backup and holders refuse. Withdrawal (`LabSession.TryWithdrawDevice`): the
+  `instance:<id>` pseudo-serial plus every serial in `InstanceRecord.CertificateSerials`
+  are revoked; agents answer every `Revocation` with `RevocationState`,
+  `MachineRecord.RevocationSerialsSeen` feeds `DeliveryOf` (delivered / pending /
+  *cannot hold*); an M5 agent leaves a console whose serial or instance id becomes
+  revoked (`console.revoked`). Correction to the design: pre-M5 agents do **not** store
+  `instance:` entries inertly — their serial normalisation breaks the signature, they
+  drop the entry and are re-pushed on every link; the console shows them as *cannot
+  hold* (`RevocationDelivery.CannotHold`, the sibling-serial signal) until the agent is
+  updated. Settings: the merged *Teacher devices* panel (replacing *Other teacher
+  machines*) is the device book with access and dates, *Authorize requests…*, *Withdraw
+  access…*, *Export lab file…* (`ConsoleBootstrap.TryExportLabFile`); Enrollment gains
+  *Use codes from the imported backup*. `LabImports` registers `.lclab`, `.lcgrant` and
+  `.lcreq` beside `.lcbak`; a backup imported onto a teacher profile upgrades it
+  (`ConsoleBootstrap.UpgradeFromBackup`) keeping `instance.json` and history, its codes
+  dormant (`enrollment.json` schema 2: `DormantSinceImportUnix`, `IssuedByInstanceId`,
+  `Batches[]`; `EnrollmentOutcome.DormantCode`; `Supersede` voids dormant codes too).
+  `lab.json` counts snapshots (`imported_snapshot_version`, `exported_snapshot_version`).
+  Chooser states for a teacher profile: *Needs authorization*, *Request pending*,
+  *Access expires <date>* (with *— request a renewal* under 60 days), *Expired*,
+  *Withdrawn*. Tests: 753 (622 Shared + 131 Console). *Manual smoke on two copies of the
+  data directory*: export → import → request → approve → grant import → "Access expires
+  08.09.2027", a teacher session opened with a teacher leaf and no vault; re-importing
+  the old file reported "older snapshot; nothing rolled back". Not run on Windows or a
+  real agent yet: the real agent receives these `AgentLink` changes with the portion-4/5
+  push. Portion 4 is next.
 
 **Not in scope.** Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs

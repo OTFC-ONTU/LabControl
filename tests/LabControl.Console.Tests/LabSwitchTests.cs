@@ -73,8 +73,8 @@ public sealed class LabSwitchTests
         rig.Log($"TIMINGS idle -> A (cold Kestrel, server-up not asserted): whole call {fromIdle.ElapsedMilliseconds} ms; {idleSwitch}");
 
         // The key was in use on A: leaving A must lock it again, whatever happens next.
-        Assert.True(sessionA.Vault.TryUnlock(TestConsole.Passphrase));
-        Assert.True(sessionA.Vault.IsUnlocked);
+        Assert.True(sessionA.Vault!.TryUnlock(TestConsole.Passphrase));
+        Assert.True(sessionA.Vault!.IsUnlocked);
         var departedAt = DateTime.MaxValue;
         sessionA.Disposed += _ => departedAt = DateTime.UtcNow;
 
@@ -95,7 +95,7 @@ public sealed class LabSwitchTests
         Assert.NotSame(sessionA, sessionB);
         Assert.True(sessionA.IsDisposed);
         Assert.True(sessionA.Screens.IsDisposed);
-        Assert.False(sessionA.Vault.IsUnlocked);
+        Assert.False(sessionA.Vault!.IsUnlocked);
         Assert.Equal(sessionB.Port, sessionA.Port);
         var abSwitch = rig.Controller.LastSwitch!;
         Assert.Equal(a.LabId, abSwitch.FromLabId);
@@ -199,7 +199,7 @@ public sealed class LabSwitchTests
         Assert.True((await rig.Controller.ActivateAsync(a.LabId, Ct)).Ok);
         var sessionA = rig.Controller.Active!;
         Assert.True(await Wait.UntilAsync(() => sessionA.Linked.Count == 3, TimeSpan.FromSeconds(15)));
-        Assert.True(sessionA.Vault.TryUnlock(TestConsole.Passphrase));
+        Assert.True(sessionA.Vault!.TryUnlock(TestConsole.Passphrase));
 
         // Step 3 (the beacon listener) blows up, and step 6 (SaveLab) too; every step is still
         // visited, in order, and the key is locked, the pictures dropped and Disposed raised at
@@ -222,7 +222,7 @@ public sealed class LabSwitchTests
         Assert.Equal(ActivationState.Active, rig.Controller.Status.State);
         Assert.True(sessionA.IsDisposed);
         Assert.Equal(1, disposedRaised);
-        Assert.False(sessionA.Vault.IsUnlocked);
+        Assert.False(sessionA.Vault!.IsUnlocked);
         Assert.True(sessionA.Screens.IsDisposed);
         Assert.Equal(
             [LabCloseStep.Cancel, LabCloseStep.Beacons, LabCloseStep.Links, LabCloseStep.Listener, LabCloseStep.Server, LabCloseStep.Housekeeping,
@@ -260,7 +260,7 @@ public sealed class LabSwitchTests
         Assert.Equal(ActivationState.Active, rig.Controller.Status.State);
         Assert.Equal(b.LabId, rig.Controller.Active!.LabId);
         Assert.True(sessionA.IsDisposed);
-        Assert.False(sessionA.Vault.IsUnlocked);
+        Assert.False(sessionA.Vault!.IsUnlocked);
         Assert.DoesNotContain(rig.Statuses, s => s.State == ActivationState.Failed);
 
         // Deactivating through the same subscriber: Idle, not stuck on Deactivating.
@@ -372,7 +372,7 @@ public sealed class LabSwitchTests
         // Every session but the active one raised Disposed; nothing else is alive.
         Assert.Equal(rig.Sessions.Count - 1, rig.DisposedSessions);
         Assert.Single(rig.Sessions, s => !s.IsDisposed);
-        Assert.All(rig.Sessions.Where(s => s.IsDisposed), s => Assert.False(s.Vault.IsUnlocked));
+        Assert.All(rig.Sessions.Where(s => s.IsDisposed), s => Assert.False(s.Vault!.IsUnlocked));
 
         var threadsAfter = Process.GetCurrentProcess().Threads.Count;
         var handlesAfter = OpenHandles();
@@ -714,7 +714,7 @@ public sealed class LabSwitchTests
             return Task.FromResult<BackupSecret?>(new BackupSecret(passphrase, null));
         }, "Windows desk PC");
 
-        Assert.Equal([Defaults.BackupFileExtension], imports.KnownExtensions);
+        Assert.Equal([Defaults.BackupFileExtension, Defaults.LabFileExtension, Defaults.DeviceGrantFileExtension, Defaults.DeviceRequestFileExtension], imports.KnownExtensions);
         var results = await imports.ImportAsync([backupA, backupB, notes, backupA]);
 
         Assert.Equal(4, results.Count);
@@ -738,7 +738,7 @@ public sealed class LabSwitchTests
         Assert.True(bootstrap.StoreFor(saved.LabId).HasLabKey);
         Assert.False(Directory.Exists(bootstrap.StoreFor(labB.Session.LabId).Directory));
         var opened = bootstrap.OpenExisting(saved.LabId);
-        Assert.False(opened.Vault.IsUnlocked);
+        Assert.False(opened.Vault!.IsUnlocked);
         opened.Vault.Dispose();
         opened.Instance.Dispose();
     }

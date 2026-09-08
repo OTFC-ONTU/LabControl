@@ -137,6 +137,12 @@ public static class Defaults
     public const int RecoveryCodeBytes = 16;
 
     public static readonly TimeSpan ConsoleCertificateLifetime = TimeSpan.FromDays(365);
+
+    /// <summary>
+    /// A teacher device's leaf (M5, D-56 item 4): the console leaf's lifetime, renewed through
+    /// a new device request from <see cref="CertificateRenewalLeadTime"/> before expiry.
+    /// </summary>
+    public static readonly TimeSpan TeacherCertificateLifetime = TimeSpan.FromDays(365);
     public static readonly TimeSpan AgentCertificateLifetime = TimeSpan.FromDays(5 * 365);
     public static readonly TimeSpan LabAuthorityLifetime = TimeSpan.FromDays(20 * 365);
 
@@ -164,7 +170,8 @@ public static class Defaults
     /// <summary>Version 2 (M5, D-55) adds the optional device-book and revocation-delivery fields; a version-1 file reads as version 2 with them absent.</summary>
     public const int LabSchemaVersion = 2;
     public const int InstanceSchemaVersion = 1;
-    public const int EnrollmentSchemaVersion = 1;
+    /// <summary>Version 2 (M5, D-60) adds the optional dormant/issuer fields and <c>batches[]</c>; a version-1 file reads as version 2 with them absent.</summary>
+    public const int EnrollmentSchemaVersion = 2;
     public const int AgentConfigSchemaVersion = 1;
     public const int PackageCatalogSchemaVersion = 1;
     public const int BackupSchemaVersion = 1;
@@ -174,6 +181,14 @@ public static class Defaults
     public const int SetupSettingsSchemaVersion = 1;
     /// <summary><c>profiles.json</c>, the index of saved labs on this device (M5, D-55).</summary>
     public const int ProfilesSchemaVersion = 1;
+
+    /// <summary>The signed envelopes exchanged offline (M5, D-56): lab file, device request, device grant.</summary>
+    public const int LabFileSchemaVersion = 1;
+    public const int DeviceRequestSchemaVersion = 1;
+    public const int DeviceGrantSchemaVersion = 1;
+
+    /// <summary><c>access.json</c>, a teacher profile's authorization state (M5, D-56).</summary>
+    public const int AccessSchemaVersion = 1;
 
     /// <summary>Name of the version field, first in every persisted file.</summary>
     public const string SchemaVersionFieldName = "schema_version";
@@ -228,6 +243,36 @@ public static class Defaults
 
     /// <summary>The encrypted backup archive (ARCHITECTURE §4, D-26): <c>&lt;lab&gt;-&lt;date&gt;.lcbak</c>.</summary>
     public const string BackupFileExtension = ".lcbak";
+
+    /// <summary>The routine lab file a teacher device imports (M5, D-56): public CA, roster, layout, revocations — never a key.</summary>
+    public const string LabFileExtension = ".lclab";
+
+    /// <summary>A teacher device's authorization request: a self-signed CSR in a signed envelope (D-56).</summary>
+    public const string DeviceRequestFileExtension = ".lcreq";
+
+    /// <summary>The administrator's answer to a request: the device leaf, its endorsement and a lab snapshot, CA-signed (D-56).</summary>
+    public const string DeviceGrantFileExtension = ".lcgrant";
+
+    /// <summary>
+    /// The pseudo-serial that revokes a teacher device across renewals (D-56 item 6):
+    /// <c>instance:&lt;instance_id&gt;</c>, signed like any serial. An agent older than M5
+    /// cannot hold it: its <c>NormalizeSerial</c> upper-cases the id, the signature no longer
+    /// verifies and the entry is dropped, so it is re-pushed on every link and the console
+    /// shows that PC as unable to hold device withdrawals until its agent is updated.
+    /// </summary>
+    public const string InstanceRevocationPrefix = "instance:";
+
+    /// <summary>
+    /// The longest device name a request may carry (D-56 item 4): it becomes a certificate
+    /// <c>CN</c>, a file name and a row in Settings, none of which wants a paragraph.
+    /// </summary>
+    public const int MaxInstanceNameLength = 64;
+
+    /// <summary>The subject OU of an administrator console leaf (D-56 item 5).</summary>
+    public const string ConsoleOrganizationalUnit = "LabControl Console";
+
+    /// <summary>The subject OU of a teacher device leaf; the SAN is the same as a console's (D-56 item 5).</summary>
+    public const string TeacherOrganizationalUnit = "LabControl Teacher";
 
     /// <summary>Events and job results are appended to these, one file per day, under <c>logs/</c>.</summary>
     public const string EventLogFilePattern = "events-{0:yyyy-MM-dd}.jsonl";

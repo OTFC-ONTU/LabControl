@@ -44,6 +44,12 @@
       </Grid>
       <TextBlock Text="{loc:Localize Settings.EndpointHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
 
+      <!-- Teacher access (M5, D-56 item 5): the key, holder, backup and enrolment panels need the lab key; one line says so. -->
+      <TextBlock Classes="h" Text="{loc:Localize Settings.Access}" />
+      <TextBlock Text="{Binding AccessLabel}" />
+      <TextBlock Text="{Binding AccessHint}" IsVisible="{Binding !IsAdministrator}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+
+      <StackPanel Spacing="4" IsVisible="{Binding IsAdministrator}">
       <TextBlock Classes="h" Text="{loc:Localize Settings.LabKey}" />
       <TextBlock Text="{Binding KeyStatus}" />
       <StackPanel Orientation="Horizontal" Spacing="8">
@@ -74,36 +80,48 @@
       <TextBlock Text="{Binding BackupStatus}" TextWrapping="Wrap" Foreground="{Binding BackupIsCurrent, Converter={x:Static vm:SettingsConverters.BackupBrush}}" />
       <Button Content="{loc:Localize Backup.Export}" Command="{Binding ExportBackupCommand}" HorizontalAlignment="Left" />
       <TextBlock Text="{loc:Localize Backup.Hint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+      </StackPanel>
 
-      <TextBlock Classes="h" Text="{loc:Localize Settings.TeacherMachines}" />
-      <TextBlock Text="{loc:Localize Settings.TeacherMachinesHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
-      <ItemsControl ItemsSource="{Binding OtherMachines}">
+      <!-- Teacher devices (M5 §3.5): every console device of the lab, administrator machines and teacher devices alike. -->
+      <TextBlock Classes="h" Text="{loc:Localize Settings.TeacherDevices}" />
+      <TextBlock Text="{loc:Localize Settings.TeacherDevicesHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+      <ItemsControl ItemsSource="{Binding Devices}">
         <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="vm:InstanceRowViewModel">
+          <DataTemplate x:DataType="vm:DeviceRowViewModel">
             <DockPanel Margin="0,2">
-              <Button DockPanel.Dock="Right" Content="{loc:Localize Revoke.Action}"
-                      IsEnabled="{Binding CanRevoke}"
-                      Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RevokeMachineCommand}"
+              <Button DockPanel.Dock="Right" Content="{loc:Localize Device.Withdraw}"
+                      IsEnabled="{Binding CanWithdraw}"
+                      IsVisible="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).IsAdministrator}"
+                      Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).WithdrawDeviceCommand}"
                       CommandParameter="{Binding}" />
               <StackPanel>
                 <TextBlock>
                   <Run Text="{Binding Name}" FontWeight="SemiBold" />
-                  <Run Text="{Binding IsLive, Converter={x:Static vm:SettingsConverters.LiveText}}" />
+                  <Run Text="{Binding Marks}" />
                   <Run Text="{Binding IsRevoked, Converter={x:Static vm:SettingsConverters.RevokedText}}" Foreground="IndianRed" />
                 </TextBlock>
-                <TextBlock Opacity="0.7" FontSize="12">
-                  <Run Text="{Binding InstanceId}" /><Run Text="   " />
-                  <Run Text="{Binding CertificateSerial}" /><Run Text="   " />
-                  <Run Text="{Binding LastSeen}" />
-                </TextBlock>
+                <TextBlock Opacity="0.7" FontSize="12" Text="{Binding Details}" TextWrapping="Wrap" />
+                <TextBlock Opacity="0.7" FontSize="12" Text="{Binding InstanceId}" />
+                <TextBlock FontSize="12" Text="{Binding Delivery}" Foreground="DarkOrange" TextWrapping="Wrap"
+                           IsVisible="{Binding Delivery, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               </StackPanel>
             </DockPanel>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-      <TextBlock Text="{loc:Localize Settings.NoOtherMachines}" IsVisible="{Binding !OtherMachines.Count}" Opacity="0.6" />
+      <TextBlock Text="{loc:Localize Settings.NoDevices}" IsVisible="{Binding !Devices.Count}" Opacity="0.6" />
+      <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsAdministrator}">
+        <Button Content="{loc:Localize Device.AuthorizeRequests}" Command="{Binding AuthorizeRequestsCommand}" />
+        <Button Content="{loc:Localize LabFile.Export}" Command="{Binding ExportLabFileCommand}" />
+      </StackPanel>
+      <TextBlock Text="{loc:Localize LabFile.Hint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding IsAdministrator}" />
 
+      <StackPanel Spacing="4" IsVisible="{Binding IsAdministrator}">
       <TextBlock Classes="h" Text="{loc:Localize Settings.Enrolment}" />
+      <StackPanel Spacing="4" IsVisible="{Binding !!DormantCodes}">
+        <TextBlock Text="{Binding DormantHint}" TextWrapping="Wrap" Foreground="DarkOrange" />
+        <Button Content="{loc:Localize Enroll.Activate}" Command="{Binding ActivateDormantCodesCommand}" HorizontalAlignment="Left" />
+      </StackPanel>
       <TextBlock Text="{Binding UnusedCodes, StringFormat={loc:Localize Enroll.UnusedFormat}}" />
       <StackPanel Orientation="Horizontal" Spacing="8">
         <TextBlock Text="{loc:Localize Enroll.PcCount}" VerticalAlignment="Center" />
@@ -125,6 +143,7 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
+      </StackPanel>
 
       <TextBlock Text="{Binding LastMessage}" Margin="0,12,0,0" TextWrapping="Wrap" Foreground="SeaGreen" />
       <TextBlock Text="{Binding Version, StringFormat={loc:Localize Settings.VersionFormat}}" Opacity="0.5" FontSize="12" Margin="0,16,0,0" />

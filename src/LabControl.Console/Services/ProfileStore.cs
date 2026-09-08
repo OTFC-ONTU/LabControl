@@ -162,6 +162,32 @@ public sealed class ProfileStore
                 }
             }
 
+            // A teacher profile that never got its grant still holds a pending key in the
+            // keystore, referenced only by access.json (D-56 item 3).
+            AccessDocument? access = null;
+            try
+            {
+                access = store.LoadAccess();
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or SchemaVersionException)
+            {
+                // Nothing readable, nothing to forget.
+            }
+
+            if (access?.PendingKey is { } pending)
+            {
+                try
+                {
+                    _protectors(pending).Forget(pending);
+                }
+                catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException
+                                               or InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    _log.LogWarning(ex, "The pending key '{Reference}' of lab {LabId} could not be removed from the keystore; the lab is removed anyway",
+                        pending.Reference, labId);
+                }
+            }
+
             if (System.IO.Directory.Exists(directory))
             {
                 System.IO.Directory.Delete(directory, recursive: true);

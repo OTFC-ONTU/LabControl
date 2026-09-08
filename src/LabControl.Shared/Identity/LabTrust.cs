@@ -88,6 +88,14 @@ public sealed class LabTrust
             return false;
         }
 
+        // A withdrawn teacher device is revoked by instance id as well as by serial (D-56
+        // item 6), so a leaf renewed after the withdrawal is refused too.
+        if (revocations is not null && name.Role == LabRole.Console && revocations.IsRevoked(LabCertificates.InstanceSerial(name.Id)))
+        {
+            failure = TrustFailure.Revoked;
+            return false;
+        }
+
         var at = now ?? DateTimeOffset.UtcNow;
         if (!ChainsToAuthority(peer, at))
         {

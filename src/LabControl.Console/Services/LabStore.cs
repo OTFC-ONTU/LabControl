@@ -34,10 +34,16 @@ public sealed class LabStore
     /// <summary>A teacher profile's authorization state (M5 portion 3); the path is reserved here.</summary>
     public string AccessPath => Path.Combine(Directory, Defaults.AccessFileName);
 
-    /// <summary>A lab exists here once both the key and this machine's instance are on disk.</summary>
-    public bool HasLab => File.Exists(LabKeyPath) && File.Exists(InstancePath);
+    /// <summary>
+    /// A lab can be opened here once this machine's instance is on disk together with what
+    /// authorizes it: the key (administrator) or <c>access.json</c> (teacher, M5 D-56).
+    /// </summary>
+    public bool HasLab => File.Exists(InstancePath) && (File.Exists(LabKeyPath) || File.Exists(AccessPath));
 
     public bool HasLabKey => File.Exists(LabKeyPath);
+
+    /// <summary>A teacher profile: the lab arrived as a lab file and <c>access.json</c> holds its authorization state.</summary>
+    public bool HasAccess => File.Exists(AccessPath);
 
     public void EnsureDirectories()
     {
@@ -70,6 +76,11 @@ public sealed class LabStore
         JsonStore.LoadIfExists<EnrollmentDocument>(EnrollmentPath, EnrollmentDocument.Migrations) ?? new EnrollmentDocument { LabId = labId };
 
     public void SaveEnrollment(EnrollmentDocument document) => JsonStore.Save(EnrollmentPath, document, EnrollmentDocument.Migrations);
+
+    public AccessDocument? LoadAccess() => JsonStore.LoadIfExists<AccessDocument>(AccessPath, AccessDocument.Migrations);
+
+    /// <summary>Owner-only: it holds the pending device key's keystore reference.</summary>
+    public void SaveAccess(AccessDocument document) => JsonStore.Save(AccessPath, document, AccessDocument.Migrations, ownerOnly: true);
 
     /// <summary>The script library, or null before the first run imported the seed (D-31 item 4).</summary>
     public ScriptsDocument? LoadScripts() => JsonStore.LoadIfExists<ScriptsDocument>(ScriptsPath, ScriptsDocument.Migrations);

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Grpc.Core;
+using LabControl.Console.Localization;
 using LabControl.Console.Server;
 using LabControl.Shared;
 using LabControl.Shared.Discovery;
@@ -40,6 +41,29 @@ public enum LabCloseStep
 }
 
 /// <summary>
+/// What a session serves as, apart from the key (M5, D-56 item 5): an administrator profile
+/// derives it from <c>lab-key.lck</c>, a teacher profile from <c>access.json</c>.
+/// </summary>
+public sealed record LabIdentity(string LabId, string LabName, byte[] Authority)
+{
+    public static LabIdentity Of(LabKeyDocument document) => new(document.LabId, document.LabName, document.Authority);
+
+    public static LabIdentity Of(AccessDocument document, string labName) => new(document.LabId, labName, document.Authority);
+}
+
+/// <summary>
+/// Where a revocation entry stands across the room (D-56 item 6): confirmed, not assumed.
+/// <see cref="Pending"/> are the PCs that have not confirmed it yet; <see cref="CannotHold"/>
+/// are the PCs whose agent predates M5 and drops an <c>instance:</c> entry (they confirmed
+/// the leaf serial issued in the same withdrawal but never this one) — those need an agent
+/// update, not patience, and the entry is never "complete" while they exist.
+/// </summary>
+public sealed record RevocationDelivery(string Serial, int Delivered, int Total, IReadOnlyList<MachineRecord> Pending, IReadOnlyList<MachineRecord> CannotHold)
+{
+    public bool IsComplete => Pending.Count == 0 && CannotHold.Count == 0;
+}
+
+/// <summary>
 /// The running lab on this teacher machine: the identity it serves with, the machine list
 /// it caches, the PCs linked to it right now, the jobs in flight, the events, the beacon
 /// going out and the beacons coming in. Everything the UI shows comes from here and
@@ -64,6 +88,7 @@ public sealed class LabSession : IAsyncDisposable
     private BeaconListener? _listener;
     private Task? _housekeeping;
 
+    /// <summary>An administrator session: the identity comes from the vault's key document.</summary>
     public LabSession(
         ConsoleOptions options,
         LabStore store,
@@ -73,9 +98,29 @@ public sealed class LabSession : IAsyncDisposable
         ILoggerFactory loggers,
         Func<DateTimeOffset>? clock = null,
         IReadOnlyList<SeedScript>? seedScripts = null)
+        : this(options, store, LabIdentity.Of(vault.Document), vault, instance, instanceDocument, loggers, clock, seedScripts)
+    {
+    }
+
+    /// <summary>
+    /// A session with or without the lab key (M5, D-56 item 5): a teacher profile has no
+    /// <c>lab-key.lck</c>, so <paramref name="vault"/> is <c>null</c> and every CA operation
+    /// answers that administrator access is needed.
+    /// </summary>
+    public LabSession(
+        ConsoleOptions options,
+        LabStore store,
+        LabIdentity identity,
+        LabKeyVault? vault,
+        ConsoleInstance instance,
+        InstanceDocument instanceDocument,
+        ILoggerFactory loggers,
+        Func<DateTimeOffset>? clock = null,
+        IReadOnlyList<SeedScript>? seedScripts = null)
     {
         Options = options;
         Store = store;
+        Identity = identity;
         Vault = vault;
         Instance = instance;
         InstanceDocument = instanceDocument;
@@ -83,10 +128,10 @@ public sealed class LabSession : IAsyncDisposable
         _log = loggers.CreateLogger<LabSession>();
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
 
-        Authority = X509CertificateLoader.LoadCertificate(vault.Document.Authority);
-        Trust = new LabTrust(Authority, vault.LabId);
-        Registry = new LabRegistry(store.LoadLab(vault.LabId, vault.LabName), Authority);
-        Enrollment = new EnrollmentAuthority(store.LoadEnrollment(vault.LabId));
+        Authority = X509CertificateLoader.LoadCertificate(identity.Authority);
+        Trust = new LabTrust(Authority, identity.LabId);
+        Registry = new LabRegistry(store.LoadLab(identity.LabId, identity.LabName), Authority);
+        Enrollment = new EnrollmentAuthority(store.LoadEnrollment(identity.LabId));
         Jobs = new JobQueue();
         Files = new FileOffers();
         Screens = new ScreenStore(_clock);
@@ -94,20 +139,33 @@ public sealed class LabSession : IAsyncDisposable
         Events = new EventLog(store.LogsDirectory, _clock);
         _journal = new JobJournal(store.LogsDirectory);
         BatchLogs = new JobBatchLogs(store.LogsDirectory, Jobs, id => Registry.FindByAgentId(id)?.Number ?? 0, _clock);
-        Scripts = new ScriptLibrary(store, vault.LabId, seedScripts ?? [], _clock, loggers.CreateLogger<ScriptLibrary>());
+        Scripts = new ScriptLibrary(store, identity.LabId, seedScripts ?? [], _clock, loggers.CreateLogger<ScriptLibrary>());
 
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
         Jobs.Updated += OnJobUpdated;
 
-        Registry.RecordInstance(instance.InstanceId, instance.InstanceName, instance.CertificateSerial, _clock(), isThisMachine: true);
+        var self = Registry.RecordInstance(instance.InstanceId, instance.InstanceName, instance.CertificateSerial, _clock(), isThisMachine: true);
+        if (self.Access == ProfileAccess.Unknown)
+        {
+            self.Access = Access;
+        }
     }
 
     public ConsoleOptions Options { get; }
 
     public LabStore Store { get; }
 
-    public LabKeyVault Vault { get; }
+    /// <summary>Lab id, name and public CA — what every session has, key or no key.</summary>
+    public LabIdentity Identity { get; }
+
+    /// <summary>The lab key, or <c>null</c> on a teacher profile (M5, D-56 item 5): then nothing here can sign.</summary>
+    public LabKeyVault? Vault { get; }
+
+    /// <summary>What this session may do: the key makes an administrator; without it, a teacher.</summary>
+    public ProfileAccess Access => Vault is null ? ProfileAccess.Teacher : ProfileAccess.Administrator;
+
+    public bool IsAdministrator => Vault is not null;
 
     public ConsoleInstance Instance { get; }
 
@@ -139,9 +197,9 @@ public sealed class LabSession : IAsyncDisposable
 
     public EventLog Events { get; }
 
-    public string LabId => Vault.LabId;
+    public string LabId => Identity.LabId;
 
-    public string LabName => Vault.LabName;
+    public string LabName => Identity.LabName;
 
     /// <summary>The port the server actually listens on — differs from the option only when it was 0.</summary>
     public int Port => _server?.Port ?? Options.Port;
@@ -278,7 +336,7 @@ public sealed class LabSession : IAsyncDisposable
             // 6–9. Persist, drop the pictures, lock the CA key, release the instance key.
             Step(LabCloseStep.Save, SaveLab);
             Step(LabCloseStep.Screens, Screens.Dispose);
-            Step(LabCloseStep.Vault, Vault.Dispose);
+            Step(LabCloseStep.Vault, () => Vault?.Dispose());
             Step(LabCloseStep.Instance, () =>
             {
                 Instance.Dispose();
@@ -448,9 +506,17 @@ public sealed class LabSession : IAsyncDisposable
     public EnrollResponse Enroll(EnrollRequest request, IPAddress from)
     {
         var now = _clock();
+        var who = string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, request.Number);
+
+        if (Vault is null)
+        {
+            // Closed, naming the administrator (D-56 item 5): a teacher console has no key to issue with.
+            _log.LogInformation("{Pc} at {From} asked to enrol; this console has teacher access", who, from);
+            throw new RpcException(new Status(StatusCode.Unavailable, Strings.Get("Access.EnrolNeedsAdministrator")));
+        }
+
         var lab = Vault.Peek();
         var result = Enrollment.Redeem(lab, request, now, Options.DevelopmentAgentCertificateLifetime);
-        var who = string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, request.Number);
 
         switch (result.Outcome)
         {
@@ -486,6 +552,11 @@ public sealed class LabSession : IAsyncDisposable
                 Events.Warning("enroll.voided_code", $"{result.Message} (from {from})", request.AgentId, request.Number);
                 throw new RpcException(new Status(StatusCode.PermissionDenied, result.Message));
 
+            case EnrollmentOutcome.DormantCode:
+                // Refused, and said once per attempt: the remedy is a Settings click (D-60).
+                Events.Warning("enroll.dormant_code", $"{result.Message} (from {from})", request.AgentId, request.Number);
+                throw new RpcException(new Status(StatusCode.Unavailable, result.Message));
+
             default:
                 Events.Warning("enroll.refused", $"{result.Message} (from {from})", request.AgentId, request.Number);
                 throw new RpcException(new Status(StatusCode.InvalidArgument, result.Message));
@@ -502,12 +573,17 @@ public sealed class LabSession : IAsyncDisposable
     /// </summary>
     public string WritePayload(string directory, int pcCount, bool voidEarlier = true)
     {
+        if (Vault is null)
+        {
+            throw new InvalidOperationException(Strings.Get("Access.AdministratorNeeded"));
+        }
+
         var now = _clock();
         var target = Path.Combine(directory, Defaults.PayloadDirectoryName);
         Directory.CreateDirectory(target);
 
         var voided = voidEarlier ? Enrollment.Supersede(now) : 0;
-        var codes = Enrollment.Generate(pcCount + Defaults.SpareEnrollmentCodes, $"{Instance.InstanceName} {now:yyyy-MM-dd HH:mm}", now);
+        var codes = Enrollment.Generate(pcCount + Defaults.SpareEnrollmentCodes, $"{Instance.InstanceName} {now:yyyy-MM-dd HH:mm}", now, Instance.InstanceId, Instance.InstanceName);
         SaveEnrollment();
 
         File.WriteAllBytes(Path.Combine(target, Defaults.CaCertificateFileName), Authority.Export(X509ContentType.Cert));
@@ -539,9 +615,17 @@ public sealed class LabSession : IAsyncDisposable
         // A renewed certificate always gets the full lifetime, even with the development
         // switch that shortens enrolment certificates (D-27): otherwise a PC with a 30-day
         // certificate would renew, get another 30-day one, and renew again for ever.
-        var result = CertificateRenewal.Renew(Vault.Peek(), name, request.Csr.ToByteArray(), now);
-
         var response = new RenewResponse { ServerTimeUnix = now.ToUnixTimeSeconds() };
+
+        if (Vault is null)
+        {
+            // Closed, naming the administrator (D-56 item 5); the PC asks the next administrator console.
+            _log.LogInformation("{Pc} asked to renew its certificate; this console has teacher access", string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, name.Number));
+            response.Refusal = Strings.Get("Access.RenewNeedsAdministrator");
+            return response;
+        }
+
+        var result = CertificateRenewal.Renew(Vault.Peek(), name, request.Csr.ToByteArray(), now);
 
         if (result.Ok)
         {
@@ -781,6 +865,20 @@ public sealed class LabSession : IAsyncDisposable
                         connection.AgentId, connection.Number);
                 }
 
+                // What this PC confirmed holding (D-56 item 6): the delivery list, never a claim.
+                var seen = offered.Select(e => LabCertificates.NormalizeSerial(e.Serial)).Where(Registry.Revocations.IsRevoked).Distinct(StringComparer.Ordinal).ToArray();
+                if (!seen.SequenceEqual(connection.Machine.RevocationSerialsSeen, StringComparer.Ordinal))
+                {
+                    connection.Machine.RevocationSerialsSeen = seen;
+                    SaveLabSoon();
+                    RevocationDeliveryChanged?.Invoke();
+                }
+
+                foreach (var entry in added)
+                {
+                    NoteRevocationOfSelf(entry);
+                }
+
                 var missing = Registry.Revocations.Except(offered.Select(e => e.Serial));
                 if (missing.Count > 0)
                 {
@@ -974,6 +1072,11 @@ public sealed class LabSession : IAsyncDisposable
     /// </summary>
     public IReadOnlyList<JobRecord> PushAgentBuild(IEnumerable<string> agentIds, AgentBuild build)
     {
+        if (Vault is null)
+        {
+            throw new InvalidOperationException(Strings.Get("Access.AdministratorNeeded"));
+        }
+
         if (!Vault.Use(key => UpdateManifestSignature.Sign(key, build.Manifest), out var signature))
         {
             throw new InvalidOperationException("Unlock the lab key before signing an agent update.");
@@ -1368,28 +1471,172 @@ public sealed class LabSession : IAsyncDisposable
     /// </summary>
     public bool TryRevoke(string certificateSerial, string reason, out string message)
     {
+        if (Vault is null)
+        {
+            message = Strings.Get("Access.AdministratorNeeded");
+            return false;
+        }
+
         if (!Vault.Use(lab => Registry.Revoke(lab, certificateSerial, reason, _clock()), out var entry))
         {
             message = "The lab key is locked; unlock it to revoke.";
             return false;
         }
 
+        Push([entry]);
+        Events.Warning("revocation.issued", $"Certificate {entry.Serial} revoked: {reason}");
+        message = $"Certificate {entry.Serial} is revoked.";
+        return true;
+    }
+
+    /// <summary>
+    /// Withdraws a teacher device (D-56 item 6): two signed entries — its current leaf serial
+    /// and the <c>instance:&lt;id&gt;</c> pseudo-serial — so a leaf renewed later is refused
+    /// too. Pushed to every linked PC at once; delivery is shown, never assumed.
+    /// </summary>
+    public bool TryWithdrawDevice(string instanceId, string reason, out string message)
+    {
+        if (Vault is null)
+        {
+            message = Strings.Get("Access.AdministratorNeeded");
+            return false;
+        }
+
+        var record = Registry.Document.Instances.FirstOrDefault(i => string.Equals(i.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
+        if (record is null)
+        {
+            message = $"Device {instanceId} is not in this lab's list.";
+            return false;
+        }
+
+        if (string.Equals(instanceId, Instance.InstanceId, StringComparison.OrdinalIgnoreCase))
+        {
+            message = "This console cannot withdraw its own access.";
+            return false;
+        }
+
+        var now = _clock();
+        if (!Vault.Use(lab =>
+            {
+                // The instance entry, then every leaf serial the device was ever recorded with
+                // (D-56 item 6): a leaf minted for an earlier request must not outlive the withdrawal.
+                var entries = new List<RevocationEntry> { Registry.Revoke(lab, LabCertificates.InstanceSerial(instanceId), reason, now) };
+                var serials = new HashSet<string>(record.CertificateSerials, StringComparer.Ordinal);
+                if (record.CertificateSerial.Length > 0)
+                {
+                    serials.Add(record.CertificateSerial);
+                }
+
+                foreach (var serial in serials.Where(serial => serial.Length > 0 && !Registry.Revocations.IsRevoked(serial)))
+                {
+                    entries.Add(Registry.Revoke(lab, serial, reason, now));
+                }
+
+                return entries;
+            }, out var issued))
+        {
+            message = "The lab key is locked; unlock it to withdraw access.";
+            return false;
+        }
+
+        Registry.Persist(_ => record.RevokedAtUnix = now.ToUnixTimeSeconds());
+        Push(issued);
+        SaveLabSoon();
+
+        var name = record.Name.Length > 0 ? record.Name : instanceId;
+        Events.Warning("device.withdrawn", $"Access of {name} withdrawn: {reason}. Delivered to the linked PCs now; the others learn it when they link.");
+        OtherConsolesChanged?.Invoke();
+        message = $"Access of {name} is withdrawn.";
+        return true;
+    }
+
+    /// <summary>Raised when a PC confirms holding a revocation it did not have before (D-56 item 6).</summary>
+    public event Action? RevocationDeliveryChanged;
+
+    /// <summary>
+    /// How far one revocation entry has travelled: which PCs confirmed holding it and which
+    /// have not, with when those were last seen. "Delivered to 11 of 14; pending on PC-03".
+    /// </summary>
+    public RevocationDelivery DeliveryOf(string serial)
+    {
+        var normalized = LabCertificates.NormalizeSerial(serial);
+        MachineRecord[] machines;
+        lock (_gate)
+        {
+            machines = Registry.Document.Machines.ToArray();
+        }
+
+        // An agent older than M5 cannot hold an instance: entry (its serial normalisation
+        // breaks the signature, so it drops it and is re-pushed on every link). It shows
+        // itself by confirming a sibling entry — a leaf serial signed in the same withdrawal,
+        // same second and same reason — while never confirming this one.
+        var siblings = Array.Empty<string>();
+        if (normalized.StartsWith(Defaults.InstanceRevocationPrefix, StringComparison.Ordinal)
+            && Registry.Revocations.Entries.FirstOrDefault(e => string.Equals(e.Serial, normalized, StringComparison.Ordinal)) is { } entry)
+        {
+            siblings = Registry.Revocations.Entries
+                .Where(e => !e.Serial.StartsWith(Defaults.InstanceRevocationPrefix, StringComparison.Ordinal)
+                            && e.RevokedAtUnix == entry.RevokedAtUnix && string.Equals(e.Reason, entry.Reason, StringComparison.Ordinal))
+                .Select(e => e.Serial)
+                .ToArray();
+        }
+
+        var missing = machines.Where(m => !m.RevocationSerialsSeen.Contains(normalized, StringComparer.Ordinal)).OrderBy(m => m.Number).ToArray();
+        var cannotHold = missing.Where(m => siblings.Length > 0 && m.RevocationSerialsSeen.Any(seen => siblings.Contains(seen, StringComparer.Ordinal))).ToArray();
+        var pending = missing.Except(cannotHold).ToArray();
+        return new RevocationDelivery(normalized, machines.Length - missing.Length, machines.Length, pending, cannotHold);
+    }
+
+    private void Push(IReadOnlyList<RevocationEntry> entries)
+    {
         var revocation = new Revocation();
-        revocation.Entries.Add(entry);
+        revocation.Entries.AddRange(entries);
         var push = new ConsoleMessage { Revocation = revocation };
+        var serials = entries.Select(e => e.Serial).ToHashSet(StringComparer.Ordinal);
 
         foreach (var connection in Linked)
         {
             connection.TrySend(push);
-            if (string.Equals(connection.CertificateSerial, entry.Serial, StringComparison.Ordinal))
+            if (serials.Contains(connection.CertificateSerial))
             {
                 connection.Close("this PC's certificate was revoked");
             }
         }
+    }
 
-        Events.Warning("revocation.issued", $"Certificate {entry.Serial} revoked: {reason}");
-        message = $"Certificate {entry.Serial} is revoked.";
-        return true;
+    /// <summary>A revocation that names this very console (learned from a PC or a file): said loudly, once.</summary>
+    private void NoteRevocationOfSelf(RevocationEntry entry)
+    {
+        if (string.Equals(entry.Serial, LabCertificates.InstanceSerial(Instance.InstanceId), StringComparison.Ordinal)
+            || string.Equals(entry.Serial, Instance.CertificateSerial, StringComparison.Ordinal))
+        {
+            Events.Error("access.withdrawn", $"This console's access to the lab was withdrawn ({entry.Reason}); PCs that hold the entry refuse it from now on.");
+        }
+    }
+
+    /// <summary>
+    /// Applies a lab file or grant snapshot to the running lab (D-56 item 3): the merge that
+    /// cannot go backwards, through the registry so linked PCs and the mosaic see it.
+    /// </summary>
+    public LabFileMergeReport ApplySnapshot(LabFilePayload snapshot)
+    {
+        LabFileMergeReport report = null!;
+        var known = Registry.Revocations.Serials;
+        Registry.Persist(document => report = LabFile.Merge(document, snapshot, Authority, Registry.Revocations, _clock()));
+        var learned = Registry.Revocations.Except(known);
+        if (learned.Count > 0)
+        {
+            foreach (var entry in learned)
+            {
+                NoteRevocationOfSelf(entry);
+            }
+
+            Push(learned);
+        }
+
+        SaveLab();
+        MachinesChanged?.Invoke();
+        return report;
     }
 
     // ------------------------------------------------------------------ departure (M5, D-57)
@@ -1517,7 +1764,7 @@ public sealed class LabSession : IAsyncDisposable
                     OtherConsolesChanged?.Invoke();
                 }
 
-                Vault.Tick();
+                Vault?.Tick();
             }
         }
         catch (OperationCanceledException)

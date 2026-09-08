@@ -5,6 +5,7 @@ using LabControl.Shared.Lab;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protection;
 using Microsoft.Extensions.Logging;
+using System.Security.Cryptography.X509Certificates;
 
 namespace LabControl.Console.Services;
 
@@ -18,6 +19,9 @@ public enum BackupStatus
     Stale = 1,
 
     Current = 2,
+
+    /// <summary>A teacher profile: there is no key here to back up (M5, D-56 item 5).</summary>
+    NotApplicable = 3,
 }
 
 /// <summary>
@@ -53,6 +57,9 @@ public sealed class ConsoleBootstrap
 
     /// <summary>The index of the labs saved on this device.</summary>
     public ProfileStore Profiles { get; }
+
+    /// <summary>The keystore a new instance or pending device key is written with (the platform's own, or a test's).</summary>
+    public Func<ISecretProtector> NewProtector => _newProtector;
 
     /// <summary>True when at least one saved lab can be opened on this device.</summary>
     public bool HasLab => Profiles.Profiles.Any(profile => StoreFor(profile.LabId).HasLab);
@@ -129,6 +136,153 @@ public sealed class ConsoleBootstrap
         var vault = new LabKeyVault(store, imported.Key.Document);
         vault.Adopt(imported.Key);
         return NewSession(store, vault, imported.Instance);
+    }
+
+    /// <summary>
+    /// A backup landing on a lab this device already holds as a teacher (D-56 item 3):
+    /// the key and a dormant <c>enrollment.json</c> (D-60) are written into the same
+    /// directory, the profile becomes an administrator one, and <c>instance.json</c> and the
+    /// history stay — the leaf is re-minted as an administrator only through an explicit
+    /// <i>Renew this device's certificate</i>. A teacher profile that never got its grant
+    /// has no instance yet, so one is minted. The caller disposes the result.
+    /// </summary>
+    public ImportedLab UpgradeFromBackup(BackupDocument backup, string? passphrase, RecoveryCode? recoveryCode, string instanceName, LabSession? active = null)
+    {
+        LabKey lab;
+        var opened = recoveryCode is not null
+            ? LabKey.TryUnlock(backup.LabKey, recoveryCode, out lab)
+            : LabKey.TryUnlock(backup.LabKey, passphrase ?? string.Empty, out lab);
+
+        if (!opened)
+        {
+            throw new UnauthorizedAccessException(Strings.Get(recoveryCode is not null ? "Bootstrap.WrongRecoveryCode" : "Bootstrap.WrongPassphrase"));
+        }
+
+        try
+        {
+            var existing = Profiles.Find(lab.LabId) ?? throw new InvalidDataException(Strings.Format("Bootstrap.LabNotSaved", lab.LabId));
+            if (existing.Access == ProfileAccess.Administrator)
+            {
+                throw new InvalidDataException(Strings.Format("Bootstrap.LabAlreadySaved", existing.LabName));
+            }
+
+            if (!string.Equals(existing.AuthorityFingerprint, ProfileRecord.AuthorityFingerprintOf(lab.Document.Authority), StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(Strings.Format("Import.DifferentAuthority", existing.LabName));
+            }
+
+            var payload = LabBackup.Open(backup, lab);
+            var store = StoreFor(lab.LabId);
+            store.EnsureDirectories();
+            var now = DateTimeOffset.UtcNow;
+
+            // The backup's lab.json is merged like a snapshot (never a rollback): the
+            // roster, layout and revocations this teacher saw stay, the administrator's add to them.
+            using var authority = X509CertificateLoader.LoadCertificate(lab.Document.Authority);
+            var snapshot = LabFile.Snapshot(lab, payload.Lab, null, backup.ExportedBy, backup.ExportedBy, payload.Lab.ExportedSnapshotVersion, DateTimeOffset.FromUnixTimeSeconds(backup.ExportedAtUnix));
+            if (active is { IsDisposed: false })
+            {
+                active.ApplySnapshot(snapshot);
+                active.Registry.Persist(document => MergeInstances(document, payload.Lab));
+                active.SaveLab();
+            }
+            else
+            {
+                var document = store.LoadLab(lab.LabId, lab.LabName);
+                var registry = new LabRegistry(document, authority);
+                LabFile.Merge(document, snapshot, authority, registry.Revocations, now);
+                MergeInstances(document, payload.Lab);
+                store.SaveLab(document);
+            }
+
+            store.SaveLabKey(lab.Document);
+            store.WriteCatalog(payload.Catalog);
+            if (payload.Scripts is not null && store.LoadScripts() is null)
+            {
+                payload.Scripts.LabId = lab.LabId;
+                store.SaveScripts(payload.Scripts);
+            }
+
+            var enrollment = payload.Enrollment ?? new EnrollmentDocument();
+            enrollment.LabId = lab.LabId;
+            new EnrollmentAuthority(enrollment).MarkDormant(now);
+            store.SaveEnrollment(enrollment);
+
+            var instanceDocument = store.LoadInstance();
+            ConsoleInstance instance;
+            if (instanceDocument is null)
+            {
+                instance = ConsoleInstance.Mint(lab, instanceName, _newProtector());
+                instance.Document.RecoveryCodeAcknowledged = true;
+                instanceDocument = instance.Document;
+            }
+            else
+            {
+                instance = ConsoleInstance.Open(instanceDocument);
+            }
+
+            instanceDocument.BackupExportedAtUnix = backup.ExportedAtUnix;
+            instanceDocument.BackupLocation = "imported from a backup";
+            instanceDocument.BackupFingerprint = JsonStore.Fingerprint(JsonStore.Serialize(lab.Document, LabKeyDocument.Migrations));
+            instanceDocument.RecoveryCodeAcknowledged = true;
+            store.SaveInstance(instanceDocument);
+
+            existing.Access = ProfileAccess.Administrator;
+            existing.Authorization = ProfileAuthorization.Authorized;
+            existing.AccessExpiresUnix = 0;
+            existing.InstanceId = instanceDocument.InstanceId;
+            existing.InstanceName = instanceDocument.InstanceName;
+            existing.PcCount = Math.Max(existing.PcCount, payload.Lab.Machines.Count);
+            existing.Source = ProfileSource.Backup;
+            Profiles.Upsert(existing);
+
+            _log.LogInformation("Lab {LabId} upgraded from a backup: administrator access, instance {Instance} kept, {Codes} enrollment codes dormant",
+                lab.LabId, instanceDocument.InstanceId, enrollment.Codes.Count(c => c.IsDormant));
+
+            return new ImportedLab(lab.LabId, lab.LabName, payload.Lab.Machines.Count, lab, instance);
+        }
+        catch
+        {
+            lab.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>The other consoles the backup knew (§3.7.1) join the list; this one stays this one.</summary>
+    private static void MergeInstances(LabDocument local, LabDocument imported)
+    {
+        foreach (var record in imported.Instances)
+        {
+            var known = local.Instances.FirstOrDefault(i => string.Equals(i.InstanceId, record.InstanceId, StringComparison.OrdinalIgnoreCase));
+            if (known is null)
+            {
+                local.Instances.Add(new InstanceRecord
+                {
+                    InstanceId = record.InstanceId,
+                    Name = record.Name,
+                    CertificateSerial = record.CertificateSerial,
+                    FirstSeenUnix = record.FirstSeenUnix,
+                    LastSeenUnix = record.LastSeenUnix,
+                    Access = record.Access,
+                    AuthorizedAtUnix = record.AuthorizedAtUnix,
+                    RevokedAtUnix = record.RevokedAtUnix,
+                });
+                continue;
+            }
+
+            if (known.Name.Length == 0)
+            {
+                known.Name = record.Name;
+            }
+
+            if (known.Access == ProfileAccess.Unknown)
+            {
+                known.Access = record.Access;
+            }
+
+            known.AuthorizedAtUnix = Math.Max(known.AuthorizedAtUnix, record.AuthorizedAtUnix);
+            known.RevokedAtUnix = Math.Max(known.RevokedAtUnix, record.RevokedAtUnix);
+        }
     }
 
     /// <summary>
@@ -209,8 +363,11 @@ public sealed class ConsoleBootstrap
 
             if (payload.Enrollment is not null)
             {
-                // The codes on sticks written by the old machine keep working here (D-28).
+                // The codes on sticks written by the old machine travel here (D-28) but sleep
+                // until the administrator activates them on this profile (D-60): two holders of
+                // the key cannot enforce single use from separate journals.
                 payload.Enrollment.LabId = lab.LabId;
+                new EnrollmentAuthority(payload.Enrollment).MarkDormant(DateTimeOffset.UtcNow);
                 store.SaveEnrollment(payload.Enrollment);
             }
 
@@ -303,6 +460,12 @@ public sealed class ConsoleBootstrap
         var store = StoreFor(labId);
         // packages/ and logs/ may be missing from a lab that never had them; every writer expects them.
         store.EnsureDirectories();
+
+        if (!store.HasLabKey)
+        {
+            return OpenTeacherProfile(labId, store);
+        }
+
         var keyDocument = store.LoadLabKey();
         var instanceDocument = store.LoadInstance()
                                ?? throw new InvalidDataException(Strings.Format("Bootstrap.InstanceMissing", Defaults.InstanceFileName));
@@ -316,7 +479,102 @@ public sealed class ConsoleBootstrap
         var instance = ConsoleInstance.Open(instanceDocument);
         var vault = new LabKeyVault(store, keyDocument);
 
-        return new OpenedLab(store, vault, instance, instanceDocument, instance.NeedsRemint(DateTimeOffset.UtcNow));
+        return new OpenedLab(store, LabIdentity.Of(keyDocument), vault, instance, instanceDocument, instance.NeedsRemint(DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>
+    /// A teacher profile (M5, D-56): no key, so <c>access.json</c> must say <i>authorized</i>
+    /// and the device leaf must be current and not withdrawn. Anything else is refused with
+    /// the step the teacher needs next, and the index is kept truthful on the way.
+    /// </summary>
+    private OpenedLab OpenTeacherProfile(string labId, LabStore store)
+    {
+        var profile = Profiles.Find(labId)!;
+        var access = store.LoadAccess() ?? throw new InvalidDataException(Strings.Format("Bootstrap.AccessMissing", Defaults.AccessFileName, Defaults.LabKeyFileName));
+
+        if (!string.Equals(access.LabId, labId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(Strings.Format("Bootstrap.KeyInstanceMismatch", Defaults.AccessFileName, access.LabId, Defaults.ProfilesFileName, labId));
+        }
+
+        switch (access.State)
+        {
+            case AccessState.NeedsAuthorization:
+                throw new InvalidDataException(Strings.Get("Access.OpenNeedsAuthorization"));
+            case AccessState.RequestPending:
+                throw new InvalidDataException(Strings.Get("Access.OpenRequestPending"));
+            case AccessState.Revoked:
+                throw new InvalidDataException(Strings.Get("Access.OpenRevoked"));
+            case AccessState.Expired:
+                throw new InvalidDataException(Strings.Get("Access.OpenExpired"));
+        }
+
+        var instanceDocument = store.LoadInstance()
+                               ?? throw new InvalidDataException(Strings.Format("Bootstrap.InstanceMissing", Defaults.InstanceFileName));
+
+        var now = DateTimeOffset.UtcNow;
+        var lab = store.LoadLab(labId, profile.LabName);
+        using var authority = X509CertificateLoader.LoadCertificate(access.Authority);
+        var registry = new LabRegistry(lab, authority);
+        if (registry.Revocations.IsRevoked(LabCertificates.InstanceSerial(access.InstanceId)))
+        {
+            SetAuthorization(profile, access, store, ProfileAuthorization.Revoked, AccessState.Revoked, now);
+            throw new InvalidDataException(Strings.Get("Access.OpenRevoked"));
+        }
+
+        var instance = ConsoleInstance.Open(instanceDocument);
+        if (instance.ExpiresAt <= now)
+        {
+            instance.Dispose();
+            SetAuthorization(profile, access, store, ProfileAuthorization.Expired, AccessState.Expired, now);
+            throw new InvalidDataException(Strings.Get("Access.OpenExpired"));
+        }
+
+        // A teacher leaf is renewed through a new request, never re-minted here.
+        return new OpenedLab(store, LabIdentity.Of(access, profile.LabName), null, instance, instanceDocument, NeedsRemint: false);
+    }
+
+    private void SetAuthorization(ProfileRecord profile, AccessDocument access, LabStore store, ProfileAuthorization authorization, AccessState state, DateTimeOffset now)
+    {
+        access.State = state;
+        if (state == AccessState.Revoked && access.RevokedAtUnix == 0)
+        {
+            access.RevokedAtUnix = now.ToUnixTimeSeconds();
+        }
+
+        store.SaveAccess(access);
+        profile.Authorization = authorization;
+        Profiles.Upsert(profile);
+    }
+
+    /// <summary>
+    /// Marks teacher profiles whose leaf has run out as expired (M5 portion 3): the chooser
+    /// calls it on every refresh, so <c>profiles.json</c> never claims an access that is gone.
+    /// </summary>
+    public void RefreshExpiry(DateTimeOffset now)
+    {
+        foreach (var profile in Profiles.Profiles.ToArray())
+        {
+            if (profile.Access == ProfileAccess.Teacher && profile.Authorization == ProfileAuthorization.Authorized
+                && profile.AccessExpiresUnix > 0 && DateTimeOffset.FromUnixTimeSeconds(profile.AccessExpiresUnix) <= now)
+            {
+                profile.Authorization = ProfileAuthorization.Expired;
+                Profiles.Upsert(profile);
+                try
+                {
+                    var store = StoreFor(profile.LabId);
+                    if (store.LoadAccess() is { } access)
+                    {
+                        access.State = AccessState.Expired;
+                        store.SaveAccess(access);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or InvalidDataException or SchemaVersionException or UnauthorizedAccessException)
+                {
+                    _log.LogWarning(ex, "The access document of lab {LabId} could not be marked expired", profile.LabId);
+                }
+            }
+        }
     }
 
     /// <summary>Replaces an expiring console leaf (§3.8); the vault must be unlocked.</summary>
@@ -343,10 +601,13 @@ public sealed class ConsoleBootstrap
     /// Builds the session for an opened lab without touching the index: the controller marks
     /// the lab as used only once the session actually serves (M5, D-57 item 1).
     /// </summary>
-    public LabSession Build(OpenedLab opened, ConsoleInstance instance) => NewSession(opened.Store, opened.Vault, instance);
+    public LabSession Build(OpenedLab opened, ConsoleInstance instance) => NewSession(opened.Store, opened.Identity, opened.Vault, instance);
 
     private LabSession NewSession(LabStore store, LabKeyVault vault, ConsoleInstance instance) =>
-        new(_options, store, vault, instance, instance.Document, _loggers, seedScripts: SeedScripts.Embedded())
+        NewSession(store, LabIdentity.Of(vault.Document), vault, instance);
+
+    private LabSession NewSession(LabStore store, LabIdentity identity, LabKeyVault? vault, ConsoleInstance instance) =>
+        new(_options, store, identity, vault, instance, instance.Document, _loggers, seedScripts: SeedScripts.Embedded())
         {
             // A PC of another saved lab is refused by name (D-57 item 2); the index is the only source.
             LabNameResolver = labId => Profiles.Find(labId)?.LabName,
@@ -356,12 +617,17 @@ public sealed class ConsoleBootstrap
 
     public BackupStatus CheckBackup(InstanceDocument instance)
     {
+        var store = StoreFor(instance.LabId);
+        if (!store.HasLabKey)
+        {
+            return BackupStatus.NotApplicable;
+        }
+
         if (instance.BackupExportedAtUnix == 0 || string.IsNullOrEmpty(instance.BackupFingerprint))
         {
             return BackupStatus.Missing;
         }
 
-        var store = StoreFor(instance.LabId);
         if (!string.Equals(instance.BackupFingerprint, store.LabKeyFingerprint(), StringComparison.Ordinal))
         {
             return BackupStatus.Stale;
@@ -382,7 +648,7 @@ public sealed class ConsoleBootstrap
     /// ever exported. The next launch resumes the wizard instead of opening the main window.
     /// </summary>
     public bool SetupIsUnfinished(InstanceDocument instance) =>
-        !instance.RecoveryCodeAcknowledged || CheckBackup(instance) == BackupStatus.Missing;
+        StoreFor(instance.LabId).HasLabKey && (!instance.RecoveryCodeAcknowledged || CheckBackup(instance) == BackupStatus.Missing);
 
     /// <summary>Writes the archive and records it as the current backup on this machine. The vault must be unlocked.</summary>
     public bool TryExportBackup(LabSession session, string path, out string error)
@@ -390,6 +656,12 @@ public sealed class ConsoleBootstrap
         var now = session.Now;
         var store = session.Store;
         session.SaveLab();
+
+        if (session.Vault is null)
+        {
+            error = Strings.Get("Access.AdministratorNeeded");
+            return false;
+        }
 
         if (!session.Vault.Use(lab => LabBackup.Serialize(LabBackup.Export(lab, session.Registry.Document, store.ReadCatalog(), session.Instance.InstanceName, now, session.Enrollment.Document, session.Scripts.Document)), out var json))
         {
@@ -419,6 +691,82 @@ public sealed class ConsoleBootstrap
 
     public void SaveInstance(InstanceDocument document) => StoreFor(document.LabId).SaveInstance(document);
 
+    // ------------------------------------------------------------------ lab file (M5, D-56)
+
+    /// <summary>
+    /// Writes the routine lab file (D-56 item 2): the public CA, the roster, the layout, the
+    /// revocations and the script library, signed by the unlocked lab key. Never a key, a
+    /// code or an instance. The snapshot counter in <c>lab.json</c> advances so an older
+    /// file cannot roll a device back.
+    /// </summary>
+    public bool TryExportLabFile(LabSession session, string path, out string error)
+    {
+        if (session.Vault is null)
+        {
+            error = Strings.Get("Access.AdministratorNeeded");
+            return false;
+        }
+
+        var now = session.Now;
+        var version = 0L;
+        session.Registry.Persist(document => version = LabFile.NextSnapshotVersion(document.ExportedSnapshotVersion, now));
+
+        if (!session.Vault.Use(lab =>
+            {
+                LabFilePayload payload = null!;
+                session.Registry.Persist(document => payload = LabFile.Snapshot(lab, document, session.Scripts.Document, session.Instance.InstanceId, session.Instance.InstanceName, version, now));
+                return LabFile.Serialize(LabFile.Export(lab, payload));
+            }, out var json))
+        {
+            error = Strings.Get("Bootstrap.KeyLocked");
+            return false;
+        }
+
+        try
+        {
+            File.WriteAllText(path, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = Strings.Format("Bootstrap.BackupWriteFailed", ex.Message);
+            return false;
+        }
+
+        // The counter advances only for a file that exists: a failed write must not burn a
+        // version, or the next export would look newer than a file nobody has.
+        session.Registry.Persist(document => document.ExportedSnapshotVersion = Math.Max(document.ExportedSnapshotVersion, version));
+        session.SaveLab();
+        session.Events.Info("labfile.exported", $"Lab file exported to {path} (snapshot {version}).");
+        error = string.Empty;
+        return true;
+    }
+
+    /// <summary>A snapshot of a saved lab for a grant, from the running session when there is one, else from disk.</summary>
+    public LabFilePayload SnapshotFor(LabKey lab, LabSession? active, DateTimeOffset now)
+    {
+        if (active is { IsDisposed: false } && string.Equals(active.LabId, lab.LabId, StringComparison.OrdinalIgnoreCase))
+        {
+            var version = 0L;
+            LabFilePayload payload = null!;
+            active.Registry.Persist(document =>
+            {
+                version = LabFile.NextSnapshotVersion(document.ExportedSnapshotVersion, now);
+                document.ExportedSnapshotVersion = version;
+                payload = LabFile.Snapshot(lab, document, active.Scripts.Document, active.Instance.InstanceId, active.Instance.InstanceName, version, now);
+            });
+            active.SaveLab();
+            return payload;
+        }
+
+        var store = StoreFor(lab.LabId);
+        var labDocument = store.LoadLab(lab.LabId, lab.LabName);
+        var next = LabFile.NextSnapshotVersion(labDocument.ExportedSnapshotVersion, now);
+        labDocument.ExportedSnapshotVersion = next;
+        store.SaveLab(labDocument);
+        var instance = store.LoadInstance();
+        return LabFile.Snapshot(lab, labDocument, store.LoadScripts(), instance?.InstanceId ?? string.Empty, instance?.InstanceName ?? string.Empty, next, now);
+    }
+
     // ------------------------------------------------------------------ index
 
     /// <summary>An administrator entry for a lab this device holds the key of.</summary>
@@ -444,7 +792,8 @@ public sealed class ConsoleBootstrap
     }
 }
 
-public sealed record OpenedLab(LabStore Store, LabKeyVault Vault, ConsoleInstance Instance, InstanceDocument Document, bool NeedsRemint);
+/// <summary>A saved lab read from disk and ready to serve; <see cref="Vault"/> is <c>null</c> on a teacher profile (M5, D-56).</summary>
+public sealed record OpenedLab(LabStore Store, LabIdentity Identity, LabKeyVault? Vault, ConsoleInstance Instance, InstanceDocument Document, bool NeedsRemint);
 
 /// <summary>A lab just written from a backup (M5): its identity, the unlocked key and the minted instance, both owned by the holder.</summary>
 public sealed record ImportedLab(string LabId, string LabName, int PcCount, LabKey Key, ConsoleInstance Instance) : IDisposable

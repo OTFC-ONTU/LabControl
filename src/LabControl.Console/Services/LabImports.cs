@@ -28,6 +28,8 @@ public sealed class LabImports
 {
     private readonly ConsoleBootstrap _bootstrap;
     private readonly Func<BackupDocument, Task<BackupSecret?>> _unlock;
+    private readonly Func<string, Task<BackupSecret?>>? _unlockKey;
+    private readonly Func<string, LabSession?> _active;
     private readonly string _instanceName;
     private readonly ILogger _log;
     private readonly Dictionary<string, Func<string, Task<ImportFileResult>>> _handlers = new(StringComparer.OrdinalIgnoreCase);
@@ -35,14 +37,29 @@ public sealed class LabImports
 
     /// <param name="unlock">Asks the teacher for the secret that opens a backup; <c>null</c> skips that file.</param>
     /// <param name="instanceName">The name this device's new instance gets in every imported lab.</param>
-    public LabImports(ConsoleBootstrap bootstrap, Func<BackupDocument, Task<BackupSecret?>> unlock, string instanceName, ILogger? log = null)
+    /// <param name="active">The running session for a lab id, if that lab is active: imports into it go through the session.</param>
+    /// <param name="unlockKey">
+    /// Asks for the secret that unlocks a saved lab's key (the reason names the request); used
+    /// to approve a <c>.lcreq</c> when its lab is not active. <c>null</c> refuses requests.
+    /// </param>
+    public LabImports(ConsoleBootstrap bootstrap, Func<BackupDocument, Task<BackupSecret?>> unlock, string instanceName, ILogger? log = null,
+        Func<string, LabSession?>? active = null, Func<string, Task<BackupSecret?>>? unlockKey = null)
     {
         _bootstrap = bootstrap;
         _unlock = unlock;
+        _unlockKey = unlockKey;
+        _active = active ?? (_ => null);
         _instanceName = instanceName;
         _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+        Devices = new DeviceAccess(bootstrap, _active, _log);
         Register(Defaults.BackupFileExtension, Strings.Get("Backup.FileType"), ImportBackupAsync);
+        Register(Defaults.LabFileExtension, Strings.Get("LabFile.FileType"), path => Task.Run(() => Devices.ImportLabFile(path, _instanceName)));
+        Register(Defaults.DeviceGrantFileExtension, Strings.Get("Grant.FileType"), path => Task.Run(() => Devices.ImportGrant(path)));
+        Register(Defaults.DeviceRequestFileExtension, Strings.Get("Request.FileType"), ImportRequestAsync);
     }
+
+    /// <summary>The lab-file and device-authorization operations behind the handlers (M5, D-56).</summary>
+    public DeviceAccess Devices { get; }
 
     /// <summary>The picker filters, one per known extension, in registration order.</summary>
     public IReadOnlyList<FileFilter> Filters => _filters;
@@ -77,10 +94,13 @@ public sealed class LabImports
             {
                 results.Add(await handler(path));
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or SchemaVersionException or InvalidOperationException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or SchemaVersionException or InvalidOperationException
+                                           or System.Security.Cryptography.CryptographicException or ArgumentException or System.Formats.Asn1.AsnContentException)
             {
                 // InvalidOperationException is the keystore refusing to hold the new instance
-                // key (Keychain, secret-tool): that file fails alone, like a wrong passphrase.
+                // key (Keychain, secret-tool); ArgumentException, CryptographicException and
+                // AsnContentException are a hostile or damaged file's certificate, CSR or
+                // subject: that file fails alone, like a wrong passphrase.
                 results.Add(new ImportFileResult(path, false, ex.Message, null));
             }
         }
@@ -97,9 +117,10 @@ public sealed class LabImports
     {
         var backup = ConsoleBootstrap.ReadBackup(path);
 
-        // Refused before asking for a secret: the portion-1 rule, until portion 3 adds the
-        // upgrade of a saved lab from a backup.
-        if (_bootstrap.Profiles.Find(backup.LabKey.LabId) is { } existing)
+        // An administrator profile is refused before asking for a secret; a teacher profile
+        // is upgraded from the backup (D-56 item 3), keeping its instance and history.
+        var existing = _bootstrap.Profiles.Find(backup.LabKey.LabId);
+        if (existing is { Access: ProfileAccess.Administrator })
         {
             return new ImportFileResult(path, false, Strings.Format("Bootstrap.LabAlreadySaved", existing.LabName), existing.LabName);
         }
@@ -111,7 +132,81 @@ public sealed class LabImports
         }
 
         // PBKDF2 takes a moment; the caller is the UI thread.
+        if (existing is not null)
+        {
+            var active = _active(existing.LabId);
+            using var upgraded = await Task.Run(() => _bootstrap.UpgradeFromBackup(backup, secret.Passphrase, secret.RecoveryCode, _instanceName, active));
+            return new ImportFileResult(path, true, Strings.Format("Import.Upgraded", upgraded.LabName), upgraded.LabName);
+        }
+
         using var imported = await Task.Run(() => _bootstrap.ImportBackupProfile(backup, secret.Passphrase, secret.RecoveryCode, _instanceName));
         return new ImportFileResult(path, true, Strings.Format("Import.Added", imported.LabName, imported.PcCount), imported.LabName);
+    }
+
+    /// <summary>
+    /// A request is approved only where the lab's key is (D-56 item 4): through the running
+    /// session's vault when that lab is active, otherwise by unlocking the saved key once.
+    /// </summary>
+    private async Task<ImportFileResult> ImportRequestAsync(string path)
+    {
+        var request = DeviceAccess.ReadRequest(path);
+        var profile = _bootstrap.Profiles.Find(request.LabId);
+        if (profile is null || !Devices.CanApprove(request.LabId))
+        {
+            return new ImportFileResult(path, false, Strings.Format("Import.RequestNoAdministrator", request.LabName), request.LabName);
+        }
+
+        // The profile's own name from here on: the file's outer lab_name is unverified text.
+        var labName = profile.LabName;
+        var active = _active(request.LabId);
+        if (active is { IsDisposed: false, Vault: { } vault })
+        {
+            if (!vault.IsUnlocked)
+            {
+                var secret = _unlockKey is null ? null : await _unlockKey(Strings.Format("Import.UnlockForRequest", labName, Path.GetFileName(path)));
+                if (secret is null)
+                {
+                    return new ImportFileResult(path, false, Strings.Get("Import.Cancelled"), labName);
+                }
+
+                var opened = await Task.Run(() => secret.RecoveryCode is not null ? vault.TryUnlock(secret.RecoveryCode) : vault.TryUnlock(secret.Passphrase ?? string.Empty));
+                if (!opened)
+                {
+                    return new ImportFileResult(path, false, Strings.Get(secret.RecoveryCode is not null ? "Bootstrap.WrongRecoveryCode" : "Bootstrap.WrongPassphrase"), labName);
+                }
+            }
+
+            if (!vault.Use(lab => Devices.ApproveRequest(path, lab), out var approved))
+            {
+                return new ImportFileResult(path, false, Strings.Get("Bootstrap.KeyLocked"), labName);
+            }
+
+            return new ImportFileResult(path, true, Strings.Format("Import.RequestApproved", approved.InstanceName, labName, approved.GrantPath), labName);
+        }
+
+        var keyDocument = _bootstrap.StoreFor(request.LabId).LoadLabKey();
+        var answer = _unlockKey is null ? null : await _unlockKey(Strings.Format("Import.UnlockForRequest", labName, Path.GetFileName(path)));
+        if (answer is null)
+        {
+            return new ImportFileResult(path, false, Strings.Get("Import.Cancelled"), labName);
+        }
+
+        return await Task.Run(() =>
+        {
+            LabKey lab;
+            var unlocked = answer.RecoveryCode is not null
+                ? LabKey.TryUnlock(keyDocument, answer.RecoveryCode, out lab)
+                : LabKey.TryUnlock(keyDocument, answer.Passphrase ?? string.Empty, out lab);
+            if (!unlocked)
+            {
+                return new ImportFileResult(path, false, Strings.Get(answer.RecoveryCode is not null ? "Bootstrap.WrongRecoveryCode" : "Bootstrap.WrongPassphrase"), labName);
+            }
+
+            using (lab)
+            {
+                var approved = Devices.ApproveRequest(path, lab);
+                return new ImportFileResult(path, true, Strings.Format("Import.RequestApproved", approved.InstanceName, labName, approved.GrantPath), labName);
+            }
+        });
     }
 }

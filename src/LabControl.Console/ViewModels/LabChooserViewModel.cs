@@ -3,16 +3,34 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LabControl.Console.Localization;
 using LabControl.Console.Services;
+using LabControl.Shared.Identity;
 using LabControl.Shared.Persistence;
+using Microsoft.Extensions.Logging;
 
 namespace LabControl.Console.ViewModels;
 
 /// <summary>One saved lab in the chooser (M5 §5): metadata from <c>profiles.json</c>, nothing live.</summary>
 public sealed partial class LabRowViewModel : ObservableObject
 {
-    public LabRowViewModel(ProfileRecord record, bool highlighted, bool active, DateTimeOffset now)
+    public LabRowViewModel(ProfileRecord record, bool highlighted, bool active, DateTimeOffset now, bool leafIsTeacher = false)
     {
         Record = record;
+        IsAdministrator = record.Access == ProfileAccess.Administrator;
+        NeedsRenewal = DeviceAccess.NeedsRenewal(record, now);
+        CanAuthorize = IsAdministrator || DeviceAccess.CanRequest(record, now);
+        AuthorizeLabel = IsAdministrator
+            ? Strings.Get("Chooser.AuthorizeRequests")
+            : record.Authorization == ProfileAuthorization.Authorized ? Strings.Get("Chooser.RequestRenewal") : Strings.Get("Chooser.Authorize");
+        CanRenewCertificate = IsAdministrator && leafIsTeacher;
+        OpenRefusal = IsAdministrator ? null : record.Authorization switch
+        {
+            ProfileAuthorization.Authorized when record.AccessExpiresUnix > 0 && DateTimeOffset.FromUnixTimeSeconds(record.AccessExpiresUnix) <= now => Strings.Get("Access.OpenExpired"),
+            ProfileAuthorization.Authorized => null,
+            ProfileAuthorization.RequestPending => Strings.Get("Access.OpenRequestPending"),
+            ProfileAuthorization.Expired => Strings.Get("Access.OpenExpired"),
+            ProfileAuthorization.Revoked => Strings.Get("Access.OpenRevoked"),
+            _ => Strings.Get("Access.OpenNeedsAuthorization"),
+        };
         LabId = record.LabId;
         Name = record.LabName;
         AccessLabel = AccessLabels.For(record.Access);
@@ -49,6 +67,24 @@ public sealed partial class LabRowViewModel : ObservableObject
 
     public bool IsActive { get; }
 
+    public bool IsAdministrator { get; }
+
+    /// <summary>A teacher device inside the renewal lead time (D-56 item 4): the chooser offers a renewal request.</summary>
+    public bool NeedsRenewal { get; }
+
+    /// <summary><i>Authorize…</i> applies: a teacher profile that can write a request, or an administrator profile that can approve them.</summary>
+    public bool CanAuthorize { get; }
+
+    public string AuthorizeLabel { get; }
+
+    /// <summary>An administrator profile whose leaf still says <c>OU=LabControl Teacher</c> (upgraded from a backup, D-56 item 3).</summary>
+    public bool CanRenewCertificate { get; }
+
+    /// <summary>Why <i>Open</i> is refused, or <c>null</c> when the lab can be opened (D-56 item 3).</summary>
+    public string? OpenRefusal { get; }
+
+    public bool CanOpen => OpenRefusal is null;
+
     /// <summary>The second line of the row, for the template.</summary>
     public string Details => $"{AccessLabel} · {PcCountText} · {StatusText} · {LastUsedText}";
 
@@ -59,6 +95,7 @@ public sealed partial class LabRowViewModel : ObservableObject
         ProfileAuthorization.Expired => Strings.Get("Chooser.Status.Expired"),
         ProfileAuthorization.Revoked => Strings.Get("Chooser.Status.Revoked"),
         _ when record.AccessExpiresUnix > 0 && DateTimeOffset.FromUnixTimeSeconds(record.AccessExpiresUnix) <= now => Strings.Get("Chooser.Status.Expired"),
+        _ when record.AccessExpiresUnix > 0 && DeviceAccess.NeedsRenewal(record, now) => Strings.Format("Chooser.Status.RenewalDue", DateTimeOffset.FromUnixTimeSeconds(record.AccessExpiresUnix).ToLocalTime().ToString("d", Strings.Culture)),
         _ when record.AccessExpiresUnix > 0 => Strings.Format("Chooser.Status.Expires", DateTimeOffset.FromUnixTimeSeconds(record.AccessExpiresUnix).ToLocalTime().ToString("d", Strings.Culture)),
         _ => Strings.Get("Chooser.Status.Ready"),
     };
@@ -78,15 +115,19 @@ public sealed partial class LabChooserViewModel : ObservableObject
     private readonly IDialogs _dialogs;
     private readonly Action<Action> _post;
     private readonly Action<ActivationStatus> _onStatus;
+    private readonly ILogger? _log;
     private bool _detached;
 
-    public LabChooserViewModel(ConsoleBootstrap bootstrap, ActiveLabController controller, IDialogs dialogs, Action<Action> post)
+    public LabChooserViewModel(ConsoleBootstrap bootstrap, ActiveLabController controller, IDialogs dialogs, Action<Action> post, ILogger? log = null)
     {
         _bootstrap = bootstrap;
         _controller = controller;
         _dialogs = dialogs;
         _post = post;
-        Imports = new LabImports(bootstrap, UnlockBackupAsync, ConsoleBootstrap.DefaultInstanceName());
+        _log = log;
+        Imports = new LabImports(bootstrap, UnlockBackupAsync, ConsoleBootstrap.DefaultInstanceName(), log,
+            labId => controller.Active is { IsDisposed: false } active && string.Equals(active.LabId, labId, StringComparison.OrdinalIgnoreCase) ? active : null,
+            UnlockKeyAsync);
 
         _onStatus = status => _post(() =>
         {
@@ -107,7 +148,7 @@ public sealed partial class LabChooserViewModel : ObservableObject
     public ObservableCollection<LabRowViewModel> Labs { get; } = [];
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand), nameof(AuthorizeCommand), nameof(RenewCertificateCommand))]
     public partial LabRowViewModel? Selected { get; set; }
 
     /// <summary>What is going on: "Opening …", or empty.</summary>
@@ -120,7 +161,7 @@ public sealed partial class LabChooserViewModel : ObservableObject
 
     /// <summary>An activation is under way: buttons wait, the list stays.</summary>
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand), nameof(AddLabsCommand), nameof(CreateLabCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand), nameof(AddLabsCommand), nameof(CreateLabCommand), nameof(AuthorizeCommand), nameof(RenewCertificateCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -143,9 +184,10 @@ public sealed partial class LabChooserViewModel : ObservableObject
     public void Refresh()
     {
         _bootstrap.Profiles.Load();
+        var now = DateTimeOffset.UtcNow;
+        _bootstrap.RefreshExpiry(now);
         var highlighted = _bootstrap.DefaultLabId;
         var active = _controller.Active is { IsDisposed: false } session ? session.LabId : null;
-        var now = DateTimeOffset.UtcNow;
         var selectedId = Selected?.LabId;
 
         Labs.Clear();
@@ -157,7 +199,8 @@ public sealed partial class LabChooserViewModel : ObservableObject
             Labs.Add(new LabRowViewModel(record,
                 highlighted: string.Equals(record.LabId, highlighted, StringComparison.OrdinalIgnoreCase),
                 active: string.Equals(record.LabId, active, StringComparison.OrdinalIgnoreCase),
-                now));
+                now,
+                leafIsTeacher: LeafIsTeacher(record)));
         }
 
         HasLabs = Labs.Count > 0;
@@ -202,6 +245,30 @@ public sealed partial class LabChooserViewModel : ObservableObject
     private string NameOf(string? labId) =>
         labId is null ? string.Empty : _bootstrap.Profiles.Find(labId)?.LabName ?? labId;
 
+    /// <summary>An administrator profile upgraded from a backup keeps its teacher leaf until <i>Renew this device's certificate</i> (D-56 item 3).</summary>
+    private bool LeafIsTeacher(ProfileRecord record)
+    {
+        if (record.Access != ProfileAccess.Administrator)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (_bootstrap.StoreFor(record.LabId).LoadInstance() is not { Certificate.Length: > 0 } instance)
+            {
+                return false;
+            }
+
+            using var leaf = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadCertificate(instance.Certificate);
+            return LabName.AccessOf(leaf) == ConsoleAccess.Teacher;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or SchemaVersionException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
+            return false;
+        }
+    }
+
     private bool CanOpen => !IsBusy && Selected is not null;
 
     /// <summary>The active lab cannot be forgotten while it is open: leave it first.</summary>
@@ -210,6 +277,10 @@ public sealed partial class LabChooserViewModel : ObservableObject
     private bool CanAct => !IsBusy;
 
     private bool CanRetry => !IsBusy && FailedLabId is not null;
+
+    private bool CanAuthorize => !IsBusy && Selected is { CanAuthorize: true };
+
+    private bool CanRenewCertificate => !IsBusy && Selected is { CanRenewCertificate: true };
 
     /// <summary>Open (button, double-click, Enter): the selected lab becomes the active one; the app shows the main window on <see cref="ActivationState.Active"/>.</summary>
     [RelayCommand(CanExecute = nameof(CanOpen))]
@@ -221,8 +292,145 @@ public sealed partial class LabChooserViewModel : ObservableObject
             return;
         }
 
+        if (target.OpenRefusal is { } refusal)
+        {
+            // A teacher profile without a current grant cannot serve (D-56 item 3): the row says what to do next.
+            Error = Strings.Format("Chooser.OpenRefused", target.Name, refusal);
+            return;
+        }
+
         Error = string.Empty;
         await ActivateAsync(target.LabId);
+    }
+
+    /// <summary>
+    /// <i>Authorize…</i> (M5 §5): on a teacher profile, writes the device request (a re-run
+    /// regenerates the same file); on an administrator profile, opens the approval flow for
+    /// one or more requests.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAuthorize))]
+    private async Task AuthorizeAsync(LabRowViewModel? row)
+    {
+        var target = row ?? Selected;
+        if (target is null || !target.CanAuthorize || IsBusy)
+        {
+            return;
+        }
+
+        if (target.IsAdministrator)
+        {
+            var requests = await _dialogs.PickOpenFilesAsync(Strings.Get("Device.AuthorizeTitle"),
+                [new FileFilter(Strings.Get("Request.FileType"), ["*" + Shared.Defaults.DeviceRequestFileExtension])]);
+            if (requests.Count > 0)
+            {
+                await ImportFilesAsync(requests);
+            }
+
+            return;
+        }
+
+        string suggested;
+        try
+        {
+            suggested = Imports.Devices.SuggestRequestFileName(target.LabId);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            Error = Strings.Format("Chooser.RequestFailed", target.Name, ex.Message);
+            return;
+        }
+
+        var path = await _dialogs.PickSaveFileAsync(Strings.Get("Chooser.RequestTitle"), suggested, Shared.Defaults.DeviceRequestFileExtension);
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Run(() => Imports.Devices.WriteRequest(target.LabId, path));
+            Error = string.Empty;
+            Status = Strings.Format("Chooser.RequestWritten", path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or SchemaVersionException or InvalidOperationException
+                                       or System.Security.Cryptography.CryptographicException)
+        {
+            Error = Strings.Format("Chooser.RequestFailed", target.Name, ex.Message);
+        }
+
+        Refresh();
+    }
+
+    /// <summary>
+    /// <i>Renew this device's certificate</i>: an administrator profile upgraded from a backup
+    /// still serves with its teacher leaf until the teacher asks, with the key, for an
+    /// administrator one (D-56 item 3). Same instance id, new key.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRenewCertificate))]
+    private async Task RenewCertificateAsync(LabRowViewModel? row)
+    {
+        var target = row ?? Selected;
+        if (target is null || !target.CanRenewCertificate || IsBusy)
+        {
+            return;
+        }
+
+        var store = _bootstrap.StoreFor(target.LabId);
+        LabKeyDocument keyDocument;
+        InstanceDocument existing;
+        try
+        {
+            keyDocument = store.LoadLabKey();
+            existing = store.LoadInstance() ?? throw new InvalidDataException(Strings.Format("Bootstrap.InstanceMissing", Shared.Defaults.InstanceFileName));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or SchemaVersionException or UnauthorizedAccessException)
+        {
+            Error = Strings.Format("Chooser.RenewFailed", target.Name, ex.Message);
+            return;
+        }
+
+        while (true)
+        {
+            var answer = await _dialogs.UnlockAsync(Strings.Format("Unlock.ReasonRenewDevice", target.Name));
+            if (answer is null)
+            {
+                return;
+            }
+
+            var lab = await Task.Run(() =>
+            {
+                var unlocked = answer.RecoveryCode is not null
+                    ? LabKey.TryUnlock(keyDocument, answer.RecoveryCode, out var key)
+                    : LabKey.TryUnlock(keyDocument, answer.Passphrase ?? string.Empty, out key);
+                return unlocked ? key : null;
+            });
+            if (lab is null)
+            {
+                await _dialogs.ShowMessageAsync(Strings.Get("Unlock.Title"), Strings.Get("Unlock.Wrong"));
+                continue;
+            }
+
+            try
+            {
+                using (lab)
+                {
+                    using var reminted = ConsoleInstance.Remint(lab, existing, _bootstrap.NewProtector());
+                    store.SaveInstance(reminted.Document);
+                }
+
+                Error = string.Empty;
+                Status = Strings.Format("Chooser.Renewed", target.Name);
+                _log?.LogInformation("Console leaf of lab {LabId} re-minted as administrator from the chooser", target.LabId);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException
+                                           or System.Security.Cryptography.CryptographicException)
+            {
+                Error = Strings.Format("Chooser.RenewFailed", target.Name, ex.Message);
+            }
+
+            Refresh();
+            return;
+        }
     }
 
     /// <summary><i>Retry</i> after a failure: the same lab again, whatever row is selected now.</summary>
@@ -335,6 +543,12 @@ public sealed partial class LabChooserViewModel : ObservableObject
         }
 
         Refresh();
+    }
+
+    private async Task<BackupSecret?> UnlockKeyAsync(string reason)
+    {
+        var answer = await _dialogs.UnlockAsync(reason);
+        return answer is null ? null : new BackupSecret(answer.Passphrase, answer.RecoveryCode);
     }
 
     private async Task<BackupSecret?> UnlockBackupAsync(BackupDocument backup)

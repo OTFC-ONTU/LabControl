@@ -2209,7 +2209,8 @@ Decisions:
 6. **A device is revoked across renewal with a pseudo-serial.** *Settings → Teacher
    devices → Withdraw access…* (unlock required) issues two signed entries through
    `Registry.Revoke`: the current leaf serial and `instance:<instance_id>`, in the same
-   signed `serial|revoked_at_unix|reason` form, so older agents store it inertly. The M5
+   signed `serial|revoked_at_unix|reason` form (older agents were expected to store it
+   inertly — corrected in item 9). The M5
    `LabTrust.TryValidate` also checks `instance:` entries for console peers, so a renewed
    leaf for a withdrawn device is refused; `InstanceRecord.RevokedAtUnix` is set.
    Propagation: pushed to linked agents at once (`TryRevoke`), carried in later `.lclab`
@@ -2219,6 +2220,45 @@ Decisions:
    14 PCs; pending on PC-03 (offline since …)* — never "revoked everywhere". Re-importing
    an old `.lclab` after withdrawal cannot bypass it; a new request mints a new instance id
    and key and needs a fresh approval.
+
+Added while building portion 3 (2026-09-08, after the security review):
+
+7. **`Approve` never re-certifies an id that is not a teacher device.** A request naming
+   an existing instance id is a renewal only when that record is a teacher device;
+   a request naming this machine, an administrator record or an unknown record is
+   refused. `LabRegistry.RecordAuthorization` is the registry-side guard, so the rule
+   holds even for a caller that skips `DeviceAuthorization.Approve`. The review found
+   that a forged `.lcreq` carrying the administrator's own instance id could otherwise
+   have been issued a teacher leaf under that id.
+8. **A renewal must present a fresh key.** `InstanceRecord.PublicKeyFingerprint` records
+   the key certified last; a request carrying the same key is refused with a pointer to
+   the grant written then. On the device the pending key is a separate keystore item
+   (`instance-<id>-pending`, `AccessDocument.PendingKeyReference`), the CSR is P-256
+   only with a verified self-signature, the name is bounded by
+   `Defaults.MaxInstanceNameLength` (64), and grant import protects and saves the new
+   key before the pending and previous items are forgotten. Withdrawal revokes every
+   serial in `InstanceRecord.CertificateSerials`, not only the current one.
+9. **Correction: pre-M5 agents do not hold `instance:` entries.** Their serial
+   normalisation strips the entry to hex, which breaks its signature, so they drop it
+   and the console re-pushes it on every link. `RevocationDelivery` therefore has a third
+   list, `CannotHold` (`LabSession.DeliveryOf`), recognised through the sibling leaf
+   serial that the same agent did confirm, and Settings shows those PCs as *cannot
+   hold* until the agent is updated. The withdrawn device is still locked out of such a
+   PC by its leaf serial; only a *renewed* leaf would be accepted by a pre-M5 agent,
+   which is the documented gap closed by the next agent push. An M5 agent additionally
+   leaves a console whose serial or instance id becomes revoked (`console.revoked`).
+10. **The role is read strictly.** `LabName.Access` comes from exactly one single-valued
+   OU: `LabControl Console` → `Administrator`, `LabControl Teacher` → `Teacher`,
+   anything else — no OU, two OUs, a multi-valued OU — → `Unknown`. An agent refuses
+   `self_update`/`rekey` and skips renewal unless the validated peer is `Administrator`;
+   `Unknown` is refused, not tolerated.
+11. **Merge details as implemented.** An older snapshot contributes only its revocations
+   and reports *older snapshot; nothing rolled back*; a PC this console has seen linked
+   is only filled in, never rewritten; a serial revoked locally blocks re-adding that
+   PC; the layout comes only from a newer snapshot; scripts go only into an empty
+   library; the access level is never downgraded; `lab.json` records
+   `imported_snapshot_version` and `exported_snapshot_version`. The merged Settings
+   panel *Teacher devices* replaces *Other teacher machines*.
 
 Rejected: a new SAN segment or a private OID for the role (every installed agent would
 parse `Malformed`); a shared teacher key copied with the file (`D-53` item 3); a
@@ -2233,7 +2273,14 @@ trip, parse a teacher leaf as `Console` with `Access = Teacher`, and refuse a re
 under an `instance:` entry. Console tests link agents to a teacher console and run a
 script, see `Enroll`/`Renew` `Closed`, withdraw a device (link closed, entry reaches
 agents, pending list shrinks) and upgrade a teacher profile from a backup keeping its
-instance id and logs. Implementation status is tracked in ROADMAP M5.
+instance id and logs. Built and reviewed 2026-09-08 (M5 portion 3): the envelope tests
+also refuse a wrong kind for the extension and a signature made under another domain;
+the authorization tests refuse a request naming this machine, an administrator or an
+unknown record, and a renewal with the already-certified key; the delivery tests see a
+pre-M5 agent in `CannotHold` and an M5 agent leave on `console.revoked`. 753 tests
+(622 Shared + 131 Console) and a manual export → import → request → approve → grant
+round trip on two copies of the data directory; no Windows or real-agent run yet —
+status in ROADMAP M5.
 
 ## D-57 — One active session: `ActiveLabController`, release before acquire, the departure report, result ownership (M5 portions 2 and 4)
 
@@ -2474,8 +2521,12 @@ the old one is in the administrator's hand); silently keeping them active (the `
 item 7 hazard).
 
 Validation: Shared tests refuse a dormant code and accept it after activation; console
-tests import a backup and see the codes dormant. Implementation status is tracked in
-ROADMAP M5.
+tests import a backup and see the codes dormant. Implemented 2026-09-08 (M5 portion 3):
+`enrollment.json` is schema 2 (`DormantSinceImportUnix`, `IssuedByInstanceId`,
+`Batches[]`, upgraded from schema 1 on load), `Redeem` answers
+`EnrollmentOutcome.DormantCode`, *Settings → Enrollment → Use codes from the imported
+backup* activates them, and `Supersede` voids dormant codes together with the active
+ones, so a fresh batch is always the whole truth. Status in ROADMAP M5.
 
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 

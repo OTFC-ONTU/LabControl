@@ -219,8 +219,11 @@ built*); portions 1–2 built and reviewed 2026-09-08 (portion 1: profile store,
 migration, `lab.json` schema 2, `console.lock`; migration tried on a copy of the owner's
 live data, the live directory migrates on the next M5 launch; portion 2:
 `ActiveLabController`, the *My labs* chooser, *Disconnect*, the departure report, bulk
-`.lcbak` import; 728 tests; real-Mac switch timing under investigation, `D-57` item 11);
-portion 3 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
+`.lcbak` import; real-Mac switch timing under investigation, `D-57` item 11; portion 3:
+signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:`
+withdrawal with confirmed delivery, the *Teacher devices* panel, dormant imported codes;
+753 tests, smoke-tested on two copies of the data directory, no Windows run yet);
+portion 4 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
 (*Files exchanged offline*, *M5 additions*) describe the design; the `Welcome.console_access`
 `.proto` change lands with portion 5 and must update PROTOCOL again in that commit.
 

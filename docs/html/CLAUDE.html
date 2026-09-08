@@ -339,8 +339,11 @@ built</em>); portions 1–2 built and reviewed 2026-09-08 (portion 1: profile st
 migration, <code>lab.json</code> schema 2, <code>console.lock</code>; migration tried on a copy of the owner's
 live data, the live directory migrates on the next M5 launch; portion 2:
 <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, the departure report, bulk
-<code>.lcbak</code> import; 728 tests; real-Mac switch timing under investigation, <code>D-57</code> item 11);
-portion 3 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
+<code>.lcbak</code> import; real-Mac switch timing under investigation, <code>D-57</code> item 11; portion 3:
+signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code>
+withdrawal with confirmed delivery, the <em>Teacher devices</em> panel, dormant imported codes;
+753 tests, smoke-tested on two copies of the data directory, no Windows run yet);
+portion 4 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
 (<em>Files exchanged offline</em>, <em>M5 additions</em>) describe the design; the <code>Welcome.console_access</code>
 <code>.proto</code> change lands with portion 5 and must update PROTOCOL again in that commit.</p>
 <p><strong>M0 is done (2026-09-04). M1 is done (2026-09-05)</strong>: the trust model, beacon discovery,
@@ -529,7 +532,7 @@ snapshot, refresh after repair and remain visible while the PC is offline. Physi
 is informational until tested; unsupported configuration and antivirus issues need attention.</p>
 
 </article>
-<footer>Generated 2026-09-08 16:13 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-08 21:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

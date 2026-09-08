@@ -38,7 +38,7 @@ public sealed class PushBuildTests
         try
         {
             Assert.True(AgentBuild.TryLoad(folder, "0.1.0", out var build, out var error), error);
-            console.Session.Vault.Lock();
+            console.Session.Vault!.Lock();
             Assert.Throws<InvalidOperationException>(() => console.Session.PushAgentBuild([], build));
             Assert.Equal(0, console.Session.Files.Count);
         }

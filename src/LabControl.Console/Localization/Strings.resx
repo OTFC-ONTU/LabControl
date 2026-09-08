@@ -384,7 +384,7 @@ exit 0
   <data name="Import.ResultsTitle" xml:space="preserve"><value>Add labs</value></data>
   <data name="Import.ResultsHeading" xml:space="preserve"><value>{0} of {1} files added</value></data>
   <data name="Import.NothingOpened" xml:space="preserve"><value>Nothing was opened. Pick a lab from the list and press Open.</value></data>
-  <data name="Import.Unsupported" xml:space="preserve"><value>Not a file this console can add ({0}). Lab files, device grants and requests come with a later update; backups (.lcbak) work now.</value></data>
+  <data name="Import.Unsupported" xml:space="preserve"><value>Not a file this console can add ({0}). Lab files (.lclab), backups (.lcbak), device grants (.lcgrant) and device requests (.lcreq) are.</value></data>
   <data name="Import.UnlockReason" xml:space="preserve"><value>Backup of lab "{0}", exported {1} by {2}. Type a holder's passphrase or the recovery code to add it to this device.</value></data>
   <data name="Import.Cancelled" xml:space="preserve"><value>Skipped: no passphrase was given.</value></data>
   <data name="Import.Added" xml:space="preserve"><value>Added "{0}" with {1} PCs.</value></data>
@@ -409,4 +409,75 @@ exit 0
   <data name="Departure.Waiting" xml:space="preserve"><value>Waiting for {0} job(s) to finish…</value></data>
   <data name="Departure.Reason" xml:space="preserve"><value>the console left this lab</value></data>
   <data name="App.SetupNotFinished" xml:space="preserve"><value>Setup of this lab was not finished; it is closed again until it is.</value></data>
+  <data name="Access.EnrolNeedsAdministrator" xml:space="preserve"><value>This console has teacher access and cannot enrol PCs. Enrol from an administrator console — the one that holds the lab key.</value></data>
+  <data name="Access.RenewNeedsAdministrator" xml:space="preserve"><value>This console has teacher access and cannot renew certificates; the PC asks again on the next administrator console.</value></data>
+  <data name="Access.AdministratorNeeded" xml:space="preserve"><value>Administrator access needed: this action needs the lab key, which this device does not hold.</value></data>
+  <data name="Access.OpenNeedsAuthorization" xml:space="preserve"><value>This device is not authorized for the lab yet. Press Authorize… to write a request file and give it to the administrator; add the grant file you get back.</value></data>
+  <data name="Access.OpenRequestPending" xml:space="preserve"><value>The request for this lab is waiting for the administrator's grant. Add the grant file when you get it (Authorize… writes the same request again if it was lost).</value></data>
+  <data name="Access.OpenRevoked" xml:space="preserve"><value>The administrator withdrew this device's access to the lab. Press Authorize… to ask again with a new identity.</value></data>
+  <data name="Access.OpenExpired" xml:space="preserve"><value>This device's access to the lab has expired. Press Authorize… to write a renewal request for the administrator.</value></data>
+  <data name="Access.RequestOnAdministrator" xml:space="preserve"><value>This device holds the lab key; it does not need a device request.</value></data>
+  <data name="Access.TeacherHint" xml:space="preserve"><value>Teacher access: enrolling, updating agents, revoking and backups are done on the administrator console.</value></data>
+  <data name="Access.TeacherStatus" xml:space="preserve"><value>Teacher access — no lab key on this device</value></data>
+  <data name="Access.Unknown" xml:space="preserve"><value>Unknown access</value></data>
+  <data name="Bootstrap.AccessMissing" xml:space="preserve"><value>This lab has neither '{0}' nor '{1}'; add it again from a lab file or a backup.</value></data>
+  <data name="Import.DifferentAuthority" xml:space="preserve"><value>"{0}" is already saved here with a different lab key; the same lab id with a different key is refused.</value></data>
+  <data name="Import.LabFileAdded" xml:space="preserve"><value>Added "{0}" with {1} PCs. This device needs the administrator's authorization before it can open the lab.</value></data>
+  <data name="Import.LabFileRefreshed" xml:space="preserve"><value>"{0}" refreshed: {1} PC(s) added, {2} updated, {3} revocation(s) new.</value></data>
+  <data name="Import.LabFileOlder" xml:space="preserve"><value>"{0}": an older snapshot; {1} PC(s) added, {2} revocation(s) new, nothing rolled back.</value></data>
+  <data name="Import.GrantForUnknownLab" xml:space="preserve"><value>This grant is for "{0}", a lab not saved on this device; add its lab file first.</value></data>
+  <data name="Import.GrantOnAdministrator" xml:space="preserve"><value>"{0}" is held here with the lab key; a device grant is not needed.</value></data>
+  <data name="Import.GrantAccepted" xml:space="preserve"><value>"{0}": this device is authorized until {1}.</value></data>
+  <data name="Import.GrantRenewed" xml:space="preserve"><value>"{0}": this device's access was renewed until {1}.</value></data>
+  <data name="Import.GrantSnapshotFailed" xml:space="preserve"><value>The lab snapshot inside the grant could not be applied ({0}); import a lab file later to refresh the PC list.</value></data>
+  <data name="Import.RequestForOtherLab" xml:space="preserve"><value>This request is for "{0}", not the lab being approved.</value></data>
+  <data name="Import.Upgraded" xml:space="preserve"><value>"{0}" now has administrator access on this device; the imported enrollment codes are dormant until activated in Settings.</value></data>
+  <data name="Import.RequestNoAdministrator" xml:space="preserve"><value>A request for "{0}" can only be approved on a device that holds that lab's key.</value></data>
+  <data name="Import.UnlockForRequest" xml:space="preserve"><value>Approve a device request for "{0}" ({1}): type a holder's passphrase or the recovery code.</value></data>
+  <data name="Import.RequestApproved" xml:space="preserve"><value>{0} authorized for "{1}"; grant written to {2}.</value></data>
+  <data name="LabFile.FileType" xml:space="preserve"><value>LabControl lab file</value></data>
+  <data name="Grant.FileType" xml:space="preserve"><value>LabControl device grant</value></data>
+  <data name="Request.FileType" xml:space="preserve"><value>LabControl device request</value></data>
+  <data name="LabFile.Export" xml:space="preserve"><value>Export lab file…</value></data>
+  <data name="LabFile.Exported" xml:space="preserve"><value>Lab file exported to {0}. Give it to teachers; it carries no key and no enrollment code.</value></data>
+  <data name="LabFile.Hint" xml:space="preserve"><value>A lab file lets another teacher's device list this room and ask for access; a grant answers that request. Neither carries the lab key.</value></data>
+  <data name="Device.AuthorizedOn" xml:space="preserve"><value>authorized {0}</value></data>
+  <data name="Device.WithdrawnOn" xml:space="preserve"><value>withdrawn {0}</value></data>
+  <data name="Device.ThisMachine" xml:space="preserve"><value>(this machine)</value></data>
+  <data name="Device.DeliveryNoPcs" xml:space="preserve"><value>Withdrawal recorded; no PCs in the list yet.</value></data>
+  <data name="Device.DeliveredAll" xml:space="preserve"><value>Withdrawal delivered to all {0} PCs.</value></data>
+  <data name="Device.DeliveryPending" xml:space="preserve"><value>Withdrawal delivered to {0} of {1} PCs; pending on {2}.</value></data>
+  <data name="Device.PendingNeverSeen" xml:space="preserve"><value>{0} (never linked here)</value></data>
+  <data name="Device.PendingOffline" xml:space="preserve"><value>{0} (offline since {1})</value></data>
+  <data name="Device.DeliveredCount" xml:space="preserve"><value>Withdrawal delivered to {0} of {1} PCs.</value></data>
+  <data name="Device.DeliveryCannotHold" xml:space="preserve"><value>{0} run an agent older than M5 that cannot hold a device withdrawal: push the current agent build to them.</value></data>
+  <data name="Device.AuthorizeTitle" xml:space="preserve"><value>Authorize device requests</value></data>
+  <data name="Device.AuthorizeRequests" xml:space="preserve"><value>Authorize requests…</value></data>
+  <data name="Device.Authorized" xml:space="preserve"><value>{0} device(s) authorized; give each grant file back to its device.</value></data>
+  <data name="Device.WithdrawConfirm" xml:space="preserve"><value>Withdraw the access of {0}? PCs that learn of it refuse that device from then on, and a renewed certificate is refused too. This cannot be undone: the device needs a fresh approval.</value></data>
+  <data name="Device.Withdraw" xml:space="preserve"><value>Withdraw access…</value></data>
+  <data name="Device.WithdrawReason" xml:space="preserve"><value>access of {0} withdrawn by the administrator</value></data>
+  <data name="Settings.Access" xml:space="preserve"><value>Access</value></data>
+  <data name="Settings.TeacherDevices" xml:space="preserve"><value>Teacher devices</value></data>
+  <data name="Settings.TeacherDevicesHint" xml:space="preserve"><value>Every console that serves this lab: administrator machines holding the key and teacher devices authorized by a grant.</value></data>
+  <data name="Settings.NoDevices" xml:space="preserve"><value>No devices yet.</value></data>
+  <data name="Unlock.ReasonAuthorize" xml:space="preserve"><value>Authorizing a teacher device signs its certificate with the lab key.</value></data>
+  <data name="Unlock.ReasonLabFile" xml:space="preserve"><value>Exporting a lab file signs it with the lab key.</value></data>
+  <data name="Unlock.ReasonRenewDevice" xml:space="preserve"><value>Renewing this device's certificate for "{0}" as an administrator needs the lab key.</value></data>
+  <data name="Code.Dormant" xml:space="preserve"><value>dormant — from an imported backup</value></data>
+  <data name="Enroll.DormantHint" xml:space="preserve"><value>{0} code(s) came in an imported backup and are dormant here: {1}.</value></data>
+  <data name="Enroll.ActivateConfirm" xml:space="preserve"><value>Use the {0} dormant code(s) on this console? If the other administrator console also uses them, a code can enrol twice; write a new stick to be sure.</value></data>
+  <data name="Enroll.Activate" xml:space="preserve"><value>Use codes from the imported backup</value></data>
+  <data name="Enroll.Activated" xml:space="preserve"><value>{0} code(s) activated.</value></data>
+  <data name="Chooser.Authorize" xml:space="preserve"><value>Authorize…</value></data>
+  <data name="Chooser.AuthorizeRequests" xml:space="preserve"><value>Authorize requests…</value></data>
+  <data name="Chooser.RequestRenewal" xml:space="preserve"><value>Request renewal…</value></data>
+  <data name="Chooser.RequestTitle" xml:space="preserve"><value>Save the device request</value></data>
+  <data name="Chooser.RequestWritten" xml:space="preserve"><value>Request written to {0}. Give it to the administrator and add the grant file you get back.</value></data>
+  <data name="Chooser.RequestFailed" xml:space="preserve"><value>Could not write a request for {0}: {1}</value></data>
+  <data name="Chooser.OpenRefused" xml:space="preserve"><value>{0} cannot be opened: {1}</value></data>
+  <data name="Chooser.RenewCertificate" xml:space="preserve"><value>Renew this device's certificate…</value></data>
+  <data name="Chooser.Renewed" xml:space="preserve"><value>{0}: this device now serves with an administrator certificate.</value></data>
+  <data name="Chooser.RenewFailed" xml:space="preserve"><value>Could not renew the certificate for {0}: {1}</value></data>
+  <data name="Chooser.Status.RenewalDue" xml:space="preserve"><value>Access expires {0} — request a renewal</value></data>
 </root>

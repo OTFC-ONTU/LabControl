@@ -98,6 +98,11 @@ public sealed class UiTests
         Assert.Equal(session.LabId, imported.LabId);
         Assert.NotEqual(session.Instance.InstanceId, imported.Instance.InstanceId);
         Assert.Equal(BackupStatus.Current, other.CheckBackup(imported.InstanceDocument));
+
+        // The codes travelled with the backup but sleep until activated here (D-60).
+        Assert.Equal(0, imported.Enrollment.UnusedCodeCount);
+        Assert.Equal(2 + Shared.Defaults.SpareEnrollmentCodes, imported.Enrollment.DormantCodeCount);
+        Assert.Equal(2 + Shared.Defaults.SpareEnrollmentCodes, imported.Enrollment.ActivateDormant());
         Assert.Equal(2 + Shared.Defaults.SpareEnrollmentCodes, imported.Enrollment.UnusedCodeCount);
 
         // Writing another stick on the new console makes its backup stale until re-exported.
@@ -126,7 +131,7 @@ public sealed class UiTests
         // first one was never acknowledged. Closing it again after acknowledging still
         // leaves the backup owed.
         var opened = bootstrap.OpenExisting();
-        Assert.True(opened.Vault.TryUnlock(passphrase));
+        Assert.True(opened.Vault!.TryUnlock(passphrase));
         var resumed = bootstrap.Start(opened, opened.Instance);
         // Dispatch has no Func<Task> overload: a lambda that returns nothing would bind to
         // Action and run as async void, so the wizard windows return the completion result.
@@ -152,10 +157,10 @@ public sealed class UiTests
         opened = bootstrap.OpenExisting();
         Assert.True(opened.Document.RecoveryCodeAcknowledged);
         Assert.True(bootstrap.SetupIsUnfinished(opened.Document));
-        Assert.False(opened.Vault.TryUnlock(firstCode), "the unacknowledged recovery code must be void");
+        Assert.False(opened.Vault!.TryUnlock(firstCode), "the unacknowledged recovery code must be void");
 
         // Launch 3: only the backup step is left; after the export the wizard is finished for good.
-        Assert.True(opened.Vault.TryUnlock(passphrase));
+        Assert.True(opened.Vault!.TryUnlock(passphrase));
         var last = bootstrap.Start(opened, opened.Instance);
         var exported = await Session.Dispatch(async () =>
         {
@@ -188,7 +193,7 @@ public sealed class UiTests
             }
 
             Assert.True(await Wait.UntilAsync(() => console.Session.Linked.Count == 8, TimeSpan.FromSeconds(15)));
-            console.Session.Vault.Lock();
+            console.Session.Vault!.Lock();
 
             // PC-02 is locked with the helper up; PC-03's helper is down (M2 session state).
             agents[1].Link.PublishSessionState(new SessionState { Kind = SessionState.Types.Kind.Lock, User = "student", SessionId = 1, HelperAlive = true, Locked = true });
@@ -473,6 +478,122 @@ public sealed class UiTests
         };
         frame.Dirty.Add(LabControl.Shared.Video.VideoGeometry.Whole(1280, 720));
         return frame;
+    }
+
+    [Fact]
+    public async Task The_chooser_shows_teacher_states_and_settings_lists_every_device_with_its_delivery()
+    {
+        // Five saved labs: an administrator one and four teacher profiles in every authorization state.
+        var directory = TestConsole.TempDirectory();
+        using var admin = SavedLab.Save(directory, "Room 214");
+        var profiles = new ProfileStore(directory);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        void Teacher(string name, ProfileAuthorization authorization, long expires = 0)
+        {
+            var id = Guid.NewGuid().ToString("d");
+            profiles.Upsert(new ProfileRecord { LabId = id, LabName = name, AuthorityFingerprint = "f", Access = ProfileAccess.Teacher, Authorization = authorization, InstanceId = Guid.NewGuid().ToString("d"), InstanceName = "Laptop", AccessExpiresUnix = expires, AddedAtUnix = now, Source = ProfileSource.LabFile, PcCount = 14 });
+        }
+
+        Teacher("Room 101", ProfileAuthorization.NeedsAuthorization);
+        Teacher("Room 102", ProfileAuthorization.RequestPending);
+        Teacher("Room 103", ProfileAuthorization.Authorized, now + 20 * 24 * 3600);
+        Teacher("Room 104", ProfileAuthorization.Authorized, now - 3600);
+        Teacher("Room 105", ProfileAuthorization.Revoked);
+
+        var bootstrap = new ConsoleBootstrap(new ConsoleOptions { DataDirectory = directory, Port = 0, BindAddress = System.Net.IPAddress.Loopback, BeaconPort = TestConsole.BeaconPort }, TestLogging.Factory);
+        await using var controller = new ActiveLabController(bootstrap, TestLogging.Factory);
+
+        await Session.Dispatch<bool>(async () =>
+        {
+            var window = new LabChooserWindow();
+            var vm = new LabChooserViewModel(bootstrap, controller, window, action => Dispatcher.UIThread.Post(action));
+            window.DataContext = vm;
+            window.Show();
+            await Render(window, "chooser-4-teacher-states");
+
+            string Status(string name) => vm.Labs.Single(l => l.Name == name).StatusText;
+            Assert.Equal("Ready", Status("Room 214"));
+            Assert.Equal("Needs authorization", Status("Room 101"));
+            Assert.Equal("Request pending", Status("Room 102"));
+            Assert.StartsWith("Access expires", Status("Room 103"), StringComparison.Ordinal);
+            Assert.Contains("renewal", Status("Room 103"), StringComparison.Ordinal);
+            Assert.Equal("Expired", Status("Room 104"));
+            Assert.Equal("Withdrawn", Status("Room 105"));
+
+            // The expiry was written back to the index, not only shown.
+            Assert.Equal(ProfileAuthorization.Expired, bootstrap.Profiles.Find(vm.Labs.Single(l => l.Name == "Room 104").LabId)!.Authorization);
+
+            // Open is refused with an explanation until authorized; Authorize… offers the next step.
+            vm.Selected = vm.Labs.Single(l => l.Name == "Room 101");
+            Assert.False(vm.Selected.CanOpen);
+            Assert.True(vm.AuthorizeCommand.CanExecute(null));
+            Assert.Equal("Authorize…", vm.Selected.AuthorizeLabel);
+            await vm.OpenCommand.ExecuteAsync(null);
+            Assert.Contains("not authorized", vm.Error, StringComparison.Ordinal);
+            Assert.Null(controller.Active);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Authorize…") && b.IsVisible);
+
+            vm.Selected = vm.Labs.Single(l => l.Name == "Room 103");
+            Assert.True(vm.Selected.CanOpen);
+            Assert.Equal("Request renewal…", vm.Selected.AuthorizeLabel);
+            vm.Selected = vm.Labs.Single(l => l.Name == "Room 214");
+            Assert.Equal("Authorize requests…", vm.Selected.AuthorizeLabel);
+            Assert.False(vm.Selected.CanRenewCertificate);
+            window.Close();
+            return true;
+        }, TestContext.Current.CancellationToken);
+
+        // Settings: the one device panel, with a withdrawn device's delivery status.
+        await using var console = await TestConsole.CreateLabAsync();
+        var lab = console.Session.Vault!.Peek()!;
+        var devices = new DeviceAccess(console.Bootstrap, id => console.Session);
+        var files = TestConsole.TempDirectory();
+        foreach (var name in new[] { "Laptop 1", "Laptop 2" })
+        {
+            var access = new AccessDocument { LabId = lab.LabId, State = AccessState.NeedsAuthorization, InstanceId = Guid.NewGuid().ToString("d"), InstanceName = name, Authority = lab.Document.Authority };
+            var request = Shared.Lab.DeviceAuthorization.CreateRequest(access, new LabControl.Shared.Protection.FileSecretProtector(), lab.LabName, "1.0.0", DateTimeOffset.UtcNow);
+            var path = Path.Combine(files, name + ".lcreq");
+            File.WriteAllText(path, Shared.Lab.DeviceAuthorization.SerializeRequest(request));
+            devices.ApproveRequest(path, lab);
+        }
+
+        await using var pc = TestAgent.InstallEnrolled(lab, 1, console.Port, pinHost: true).Start();
+        Assert.True(await Wait.UntilAsync(() => console.Session.Linked.Count == 1));
+        var withdrawn = console.Session.Registry.Document.Instances.Single(i => i.Name == "Laptop 2");
+        Assert.True(console.Session.TryWithdrawDevice(withdrawn.InstanceId, "left", out _));
+        Assert.True(await Wait.UntilAsync(() => console.Session.DeliveryOf(LabControl.Shared.Identity.LabCertificates.InstanceSerial(withdrawn.InstanceId)).IsComplete));
+
+        await Session.Dispatch<bool>(async () =>
+        {
+            var window = new MainWindow();
+            var vm = new MainViewModel(console.Session, console.Bootstrap, window, action => Dispatcher.UIThread.Post(action));
+            window.DataContext = vm;
+            window.Show();
+            var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
+            tabs.SelectedIndex = 4;
+            await Render(window, "settings-teacher-devices");
+
+            Assert.True(vm.Settings.IsAdministrator);
+            Assert.Equal(3, vm.Settings.Devices.Count);
+            var self = Assert.Single(vm.Settings.Devices, d => d.IsThisMachine);
+            Assert.Equal("Administrator", self.AccessLabel);
+            var one = vm.Settings.Devices.Single(d => d.Name == "Laptop 1");
+            Assert.Equal("Teacher", one.AccessLabel);
+            Assert.StartsWith("authorized", one.Authorized, StringComparison.Ordinal);
+            Assert.True(one.CanWithdraw);
+            var two = vm.Settings.Devices.Single(d => d.Name == "Laptop 2");
+            Assert.True(two.IsRevoked);
+            Assert.False(two.CanWithdraw);
+            Assert.Equal("Withdrawal delivered to all 1 PCs.", two.Delivery);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Authorize requests…") && b.IsVisible);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Export lab file…") && b.IsVisible);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Withdraw access…"));
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Teacher devices");
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Other teacher machines");
+            vm.Detach();
+            window.Close();
+            return true;
+        }, TestContext.Current.CancellationToken);
     }
 
     private static async Task Render(Window window, string name)

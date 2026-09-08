@@ -65,14 +65,18 @@
         <Button Content="{loc:Localize Action.Reboot}" Command="{Binding RebootCommand}" />
         <Button Content="{loc:Localize Action.Logoff}" Command="{Binding LogoffCommand}" />
         <Button Content="{loc:Localize Action.SendFiles}" Command="{Binding SendFilesCommand}" />
-        <Button Content="{loc:Localize Action.PushBuild}" Command="{Binding PushBuildCommand}" />
+        <Button Content="{loc:Localize Action.PushBuild}" Command="{Binding PushBuildCommand}" IsVisible="{Binding IsAdministrator}" />
         <Button Content="{loc:Localize Action.RemoveSelected}" Command="{Binding RemoveSelectedCommand}" />
         <Rectangle Width="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" Margin="4,0" />
         <Button Content="{loc:Localize Action.SelectAll}" Command="{Binding SelectAllCommand}" />
         <Button Content="{loc:Localize Action.ClearSelection}" Command="{Binding ClearSelectionCommand}" />
         <Rectangle Width="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" Margin="4,0" />
-        <Button Content="{loc:Localize Action.EnrolPcs}" Command="{Binding UnlockCommand}" IsVisible="{Binding !IsUnlocked}" />
-        <Button Content="{loc:Localize Key.Lock}" Command="{Binding LockCommand}" IsVisible="{Binding IsUnlocked}" />
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsAdministrator}">
+          <Button Content="{loc:Localize Action.EnrolPcs}" Command="{Binding UnlockCommand}" IsVisible="{Binding !IsUnlocked}" />
+          <Button Content="{loc:Localize Key.Lock}" Command="{Binding LockCommand}" IsVisible="{Binding IsUnlocked}" />
+        </StackPanel>
+        <!-- Teacher access (M5, D-56 item 5): the administrator-only actions are hidden, and one line says why. -->
+        <TextBlock Text="{Binding AccessHint}" IsVisible="{Binding !IsAdministrator}" VerticalAlignment="Center" Opacity="0.7" FontSize="12" />
         </StackPanel>
         <TextBlock Text="{Binding SelectedCount, StringFormat={loc:Localize Main.SelectedFormat}}"
                    VerticalAlignment="Center" Opacity="0.7" Margin="12,0,0,0" />

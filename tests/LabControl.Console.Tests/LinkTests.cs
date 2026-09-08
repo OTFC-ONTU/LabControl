@@ -57,7 +57,7 @@ public sealed class LinkTests
     {
         await using var console = await TestConsole.CreateLabAsync();
         var code = console.IssueCodes(1)[0];
-        console.Session.Vault.Lock();
+        console.Session.Vault!.Lock();
 
         await using var agent = TestAgent.Install(console, 3, code).Start();
 
@@ -66,7 +66,7 @@ public sealed class LinkTests
         Assert.False(agent.Link.IsEnrolled);
         Assert.Equal(1, console.Session.Enrollment.UnusedCodeCount);
 
-        Assert.True(console.Session.Vault.TryUnlock(TestConsole.Passphrase));
+        Assert.True(console.Session.Vault!.TryUnlock(TestConsole.Passphrase));
 
         Assert.True(await Wait.UntilAsync(() => agent.Link.State == LinkState.Linked, TimeSpan.FromSeconds(20)));
         Assert.True(agent.Link.IsEnrolled);
@@ -204,7 +204,7 @@ public sealed class LinkTests
         Assert.True(LabCertificates.NeedsRenewal(pc.Store.Certificate!, DateTimeOffset.UtcNow));
 
         // Locked: the PC links, is refused politely and keeps working with its current certificate.
-        console.Session.Vault.Lock();
+        console.Session.Vault!.Lock();
         pc.Start();
         Assert.True(await Wait.UntilAsync(() => pc.Link.State == LinkState.Linked));
         Assert.True(await Wait.UntilAsync(() => console.Session.Registry.FindByAgentId(pc.AgentId) is not null));
@@ -214,7 +214,7 @@ public sealed class LinkTests
         Assert.Single(console.Session.MachinesNeedingRenewal());
         Assert.DoesNotContain(console.Session.Events.Recent, e => e.Code == "renew.issued");
 
-        console.Session.Vault.TryUnlock(TestConsole.Passphrase);
+        console.Session.Vault!.TryUnlock(TestConsole.Passphrase);
 
         Assert.True(await Wait.UntilAsync(() => LabCertificates.SerialOf(pc.Store.Certificate!) != firstSerial, TimeSpan.FromSeconds(40)));
         var newSerial = LabCertificates.SerialOf(pc.Store.Certificate!);

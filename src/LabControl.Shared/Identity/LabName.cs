@@ -1,8 +1,22 @@
 using System.Formats.Asn1;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace LabControl.Shared.Identity;
+
+/// <summary>What a console leaf may do, read off its subject OU (M5, D-56 item 5).</summary>
+public enum ConsoleAccess
+{
+    /// <summary>Not a console leaf, or a leaf whose OU this build does not know.</summary>
+    Unknown = 0,
+
+    /// <summary><c>OU=LabControl Console</c>: holds the lab key; may enrol, renew, revoke, sign updates.</summary>
+    Administrator = 1,
+
+    /// <summary><c>OU=LabControl Teacher</c>: drives the room; <c>self_update</c> and <c>rekey</c> are refused.</summary>
+    Teacher = 2,
+}
 
 /// <summary>
 /// Who a certificate says it is. Neither side of a LabControl connection trusts a
@@ -14,6 +28,12 @@ namespace LabControl.Shared.Identity;
 public sealed record LabName(LabRole Role, string LabId, string Id, int Number)
 {
     public const string UriScheme = "labcontrol";
+
+    /// <summary>
+    /// The access level of a console leaf, from its subject OU (D-56 item 5); <see cref="ConsoleAccess.Unknown"/>
+    /// for every other role and for a name that did not come out of a certificate.
+    /// </summary>
+    public ConsoleAccess Access { get; init; }
 
     public static LabName ForAuthority(string labId) => new(LabRole.Authority, labId, labId, 0);
 
@@ -50,6 +70,11 @@ public sealed record LabName(LabRole Role, string LabId, string Id, int Number)
             {
                 if (TryParse(uri, out name))
                 {
+                    if (name.Role == LabRole.Console)
+                    {
+                        name = name with { Access = AccessOf(certificate) };
+                    }
+
                     return true;
                 }
             }
@@ -60,6 +85,58 @@ public sealed record LabName(LabRole Role, string LabId, string Id, int Number)
     }
 
     private const string SubjectAlternativeNameOid = "2.5.29.17";
+    private const string OrganizationalUnitOid = "2.5.4.11";
+
+    /// <summary>
+    /// The console access a leaf's subject OU claims; the chain check is the caller's job.
+    /// Exactly one single-valued OU that equals the known string byte for byte, or
+    /// <see cref="ConsoleAccess.Unknown"/>: two OUs, a multi-valued RDN, a trailing space or
+    /// a subject this build cannot read all mean "no authority", never an exception — this
+    /// runs inside TLS validation, before the chain is even checked.
+    /// </summary>
+    public static ConsoleAccess AccessOf(X509Certificate2 certificate)
+    {
+        string? unit = null;
+        try
+        {
+            foreach (var rdn in certificate.SubjectName.EnumerateRelativeDistinguishedNames())
+            {
+                if (rdn.HasMultipleElements)
+                {
+                    // An OU hidden inside a multi-valued RDN is not the OU the lab key writes.
+                    return ConsoleAccess.Unknown;
+                }
+
+                if (rdn.GetSingleElementType().Value != OrganizationalUnitOid)
+                {
+                    continue;
+                }
+
+                if (unit is not null)
+                {
+                    return ConsoleAccess.Unknown;
+                }
+
+                unit = rdn.GetSingleElementValue();
+            }
+        }
+        catch (Exception ex) when (ex is CryptographicException or AsnContentException or InvalidOperationException or ArgumentException)
+        {
+            return ConsoleAccess.Unknown;
+        }
+
+        if (string.Equals(unit, Defaults.ConsoleOrganizationalUnit, StringComparison.Ordinal))
+        {
+            return ConsoleAccess.Administrator;
+        }
+
+        if (string.Equals(unit, Defaults.TeacherOrganizationalUnit, StringComparison.Ordinal))
+        {
+            return ConsoleAccess.Teacher;
+        }
+
+        return ConsoleAccess.Unknown;
+    }
 
     /// <summary>
     /// The BCL exposes DNS names and IP addresses from a SAN but not URIs, so the

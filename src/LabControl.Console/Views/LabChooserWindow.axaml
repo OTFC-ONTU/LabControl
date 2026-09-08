@@ -52,6 +52,10 @@
       <Button Content="{loc:Localize Chooser.Retry}" Command="{Binding RetryCommand}" IsVisible="{Binding HasFailure}" />
       <Button Content="{loc:Localize Chooser.AddLabs}" Command="{Binding AddLabsCommand}" />
       <Button Content="{loc:Localize Chooser.Create}" Command="{Binding CreateLabCommand}" />
+      <Button Content="{Binding Selected.AuthorizeLabel, FallbackValue=''}" Command="{Binding AuthorizeCommand}"
+              IsVisible="{Binding Selected.CanAuthorize, FallbackValue=False}" />
+      <Button Content="{loc:Localize Chooser.RenewCertificate}" Command="{Binding RenewCertificateCommand}"
+              IsVisible="{Binding Selected.CanRenewCertificate, FallbackValue=False}" />
       <Button Content="{loc:Localize Chooser.Remove}" Command="{Binding RemoveCommand}" />
       <Button Content="{loc:Localize Common.Quit}" Command="{Binding QuitCommand}" IsCancel="True" HorizontalAlignment="Right" />
     </StackPanel>

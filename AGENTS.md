@@ -42,10 +42,13 @@ the documents relevant to the task:
   `ActiveLabController` with release-before-acquire and result ownership, take-over on
   the agent's clock, per-user console packaging with single-instance forwarding, dormant
   imported enrollment codes. Follow those entries and ROADMAP M5 *How it is being built*
-  (eight portions; portions 1–2 built and reviewed 2026-09-08 — portion 1: profile store,
+  (eight portions; portions 1–3 built and reviewed 2026-09-08 — portion 1: profile store,
   resumable migration, `lab.json` schema 2, `console.lock`; portion 2: `ActiveLabController`,
   the *My labs* chooser, *Disconnect*, the departure report and bulk `.lcbak` import;
-  portion 3 in progress); the `Welcome.console_access`
+  portion 3: the signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a
+  vault, `instance:` withdrawal with confirmed delivery, the *Teacher devices* panel and
+  dormant imported codes, 753 tests, no Windows run yet; portion 4 in progress); the
+  `Welcome.console_access`
   `.proto` change belongs to portion 5 and must update `docs/PROTOCOL.md` in its commit.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.

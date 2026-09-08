@@ -245,14 +245,60 @@ public sealed class LabRegistry
 
             if (certificateSerial.Length > 0)
             {
+                // A record written by an older build has a serial but no history: keep that one too.
+                RememberSerial(instance, instance.CertificateSerial);
                 instance.CertificateSerial = LabCertificates.NormalizeSerial(certificateSerial);
+                RememberSerial(instance, instance.CertificateSerial);
             }
 
+            // Never the access level: a record's authority is set by an approval or a backup,
+            // and a Hello or a beacon naming the same id must not lower it (D-56 item 4).
             instance.LastSeenUnix = now.ToUnixTimeSeconds();
             instance.IsThisMachine = isThisMachine || instance.IsThisMachine;
 
             Changed?.Invoke();
             return instance;
+        }
+    }
+
+    /// <summary>
+    /// Records a device authorization from an approved request (D-56 item 4). The id must be
+    /// new or belong to a teacher device already in the book — never to this machine, an
+    /// administrator machine or a record of unknown authority, which the approval refuses
+    /// before issuing anything (<see cref="DeviceAuthorization.Approve"/>); this is the
+    /// last line, so a caller cannot turn the administrator's own record into a teacher's.
+    /// </summary>
+    public InstanceRecord RecordAuthorization(string instanceId, string name, string certificateSerial, string publicKeyFingerprint, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var existing = Document.Instances.FirstOrDefault(
+                i => string.Equals(i.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null && (existing.IsThisMachine || existing.Access != ProfileAccess.Teacher))
+            {
+                throw new InvalidOperationException($"Device id {instanceId} belongs to {(existing.IsThisMachine ? "this machine" : "a console that is not a teacher device")}; it cannot be authorized as a teacher device.");
+            }
+        }
+
+        var instance = RecordInstance(instanceId, name, certificateSerial, now, isThisMachine: false);
+        lock (_gate)
+        {
+            instance.Access = ProfileAccess.Teacher;
+            instance.AuthorizedAtUnix = now.ToUnixTimeSeconds();
+            instance.RevokedAtUnix = 0;
+            instance.PublicKeyFingerprint = publicKeyFingerprint;
+        }
+
+        Changed?.Invoke();
+        return instance;
+    }
+
+    /// <summary>Every serial an instance was ever recorded with, so a withdrawal revokes all of them (D-56 item 6). Called under the lock.</summary>
+    private static void RememberSerial(InstanceRecord instance, string normalizedSerial)
+    {
+        if (normalizedSerial.Length > 0 && !instance.CertificateSerials.Contains(normalizedSerial, StringComparer.Ordinal))
+        {
+            instance.CertificateSerials.Add(normalizedSerial);
         }
     }
 

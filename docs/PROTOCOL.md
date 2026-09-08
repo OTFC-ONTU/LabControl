@@ -629,11 +629,17 @@ the whole of the teacher-device authorization flow. Each is a JSON document writ
              over  domain || payload bytes  (the UpdateManifest pattern, D-52) }
 ```
 
-| Kind | Extension | Domain | Signed by | Verified against |
-|---|---|---|---|---|
-| lab file | `.lclab` | `labcontrol/lab-file/v1\0` | the lab CA key | the CA certificate inside the file on first import; the pinned CA on re-import |
-| device request | `.lcreq` | `labcontrol/device-request/v1\0` | the device's own key (self-signed PKCS#10 CSR) | the CSR's self-signature |
-| device grant | `.lcgrant` | `labcontrol/device-grant/v1\0` | the lab CA key | the pinned CA of the profile it targets |
+(`SignedEnvelopeDocument` in `Shared/Persistence/LabFileDocument.cs`; implemented in M5
+portion 3, 2026-09-08. `schema_version` is 1 for all three. `kind` must match the file's
+extension — `lab_file`, `device_request`, `device_grant` — or the file is refused; the
+signature is checked under the domain of that kind, so a valid signature made under
+another domain is refused too.)
+
+| Kind | `kind` | Extension | Domain | Signed by | Verified against |
+|---|---|---|---|---|---|
+| lab file | `lab_file` | `.lclab` | `labcontrol/lab-file/v1\0` | the lab CA key | the CA certificate inside the file on first import; the pinned CA (byte for byte) on re-import |
+| device request | `device_request` | `.lcreq` | `labcontrol/device-request/v1\0` | the device's own key (self-signed PKCS#10 CSR) | the CSR's self-signature |
+| device grant | `device_grant` | `.lcgrant` | `labcontrol/device-grant/v1\0` | the lab CA key | the pinned CA of the profile it targets |
 
 Payloads:
 
@@ -643,16 +649,26 @@ Payloads:
   hostname, mac, last_ip, certificate_serial, certificate_not_after_unix}`, `layout[]`
   `{number, column, row}`, `revocations[]` (signed entries as on the wire, so they are
   self-authenticating), optional `scripts` (a `ScriptsDocument`, imported only into a
-  profile without one). Produced only by *Export lab file…*.
-- **`.lcreq`** — `lab_id`, `instance_id`, `instance_name`, `requested_access: teacher`,
-  `created_at_unix`, `csr` (PKCS#10 from the device's pending key, `CN` = instance name),
-  `console_version`. Re-running the request on the device regenerates the same file from
-  the same key.
+  profile without one). Produced only by *Export lab file…*; the issuing console counts
+  what it exported and imported in `lab.json` (`exported_snapshot_version`,
+  `imported_snapshot_version`).
+- **`.lcreq`** — `lab_id`, `instance_id`, `instance_name` (1 to 64 printable
+  characters, `Defaults.MaxInstanceNameLength`), `requested_access: teacher`,
+  `created_at_unix`, `csr` (PKCS#10 from the device's pending key, P-256 only, `CN` =
+  instance name, self-signature verified), `console_version`. Re-running the request on
+  the device regenerates the same file from the same key (the key is a separate keystore
+  item, `instance-<id>-pending`). The administrator's *Authorize requests…* refuses a
+  request whose `instance_id` names anything other than a new id or an existing teacher
+  device (never this machine, an administrator or an unknown record), and refuses a
+  renewal that presents the key already certified for that id.
 - **`.lcgrant`** — `lab_id`, `instance_id`, `certificate` (DER: SAN
   `labcontrol://<lab>/console/<instance>`, `OU=LabControl Teacher`, 365 days), the beacon
   `endorsement` over `lab | inst | base64(pub)` (`D-24`), `issued_at_unix`, `expires_unix`,
   `snapshot` (a full `.lclab` payload). The device accepts it only if the instance id and
-  public key match its pending request and the leaf validates as a console of this lab.
+  public key match its pending request, the leaf chains to the pinned CA, carries
+  `OU=LabControl Teacher` and validates as a console of this lab, and the endorsement
+  verifies; the new key is protected and saved before the pending (and any previous)
+  key is forgotten.
 
 **What they must never contain** — a test serialises each and asserts the absence of: the
 `LabKeyDocument`, any holder or recovery wrapping, the CA private key; the
@@ -661,8 +677,12 @@ carries only the CSR's public half); package binaries; logs. A `.lcbak` is the o
 that carries the lab key, and it stays the administrator's backup (`D-26`, `D-54`).
 
 A corrupt, unsigned, wrongly signed or newer-schema file is refused with a reason and
-changes nothing; re-importing an older `.lclab` never rolls back revocations, deletes a PC
-this console has seen linked, downgrades access or replaces the device identity.
+changes nothing. Re-import is a merge that cannot go backwards: an older `.lclab`
+contributes only its revocations (*older snapshot; nothing rolled back*); a PC this
+console has seen linked is only filled in, never rewritten; a serial revoked locally
+blocks re-adding that PC; the layout comes only from a newer `snapshot_version`; scripts
+go only into an empty library; the access level is never downgraded and the device
+identity never replaced; the same `lab_id` under a different authority is refused.
 
 ## Versioning
 
@@ -687,38 +707,50 @@ records an event naming both agent ids and the old certificate serial.
 
 Recorded from the design on 2026-09-08; the portion that lands each item is in ROADMAP
 M5, and the `.proto` change below must be reflected here again in the commit that makes it.
+**Status (2026-09-08, after portion 3):** items 2, 3, the refusal half of 4 and 7 are
+implemented; item 1, the result-ownership half of 4, 5 and 6 remain for portions 4–5.
 
-1. **`Welcome.console_access = 6`** — `enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0;
+1. **`Welcome.console_access = 6`** *(not yet made — portion 5)* — `enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0;
    ADMINISTRATOR = 1; TEACHER = 2; }`. Additive and informational: the authoritative role
    is the subject OU of the console leaf the agent already validated; the field lets an
    agent name the access level in events without re-parsing the certificate. Agents that
    do not know the field ignore it.
-2. **Role in the certificate table** (above): `OU=LabControl Console` versus
-   `OU=LabControl Teacher` with an unchanged SAN. Agents older than M5 treat both as
-   consoles — a teacher console can, until the next agent push, replay an
-   administrator-signed update bundle to such an agent; this is documented, not negotiated.
-3. **Revocation**: the `instance:<instance_id>` pseudo-serial; an M5 agent answers every
-   applied `Revocation` with `RevocationState`, and the console keeps a per-PC delivered
-   list and a pending status. No message change.
-4. **`Job`**: an M5 agent refuses `self_update` and `rekey` on a link whose console has
-   teacher access — `JobResult{ok: false, message: "refused: this console has teacher
-   access"}` plus the event `job.refused_by_role`, before any manifest is pulled. The
-   agent's renewal loop is not run on a teacher link. **`JobResult` ownership**: an M5
+2. **Role in the certificate table** (above) *(implemented, portion 3)*: `OU=LabControl
+   Console` versus `OU=LabControl Teacher` with an unchanged SAN. `LabName.Access` reads
+   exactly one single-valued OU — `Administrator`, `Teacher`, otherwise `Unknown` — from
+   the validated peer (`ConsoleChannel.PeerName`, `AgentLink.LinkedConsoleAccess`).
+   Agents older than M5 treat both as consoles — a teacher console can, until the next
+   agent push, replay an administrator-signed update bundle to such an agent; this is
+   documented, not negotiated.
+3. **Revocation** *(implemented, portion 3)*: the `instance:<instance_id>` pseudo-serial,
+   revoked together with every leaf serial the device was ever issued; an M5 agent
+   answers every applied `Revocation` with `RevocationState`, the console keeps a per-PC
+   delivered list (`RevocationSerialsSeen`) and a pending status, and an M5 agent leaves
+   a console whose serial or instance id becomes revoked (event `console.revoked`). A
+   pre-M5 agent cannot hold an `instance:` entry: its serial normalisation breaks the
+   signature, it drops the entry and the console re-pushes it on every link, showing the
+   PC as *cannot hold* until the agent is updated (`D-56` item 9). No message change.
+4. **`Job`** *(refusal implemented, portion 3; ownership pending, portion 4)*: an M5
+   agent refuses `self_update` and `rekey` on a link whose console is not an
+   administrator — `JobResult{ok: false, message: "refused: this console has teacher
+   access"}` (or *carries no known access level*) plus the event `job.refused_by_role`,
+   before any manifest is pulled. The agent's renewal loop is run only on an
+   administrator link. **`JobResult` ownership**: an M5
    agent records the delivering console's `instance_id` (from `Welcome`) in its ledger and
    drains a kept result only to a link with that instance id; any other console receives
    the result only when it re-sends the job after its own `Welcome`, which it already does
    for jobs it had in flight. No field change; the frozen subset is untouched.
-5. **Beacon `take`**: honoured when the `(inst, take)` token is unhonoured, the beacon
+5. **Beacon `take`** *(pending, portion 5)*: honoured when the `(inst, take)` token is unhonoured, the beacon
    arrived after the link was established on the agent's own clock, and `take` is within
    `TakeOverWindow + BeaconMaxSkew` of the beacon's own `ts`. The taker's timestamp is
    never compared with the agent's link time. No field change.
-6. **Versioning**: an M5 console accepts every older agent as before and shows the
+6. **Versioning** *(pending, portions 4–5)*: an M5 console accepts every older agent as before and shows the
    *update available* badge; the two behaviours it cannot get from an older agent —
    role-based refusal of `self_update`/`rekey` and result binding to the delivering
    instance — are listed on the tile as reasons to update, not as connection failures.
    An older console meeting an M5 agent sees an `instance:` entry as an odd serial and a
    `Welcome` field it did not send; both are harmless.
-7. **Files exchanged offline** — the section above.
+7. **Files exchanged offline** *(implemented, portion 3)* — the section above.
 
 ### The frozen subset
 

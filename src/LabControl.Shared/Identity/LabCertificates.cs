@@ -56,13 +56,67 @@ public static class LabCertificates
         DateTimeOffset now)
     {
         var request = new CertificateRequest(
-            SubjectFor(instanceName, "LabControl Console"), instanceKey, Hash);
+            SubjectFor(instanceName, Defaults.ConsoleOrganizationalUnit), instanceKey, Hash);
 
         Decorate(request, LabName.ForConsole(labId, instanceId),
             X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyAgreement,
             OidServerAuthentication, OidClientAuthentication);
 
         return Sign(request, authority, now, Defaults.ConsoleCertificateLifetime);
+    }
+
+    /// <summary>
+    /// A teacher device's leaf (M5, D-56 items 4–5), issued from the PKCS#10 the device
+    /// wrote into its request: the <b>same</b> SAN URI and key usages as a console instance,
+    /// so every agent already in the field links to it, and <c>OU=LabControl Teacher</c> so
+    /// an M5 agent knows it may not sign updates or re-key. Only the public key is taken from
+    /// the request; the name and the lifetime are the administrator's decision.
+    /// </summary>
+    public static X509Certificate2 IssueTeacherDevice(
+        X509Certificate2 authority,
+        string labId,
+        string instanceId,
+        string instanceName,
+        byte[] pkcs10,
+        DateTimeOffset now)
+    {
+        var incoming = CertificateRequest.LoadSigningRequest(pkcs10, Hash);
+
+        var request = new CertificateRequest(
+            SubjectFor(instanceName, Defaults.TeacherOrganizationalUnit), incoming.PublicKey, Hash);
+
+        Decorate(request, LabName.ForConsole(labId, instanceId),
+            X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyAgreement,
+            OidServerAuthentication, OidClientAuthentication);
+
+        return Sign(request, authority, now, Defaults.TeacherCertificateLifetime);
+    }
+
+    /// <summary>The PKCS#10 a teacher device puts into its request (D-56 item 4); <c>CN</c> = the device name.</summary>
+    public static byte[] CreateDeviceSigningRequest(ECDsa key, string instanceName) =>
+        new CertificateRequest(SubjectFor(instanceName, Defaults.TeacherOrganizationalUnit), key, Hash)
+            .CreateSigningRequest();
+
+    /// <summary>
+    /// Reads the public key out of a PKCS#10 after checking its self-signature; throws on
+    /// anything else, including a key on any curve but P-256 — the only curve LabControl
+    /// signs with, so a request cannot make the lab certify something it never verifies.
+    /// </summary>
+    public static ECDsa PublicKeyOfSigningRequest(byte[] pkcs10)
+    {
+        var incoming = CertificateRequest.LoadSigningRequest(pkcs10, Hash);
+        var key = incoming.PublicKey.GetECDsaPublicKey()
+                  ?? throw new CryptographicException("The signing request does not carry an ECDSA key.");
+
+        var curve = key.ExportParameters(false).Curve;
+        if (!curve.IsNamed || !string.Equals(curve.Oid.Value, ECCurve.NamedCurves.nistP256.Oid.Value, StringComparison.Ordinal)
+            && !string.Equals(curve.Oid.FriendlyName, ECCurve.NamedCurves.nistP256.Oid.FriendlyName, StringComparison.OrdinalIgnoreCase))
+        {
+            key.Dispose();
+            throw new CryptographicException("The signing request carries a key that is not on the P-256 curve.");
+        }
+
+        return key;
     }
 
     /// <summary>
@@ -108,6 +162,12 @@ public static class LabCertificates
     /// </summary>
     public static string NormalizeSerial(string serial)
     {
+        // The instance pseudo-serial (D-56 item 6) is not hex: keep the prefix, lower-case the id.
+        if (serial.StartsWith(Defaults.InstanceRevocationPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return Defaults.InstanceRevocationPrefix + serial[Defaults.InstanceRevocationPrefix.Length..].Trim().ToLowerInvariant();
+        }
+
         var trimmed = serial.Replace(":", string.Empty, StringComparison.Ordinal)
                             .Replace(" ", string.Empty, StringComparison.Ordinal)
                             .ToUpperInvariant()
@@ -117,6 +177,9 @@ public static class LabCertificates
     }
 
     public static string SerialOf(X509Certificate2 certificate) => NormalizeSerial(certificate.SerialNumber);
+
+    /// <summary>The pseudo-serial that revokes a console instance across renewals: <c>instance:&lt;id&gt;</c> (D-56 item 6).</summary>
+    public static string InstanceSerial(string instanceId) => NormalizeSerial(Defaults.InstanceRevocationPrefix + instanceId);
 
     /// <summary>
     /// True once a leaf has less than <see cref="Defaults.CertificateRenewalLeadTime"/> left

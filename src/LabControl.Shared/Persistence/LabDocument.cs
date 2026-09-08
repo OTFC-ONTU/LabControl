@@ -80,6 +80,20 @@ public sealed class InstanceRecord
     public long AuthorizedAtUnix { get; set; }
 
     public long RevokedAtUnix { get; set; }
+
+    /// <summary>
+    /// Every leaf serial this instance was ever recorded with, the current one included
+    /// (D-56 item 6): a withdrawal revokes all of them, not only the latest. Optional within
+    /// schema 2; empty for a record written by an older build.
+    /// </summary>
+    public List<string> CertificateSerials { get; set; } = [];
+
+    /// <summary>
+    /// SHA-256 hex of the public key the last grant certified (D-56 item 4): a renewal must
+    /// present a fresh key, so re-approving an old request cannot mint a second leaf for
+    /// the same one. Empty for administrator machines and older records.
+    /// </summary>
+    public string PublicKeyFingerprint { get; set; } = string.Empty;
 }
 
 /// <summary>Where a PC's tile sits in the room view. Absent tiles fall back to number order.</summary>
@@ -124,4 +138,16 @@ public sealed class LabDocument : ISchemaVersioned
 
     /// <summary>Hand-arranged tile positions. Travels only in a backup, by design (§3.7).</summary>
     public List<LayoutTile> Layout { get; set; } = [];
+
+    /// <summary>
+    /// The <c>snapshot_version</c> of the newest lab file or grant applied here (M5, D-56
+    /// item 3): an older snapshot never replaces the layout. Optional within schema 2; 0 = none.
+    /// </summary>
+    public long ImportedSnapshotVersion { get; set; }
+
+    /// <summary>
+    /// The <c>snapshot_version</c> this console stamped on the lab file it exported last
+    /// (D-56 item 2): monotonic per issuing console. Optional within schema 2; 0 = never exported.
+    /// </summary>
+    public long ExportedSnapshotVersion { get; set; }
 }

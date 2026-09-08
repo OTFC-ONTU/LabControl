@@ -141,7 +141,9 @@ public partial class App : Application
 
             _bootstrap = new ConsoleBootstrap(options, _loggers);
             _controller = new ActiveLabController(_bootstrap, _loggers,
-                (opened, token) => Dispatcher.UIThread.InvokeAsync(() => PromptUnlockAsync(desktop, _chooser, opened.Vault, Strings.Get("Unlock.ReasonRemint"), token)));
+                (opened, token) => opened.Vault is { } vault
+                    ? Dispatcher.UIThread.InvokeAsync(() => PromptUnlockAsync(desktop, _chooser, vault, Strings.Get("Unlock.ReasonRemint"), token))
+                    : Task.FromResult(false));
             _controller.SessionBuilt += session => Dispatcher.UIThread.Post(() => OnSessionBuilt(session));
             _controller.StatusChanged += status => Dispatcher.UIThread.Post(() => _ = OnStatusAsync(status));
 
@@ -197,7 +199,7 @@ public partial class App : Application
         }
 
         var chooser = new LabChooserWindow();
-        var viewModel = new LabChooserViewModel(_bootstrap, _controller, chooser, action => Dispatcher.UIThread.Post(action));
+        var viewModel = new LabChooserViewModel(_bootstrap, _controller, chooser, action => Dispatcher.UIThread.Post(action), _log);
         chooser.DataContext = viewModel;
         viewModel.QuitRequested += () => _desktop.Shutdown();
         viewModel.CreateRequested += () => _ = CreateLabAsync(chooser, viewModel);
@@ -318,8 +320,8 @@ public partial class App : Application
             // The wizard was closed before the recovery code was acknowledged or a backup
             // exported (ARCHITECTURE §3.7). Both steps need the lab key, and the main window
             // stays shut until they are done.
-            if (!session.Vault.IsUnlocked
-                && !await PromptUnlockAsync(_desktop, _chooser, session.Vault, Strings.Get("Unlock.ReasonResume")))
+            if (session.Vault is { IsUnlocked: false } vault
+                && !await PromptUnlockAsync(_desktop, _chooser, vault, Strings.Get("Unlock.ReasonResume")))
             {
                 await _controller.DeactivateAsync(Strings.Get("App.SetupNotFinished"));
                 return;
@@ -465,12 +467,19 @@ public partial class App : Application
             return;
         }
 
+        var controller = _controller;
         var imports = new LabImports(_bootstrap, async backup =>
         {
             var exported = DateTimeOffset.FromUnixTimeSeconds(backup.ExportedAtUnix).ToLocalTime().ToString("g", Strings.Culture);
             var answer = await main.UnlockAsync(Strings.Format("Import.UnlockReason", backup.LabName, exported, backup.ExportedBy));
             return answer is null ? null : new BackupSecret(answer.Passphrase, answer.RecoveryCode);
-        }, ConsoleBootstrap.DefaultInstanceName(), _log);
+        }, ConsoleBootstrap.DefaultInstanceName(), _log,
+            labId => controller?.Active is { IsDisposed: false } active && string.Equals(active.LabId, labId, StringComparison.OrdinalIgnoreCase) ? active : null,
+            async reason =>
+            {
+                var answer = await main.UnlockAsync(reason);
+                return answer is null ? null : new BackupSecret(answer.Passphrase, answer.RecoveryCode);
+            });
 
         var results = await imports.ImportAsync(paths);
         await main.ShowImportResultsAsync(results);

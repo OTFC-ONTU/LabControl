@@ -103,6 +103,16 @@ public sealed partial class AgentLink : IAsyncDisposable
 
     public string? LinkedEndpoint { get; private set; }
 
+    /// <summary>
+    /// What the linked console may do, from the OU of the leaf it presented (M5, D-56 item 5):
+    /// a teacher console drives the room but is refused <c>self_update</c> and <c>rekey</c>,
+    /// and this PC does not ask it for a renewal. <see cref="ConsoleAccess.Unknown"/> while unlinked.
+    /// </summary>
+    public ConsoleAccess LinkedConsoleAccess { get; private set; }
+
+    /// <summary>The serial of the linked console's leaf, from the TLS handshake; <c>null</c> while unlinked.</summary>
+    private string? _linkedConsoleSerial;
+
     /// <summary>Console clock minus PC clock, learned from <c>Welcome</c>; deadlines are corrected by it.</summary>
     public TimeSpan ClockSkew { get; private set; }
 
@@ -568,13 +578,19 @@ public sealed partial class AgentLink : IAsyncDisposable
             }
 
             var welcome = call.ResponseStream.Current.Welcome;
+            LinkedConsoleAccess = channel.PeerName?.Access ?? ConsoleAccess.Unknown;
+            _linkedConsoleSerial = channel.PeerSerial;
             OnWelcome(welcome, endpoint);
             linked = true;
 
             var outgoing = Channel.CreateUnbounded<AgentMessage>(new UnboundedChannelOptions { SingleReader = true });
             var writer = WriteLoopAsync(call.RequestStream, outgoing.Reader, token);
             var heartbeats = HeartbeatLoopAsync(outgoing.Writer, token);
-            var renewal = RenewalLoopAsync(client, certificate, token);
+
+            // Only an administrator console can sign a renewal (D-56 item 5): asking a teacher
+            // console would only fill its event log with refusals, and a leaf whose OU this build
+            // does not know has no authority at all. The PC asks the next administrator instead.
+            var renewal = LinkedConsoleAccess != ConsoleAccess.Administrator ? Task.CompletedTask : RenewalLoopAsync(client, certificate, token);
 
             var video = new VideoUplink(client, config.AgentId, _log, token,
                 (code, message) => Report(Event.Types.Severity.Warning, code, message));
@@ -672,6 +688,8 @@ public sealed partial class AgentLink : IAsyncDisposable
                 LinkedInstanceId = null;
                 LinkedInstanceName = null;
                 LinkedEndpoint = null;
+                LinkedConsoleAccess = ConsoleAccess.Unknown;
+                _linkedConsoleSerial = null;
                 _gate.Unlinked();
                 _log.LogInformation("{Pc}: unlinked — {Reason}", Name, endedBy);
                 Unlinked?.Invoke(endedBy);
@@ -719,6 +737,12 @@ public sealed partial class AgentLink : IAsyncDisposable
 
             case ConsoleMessage.PayloadOneofCase.Revocation:
                 MergeRevocations(message.Revocation.Entries);
+                // Delivery is confirmed, never assumed (D-56 item 6): every Revocation is
+                // answered with what this PC holds now, so the console can show a pending list.
+                var held = new RevocationState();
+                held.Entries.AddRange(_revocations.Entries);
+                await outgoing.WriteAsync(new AgentMessage { RevocationState = held }, token);
+                LeaveIfConsoleRevoked();
                 break;
 
             case ConsoleMessage.PayloadOneofCase.Welcome:
@@ -809,10 +833,60 @@ public sealed partial class AgentLink : IAsyncDisposable
         _store.SaveConfig();
     }
 
+    /// <summary>
+    /// A revocation just merged may name the very console this PC is linked to — its leaf
+    /// serial, or its <c>instance:</c> id (D-56 item 6), pushed by that console itself after a
+    /// lab file taught it, or carried in from another console. A withdrawn console keeps no
+    /// live link: the PC leaves at once and refuses the next dial like any other agent would.
+    /// </summary>
+    private void LeaveIfConsoleRevoked()
+    {
+        var instanceId = LinkedInstanceId;
+        var serial = _linkedConsoleSerial;
+        if (instanceId is null)
+        {
+            return;
+        }
+
+        string? why = null;
+        if (serial is not null && _revocations.IsRevoked(serial))
+        {
+            why = $"the linked console's certificate {serial} is revoked";
+        }
+        else if (_revocations.IsRevoked(LabCertificates.InstanceSerial(instanceId)))
+        {
+            why = $"the linked console's access ({LinkedInstanceName ?? instanceId}) was withdrawn";
+        }
+
+        if (why is null)
+        {
+            return;
+        }
+
+        Report(Event.Types.Severity.Warning, "console.revoked", $"Leaving {LinkedInstanceName ?? instanceId}: {why}.");
+        Disconnect(why);
+    }
+
     // ------------------------------------------------------------------ jobs
 
     private async Task AdmitJobAsync(Job job, ChannelWriter<AgentMessage> outgoing, CancellationToken token)
     {
+        if (job.Kind is Job.Types.Kind.SelfUpdate or Job.Types.Kind.Rekey && LinkedConsoleAccess != ConsoleAccess.Administrator)
+        {
+            // Refused by role before any manifest is pulled (D-56 item 5, PROTOCOL "M5 additions"
+            // item 4): only OU=LabControl Console — every leaf minted before M5 carries it — may
+            // sign an update or re-key; a teacher leaf and an unknown OU may not. Not through
+            // the ledger: an administrator console re-sending the same job id later must be
+            // admitted, not answered from a cache of this refusal.
+            var refusal = LinkedConsoleAccess == ConsoleAccess.Teacher
+                ? "refused: this console has teacher access"
+                : "refused: this console's certificate carries no known access level";
+            _log.LogWarning("{Pc}: job {Job} ({Kind}) refused — {Reason}", Name, job.Id, job.Kind, refusal);
+            Report(Event.Types.Severity.Warning, "job.refused_by_role", $"{job.Kind} job {job.Id} {refusal}; only an administrator console can send it.");
+            await outgoing.WriteAsync(new AgentMessage { JobResult = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = refusal } }, token);
+            return;
+        }
+
         var admission = _ledger.Admit(job);
 
         if (admission.CachedResult is { } cached)

@@ -213,12 +213,14 @@ public sealed partial class SetupViewModel : ObservableObject
             return;
         }
 
-        if (!session.Vault.Use(lab => lab.ResetRecoveryCode(), out var code))
+        // The wizard only ever runs on a lab created or imported here, which holds the key.
+        var vault = session.Vault ?? throw new InvalidOperationException("The wizard needs the lab key.");
+        if (!vault.Use(lab => lab.ResetRecoveryCode(), out var code))
         {
             throw new InvalidOperationException("The lab key is locked.");
         }
 
-        session.Vault.Save();
+        vault.Save();
         session.Events.Warning("key.recovery_reprinted", Strings.Get("Key.RecoveryReprinted"));
         _recoveryCode = code;
         RecoveryCodeText = code.ToPrintableString();

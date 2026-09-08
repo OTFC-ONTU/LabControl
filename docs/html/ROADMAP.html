@@ -187,7 +187,7 @@ implement.</p>
 <tr>
 <td><strong>M5</strong></td>
 <td>Lab files, teacher access and fast switching between rooms</td>
-<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–2 built and reviewed 2026-09-08 (profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import), migration tried on a copy of the live data; portion 3 next; real-Mac switch timing under investigation</strong></td>
+<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–3 built and reviewed 2026-09-08 (profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes), migration tried on a copy of the live data, portion 3 smoke-tested on two copies; portion 4 next; real-Mac switch timing under investigation</strong></td>
 <td>M4</td>
 </tr>
 <tr>
@@ -1630,7 +1630,66 @@ the file protector), the open/build/start split and the 250 ms warning now instr
 it, and it is expected to disappear with the signed packaged app (portion 7) — to be
 re-measured. <em>Trial against a copy of the live data</em>: the chooser appeared with the lab
 row (administrator, 14 PCs), nothing listening until <em>Open</em>; the owner had exercised
-<em>Open</em> → <em>Disconnect</em> → <em>Open</em> on the copy earlier. Portion 3 is next.</li>
+<em>Open</em> → <em>Disconnect</em> → <em>Open</em> on the copy earlier.</li>
+<li><em>Portion 3 (built, security-reviewed and fixed 2026-09-08, on the Mac).</em> Lab files,
+offline device authorization, teacher mode and dormant codes (<code>D-56</code>, <code>D-60</code>). The
+signed envelope (<code>SignedEnvelopeDocument</code>: <code>kind</code>, <code>lab_id</code>, <code>lab_name</code> in the clear,
+base64 <code>payload</code>, P1363 <code>signature</code> over domain || payload bytes; domains
+<code>labcontrol/lab-file/v1\0</code>, <code>labcontrol/device-request/v1\0</code>,
+<code>labcontrol/device-grant/v1\0</code>) — a wrong kind for the extension, a tampered byte, a
+signature made under another domain or a newer <code>schema_version</code> is refused and changes
+nothing. <code>.lclab</code> (<code>LabFilePayload</code>: authority DER + fingerprint, <code>snapshot_version</code>,
+roster, layout, revocations, optional scripts) with a test proving it carries no key,
+wrapping, recovery material, enrollment code or private material; the pinned authority
+is compared byte for byte on re-import. Merge as implemented (<code>LabFile</code>): an older
+snapshot contributes only its revocations (&quot;older snapshot; nothing rolled back&quot;), a PC
+this console has seen linked is only filled in, never rewritten, a serial revoked
+locally blocks re-adding, the layout comes only from a newer snapshot, scripts go only
+into an empty library, the access level is never downgraded, the same <code>lab_id</code> under a
+different authority is refused. Request/grant (<code>DeviceAuthorization</code>): the pending key
+lives under the keystore reference <code>instance-&lt;id&gt;-pending</code>
+(<code>AccessDocument.PendingKeyReference</code>), the CSR self-signature is verified, P-256 only,
+the name is bounded (<code>Defaults.MaxInstanceNameLength</code> = 64); <code>Approve</code> refuses a
+request naming an existing id unless that record is a teacher device — never this
+machine, an administrator or an unknown record (<code>LabRegistry.RecordAuthorization</code> is
+the registry guard; the review found the administrator's own id could otherwise be
+hijacked) — and refuses a renewal that presents the already-certified key
+(<code>InstanceRecord.PublicKeyFingerprint</code>); grant import checks the instance id, key
+equality, the chain, <code>OU=LabControl Teacher</code> and the endorsement, and the new key is
+protected and saved before the old items are forgotten. Role: <code>LabName.Access</code> from
+exactly one single-valued OU (<code>LabControl Console</code> → <code>Administrator</code>,
+<code>LabControl Teacher</code> → <code>Teacher</code>, anything else → <code>Unknown</code>); the SAN is unchanged, so
+pre-M5 agents link to teacher consoles; agents refuse <code>self_update</code>/<code>rekey</code> with the
+event <code>job.refused_by_role</code> and skip renewal unless the validated peer
+(<code>ConsoleChannel.PeerName</code>, <code>AgentLink.LinkedConsoleAccess</code>) is <code>Administrator</code>.
+Teacher sessions have a null <code>LabSession.Vault</code> (<code>LabSession.Access</code> = <code>Teacher</code>):
+<code>Enroll</code>/<code>Renew</code> answer <code>Closed</code> naming the administrator; push, revoke, USB payload,
+backup and holders refuse. Withdrawal (<code>LabSession.TryWithdrawDevice</code>): the
+<code>instance:&lt;id&gt;</code> pseudo-serial plus every serial in <code>InstanceRecord.CertificateSerials</code>
+are revoked; agents answer every <code>Revocation</code> with <code>RevocationState</code>,
+<code>MachineRecord.RevocationSerialsSeen</code> feeds <code>DeliveryOf</code> (delivered / pending /
+<em>cannot hold</em>); an M5 agent leaves a console whose serial or instance id becomes
+revoked (<code>console.revoked</code>). Correction to the design: pre-M5 agents do <strong>not</strong> store
+<code>instance:</code> entries inertly — their serial normalisation breaks the signature, they
+drop the entry and are re-pushed on every link; the console shows them as <em>cannot
+hold</em> (<code>RevocationDelivery.CannotHold</code>, the sibling-serial signal) until the agent is
+updated. Settings: the merged <em>Teacher devices</em> panel (replacing <em>Other teacher
+machines</em>) is the device book with access and dates, <em>Authorize requests…</em>, <em>Withdraw
+access…</em>, <em>Export lab file…</em> (<code>ConsoleBootstrap.TryExportLabFile</code>); Enrollment gains
+<em>Use codes from the imported backup</em>. <code>LabImports</code> registers <code>.lclab</code>, <code>.lcgrant</code> and
+<code>.lcreq</code> beside <code>.lcbak</code>; a backup imported onto a teacher profile upgrades it
+(<code>ConsoleBootstrap.UpgradeFromBackup</code>) keeping <code>instance.json</code> and history, its codes
+dormant (<code>enrollment.json</code> schema 2: <code>DormantSinceImportUnix</code>, <code>IssuedByInstanceId</code>,
+<code>Batches[]</code>; <code>EnrollmentOutcome.DormantCode</code>; <code>Supersede</code> voids dormant codes too).
+<code>lab.json</code> counts snapshots (<code>imported_snapshot_version</code>, <code>exported_snapshot_version</code>).
+Chooser states for a teacher profile: <em>Needs authorization</em>, <em>Request pending</em>,
+<em>Access expires <date></em> (with <em>— request a renewal</em> under 60 days), <em>Expired</em>,
+<em>Withdrawn</em>. Tests: 753 (622 Shared + 131 Console). <em>Manual smoke on two copies of the
+data directory</em>: export → import → request → approve → grant import → &quot;Access expires
+08.09.2027&quot;, a teacher session opened with a teacher leaf and no vault; re-importing
+the old file reported &quot;older snapshot; nothing rolled back&quot;. Not run on Windows or a
+real agent yet: the real agent receives these <code>AgentLink</code> changes with the portion-4/5
+push. Portion 4 is next.</li>
 </ul>
 <p><strong>Not in scope.</strong> Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs
@@ -1901,7 +1960,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-08 16:13 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-08 21:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

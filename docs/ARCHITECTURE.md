@@ -338,7 +338,11 @@ explicit *Export lab file…*.
 `instance:<instance_id>`, signed like any revocation entry, so a renewed leaf is refused
 too. Delivery is confirmed per PC (`RevocationSerialsSeen`) and shown as *delivered to N
 of M; pending on …* — the console never claims a revocation reached a PC it has not heard
-from.
+from. A pre-M5 agent cannot hold the `instance:` entry (its serial normalisation breaks
+the signature and it drops it); the console shows such a PC as *cannot hold* until the
+agent is updated, and an M5 agent leaves a console whose serial or instance id becomes
+revoked (`D-56` item 9). Approval never re-certifies an id that is not a teacher device
+and never re-certifies the same key (`D-56` items 7–8).
 
 **One active session** (`D-57`). `ActiveLabController` holds at most one `LabSession`;
 selections are serialised so a rapid A → B → C activates C once. Activation releases the

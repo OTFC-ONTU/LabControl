@@ -67,7 +67,11 @@ public sealed partial class MainViewModel : ObservableObject
         session.OtherConsolesChanged += _onOtherConsolesChanged;
         session.Events.Added += _onEventAdded;
         session.Jobs.Updated += _onJobUpdated;
-        session.Vault.Changed += _onVaultChanged;
+        if (session.Vault is { } vault)
+        {
+            vault.Changed += _onVaultChanged;
+        }
+
         session.Screens.Updated += _onScreenUpdated;
 
         RefreshMachines();
@@ -88,6 +92,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>"Administrator" or "Teacher", from the profile (M5 §5).</summary>
     public string AccessLabel { get; }
+
+    /// <summary>True when this session holds the lab key (D-56 item 5); administrator-only actions are hidden otherwise.</summary>
+    public bool IsAdministrator => _session.IsAdministrator;
+
+    /// <summary>The one-line explanation shown in place of the administrator-only actions on a teacher console.</summary>
+    public string AccessHint => IsAdministrator ? string.Empty : Strings.Get("Access.TeacherHint");
 
     /// <summary>The toolbar chip next to <i>Disconnect</i>: lab name and access, and "Connecting…" until the server serves.</summary>
     public string LabChip => Strings.Format(IsConnecting ? "Main.LabChipConnecting" : "Main.LabChip", _session.LabName, AccessLabel);
@@ -203,7 +213,11 @@ public sealed partial class MainViewModel : ObservableObject
         _session.OtherConsolesChanged -= _onOtherConsolesChanged;
         _session.Events.Added -= _onEventAdded;
         _session.Jobs.Updated -= _onJobUpdated;
-        _session.Vault.Changed -= _onVaultChanged;
+        if (_session.Vault is { } vault)
+        {
+            vault.Changed -= _onVaultChanged;
+        }
+
         _session.Screens.Updated -= _onScreenUpdated;
         Scripts.Detach();
 
@@ -428,8 +442,10 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void Logoff() => CreateJobs(Job.Types.Kind.Logoff);
 
-    /// <summary>Signs and pushes a published agent build to selected PCs for side-by-side installation.</summary>
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private bool CanPushBuild => HasSelection && IsAdministrator;
+
+    /// <summary>Signs and pushes a published agent build to selected PCs for side-by-side installation; administrator only (D-56 item 5).</summary>
+    [RelayCommand(CanExecute = nameof(CanPushBuild))]
     private async Task PushBuildAsync()
     {
         var build = await _dialogs.PushAgentBuildAsync(SelectedCount);
@@ -501,9 +517,11 @@ public sealed partial class MainViewModel : ObservableObject
         // Removing without revoking would leave a valid certificate nobody can see any more
         // (D-28): the PC would come straight back through the self-healing list, or sit in a
         // cupboard as a credential. So the certificate goes first, then the record.
-        var toRevoke = tiles
-            .Where(t => t.CertificateSerial.Length > 0 && !_session.Registry.Revocations.IsRevoked(t.CertificateSerial))
-            .ToArray();
+        // A teacher console cannot revoke (D-56 item 5): it only forgets the record; the
+        // administrator revokes when the PC must never come back.
+        var toRevoke = IsAdministrator
+            ? tiles.Where(t => t.CertificateSerial.Length > 0 && !_session.Registry.Revocations.IsRevoked(t.CertificateSerial)).ToArray()
+            : [];
         if (toRevoke.Length > 0 && !await EnsureUnlockedAsync(Strings.Get("Unlock.ReasonRemove")))
         {
             return;
@@ -551,9 +569,16 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Unlocks the lab key if it is locked, asking for a passphrase or the recovery code.</summary>
     public async Task<bool> EnsureUnlockedAsync(string reason)
     {
-        if (_session.Vault.IsUnlocked)
+        if (_session.Vault is not { } vault)
         {
-            _session.Vault.Peek();
+            // A teacher console has no key to unlock (D-56 item 5): say so, once, in place of the prompt.
+            await _dialogs.ShowMessageAsync(Strings.Get("Unlock.Title"), Strings.Get("Access.AdministratorNeeded"));
+            return false;
+        }
+
+        if (vault.IsUnlocked)
+        {
+            vault.Peek();
             return true;
         }
 
@@ -566,8 +591,8 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             var opened = answer.RecoveryCode is not null
-                ? _session.Vault.TryUnlock(answer.RecoveryCode)
-                : _session.Vault.TryUnlock(answer.Passphrase ?? string.Empty);
+                ? vault.TryUnlock(answer.RecoveryCode)
+                : vault.TryUnlock(answer.Passphrase ?? string.Empty);
 
             if (opened)
             {
@@ -584,7 +609,7 @@ public sealed partial class MainViewModel : ObservableObject
     private Task UnlockAsync() => EnsureUnlockedAsync(Strings.Get("Unlock.ReasonEnrol"));
 
     [RelayCommand]
-    private void Lock() => _session.Vault.Lock();
+    private void Lock() => _session.Vault?.Lock();
 
     [RelayCommand]
     private void TakeOver() => _session.TakeOver();
@@ -607,10 +632,12 @@ public sealed partial class MainViewModel : ObservableObject
     private void RefreshBanners()
     {
         var vault = _session.Vault;
-        IsUnlocked = vault.IsUnlocked;
-        KeyStatus = vault.IsUnlocked
-            ? Strings.Format("Key.UnlockedUntil", vault.LocksAt?.ToLocalTime().ToString("t", Strings.Culture) ?? string.Empty)
-            : Strings.Get("Key.Locked");
+        IsUnlocked = vault is { IsUnlocked: true };
+        KeyStatus = vault is null
+            ? Strings.Get("Access.TeacherStatus")
+            : vault.IsUnlocked
+                ? Strings.Format("Key.UnlockedUntil", vault.LocksAt?.ToLocalTime().ToString("t", Strings.Culture) ?? string.Empty)
+                : Strings.Get("Key.Locked");
 
         var wanted = new List<BannerViewModel>();
 
@@ -628,21 +655,21 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         var renewals = _session.MachinesNeedingRenewal();
-        if (renewals.Count > 0 && !vault.IsUnlocked)
+        if (renewals.Count > 0 && vault is { IsUnlocked: false })
         {
             wanted.Add(new BannerViewModel("renew", Strings.Format("Banner.Renewal", renewals.Count),
                 Strings.Get("Banner.UnlockKey"), () => EnsureUnlockedAsync(Strings.Get("Unlock.ReasonRenewal")), isWarning: true));
         }
 
         var backup = _bootstrap.CheckBackup(_session.InstanceDocument);
-        if (backup != BackupStatus.Current)
+        if (backup is not BackupStatus.Current and not BackupStatus.NotApplicable)
         {
             wanted.Add(new BannerViewModel("backup",
                 Strings.Get(backup == BackupStatus.Missing ? "Banner.BackupMissing" : "Banner.BackupStale"),
                 Strings.Get("Banner.ExportBackup"), () => Settings.ExportBackupCommand.ExecuteAsync(null), isWarning: true));
         }
 
-        if (vault.IsUnlocked)
+        if (vault is { IsUnlocked: true })
         {
             wanted.Add(new BannerViewModel("unlocked", KeyStatus, Strings.Get("Key.Lock"),
                 () => { vault.Lock(); return Task.CompletedTask; }, isWarning: false));

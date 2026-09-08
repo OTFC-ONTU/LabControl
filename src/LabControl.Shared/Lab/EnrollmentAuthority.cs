@@ -30,6 +30,9 @@ public enum EnrollmentOutcome
 
     /// <summary>The code is from an older USB stick, voided when a newer payload was written (D-28).</summary>
     VoidedCode = 7,
+
+    /// <summary>The code came in an imported backup and has not been activated on this console (M5, D-60).</summary>
+    DormantCode = 8,
 }
 
 /// <summary>The result of one enrolment attempt, ready to be turned into a response or an event.</summary>
@@ -77,10 +80,95 @@ public sealed class EnrollmentAuthority
         }
     }
 
+    /// <summary>Codes that arrived in a backup and wait for <i>Use codes from the imported backup</i> (D-60).</summary>
+    public int DormantCodeCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _document.Codes.Count(code => code.IsOutstanding && code.IsDormant);
+            }
+        }
+    }
+
+    /// <summary>The batches with dormant codes, for the activation button's text (D-60).</summary>
+    public IReadOnlyList<EnrollmentBatchRecord> DormantBatches
+    {
+        get
+        {
+            lock (_gate)
+            {
+                var names = _document.Codes.Where(code => code.IsOutstanding && code.IsDormant).Select(code => code.Batch).ToHashSet(StringComparer.Ordinal);
+                var known = _document.Batches.Where(batch => names.Contains(batch.Batch)).ToList();
+                foreach (var name in names.Where(name => known.All(batch => !string.Equals(batch.Batch, name, StringComparison.Ordinal))))
+                {
+                    known.Add(new EnrollmentBatchRecord { Batch = name });
+                }
+
+                return known;
+            }
+        }
+    }
+
     /// <summary>
-    /// Voids every code that is still unused: called before a new stick is written, so that
-    /// a new stick always replaces the old one and a stick left in a drawer or lost cannot
-    /// enrol anything once a newer one exists (D-28). Returns how many codes were voided.
+    /// Marks every outstanding code dormant: called when a backup lands in a saved lab
+    /// (D-60 item 1), never by the single-lab migration (item 2). Returns how many.
+    /// </summary>
+    public int MarkDormant(DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var marked = 0;
+            foreach (var code in _document.Codes)
+            {
+                if (code.IsOutstanding && !code.IsDormant)
+                {
+                    code.DormantSinceImportUnix = now.ToUnixTimeSeconds();
+                    marked++;
+                }
+            }
+
+            foreach (var batch in _document.Batches)
+            {
+                if (!batch.IsDormant)
+                {
+                    batch.DormantSinceImportUnix = now.ToUnixTimeSeconds();
+                }
+            }
+
+            return marked;
+        }
+    }
+
+    /// <summary>The explicit administrator action of D-60: every dormant code is usable from now on. Returns how many.</summary>
+    public int ActivateDormant()
+    {
+        lock (_gate)
+        {
+            var activated = 0;
+            foreach (var code in _document.Codes)
+            {
+                if (code.IsOutstanding && code.IsDormant)
+                {
+                    code.DormantSinceImportUnix = 0;
+                    activated++;
+                }
+            }
+
+            foreach (var batch in _document.Batches)
+            {
+                batch.DormantSinceImportUnix = 0;
+            }
+
+            return activated;
+        }
+    }
+
+    /// <summary>
+    /// Voids every code that is still outstanding — dormant ones too: a new stick replaces
+    /// every older one (D-28). Called before a new stick is written, so that a stick left in a
+    /// drawer or lost cannot enrol anything once a newer one exists. Returns how many codes were voided.
     /// </summary>
     public int Supersede(DateTimeOffset now)
     {
@@ -89,7 +177,7 @@ public sealed class EnrollmentAuthority
             var voided = 0;
             foreach (var code in _document.Codes)
             {
-                if (code.IsUsable)
+                if (code.IsOutstanding)
                 {
                     code.VoidedAtUnix = now.ToUnixTimeSeconds();
                     voided++;
@@ -104,13 +192,21 @@ public sealed class EnrollmentAuthority
     /// Writes a batch of codes for one USB stick. They are single use and worth nothing on
     /// their own, so there is no reason to be frugal: one per PC plus spares.
     /// </summary>
-    public IReadOnlyList<string> Generate(int count, string batch, DateTimeOffset now)
+    public IReadOnlyList<string> Generate(int count, string batch, DateTimeOffset now, string? issuedByInstanceId = null, string? issuedByInstanceName = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
 
         var printable = new List<string>(count);
         lock (_gate)
         {
+            _document.Batches.Add(new EnrollmentBatchRecord
+            {
+                Batch = batch,
+                IssuedByInstanceId = issuedByInstanceId,
+                IssuedByInstanceName = issuedByInstanceName,
+                CreatedAtUnix = now.ToUnixTimeSeconds(),
+            });
+
             for (var i = 0; i < count; i++)
             {
                 var code = EnrollmentCode.Generate();
@@ -124,6 +220,7 @@ public sealed class EnrollmentAuthority
                     Code = canonical,
                     Batch = batch,
                     CreatedAtUnix = now.ToUnixTimeSeconds(),
+                    IssuedByInstanceId = issuedByInstanceId,
                 });
 
                 printable.Add(code);
@@ -187,6 +284,13 @@ public sealed class EnrollmentAuthority
                 return new EnrollmentResult(EnrollmentOutcome.VoidedCode, null,
                     $"{Describe(request)} presented a code from an older USB stick ({match.Batch}); it was voided on " +
                     $"{DateTimeOffset.FromUnixTimeSeconds(match.VoidedAtUnix):yyyy-MM-dd} when a newer payload was written. Install from the current stick.");
+            }
+
+            if (match.IsDormant)
+            {
+                return new EnrollmentResult(EnrollmentOutcome.DormantCode, null,
+                    $"{Describe(request)} presented a code from a backup imported on this console ({match.Batch}); imported codes are dormant " +
+                    "until the administrator chooses Settings → Enrollment → Use codes from the imported backup.");
             }
 
             if (match.IsBurned)

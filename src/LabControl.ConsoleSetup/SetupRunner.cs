@@ -15,12 +15,23 @@ namespace LabControl.ConsoleSetup;
 /// </summary>
 internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, string version)
 {
+    /// <summary>How long the temporary copy waits for the uninstaller that started it.</summary>
+    private static readonly TimeSpan ParentWait = TimeSpan.FromMinutes(5);
+
+    /// <summary>How long the temporary copy keeps retrying the deletes after that.</summary>
+    private static readonly TimeSpan RemovalBudget = TimeSpan.FromMinutes(2);
+
+    private static readonly TimeSpan RemovalRetry = TimeSpan.FromMilliseconds(500);
+
+    private readonly ConsoleInstalledFiles _files = new(layout.InstallDirectory);
+
     public bool IsElevated =>
         new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
 
     public int Run(ConsoleInstallCommand command)
     {
-        var payload = command.Request.Action == ConsoleInstallAction.Install ? ConsolePayload.Open() : null;
+        var install = command.Request.Action == ConsoleInstallAction.Install;
+        var payload = install && ConsolePayload.IsPresent ? ConsolePayload.Open() : null;
         var plan = ConsoleInstallPlan.Build(command.Request, layout, version, payload?.Entries.Count ?? 0);
         log.Header(plan);
 
@@ -46,7 +57,16 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
                 log.Fail(step.Id, error);
-                log.Say("stopped. Nothing further was changed; the full log is " + log.Path);
+
+                // Only a step that merely looked at the machine may claim that nothing changed.
+                // Anything else has predecessors that already ran, and may itself have written
+                // half of its own work, so the teacher is told to fix the problem and run the
+                // installer again — it is idempotent, and a second run finishes the job.
+                log.Say(ConsoleInstallPlan.ChangesNothing(step.Id)
+                    ? "stopped before anything was changed. The full log is " + log.Path
+                    : "stopped at " + step.Id + ". The steps before it were carried out and this one may have been "
+                        + "half done; fix the problem above and run this installer again — it repeats safely. "
+                        + "The full log is " + log.Path);
                 return 1;
             }
         }
@@ -110,7 +130,8 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
 
         if (step.Id == ConsoleInstallPlan.RegistryUninstallRemove)
         {
-            return WindowsRegistrations.RemoveUninstallEntry(layout) ? "removed" : "already gone";
+            return Describe(WindowsRegistrations.RemoveUninstallEntry(layout),
+                "it points at another installation and was left for review");
         }
 
         if (step.Id == ConsoleInstallPlan.ShellNotify)
@@ -149,7 +170,8 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
 
             if (step.Id == ConsoleInstallPlan.ProgIdRemoveStep(type))
             {
-                return WindowsRegistrations.RemoveProgId(type, layout) ? "removed" : "already gone";
+                return Describe(WindowsRegistrations.RemoveProgId(type, layout),
+                    "the handler points somewhere else and was left for review");
             }
 
             if (step.Id == ConsoleInstallPlan.AssociationStep(type))
@@ -173,15 +195,36 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
                         "Adding a firewall rule needs an administrator. Run: " + spec.NetshLine);
                 }
 
-                return WindowsConsoleFirewall.EnsureRule(spec) ? "added" : "already allowed";
+                return WindowsConsoleFirewall.EnsureRule(spec, layout.ConsoleExecutable) ? "added" : "already allowed";
             }
         }
 
         throw new InvalidOperationException("Unknown installer step: " + step.Id);
     }
 
+    private static string Describe(RegistryRemoval outcome, string preserved) => outcome switch
+    {
+        RegistryRemoval.Removed => "removed",
+        RegistryRemoval.Missing => "already gone",
+        _ => "left in place: " + preserved,
+    };
+
+    /// <summary>
+    /// Refuses to touch the program files while a console is using them. Two things are asked,
+    /// because either alone lies: the lock file only covers the default data directory, so a
+    /// console started with <c>--data</c> somewhere else holds no lock this installer can see,
+    /// and a process by that name may be a console this installer does not manage. Both are
+    /// good enough reasons to stop.
+    /// </summary>
     private string CheckLock()
     {
+        if (RunningConsoles() is { Length: > 0 } running)
+        {
+            throw new IOException(Defaults.ConsoleProductName + " is running (process "
+                + string.Join(", ", running.Select(id => id.ToString(CultureInfo.InvariantCulture)))
+                + "). Close it — including a console started with --data on another directory — and start this again.");
+        }
+
         if (!File.Exists(layout.LockFile))
         {
             return "no console is running";
@@ -202,15 +245,35 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
         }
     }
 
+    private static int[] RunningConsoles()
+    {
+        try
+        {
+            var found = Process.GetProcessesByName(Defaults.ConsoleExecutableBaseName);
+            try
+            {
+                return [.. found.Select(process => process.Id)];
+            }
+            finally
+            {
+                foreach (var process in found)
+                {
+                    process.Dispose();
+                }
+            }
+        }
+        catch (Exception error) when (error is InvalidOperationException or NotSupportedException or PlatformNotSupportedException)
+        {
+            // Windows would not enumerate; the lock file below is then the only evidence.
+            return [];
+        }
+    }
+
     private string InstallFiles(ConsolePayload payload)
     {
         Directory.CreateDirectory(layout.InstallDirectory);
-        var manifestPath = Path.Combine(layout.InstallDirectory, Defaults.ConsoleInstallManifestFileName);
-        var previous = File.Exists(manifestPath)
-            ? File.ReadAllLines(manifestPath).Where(line => line.Length > 0).ToArray()
-            : [];
-
-        var written = payload.ExtractTo(layout.InstallDirectory);
+        var previous = _files.ReadManifest();
+        var written = ConsolePayload.ExtractTo(_files);
 
         // The installed copy of this executable is the uninstaller (the same pattern the
         // student Setup uses), so it is owned and listed like every other file.
@@ -219,65 +282,63 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
         if (self is not null && !string.Equals(Path.GetFullPath(self), Path.GetFullPath(layout.SetupExecutable), StringComparison.OrdinalIgnoreCase))
         {
             File.Copy(self, layout.SetupExecutable, true);
+            ClearZoneIdentifier(layout.SetupExecutable);
             written++;
         }
 
         owned.Add(Defaults.ConsoleSetupExecutableName);
-        File.WriteAllLines(manifestPath, owned.OrderBy(name => name, StringComparer.OrdinalIgnoreCase));
+        _files.WriteManifest(owned);
 
-        var stale = previous.Except(owned, StringComparer.OrdinalIgnoreCase).ToArray();
-        foreach (var relative in stale)
-        {
-            DeleteOwned(Path.Combine(layout.InstallDirectory, relative));
-        }
+        // Only a manifest this installation really wrote may prune anything: the fallback list
+        // is a guess about what is there, not a record of what an older payload contained.
+        var stale = previous.FromFallback
+            ? []
+            : previous.Owned.Except(owned, StringComparer.OrdinalIgnoreCase).ToArray();
+        var pruned = _files.Prune(stale);
 
-        return written == 0 && stale.Length == 0
+        var refused = Report(pruned.Refused, "the previous " + Defaults.ConsoleInstallManifestFileName);
+        return (written == 0 && pruned.Removed.Count == 0
             ? "already up to date (" + owned.Count + " file(s))"
-            : written + " file(s) written, " + stale.Length + " no longer needed";
+            : written + " file(s) written, " + pruned.Removed.Count + " no longer needed") + refused;
     }
 
     private string RemoveFiles()
     {
-        var manifestPath = Path.Combine(layout.InstallDirectory, Defaults.ConsoleInstallManifestFileName);
         if (!Directory.Exists(layout.InstallDirectory))
         {
             return "already gone";
         }
 
-        var owned = File.Exists(manifestPath)
-            ? File.ReadAllLines(manifestPath).Where(line => line.Length > 0).ToArray()
-            : [];
+        var self = Environment.ProcessPath;
+        var removal = _files.RemoveAll(self);
+        var refused = Report(removal.Refused, Defaults.ConsoleInstallManifestFileName);
+        var fallback = removal.FromFallback
+            ? " (no usable " + Defaults.ConsoleInstallManifestFileName + "; the two program files were removed by name)"
+            : "";
 
-        var self = Environment.ProcessPath is { } path ? Path.GetFullPath(path) : null;
-        var left = 0;
-        foreach (var relative in owned)
+        if (removal.Kept.Count == 0)
         {
-            var target = Path.Combine(layout.InstallDirectory, relative);
-            if (self is not null && string.Equals(Path.GetFullPath(target), self, StringComparison.OrdinalIgnoreCase))
-            {
-                left++;
-                continue;
-            }
-
-            DeleteOwned(target);
-        }
-
-        DeleteOwned(manifestPath);
-        RemoveEmptyDirectories(layout.InstallDirectory);
-
-        if (left == 0)
-        {
-            return owned.Length == 0 ? "nothing was owned here" : "removed " + owned.Length + " file(s)";
+            return (removal.Removed.Count == 0
+                ? "nothing was owned here"
+                : "removed " + removal.Removed.Count + " file(s)") + fallback + refused;
         }
 
         HandOverToTemporaryCopy();
-        return "removed " + (owned.Length - left) + " file(s); a temporary copy removes this program itself";
+        return "removed " + removal.Removed.Count + " file(s); a temporary copy removes this program itself"
+            + fallback + refused;
     }
 
+    private static string Report(IReadOnlyList<ConsoleManifestRefusal> refused, string what) =>
+        refused.Count == 0
+            ? ""
+            : "; refused " + refused.Count + " line(s) of " + what + " that named something outside the install directory: "
+                + string.Join(", ", refused.Select(entry => entry.ToString()));
+
     /// <summary>
-    /// The uninstaller cannot delete the file it is running from, so it copies itself into
-    /// the temp directory and lets that copy finish once this process has exited. Nothing is
-    /// scheduled, nothing survives a reboot, and the copy removes only the install directory.
+    /// The uninstaller cannot delete the file it is running from, so it copies itself into the
+    /// temp directory and lets that copy finish once this process has exited. The copy is told
+    /// which process to wait for and which directory it may remove; nothing is scheduled,
+    /// nothing survives a reboot, and the copy deletes itself when it is done.
     /// </summary>
     private void HandOverToTemporaryCopy()
     {
@@ -287,9 +348,9 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
             return;
         }
 
-        var worker = Path.Combine(Path.GetTempPath(),
-            "LabControl.ConsoleSetup." + Guid.NewGuid().ToString("N") + ".exe");
+        var worker = Path.Combine(Path.GetTempPath(), ConsoleTempCopies.NameFor(Guid.NewGuid()));
         File.Copy(self, worker, true);
+        ClearZoneIdentifier(worker);
         using var process = Process.Start(new ProcessStartInfo(worker)
         {
             UseShellExecute = false,
@@ -298,63 +359,183 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
             {
                 ConsoleInstallCommandLine.FinishRemovalSwitch,
                 layout.InstallDirectory,
+                ConsoleInstallCommandLine.FinishRemovalProcessSwitch,
+                Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
             },
         });
     }
 
-    /// <summary>The temporary copy's whole job: wait for the uninstaller to exit, then remove what is left.</summary>
-    public static int FinishRemoval(string directory, SetupLog log)
+    /// <summary>
+    /// The temporary copy's whole job: make sure it is the right directory, wait for the
+    /// uninstaller to exit, remove what the manifest still lists, and then remove itself.
+    ///
+    /// It deletes nothing but this installation. The argument is compared with the layout's
+    /// own install directory, so a copy started by hand with any other path — a profile, a
+    /// documents folder — refuses and changes nothing (D-59 item 1).
+    /// </summary>
+    public static int FinishRemoval(string directory, int? parentProcessId, ConsoleInstallLayout layout, SetupLog log)
     {
-        for (var attempt = 1; attempt <= 30; attempt++)
+        if (!ConsoleInstalledFiles.IsTheSameDirectory(directory, layout.InstallDirectory))
+        {
+            log.Say("refused: " + ConsoleInstallCommandLine.FinishRemovalSwitch + " removes only "
+                + layout.InstallDirectory + ", never " + directory + ".");
+            return 2;
+        }
+
+        WaitForParent(parentProcessId);
+
+        var files = new ConsoleInstalledFiles(layout.InstallDirectory);
+        var started = Stopwatch.StartNew();
+        Exception? last = null;
+        while (true)
         {
             try
             {
-                if (!Directory.Exists(directory))
+                var removal = files.RemoveAll();
+                if (removal.DirectoryRemoved)
                 {
-                    log.Step(ConsoleInstallPlan.FilesRemove, "removed by the temporary copy");
+                    log.Step(ConsoleInstallPlan.FilesRemove,
+                        "removed by the temporary copy (" + removal.Removed.Count + " file(s))");
+                    SelfDelete();
                     return 0;
                 }
 
-                Directory.Delete(directory, true);
-                log.Step(ConsoleInstallPlan.FilesRemove, "removed by the temporary copy");
-                return 0;
+                last = new IOException(layout.InstallDirectory + " still holds files that are in use.");
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
-                if (attempt == 30)
-                {
-                    log.Fail(ConsoleInstallPlan.FilesRemove, error);
-                    return 1;
-                }
-
-                Thread.Sleep(TimeSpan.FromMilliseconds(500));
+                last = error;
             }
-        }
 
-        return 1;
+            if (started.Elapsed >= RemovalBudget)
+            {
+                log.Fail(ConsoleInstallPlan.FilesRemove, last ?? new IOException("the directory could not be removed"));
+                log.Say("The program files are still in " + layout.InstallDirectory
+                    + ". Delete that directory by hand, or run the installer again and remove it from Installed apps.");
+                SelfDelete();
+                return 1;
+            }
+
+            Thread.Sleep(RemovalRetry);
+        }
     }
 
+    /// <summary>
+    /// Nothing may be deleted while the uninstaller that started this copy is still running:
+    /// it is still writing its own log, and on Windows its executable cannot be deleted at all.
+    /// Waiting for it is what makes the removal actually happen rather than fail quietly.
+    /// </summary>
+    private static void WaitForParent(int? parentProcessId)
+    {
+        if (parentProcessId is not { } id)
+        {
+            return;
+        }
+
+        try
+        {
+            using var parent = Process.GetProcessById(id);
+            parent.WaitForExit((int)ParentWait.TotalMilliseconds);
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            // Already gone, or not a process this copy may wait for. Either way: carry on.
+        }
+    }
+
+    /// <summary>
+    /// The copy is a ~60 MB working installer sitting in the temp directory; leaving it there
+    /// invites a double-click months later. A running executable cannot delete itself, so it
+    /// hands the deletion to a detached shell that waits a few seconds first.
+    /// </summary>
+    private static void SelfDelete()
+    {
+        var self = Environment.ProcessPath;
+        if (self is null || !OperatingSystem.IsWindows() || !ConsoleTempCopies.IsTemporaryCopy(Path.GetFileName(self)))
+        {
+            return;
+        }
+
+        try
+        {
+            var comspec = Environment.GetEnvironmentVariable("ComSpec");
+            using var _ = Process.Start(new ProcessStartInfo(string.IsNullOrEmpty(comspec) ? "cmd.exe" : comspec)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                ArgumentList =
+                {
+                    "/d", "/c",
+                    "ping 127.0.0.1 -n 5 > nul & del /f /q \"" + self + "\"",
+                },
+            });
+        }
+        catch (Exception error) when (error is IOException or System.ComponentModel.Win32Exception)
+        {
+            // The next run of the installer sweeps it instead.
+        }
+    }
+
+    /// <summary>
+    /// Uninstall runs unelevated, because installing does (D-59 item 1). Removing a firewall
+    /// rule needs an administrator, so unless this particular run happens to be elevated the
+    /// rules are left exactly as they are and the two commands that remove them are printed.
+    /// An open port with nothing listening on it is not a hazard; deleting somebody else's
+    /// rule, or asking a teacher for an administrator in the middle of an uninstall started
+    /// from Installed apps, would be worse.
+    /// </summary>
     private string RemoveFirewallRules()
     {
+        if (!IsElevated)
+        {
+            var present = Present();
+            return present.Count == 0
+                ? "no rule of this installer is present"
+                : "left in place — removing a firewall rule needs an administrator, and uninstalling never asks for one. "
+                    + "To remove " + string.Join(" and ", present) + " run in an elevated Command Prompt: "
+                    + string.Join("  ", ConsoleFirewallRules.NetshDeleteLines());
+        }
+
         var removed = new List<string>();
+        var preserved = new List<string>();
         foreach (var spec in ConsoleFirewallRules.Required)
         {
             try
             {
-                if (WindowsConsoleFirewall.RemoveOwnedRule(spec))
+                switch (WindowsConsoleFirewall.RemoveOwnedRule(spec))
                 {
-                    removed.Add(spec.Name);
+                    case ConsoleFirewallRuleOwnership.Owned:
+                        removed.Add(spec.Name);
+                        break;
+                    case ConsoleFirewallRuleOwnership.Foreign:
+                        preserved.Add(spec.Name);
+                        break;
                 }
             }
             catch (IOException)
             {
-                return "skipped — removing a firewall rule needs an administrator. To do it by hand: "
-                    + string.Join("  ", ConsoleFirewallRules.Required.Select(rule =>
-                        "netsh advfirewall firewall delete rule name=\"" + rule.Name + "\""));
+                return "skipped — the Windows Firewall would not answer. To remove the rules by hand: "
+                    + string.Join("  ", ConsoleFirewallRules.NetshDeleteLines());
             }
         }
 
-        return removed.Count == 0 ? "no rule of this installer was present" : "removed " + string.Join(", ", removed);
+        var note = preserved.Count == 0
+            ? ""
+            : "; left " + string.Join(", ", preserved) + " for review: another group holds a rule of that name";
+        return (removed.Count == 0 ? "no rule of this installer was present" : "removed " + string.Join(", ", removed)) + note;
+    }
+
+    /// <summary>Which of this installer's own rules Windows still holds. Reading needs no administrator.</summary>
+    private static IReadOnlyList<string> Present()
+    {
+        try
+        {
+            return WindowsConsoleFirewall.Check().OwnedRuleNames;
+        }
+        catch (Exception error) when (error is IOException or PlatformNotSupportedException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
     private string RemoveData()
@@ -385,40 +566,26 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
         return string.Equals(System.Console.In.ReadLine()?.Trim(), "REMOVE", StringComparison.Ordinal);
     }
 
-    private static void DeleteOwned(string path)
+    /// <summary>
+    /// Removes the <c>Zone.Identifier</c> stream Windows attaches to a file copied from a
+    /// download or a USB stick, so the installed uninstaller does not raise SmartScreen every
+    /// time it is started from Installed apps. Nothing else about the file changes.
+    /// </summary>
+    private static void ClearZoneIdentifier(string path)
     {
-        if (!File.Exists(path))
+        if (!OperatingSystem.IsWindows())
         {
             return;
         }
 
         try
         {
-            File.SetAttributes(path, FileAttributes.Normal);
+            File.Delete(path + ":Zone.Identifier");
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException
+            or ArgumentException or NotSupportedException)
         {
-            // The delete below reports the real problem.
-        }
-
-        File.Delete(path);
-    }
-
-    private static void RemoveEmptyDirectories(string root)
-    {
-        if (!Directory.Exists(root))
-        {
-            return;
-        }
-
-        foreach (var directory in Directory.GetDirectories(root))
-        {
-            RemoveEmptyDirectories(directory);
-        }
-
-        if (Directory.GetFileSystemEntries(root).Length == 0)
-        {
-            Directory.Delete(root);
+            // No stream, or a file system without them. Harmless either way.
         }
     }
 
@@ -429,5 +596,4 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
             PInvoke.SHChangeNotify(SHCNE_ID.SHCNE_ASSOCCHANGED, SHCNF_FLAGS.SHCNF_IDLIST, null, null);
         }
     }
-
 }

@@ -54,6 +54,10 @@ fi
 mkdir -p "$stage/share/pixmaps"
 cp "$master" "$stage/share/pixmaps/labcontrol-console.png"
 
+# Exec/TryExec are rewritten to the absolute launcher path by install.sh: on a first
+# install ~/.local/bin is usually not yet on the session's PATH (the shell adds it at the
+# NEXT login), and a .desktop entry whose TryExec cannot be resolved is hidden by the
+# application menu — the teacher installs it and finds nothing.
 cat > "$stage/share/applications/labcontrol-console.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
@@ -114,7 +118,14 @@ exec "$prefix/LabControl.Console" "\$@"
 LAUNCHER
 chmod +x "$bin/labcontrol-console"
 
-cp "$here/share/applications/labcontrol-console.desktop" "$opt/applications/"
+# The launcher by its absolute path: ~/.local/bin is not on the PATH of the session that is
+# running right now, and a TryExec the desktop cannot resolve hides the entry. awk, not sed,
+# because the replacement is a home directory nobody chose with a regular expression in mind.
+awk -v launcher="$bin/labcontrol-console" '
+  /^Exec=/    { print "Exec=" launcher " %F"; next }
+  /^TryExec=/ { print "TryExec=" launcher; next }
+                { print }
+' "$here/share/applications/labcontrol-console.desktop" > "$opt/applications/labcontrol-console.desktop"
 cp "$here/share/mime/packages/labcontrol-console.xml" "$opt/mime/packages/"
 if [ -d "$here/share/icons" ]; then
   mkdir -p "$opt/icons"

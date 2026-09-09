@@ -76,6 +76,15 @@ public sealed class ConsoleInstallPlan
     public const string DataKeep = "data.keep";
     public const string DataRemove = "data.remove";
 
+    /// <summary>
+    /// The steps that only look. When one of these fails the machine is exactly as it was, and
+    /// the installer may honestly say so; when any other step fails, earlier steps have already
+    /// been carried out and this one may have written something, so the run must say that
+    /// instead of claiming nothing changed (S6).
+    /// </summary>
+    public static bool ChangesNothing(string stepId) =>
+        stepId is CheckLock or FirewallHint or DataKeep;
+
     public static string ProgIdStep(ConsoleFileType type) => "progid" + type.Extension;
 
     public static string ProgIdRemoveStep(ConsoleFileType type) => "progid" + type.Extension + ".remove";
@@ -144,7 +153,7 @@ public sealed class ConsoleInstallPlan
                 steps.Add(new(RegistryUninstallRemove, $"Remove the Installed apps entry (HKCU\\{ConsoleUninstallEntry.Key})"));
                 steps.Add(new(ShortcutStartMenuRemove, $"Remove the Start-menu shortcut {layout.StartMenuShortcut}"));
                 steps.Add(new(ShortcutDesktopRemove, $"Remove the desktop shortcut {layout.DesktopShortcut}"));
-                steps.Add(new(FirewallRemove, $"Remove this installer's firewall rules, group \"{ConsoleFirewallRules.Group}\" (needs elevation; other rules are left alone)"));
+                steps.Add(new(FirewallRemove, $"Remove this installer's firewall rules, group \"{ConsoleFirewallRules.Group}\" — only when this uninstall itself runs elevated; otherwise the two delete commands are printed and the rules stay (other rules are always left alone)"));
                 steps.Add(new(ShellNotify, "Tell Explorer that the file types changed"));
                 steps.Add(new(FilesRemove, $"Remove {layout.InstallDirectory}"));
                 steps.Add(new(DataKeep,

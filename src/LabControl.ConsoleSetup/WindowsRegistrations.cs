@@ -4,6 +4,24 @@ using Microsoft.Win32;
 
 namespace LabControl.ConsoleSetup;
 
+/// <summary>What happened to one registry key uninstall tried to remove.</summary>
+internal enum RegistryRemoval
+{
+    /// <summary>The key was this installation's, and it is gone.</summary>
+    Removed = 0,
+
+    /// <summary>There was no such key.</summary>
+    Missing = 1,
+
+    /// <summary>
+    /// The key belongs to another installation of the console — a second copy, or one
+    /// installed somewhere else — so it is left exactly as it is. That is a reason to say so
+    /// and carry on, never a reason to abandon an uninstall half-way and leave the machine in
+    /// a state with no entry to retry from.
+    /// </summary>
+    PreservedForReview = 2,
+}
+
 /// <summary>
 /// Everything the installer writes under <c>HKEY_CURRENT_USER</c> (D-59 item 1): the
 /// Installed-apps entry and the two file types. Nothing is written machine-wide, and the
@@ -26,24 +44,24 @@ internal static class WindowsRegistrations
     }
 
     /// <summary>Removes the entry only while it still points at this installation.</summary>
-    public static bool RemoveUninstallEntry(ConsoleInstallLayout layout)
+    public static RegistryRemoval RemoveUninstallEntry(ConsoleInstallLayout layout)
     {
         using (var key = Registry.CurrentUser.OpenSubKey(ConsoleUninstallEntry.Key))
         {
             if (key is null)
             {
-                return false;
+                return RegistryRemoval.Missing;
             }
 
             if (key.GetValue("InstallLocation") is string location
                 && !string.Equals(location.TrimEnd(Path.DirectorySeparatorChar), layout.InstallDirectory, StringComparison.OrdinalIgnoreCase))
             {
-                throw new IOException("The Installed apps entry points at " + location + "; preserve it for review.");
+                return RegistryRemoval.PreservedForReview;
             }
         }
 
         Registry.CurrentUser.DeleteSubKeyTree(ConsoleUninstallEntry.Key, false);
-        return true;
+        return RegistryRemoval.Removed;
     }
 
     public static void WriteProgId(ConsoleFileType type, ConsoleInstallLayout layout)
@@ -63,7 +81,7 @@ internal static class WindowsRegistrations
     }
 
     /// <summary>Removes the ProgId tree, but only while its open command still names this installation.</summary>
-    public static bool RemoveProgId(ConsoleFileType type, ConsoleInstallLayout layout)
+    public static RegistryRemoval RemoveProgId(ConsoleFileType type, ConsoleInstallLayout layout)
     {
         using (var command = Registry.CurrentUser.OpenSubKey(type.CommandKey))
         {
@@ -72,18 +90,18 @@ internal static class WindowsRegistrations
                 using var progId = Registry.CurrentUser.OpenSubKey(type.ProgIdKey);
                 if (progId is null)
                 {
-                    return false;
+                    return RegistryRemoval.Missing;
                 }
             }
             else if (command.GetValue(null) is string line
                 && !line.Contains(layout.ConsoleExecutable, StringComparison.OrdinalIgnoreCase))
             {
-                throw new IOException("The " + type.Extension + " handler points somewhere else; preserve it for review.");
+                return RegistryRemoval.PreservedForReview;
             }
         }
 
         Registry.CurrentUser.DeleteSubKeyTree(type.ProgIdKey, false);
-        return true;
+        return RegistryRemoval.Removed;
     }
 
     /// <summary>

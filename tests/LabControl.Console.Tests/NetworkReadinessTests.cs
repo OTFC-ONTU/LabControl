@@ -28,6 +28,12 @@ public class NetworkReadinessTests
         /// <summary>What the elevated helper answers; when it succeeds it also opens the ports, unless <see cref="Lies"/>.</summary>
         public bool Grants { get; set; } = true;
 
+        /// <summary>What a run that did happen reported. <see cref="Grants"/> false means Windows never started it.</summary>
+        public ConsoleElevationOutcome Outcome { get; set; } = ConsoleElevationOutcome.Completed;
+
+        /// <summary>The helper opened the ports even though it reported a failure — a closed window after two added rules.</summary>
+        public bool OpensPortsAnyway { get; set; }
+
         public bool Lies { get; set; }
 
         public int Checks { get; private set; }
@@ -49,7 +55,7 @@ public class NetworkReadinessTests
 
         public string? FindHelper() => Helper;
 
-        public bool RequestElevated(string helper)
+        public ConsoleElevationOutcome RequestElevated(string helper)
         {
             Requests++;
             Assert.Equal(Helper, helper);
@@ -58,12 +64,21 @@ public class NetworkReadinessTests
                 throw error;
             }
 
-            if (Grants && !Lies)
+            if (!Grants)
+            {
+                return ConsoleElevationOutcome.Refused;
+            }
+
+            if (Outcome == ConsoleElevationOutcome.Completed && !Lies)
+            {
+                Allowed = true;
+            }
+            else if (OpensPortsAnyway)
             {
                 Allowed = true;
             }
 
-            return Grants;
+            return Outcome;
         }
     }
 
@@ -248,6 +263,50 @@ public class NetworkReadinessTests
         }
 
         Assert.DoesNotContain("{0}", LabControl.Console.Localization.Strings.Get("Network.Blocked"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_helper_that_exited_non_zero_is_believed_only_by_the_rules()
+    {
+        // The teacher added both rules and then closed the window, so the helper exited with a
+        // failure. The ports are open; saying "Denied" here would send a teacher to an elevated
+        // prompt to add rules that are already there.
+        var firewall = new FakeFirewall { Outcome = ConsoleElevationOutcome.Failed, OpensPortsAnyway = true };
+        var (readiness, _) = Watch(firewall);
+
+        readiness.Check();
+        readiness.Allow();
+
+        Assert.Equal(NetworkReadinessState.Allowed, readiness.State);
+        Assert.False(readiness.HasBanner);
+        Assert.Equal(2, firewall.Checks);
+    }
+
+    [Fact]
+    public void A_helper_that_exited_non_zero_and_changed_nothing_still_shows_the_commands()
+    {
+        var firewall = new FakeFirewall { Outcome = ConsoleElevationOutcome.Failed };
+        var (readiness, _) = Watch(firewall);
+
+        readiness.Check();
+        readiness.Allow();
+
+        Assert.Equal(NetworkReadinessState.Denied, readiness.State);
+        Assert.Equal(ConsoleFirewallRules.NetshLines(), readiness.Diagnostic);
+    }
+
+    [Fact]
+    public async Task A_probe_that_throws_something_unexpected_never_faults_the_fire_and_forget_task()
+    {
+        // MainViewModel does `_ = _network.CheckAsync()`. A task that faults with nobody
+        // observing it is a crash waiting for the finalizer, so the work catches everything.
+        var firewall = new FakeFirewall { CheckThrows = new InvalidCastException("a COM object of another shape") };
+        var readiness = new NetworkReadiness(firewall);
+
+        await readiness.CheckAsync();
+
+        Assert.Equal(NetworkReadinessState.Failed, readiness.State);
+        Assert.Equal(ConsoleFirewallRules.NetshLines(), readiness.Diagnostic);
     }
 
     [Fact]

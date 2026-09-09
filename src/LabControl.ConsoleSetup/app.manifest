@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-  <assemblyIdentity version="1.0.0.0" name="LabControl.ConsoleSetup" />
+  <!-- The version below is a placeholder and is never used as it stands: the build writes
+       this manifest into obj/ with the build's own version substituted for it, so what
+       Windows shows and what the installer log prints are the same number (see
+       LabControl.ConsoleSetup.csproj, target StampSetupManifestVersion). -->
+  <assemblyIdentity version="0.0.0.0" name="LabControl.ConsoleSetup" />
   <!-- asInvoker: the teacher console installs into the signed-in user's own profile and
        must never need an administrator (D-59 item 1). Only "--firewall" elevates, and it
        relaunches itself for that one step. -->

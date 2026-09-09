@@ -35,12 +35,52 @@ public sealed record ConsoleInstallLayout(
     /// <summary>The append-only installer log, next to the console's own data but under <c>%LOCALAPPDATA%</c>.</summary>
     public string LogFile => Path.Combine(LocalAppData, "LabControl", Defaults.ConsoleSetupLogFileName);
 
+    /// <summary>
+    /// Every root this layout cannot use, as a sentence naming it. <see cref="Environment.GetFolderPath(Environment.SpecialFolder)"/>
+    /// returns an empty string for a special folder Windows has not materialised — a fresh
+    /// profile with no Desktop directory, a locked-down or redirected shell folder — and an
+    /// empty root would silently turn every path below into a relative one, writing shortcuts
+    /// into whatever the current working directory happened to be. The installer refuses
+    /// instead, and says which root Windows would not give it.
+    /// </summary>
+    public IReadOnlyList<string> UnusableRoots()
+    {
+        var problems = new List<string>();
+        Check("the local application data directory", LocalAppData);
+        Check("the Start-menu Programs directory", StartMenuPrograms);
+        Check("the desktop directory", Desktop);
+        Check("the console's data directory", DataDirectory);
+        return problems;
+
+        void Check(string what, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                problems.Add(what + " (Windows reported no path)");
+            }
+            else if (!Path.IsPathRooted(value))
+            {
+                problems.Add(what + " (\"" + value + "\" is not a full path)");
+            }
+        }
+    }
+
     /// <summary>The roots Windows reports for the signed-in user. Only meaningful on Windows.</summary>
-    public static ConsoleInstallLayout Current() => new(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-        Defaults.ConsoleDataDirectory);
+    /// <exception cref="InvalidOperationException">Windows did not report a usable root.</exception>
+    public static ConsoleInstallLayout Current()
+    {
+        var layout = new ConsoleInstallLayout(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Defaults.ConsoleDataDirectory);
+
+        return layout.UnusableRoots() is { Count: > 0 } unusable
+            ? throw new InvalidOperationException(
+                "Windows did not say where to install: " + string.Join("; ", unusable)
+                + ". Sign in as the teacher's own user and run this again.")
+            : layout;
+    }
 }
 
 /// <summary>

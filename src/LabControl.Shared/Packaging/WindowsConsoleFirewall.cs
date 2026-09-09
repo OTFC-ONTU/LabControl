@@ -32,38 +32,46 @@ public static class WindowsConsoleFirewall
     }
 
     /// <summary>Whether the LAN may reach this console, and which of the installer's rules exist.</summary>
-    public static ConsoleFirewallStatus Check() => ConsoleFirewallRules.Evaluate(ReadRules());
+    /// <param name="consoleExecutable">The console a program-scoped rule must name to count; <c>null</c> compares the file name only.</param>
+    public static ConsoleFirewallStatus Check(string? consoleExecutable = null) =>
+        ConsoleFirewallRules.Evaluate(ReadRules(), consoleExecutable);
 
     /// <summary>
     /// Adds the rule when the port is not already reachable. Returns <c>true</c> when a rule
     /// was created, <c>false</c> when nothing was needed — so a second run is a no-op, and a
     /// rule somebody else already added is never duplicated.
     /// </summary>
-    public static bool EnsureRule(ConsoleFirewallRuleSpec spec)
+    public static bool EnsureRule(ConsoleFirewallRuleSpec spec, string? consoleExecutable = null)
     {
         if (!OperatingSystem.IsWindows())
         {
             throw Unsupported();
         }
 
-        return ConsoleFirewallRules.Evaluate(ReadRulesCore()).Missing.Any(missing => missing.Name == spec.Name)
+        return ConsoleFirewallRules.Evaluate(ReadRulesCore(), consoleExecutable).Missing.Any(missing => missing.Name == spec.Name)
             && AddCore(spec);
     }
 
     /// <summary>
-    /// Removes a rule this installer owns: the name and the group must both still match,
-    /// so a rule a teacher edited or renamed is preserved for review rather than deleted.
+    /// Removes a rule this installer owns. Windows deletes rules by name, so every rule of
+    /// that name must still be in this installer's group: one rule someone else put there
+    /// under the same name makes the removal unsafe, and the rules are preserved for review
+    /// instead (<see cref="ConsoleFirewallRuleOwnership.Foreign"/>).
     /// </summary>
-    public static bool RemoveOwnedRule(ConsoleFirewallRuleSpec spec)
+    public static ConsoleFirewallRuleOwnership RemoveOwnedRule(ConsoleFirewallRuleSpec spec)
     {
         if (!OperatingSystem.IsWindows())
         {
             throw Unsupported();
         }
 
-        return ConsoleFirewallRules.Evaluate(ReadRulesCore()).OwnedRuleNames
-                .Contains(spec.Name, StringComparer.OrdinalIgnoreCase)
-            && RemoveCore(spec);
+        var ownership = ConsoleFirewallRules.Ownership(ReadRulesCore(), spec);
+        if (ownership == ConsoleFirewallRuleOwnership.Owned)
+        {
+            RemoveCore(spec);
+        }
+
+        return ownership;
     }
 
     private static PlatformNotSupportedException Unsupported() =>
@@ -78,6 +86,14 @@ public static class WindowsConsoleFirewall
             try
             {
                 found.Add(Describe(item));
+            }
+            catch (Exception error) when (error is COMException or TargetInvocationException
+                or MissingMemberException or InvalidCastException or NotSupportedException
+                or UnauthorizedAccessException or InvalidOperationException)
+            {
+                // One rule Windows will not describe — a broken third-party entry, a rule whose
+                // properties this user may not read — must not turn a healthy machine into
+                // "Failed". Skip it: a rule that cannot be read is not evidence of anything.
             }
             finally
             {
@@ -136,6 +152,11 @@ public static class WindowsConsoleFirewall
             Action = Number(Get(rule, "Action")),
             Enabled = Get(rule, "Enabled") is true,
             Profiles = Number(Get(rule, "Profiles")),
+            ApplicationName = Get(rule, "ApplicationName") as string,
+            ServiceName = Get(rule, "ServiceName") as string,
+            RemoteAddresses = Get(rule, "RemoteAddresses") as string,
+            LocalAddresses = Get(rule, "LocalAddresses") as string,
+            InterfaceTypes = Get(rule, "InterfaceTypes") as string,
         };
     }
 
@@ -182,7 +203,8 @@ public static class WindowsConsoleFirewall
             return action(rules);
         }
         catch (Exception error) when (error is COMException or TargetInvocationException
-            or MissingMemberException or InvalidCastException or UnauthorizedAccessException)
+            or MissingMemberException or InvalidCastException or NotSupportedException
+            or UnauthorizedAccessException)
         {
             throw new IOException("The Windows Firewall rules could not be read or changed safely.", error);
         }

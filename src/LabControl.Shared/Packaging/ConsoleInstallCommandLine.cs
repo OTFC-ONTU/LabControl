@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace LabControl.Shared.Packaging;
 
 /// <summary>One parsed command line of <c>LabControl.ConsoleSetup.exe</c>.</summary>
@@ -15,6 +17,14 @@ public sealed record ConsoleInstallCommand
     /// directory the running executable was still sitting in.
     /// </summary>
     public string? FinishRemovalDirectory { get; init; }
+
+    /// <summary>
+    /// Internal: the uninstaller that started the temporary copy. The copy waits for that
+    /// process to exit before its first delete — otherwise it races an uninstaller that is
+    /// still writing its log, and the program files survive with the Installed-apps entry
+    /// already gone (D-59 item 1).
+    /// </summary>
+    public int? FinishRemovalProcessId { get; init; }
 }
 
 /// <summary>
@@ -24,6 +34,9 @@ public sealed record ConsoleInstallCommand
 public static class ConsoleInstallCommandLine
 {
     public const string FinishRemovalSwitch = "--finish-removal";
+
+    /// <summary>The process the temporary copy waits for before it deletes anything.</summary>
+    public const string FinishRemovalProcessSwitch = "--finish-removal-pid";
 
     public static string Usage =>
         $"""
@@ -49,6 +62,7 @@ public static class ConsoleInstallCommandLine
         var elevated = false;
         var help = false;
         string? finishRemoval = null;
+        int? finishRemovalProcess = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -101,6 +115,19 @@ public static class ConsoleInstallCommandLine
                     action ??= ConsoleInstallAction.Uninstall;
                     break;
 
+                case FinishRemovalProcessSwitch:
+                    if (i + 1 >= args.Length
+                        || !int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var processId)
+                        || processId <= 0)
+                    {
+                        error = FinishRemovalProcessSwitch + " needs the process id to wait for.";
+                        return false;
+                    }
+
+                    finishRemovalProcess = processId;
+                    i++;
+                    break;
+
                 default:
                     error = "Unknown option: " + argument;
                     return false;
@@ -114,12 +141,19 @@ public static class ConsoleInstallCommandLine
             return false;
         }
 
+        if (finishRemovalProcess is not null && finishRemoval is null)
+        {
+            error = FinishRemovalProcessSwitch + " only applies together with " + FinishRemovalSwitch + ".";
+            return false;
+        }
+
         command = new ConsoleInstallCommand
         {
             Request = new ConsoleInstallRequest { Action = resolved, DesktopShortcut = desktop, DryRun = dryRun },
             Elevated = elevated,
             Help = help,
             FinishRemovalDirectory = finishRemoval,
+            FinishRemovalProcessId = finishRemovalProcess,
         };
         return true;
     }

@@ -331,6 +331,195 @@ public class ConsolePackagingTests
         Assert.Contains("protocol=UDP localport=47801", lines[1], StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TheDeleteLinesRemoveExactlyTheTwoRulesTheAddLinesCreate()
+    {
+        var lines = ConsoleFirewallRules.NetshDeleteLines();
+
+        Assert.Equal(2, lines.Count);
+        Assert.All(lines, line => Assert.StartsWith("netsh advfirewall firewall delete rule ", line, StringComparison.Ordinal));
+        foreach (var spec in ConsoleFirewallRules.Required)
+        {
+            Assert.Contains(lines, line => line.Contains("name=\"" + spec.Name + "\"", StringComparison.Ordinal));
+        }
+    }
+
+    // ------------------------------------------- a rule that does not open the port for us
+
+    [Fact]
+    public void WhatTheInstallerCreatesIsExactlyWhatTheCheckAccepts()
+    {
+        var status = ConsoleFirewallRules.Evaluate(
+            [.. ConsoleFirewallRules.Required.Select(ConsoleFirewallRules.AsCreated)]);
+
+        Assert.True(status.Allowed);
+        Assert.Equal(2, status.OwnedRuleNames.Count);
+    }
+
+    [Fact]
+    public void ARuleScopedToAnotherProgramOpensNothingForThisConsole()
+    {
+        var conferencing = Rule(ConsoleFirewallRules.Control) with
+        {
+            Name = "Some conferencing tool",
+            Grouping = "Some conferencing tool",
+            ApplicationName = @"C:\Program Files\Conference\conference.exe",
+        };
+
+        var status = ConsoleFirewallRules.Evaluate([conferencing, Rule(ConsoleFirewallRules.Discovery)]);
+
+        Assert.False(status.Allowed);
+        Assert.Equal([ConsoleFirewallRules.Control.Name], status.Missing.Select(spec => spec.Name));
+    }
+
+    [Fact]
+    public void AProgramScopedRuleCountsOnlyWhenItNamesThisVeryConsole()
+    {
+        const string installed = @"C:\Users\teacher\AppData\Local\LabControl\Console\" + Defaults.ConsoleExecutableName;
+        const string elsewhere = @"D:\Portable\LabControl\" + Defaults.ConsoleExecutableName;
+        var scoped = Rule(ConsoleFirewallRules.Control) with { ApplicationName = "\"" + installed + "\"" };
+
+        // Told which console is asking, the rule must name that exact file.
+        Assert.True(ConsoleFirewallRules.IsForThisConsole(scoped, installed));
+        Assert.False(ConsoleFirewallRules.IsForThisConsole(scoped, elsewhere));
+
+        // Told nothing, the file name is all an installer can honestly compare.
+        Assert.True(ConsoleFirewallRules.IsForThisConsole(scoped, null));
+        Assert.False(ConsoleFirewallRules.IsForThisConsole(
+            scoped with { ApplicationName = @"C:\Windows\System32\svchost.exe" }, null));
+
+        Assert.True(ConsoleFirewallRules.Evaluate(
+            [scoped, Rule(ConsoleFirewallRules.Discovery)], installed).Allowed);
+        Assert.False(ConsoleFirewallRules.Evaluate(
+            [scoped, Rule(ConsoleFirewallRules.Discovery)], elsewhere).Allowed);
+    }
+
+    [Fact]
+    public void ARuleScopedToAWindowsServiceIsNeverAnAnswer()
+    {
+        // The console is not a service, so a service rule that happens to cover the port
+        // lets nothing of ours through.
+        var service = Rule(ConsoleFirewallRules.Control) with { ServiceName = "RemoteRegistry" };
+
+        Assert.False(ConsoleFirewallRules.IsForThisConsole(service, null));
+        Assert.False(ConsoleFirewallRules.Evaluate([service, Rule(ConsoleFirewallRules.Discovery)]).Allowed);
+    }
+
+    [Theory]
+    [InlineData("192.168.1.7", null, null, "one remote host")]
+    [InlineData("192.168.1.0-192.168.1.50", null, null, "one remote range")]
+    [InlineData(null, "10.0.0.4", null, "one local address")]
+    [InlineData(null, null, "Wireless", "only Wi-Fi")]
+    [InlineData(null, null, "Lan,Wireless", "a list, not All")]
+    public void ARuleCutDownToOneCornerOfTheLabIsNoAnswer(
+        string? remote, string? local, string? interfaces, string because)
+    {
+        var narrow = Rule(ConsoleFirewallRules.Control) with
+        {
+            RemoteAddresses = remote,
+            LocalAddresses = local,
+            InterfaceTypes = interfaces,
+        };
+
+        var status = ConsoleFirewallRules.Evaluate([narrow, Rule(ConsoleFirewallRules.Discovery)]);
+
+        Assert.False(status.Allowed, because);
+        Assert.Equal([ConsoleFirewallRules.Control.Name], status.Missing.Select(spec => spec.Name));
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("*", true)]
+    [InlineData("Any", true)]
+    [InlineData("LocalSubnet", true)]
+    [InlineData("localsubnet", true)]
+    [InlineData("LocalSubnet,*", true)]
+    [InlineData("LocalSubnet,192.168.1.7", false)]
+    [InlineData("192.168.1.7", false)]
+    public void TheAddressScopeParserReadsWhatWindowsWrites(string? addresses, bool reaches) =>
+        Assert.Equal(reaches, ConsoleFirewallRules.ReachesTheClassroom(addresses));
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("All", true)]
+    [InlineData(" all ", true)]
+    [InlineData("Lan", false)]
+    [InlineData("Lan,Wireless,RemoteAccess", false)]
+    public void OnlyAnUnrestrictedInterfaceListCoversATeacherWhoMoves(string? types, bool covers) =>
+        Assert.Equal(covers, ConsoleFirewallRules.CoversEveryInterface(types));
+
+    [Fact]
+    public void OneMatchingBlockRuleOverridesEveryAllowRuleThereIs()
+    {
+        // Windows applies a matching block before any allow. Saying "allowed" here would send
+        // the teacher looking at the student PCs for a problem that is on this machine.
+        var block = Rule(ConsoleFirewallRules.Control) with
+        {
+            Name = "Block everything odd",
+            Grouping = "Some policy",
+            Action = ConsoleFirewallRuleSpec.ActionBlock,
+            LocalPorts = "*",
+        };
+
+        var status = ConsoleFirewallRules.Evaluate(
+            [ConsoleFirewallRules.AsCreated(ConsoleFirewallRules.Control), block, ConsoleFirewallRules.AsCreated(ConsoleFirewallRules.Discovery)]);
+
+        Assert.False(status.Allowed);
+        Assert.Equal([ConsoleFirewallRules.Control.Name], status.Missing.Select(spec => spec.Name));
+        // The rule is still ours to remove on uninstall; it just does not open anything.
+        Assert.Equal(2, status.OwnedRuleNames.Count);
+    }
+
+    [Fact]
+    public void ABlockRuleIsJudgedGenerouslyButStillHasToConcernThisPort()
+    {
+        var narrowBlock = Rule(ConsoleFirewallRules.Control) with
+        {
+            Name = "Block one visitor",
+            Grouping = "Some policy",
+            Action = ConsoleFirewallRuleSpec.ActionBlock,
+            // One profile, one address, one interface: still enough to stop the classroom.
+            Profiles = 2,
+            RemoteAddresses = "192.168.1.7",
+            InterfaceTypes = "Wireless",
+        };
+
+        Assert.False(ConsoleFirewallRules.Evaluate(
+            [ConsoleFirewallRules.AsCreated(ConsoleFirewallRules.Control), narrowBlock,
+                ConsoleFirewallRules.AsCreated(ConsoleFirewallRules.Discovery)]).Allowed);
+
+        // Another port, another program, the Public profile only, or disabled: not our problem.
+        foreach (var harmless in new[]
+                 {
+                     narrowBlock with { LocalPorts = "47999" },
+                     narrowBlock with { ApplicationName = @"C:\Games\game.exe" },
+                     narrowBlock with { Profiles = 1 },
+                     narrowBlock with { Enabled = false },
+                     narrowBlock with { Direction = 2 },
+                 })
+        {
+            Assert.True(ConsoleFirewallRules.Evaluate(
+                [ConsoleFirewallRules.AsCreated(ConsoleFirewallRules.Control), harmless,
+                    ConsoleFirewallRules.AsCreated(ConsoleFirewallRules.Discovery)]).Allowed);
+        }
+    }
+
+    [Fact]
+    public void ARuleIsOnlyOursToRemoveWhileEveryRuleOfThatNameIsOurs()
+    {
+        var spec = ConsoleFirewallRules.Control;
+        var ours = ConsoleFirewallRules.AsCreated(spec);
+        var namesake = ours with { Grouping = "Some other tool" };
+
+        Assert.Equal(ConsoleFirewallRuleOwnership.Absent, ConsoleFirewallRules.Ownership([], spec));
+        Assert.Equal(ConsoleFirewallRuleOwnership.Owned, ConsoleFirewallRules.Ownership([ours], spec));
+        // Windows deletes by name, so one namesake makes the whole removal unsafe.
+        Assert.Equal(ConsoleFirewallRuleOwnership.Foreign, ConsoleFirewallRules.Ownership([ours, namesake], spec));
+        Assert.Equal(ConsoleFirewallRuleOwnership.Foreign, ConsoleFirewallRules.Ownership([namesake], spec));
+    }
+
     // ------------------------------------------------------------------ the command line
 
     [Fact]
@@ -398,6 +587,77 @@ public class ConsolePackagingTests
 
         Assert.False(ConsoleInstallCommandLine.TryParse([ConsoleInstallCommandLine.FinishRemovalSwitch], out _, out var error));
         Assert.Contains("needs the directory", error!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheTemporaryCopyIsAlsoToldWhichProcessToWaitFor()
+    {
+        Assert.True(ConsoleInstallCommandLine.TryParse(
+            [
+                ConsoleInstallCommandLine.FinishRemovalSwitch, @"C:\x\Console",
+                ConsoleInstallCommandLine.FinishRemovalProcessSwitch, "4321",
+            ],
+            out var command, out _));
+        Assert.Equal(4321, command.FinishRemovalProcessId);
+
+        // A process id on its own would delete nothing and wait for nobody.
+        Assert.False(ConsoleInstallCommandLine.TryParse(
+            [ConsoleInstallCommandLine.FinishRemovalProcessSwitch, "4321"], out _, out var alone));
+        Assert.Contains("only applies together with", alone!, StringComparison.Ordinal);
+
+        foreach (var bad in new[] { "", "0", "-1", "4321x", "99999999999999999999" })
+        {
+            Assert.False(ConsoleInstallCommandLine.TryParse(
+                [
+                    ConsoleInstallCommandLine.FinishRemovalSwitch, @"C:\x\Console",
+                    ConsoleInstallCommandLine.FinishRemovalProcessSwitch, bad,
+                ],
+                out _, out var error), bad);
+            Assert.Contains("needs the process id", error!, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void OnlyAStepThatMerelyLookedMayClaimNothingWasChanged()
+    {
+        // A step that writes has predecessors that already ran, so "nothing was changed" would
+        // be a lie that sends a teacher away from a half-finished installation.
+        Assert.True(ConsoleInstallPlan.ChangesNothing(ConsoleInstallPlan.CheckLock));
+        Assert.True(ConsoleInstallPlan.ChangesNothing(ConsoleInstallPlan.FirewallHint));
+        Assert.True(ConsoleInstallPlan.ChangesNothing(ConsoleInstallPlan.DataKeep));
+
+        foreach (var writing in new[]
+                 {
+                     ConsoleInstallPlan.FilesReplace, ConsoleInstallPlan.FilesRemove,
+                     ConsoleInstallPlan.RegistryUninstall, ConsoleInstallPlan.RegistryUninstallRemove,
+                     ConsoleInstallPlan.ShortcutStartMenu, ConsoleInstallPlan.FirewallRemove,
+                     ConsoleInstallPlan.DataRemove,
+                 })
+        {
+            Assert.False(ConsoleInstallPlan.ChangesNothing(writing), writing);
+        }
+    }
+
+    // ------------------------------------------------------------------ the roots Windows gives
+
+    [Fact]
+    public void ALayoutWindowsWouldNotGiveIsRefusedRatherThanWrittenBlind()
+    {
+        // Not the Windows-shaped Layout() above: "C:\…" is not a rooted path on the Mac these
+        // tests run on, and the rule under test is exactly "is this root a full path".
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "labcontrol-layout"));
+        var usable = new ConsoleInstallLayout(root, root, root, root);
+        Assert.Empty(usable.UnusableRoots());
+
+        // GetFolderPath answers "" for a shell folder Windows has not materialised; every path
+        // below it would then be relative to whatever directory the installer happened to be in.
+        Assert.Equal(
+            ["the local application data directory (Windows reported no path)"],
+            (usable with { LocalAppData = "" }).UnusableRoots());
+
+        var relativeDesktop = (usable with { Desktop = "Desktop" }).UnusableRoots();
+        Assert.Single(relativeDesktop);
+        Assert.Contains("is not a full path", relativeDesktop[0], StringComparison.Ordinal);
     }
 
     [Fact]

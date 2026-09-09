@@ -143,8 +143,11 @@ public class MacBundleTests
         }
 
         using var process = Process.Start(start)!;
-        process.StandardOutput.ReadToEnd();
-        process.StandardError.ReadToEnd();
+        // Both pipes are drained at once: codesign writes to stderr, and reading stdout to the
+        // end first deadlocks as soon as the other pipe's buffer fills.
+        var output = process.StandardOutput.ReadToEndAsync();
+        var errors = process.StandardError.ReadToEndAsync();
+        Task.WaitAll(output, errors);
         process.WaitForExit();
         return process.ExitCode;
     }

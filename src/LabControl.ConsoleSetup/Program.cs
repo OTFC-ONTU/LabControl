@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Security;
 using LabControl.Shared;
 using LabControl.Shared.Packaging;
 using Windows.Win32;
@@ -33,16 +34,37 @@ internal static class Program
             return 0;
         }
 
-        var layout = ConsoleInstallLayout.Current();
+        ConsoleInstallLayout layout;
+        try
+        {
+            layout = ConsoleInstallLayout.Current();
+        }
+        catch (InvalidOperationException failure)
+        {
+            // Windows would not say where this user's profile is; nothing may be written blind.
+            System.Console.Error.WriteLine(failure.Message);
+            return 5;
+        }
+
         var log = new SetupLog(layout.LogFile);
 
         if (command.FinishRemovalDirectory is { } finishing)
         {
-            return SetupRunner.FinishRemoval(finishing, log);
+            return SetupRunner.FinishRemoval(finishing, command.FinishRemovalProcessId, layout, log);
         }
 
+        SweepOldCopies(log);
+
         var code = Execute(command, layout, log);
-        Pause();
+
+        // The log lives outside the data directory, so removing the labs has to remove it too:
+        // it is the last file on the machine that still names this teacher's installation.
+        if (code == 0 && command.Request.Action == ConsoleInstallAction.RemoveData)
+        {
+            log.Remove();
+        }
+
+        Pause(command);
         return code;
     }
 
@@ -52,11 +74,20 @@ internal static class Program
 
         if (command.Request.Action == ConsoleInstallAction.Install && !ConsolePayload.IsPresent)
         {
-            System.Console.Error.WriteLine(
-                "This installer was built without the " + Defaults.ConsoleProductName + " program files, so it cannot install anything.");
-            System.Console.Error.WriteLine(
-                "Build the real installer with tools/package-windows.sh (it publishes the console and embeds it) and run that.");
-            return 3;
+            // A dry run changes nothing, so a payload-less build may still print its plan —
+            // which is exactly what a developer or a reviewer wants from `dotnet build`.
+            if (!command.Request.DryRun)
+            {
+                System.Console.Error.WriteLine(
+                    "This installer was built without the " + Defaults.ConsoleProductName + " program files, so it cannot install anything.");
+                System.Console.Error.WriteLine(
+                    "Build the real installer with tools/package-windows.sh (it publishes the console and embeds it) and run that.");
+                return 3;
+            }
+
+            System.Console.Out.WriteLine(
+                "Note: this build carries no program files, so the plan below counts none. "
+                + "tools/package-windows.sh builds the installer a teacher runs.");
         }
 
         if (command.Request.Action == ConsoleInstallAction.Firewall && !command.Request.DryRun && !runner.IsElevated)
@@ -68,11 +99,36 @@ internal static class Program
         {
             return runner.Run(command);
         }
-        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException
+            or InvalidOperationException or InvalidDataException or SecurityException)
         {
+            // A corrupt payload, a registry this user may not write, a file that vanished: all
+            // of them are things to say in one sentence, never a stack trace at a teacher.
             System.Console.Error.WriteLine(failure.Message);
             log.Say("failed: " + failure.Message);
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// Removes the copies of this installer that earlier uninstalls left in the temp directory
+    /// (D-59 item 1). Each one is a working ~60 MB installer; one that survived an interrupted
+    /// uninstall must not sit there waiting to be double-clicked.
+    /// </summary>
+    private static void SweepOldCopies(SetupLog log)
+    {
+        try
+        {
+            var swept = ConsoleTempCopies.Sweep(
+                Path.GetTempPath(), Environment.ProcessPath, ConsoleTempCopies.Stale, DateTime.UtcNow);
+            if (swept.Count > 0)
+            {
+                log.Say("swept " + swept.Count + " leftover copy/copies of this installer out of the temp directory");
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // Housekeeping never stops an installation.
         }
     }
 
@@ -122,11 +178,21 @@ internal static class Program
 
     /// <summary>
     /// Only when this process owns its console window — a double-click from Explorer — is
-    /// there anything to keep open. Started from a prompt or a script, it just exits.
+    /// there anything to keep open, and only when somebody is there to read it.
+    ///
+    /// Two runs must never wait for a keypress. The elevated <c>--firewall</c> child is being
+    /// waited for by the console's <i>Allow…</i> banner, which would sit on a keypress nobody
+    /// is going to give it; and an uninstall is followed by a temporary copy that cannot delete
+    /// the program files until this process has exited, so a pause there leaves the executables
+    /// on the machine with the Installed-apps entry already gone.
     /// </summary>
-    private static void Pause()
+    private static void Pause(ConsoleInstallCommand command)
     {
-        if (System.Console.IsInputRedirected || System.Console.IsOutputRedirected || !OwnsConsoleWindow())
+        if (command.Elevated
+            || command.Request.Action == ConsoleInstallAction.Uninstall
+            || System.Console.IsInputRedirected
+            || System.Console.IsOutputRedirected
+            || !OwnsConsoleWindow())
         {
             return;
         }

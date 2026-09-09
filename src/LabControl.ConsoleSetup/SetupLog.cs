@@ -36,6 +36,27 @@ internal sealed class SetupLog(string path)
         Append("fail " + id + ": " + error.Message);
     }
 
+    /// <summary>
+    /// Deletes the log itself. Only <c>--remove-data</c> does this: once the labs, the keys and
+    /// the console's own logs are gone, this file is the last thing on the computer that still
+    /// records which labs were on it, and leaving it behind would contradict what the teacher
+    /// was asked to type REMOVE for.
+    /// </summary>
+    public void Remove()
+    {
+        try
+        {
+            lock (_gate)
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            System.Console.Error.WriteLine("The installer log " + path + " could not be removed; delete it by hand.");
+        }
+    }
+
     private void Append(string line)
     {
         try

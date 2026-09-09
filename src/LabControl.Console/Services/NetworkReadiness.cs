@@ -27,6 +27,22 @@ public enum NetworkReadinessState
     Failed = 5,
 }
 
+/// <summary>How the one elevated run of the installer ended.</summary>
+public enum ConsoleElevationOutcome
+{
+    /// <summary>Windows never started it: the teacher answered No, or policy forbids elevation.</summary>
+    Refused = 0,
+
+    /// <summary>It ran and reported success.</summary>
+    Completed = 1,
+
+    /// <summary>
+    /// It ran and reported a failure. That is a hint, not a verdict: the window may simply have
+    /// been closed after both rules were added, so the rules themselves are asked again.
+    /// </summary>
+    Failed = 2,
+}
+
 /// <summary>
 /// What the console is allowed to know about the firewall. Read-only inspection and one
 /// elevated request; everything else belongs to <c>LabControl.ConsoleSetup.exe</c>.
@@ -43,8 +59,8 @@ public interface IConsoleFirewallProbe
     /// <summary>The installer beside this console, or <c>null</c> when it was not installed from one.</summary>
     string? FindHelper();
 
-    /// <summary>Runs the helper elevated and waits. False when the teacher declined or it failed.</summary>
-    bool RequestElevated(string helper);
+    /// <summary>Runs the helper elevated and waits for it.</summary>
+    ConsoleElevationOutcome RequestElevated(string helper);
 }
 
 /// <summary>
@@ -125,10 +141,10 @@ public sealed class NetworkReadiness(IConsoleFirewallProbe probe)
             return;
         }
 
-        bool granted;
+        ConsoleElevationOutcome outcome;
         try
         {
-            granted = probe.RequestElevated(helper);
+            outcome = probe.RequestElevated(helper);
         }
         catch (Exception error) when (error is IOException or Win32Exception or InvalidOperationException)
         {
@@ -136,24 +152,48 @@ public sealed class NetworkReadiness(IConsoleFirewallProbe probe)
             return;
         }
 
-        if (!granted)
+        if (outcome == ConsoleElevationOutcome.Refused)
         {
             Move(NetworkReadinessState.Denied, ConsoleFirewallRules.NetshLines());
             return;
         }
 
-        // The helper said it succeeded; only the rules themselves prove it.
+        // Whatever the helper said, only the rules themselves prove anything. A window closed
+        // after both rules were added exits non-zero and has still opened the ports; a helper
+        // that exits 0 without adding them has not. So the rules are read again, and the exit
+        // code only decides how a still-blocked port is explained.
         Check();
         if (State != NetworkReadinessState.Allowed)
         {
-            Move(NetworkReadinessState.Failed, ConsoleFirewallRules.NetshLines());
+            Move(
+                outcome == ConsoleElevationOutcome.Completed
+                    ? NetworkReadinessState.Failed
+                    : NetworkReadinessState.Denied,
+                ConsoleFirewallRules.NetshLines());
         }
     }
 
-    /// <summary>The COM read and the elevation prompt both block; keep them off the UI thread.</summary>
-    public Task CheckAsync() => Task.Run(Check);
+    /// <summary>
+    /// The COM read and the elevation prompt both block; keep them off the UI thread. Neither
+    /// task ever faults: the console starts them and does not await them, and a faulted task
+    /// nobody observes is a crash waiting for the finalizer thread.
+    /// </summary>
+    public Task CheckAsync() => Task.Run(() => Guarded(Check));
 
-    public Task AllowAsync() => Task.Run(Allow);
+    public Task AllowAsync() => Task.Run(() => Guarded(Allow));
+
+    private void Guarded(Action work)
+    {
+        try
+        {
+            work();
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("network readiness: " + error);
+            Move(NetworkReadinessState.Failed, ConsoleFirewallRules.NetshLines());
+        }
+    }
 
     private void Move(NetworkReadinessState state, IReadOnlyList<string> diagnostic)
     {
@@ -177,7 +217,20 @@ public sealed class WindowsConsoleFirewallProbe : IConsoleFirewallProbe
 {
     public bool IsSupported => WindowsConsoleFirewall.IsSupported;
 
-    public ConsoleFirewallStatus Check() => WindowsConsoleFirewall.Check();
+    public ConsoleFirewallStatus Check() => WindowsConsoleFirewall.Check(ConsoleExecutable());
+
+    /// <summary>
+    /// This console's own executable. A rule scoped to a program only counts when that program
+    /// is this one, so the check has to know which file is asking.
+    /// </summary>
+    private static string? ConsoleExecutable()
+    {
+        var path = Environment.ProcessPath;
+        return string.IsNullOrEmpty(path)
+            || !string.Equals(Path.GetFileName(path), Defaults.ConsoleExecutableName, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : path;
+    }
 
     /// <summary>
     /// <c>LabControl.ConsoleSetup.exe</c> sits beside the installed console (D-59 item 1).
@@ -203,7 +256,7 @@ public sealed class WindowsConsoleFirewallProbe : IConsoleFirewallProbe
         return null;
     }
 
-    public bool RequestElevated(string helper)
+    public ConsoleElevationOutcome RequestElevated(string helper)
     {
         var start = new ProcessStartInfo(helper)
         {
@@ -217,16 +270,16 @@ public sealed class WindowsConsoleFirewallProbe : IConsoleFirewallProbe
             using var process = Process.Start(start);
             if (process is null)
             {
-                return false;
+                return ConsoleElevationOutcome.Refused;
             }
 
             process.WaitForExit();
-            return process.ExitCode == 0;
+            return process.ExitCode == 0 ? ConsoleElevationOutcome.Completed : ConsoleElevationOutcome.Failed;
         }
         catch (Win32Exception)
         {
             // The teacher answered No to the Windows prompt, or policy forbids elevation.
-            return false;
+            return ConsoleElevationOutcome.Refused;
         }
     }
 }

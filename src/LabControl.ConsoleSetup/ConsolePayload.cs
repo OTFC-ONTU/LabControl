@@ -1,6 +1,5 @@
 using System.IO.Compression;
-using System.Reflection;
-using System.Security.Cryptography;
+using LabControl.Shared.Packaging;
 
 namespace LabControl.ConsoleSetup;
 
@@ -9,6 +8,10 @@ namespace LabControl.ConsoleSetup;
 /// (D-59 item 1). The project compiles without it — so an ordinary <c>dotnet build</c> on any
 /// machine still builds this executable — and an executable built that way refuses to install
 /// and says so, instead of writing an empty program directory.
+///
+/// Reading the zip is all this class does. Where the bytes may land, whether an entry is
+/// allowed to name that path at all, and the retry around an antivirus scan all live in
+/// <see cref="ConsoleInstalledFiles"/>, which is tested on any operating system.
 /// </summary>
 internal sealed class ConsolePayload
 {
@@ -24,52 +27,17 @@ internal sealed class ConsolePayload
     public static ConsolePayload Open()
     {
         using var archive = OpenArchive();
-        var entries = archive.Entries
-            .Where(entry => !string.IsNullOrEmpty(entry.Name))
-            .Select(entry => entry.FullName.Replace('/', Path.DirectorySeparatorChar))
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        return new ConsolePayload(entries);
+        return new ConsolePayload(ConsoleInstalledFiles.EntriesOf(archive));
     }
 
     /// <summary>
-    /// Writes every entry into <paramref name="directory"/>, skipping the ones already there
-    /// byte for byte, and returns how many files it actually replaced. A freshly written file
-    /// can still be held open by an antivirus scan (D-33 item 9), so each write is retried.
+    /// Writes every entry into the install directory, skipping the ones already there byte for
+    /// byte, and returns how many files it replaced.
     /// </summary>
-    public int ExtractTo(string directory)
+    public static int ExtractTo(ConsoleInstalledFiles files)
     {
         using var archive = OpenArchive();
-        var written = 0;
-        foreach (var entry in archive.Entries)
-        {
-            if (string.IsNullOrEmpty(entry.Name))
-            {
-                continue;
-            }
-
-            var relative = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
-            var target = Path.GetFullPath(Path.Combine(directory, relative));
-            if (!target.StartsWith(Path.GetFullPath(directory) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            {
-                throw new IOException("The embedded console payload contains a path outside the install directory: " + entry.FullName);
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            using var source = entry.Open();
-            using var buffer = new MemoryStream();
-            source.CopyTo(buffer);
-            var bytes = buffer.ToArray();
-            if (SameContent(target, bytes))
-            {
-                continue;
-            }
-
-            WriteWithRetry(target, bytes);
-            written++;
-        }
-
-        return written;
+        return files.ExtractArchive(archive);
     }
 
     private static ZipArchive OpenArchive()
@@ -79,57 +47,5 @@ internal sealed class ConsolePayload
                 "This installer was built without the console program files. Build it with tools/package-windows.sh, "
                 + "which publishes the console and embeds it, and run that executable instead.");
         return new ZipArchive(stream, ZipArchiveMode.Read);
-    }
-
-    private static bool SameContent(string path, byte[] bytes)
-    {
-        if (!File.Exists(path))
-        {
-            return false;
-        }
-
-        try
-        {
-            using var existing = File.OpenRead(path);
-            if (existing.Length != bytes.Length)
-            {
-                return false;
-            }
-
-            return SHA256.HashData(existing).AsSpan().SequenceEqual(SHA256.HashData(bytes));
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-    }
-
-    private static void WriteWithRetry(string target, byte[] bytes)
-    {
-        for (var attempt = 1; ; attempt++)
-        {
-            try
-            {
-                File.SetAttributes(target, FileAttributes.Normal);
-            }
-            catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException)
-            {
-                // Nothing to clear; the write below reports the real problem.
-            }
-
-            try
-            {
-                File.WriteAllBytes(target, bytes);
-                return;
-            }
-            catch (IOException) when (attempt < 5)
-            {
-                Thread.Sleep(TimeSpan.FromMilliseconds(250 * attempt));
-            }
-            catch (UnauthorizedAccessException) when (attempt < 5)
-            {
-                Thread.Sleep(TimeSpan.FromMilliseconds(250 * attempt));
-            }
-        }
     }
 }

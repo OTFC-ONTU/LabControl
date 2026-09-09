@@ -19,7 +19,7 @@ implement.
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
-| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** the Windows and Linux runs of the console packaging (the installer itself, the LAN banner against a real Windows Firewall, the Windows named pipe, the Linux `SO_PEERCRED` path and a real desktop menu), portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
+| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the `app.manifest` double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the `group=` argument that made the printed `netsh` line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest `PC-27`) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three `--remove-data` answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`; on Linux, the `SO_PEERCRED` path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
@@ -1732,10 +1732,55 @@ contract, then desktop integration (`D-54` item 6).
   observed as documented, and the bundle launched once against a copy of a data directory;
   the Linux tarball installed and uninstalled into a throwaway `HOME`, with the generated
   `.desktop` entry inspected (absolute `Exec`/`TryExec`, an executable launcher, nothing
-  left behind). **Never run, and not runnable on a Mac**: the Windows installer itself in
-  any form, the LAN banner against a real Windows Firewall, and a real GNOME or KDE
-  application menu. Those join portion 6's Windows named-pipe and Linux `SO_PEERCRED` paths
-  in portion 7's manual matrix and must not be reported as passing until they are.
+  left behind). ***On Windows, for the first time, 2026-09-09*** — the isolated UTM clone
+  *M4 isolated native tests 2026-09-08*: Windows 11 Pro 10.0.26200 ARM64, guest `PC-27`,
+  one host-only NIC, `LabControl-Console-0.1.4-win-arm64-Setup.exe` hash-compared on host
+  and guest before every run, the clone stopped and left in its pre-drill state afterwards.
+  The clone has no interactive session and takes no password, so every unelevated run was
+  made as `LOCAL SERVICE` — a non-administrator with a real profile — through a scheduled
+  task, and the one elevated step ran as `SYSTEM`. **Four defects, all fixed and merged
+  (`a7fbe33`):** (1) `app.manifest` carried a double hyphen inside an XML comment, which
+  XML forbids, so Windows refused to build the activation context and the installer would
+  not start at all (*"side-by-side configuration is incorrect"*, an invalid-manifest-XML
+  entry in the event log) — nothing in the console installer had ever run on Windows before
+  that day, and the failure is an OS refusal, not a compile error; (2)
+  `ConsoleFirewallRuleSpec.Profiles` was 6, but `NET_FW_PROFILE_TYPE2` numbers the profiles
+  Domain 1, Private 2, Public 4, so the installer opened the **Public** profile it says it
+  never requests, left the domain closed, and — the same constant deciding coverage —
+  rejected a genuine private-and-domain rule as missing; at 3 the rule reads back as
+  *Domain, Private* and the banner reports the port allowed; (3) the printed `netsh` line
+  carried `group="…"`, which `add rule` has no argument for and refuses outright, so the
+  fallback created nothing — removed, and the accepted price is that a hand-made rule has
+  no group, so uninstall leaves it for review; (4) the uninstaller's temporary copy never
+  deleted itself, because the command line was built with `ArgumentList`, whose C-runtime
+  `\"` escaping `cmd.exe` rejects, leaving a 148 MB executable in the temp directory — one
+  argument string now, and no copies remain. **Verified with the rebuilt installer**: that
+  it starts at all; the whole ordered plan and a dry run that changes nothing; a clean
+  per-user install by a non-administrator into the per-user programs directory; the
+  Start-menu shortcut, and that it launches the console; the Installed-apps entry with its
+  name, version, publisher and uninstall command; both file-type registrations and their
+  open commands; a byte-identical machine on a repeat run; the refusal to install while a
+  console holds its lock; document forwarding through the registered command into a running
+  console's import flow for both file types, including a path with spaces and Ukrainian
+  characters — which exercises portion 6's Windows named pipe; the real Windows Firewall
+  rules and their profiles, the banner moving from missing to allowed, a rule belonging to
+  another program correctly not counting as coverage, and uninstall removing only its own
+  rule while leaving a foreign one for review; the unelevated uninstall's firewall policy;
+  the temporary-copy hand-over including its self-deletion; all three answers to
+  `--remove-data`, including its refusal with redirected input and its insistence on the
+  exact word; and a DPAPI-sealed lab key still opening after the application was replaced.
+  **Still unverified**: Explorer's own double-click (the registration, the forwarding and
+  the import are proven, the shell's resolution step is not — it needs a desktop session);
+  a real elevation consent prompt answered yes or no by a teacher (no interactive session,
+  so Windows cannot show one); anything on `win-x64` (only the ARM64 package was built and
+  run); the installer under an ordinary interactive user profile rather than a service
+  account; the unsigned-download warning; the Linux `SO_PEERCRED` path of the single
+  instance (portion 6); and a real GNOME or KDE application menu. Those stay in portion 7's
+  manual matrix and must not be reported as passing until they are run. **Rough edges for a
+  later pass**, none of them wrong behaviour: the dry run prints its plan header twice; a
+  repeat install reports steps as *written* where the code's comments promise *already*, so
+  the machine is idempotent but the wording is not; and uninstall leaves the now-empty
+  parent programs directory behind.
 - *Portion 8 (built and reviewed 2026-09-09, on the Mac).* The acceptance drills, and
   the six gaps an adversarial audit of every M5 acceptance criterion found (`D-68`).
   **The file picker could not take a mixed selection**: `LabImports` registered one

@@ -532,7 +532,14 @@ tools/package-all.sh          # all three; the macOS part is skipped off macOS
 tools/package-windows.sh      # LabControl-Console-<version>-win-x64-Setup.exe
 tools/package-mac.sh          # LabControl-Console-<version>-osx-arm64.dmg
 tools/package-linux.sh        # labcontrol-console-<version>-linux-x64.tar.gz
+
+tools/package-windows.sh Release win-arm64   # the same installer for a Windows-on-ARM VM
 ```
+
+`tools/package-windows.sh` takes the configuration and a runtime identifier — `win-x64` by
+default, which is what the teacher machines are, and `win-arm64` for the Windows-on-ARM VM
+that is the only Windows an Apple Silicon Mac can test on. Nothing else differs between
+the two; the file name says which one it is.
 
 Everything lands under `artifacts/package/{windows,mac,linux}/`. Each script reads the
 version from the console project, so the file name, the Installed-apps entry, the
@@ -546,15 +553,25 @@ its executables.
 
 ### Windows: one self-contained Setup executable
 
-`src/LabControl.ConsoleSetup/` is a single-file, self-contained `win-x64` executable that
-carries the published console inside it as an embedded zip, so a Windows teacher machine
-needs nothing else — no .NET install, no second download, no packaging toolchain (`D-59`
-item 1; WiX, Inno Setup and MSIX were rejected there).
+`src/LabControl.ConsoleSetup/` is a single-file, self-contained executable — `win-x64` for
+the teacher machines, `win-arm64` for a Windows-on-ARM VM — that carries the published
+console inside it as an embedded zip, so a Windows teacher machine needs nothing else — no
+.NET install, no second download, no packaging toolchain (`D-59` item 1; WiX, Inno Setup
+and MSIX were rejected there).
 
 Its manifest is **`asInvoker`, never `requireAdministrator`**. The console installs into
 the signed-in user's own profile, so installing it — and, far more often, updating it —
 is not a UAC prompt. `--firewall` is the one step that elevates, and it does so by
 relaunching itself once (see *LAN access* below).
+
+**Nothing in `app.manifest` may contain two hyphens in a row, not even inside a comment.**
+XML forbids `--` there, and the consequence is not a build error: the compiler embeds the
+manifest happily, and Windows then refuses to build the activation context, so the
+installer will not start at all — *"The application has failed to start because its
+side-by-side configuration is incorrect"*, with an invalid-manifest-XML entry in the event
+log. This is why the file names the `--firewall` switch in prose rather than spelling it,
+and why a build of this executable is not finished until it has been started once on a
+Windows machine (found on the first Windows run, 2026-09-09; `D-59` item 1).
 
 The payload is the published console, zipped by `tools/package-windows.sh` and embedded
 as a resource. The project deliberately compiles without it, so a plain `dotnet build`
@@ -620,8 +637,13 @@ where the signed-in user can edit them:
   copy compares the directory against the layout's own and refuses anything else, waits
   for the parent to exit (up to five minutes), retries the deletes for two minutes, then
   deletes itself. Copies an interrupted uninstall left behind are swept by any later run
-  of the installer — each one is a working ~60 MB installer and must not sit in the temp
-  directory waiting to be double-clicked.
+  of the installer — each one is a working installer (148 MB on the ARM64 drill) and must
+  not sit in the temp directory waiting to be double-clicked. **The self-deletion is handed
+  to `cmd.exe` as one argument string, never as an argument list**: an argument list quotes
+  each argument the way a C runtime parses `argv`, so the inner quotes come out as `\"`,
+  which `cmd.exe` does not understand — it answers *"The filename, directory name, or
+  volume label syntax is incorrect"*, deletes nothing, and leaves the copy behind. That is
+  exactly what the first Windows run found.
 - **A registry key that points at another installation is preserved and reported.** A
   second copy of the console, or one installed elsewhere, owns its own Installed-apps
   entry and ProgIds; taking them would be wrong, and throwing mid-uninstall would leave a
@@ -676,9 +698,27 @@ publish directory), or if the rules are still missing afterwards, the banner tur
 the exact commands with a *Check again* action:
 
 ```
-netsh advfirewall firewall add rule name="LabControl Console (control)" dir=in action=allow protocol=TCP localport=47800 profile=private,domain group="LabControl Console" enable=yes
-netsh advfirewall firewall add rule name="LabControl Console (discovery)" dir=in action=allow protocol=UDP localport=47801 profile=private,domain group="LabControl Console" enable=yes
+netsh advfirewall firewall add rule name="LabControl Console (control)" dir=in action=allow protocol=TCP localport=47800 profile=private,domain enable=yes
+netsh advfirewall firewall add rule name="LabControl Console (discovery)" dir=in action=allow protocol=UDP localport=47801 profile=private,domain enable=yes
 ```
+
+**There is no `group=` on those lines, on purpose.** `netsh advfirewall firewall add rule`
+has no such argument and refuses the whole command when it is given one — *"'group' is not
+a valid argument for this command"* — so a line carrying it creates nothing at all, which
+is what the first Windows run found. Without it both lines answer *Ok.* The price is that a
+rule made by hand belongs to no group, so an uninstall cannot prove it is the installer's
+own and leaves it for review with the `netsh … delete rule` lines printed. That is the safe
+half of the trade: Windows deletes rules by name, and a namesake rule somebody else created
+must never be taken.
+
+Windows numbers the profiles **Domain 1, Private 2, Public 4** (`NET_FW_PROFILE_TYPE2`),
+so *Private and Domain* is the value 3. One constant,
+`ConsoleFirewallRuleSpec.Profiles`, both creates the rules and decides whether an existing
+rule covers a port, so a wrong value does two things at once: it opens the teacher's
+machine on the very profile this document says is never requested, and it rejects a genuine
+private-and-domain rule as missing. It was 6 — Private and Public — until the first Windows
+run; a created rule now reads back as *Domain, Private* and the banner then reports the port
+as allowed.
 
 The Public profile is never requested, nothing is ever disabled or excluded, and macOS
 and Linux report *not applicable* and show no banner at all.
@@ -745,7 +785,7 @@ matrix is **Ubuntu 22.04 LTS and 24.04 LTS**, x86-64; other distributions are ex
 to work and are not verified. Desktop Ubuntu has `ufw` disabled by default; the two `ufw
 allow` lines for 47800/47801 are in the same README for machines where it is on.
 
-### What is verified, and what a Mac cannot answer
+### What is verified, and what is not
 
 Done on the owner's Mac (M5 portion 7, 2026-09-09): the full solution build; 888 tests at
 the portion's own head and **936 after merging with portions 4 and 6** (726 Shared and
@@ -758,19 +798,63 @@ uninstalled into a throwaway `HOME`, with the generated `.desktop` entry inspect
 absolute `Exec`/`TryExec`, an executable launcher, and an uninstall that leaves nothing
 behind.
 
-Never run, and not runnable here:
+**The first Windows run (2026-09-09)** took `LabControl-Console-0.1.4-win-arm64-Setup.exe`
+onto the isolated UTM clone *M4 isolated native tests 2026-09-08* — Windows 11 Pro
+10.0.26200 ARM64, guest `PC-27`, one host-only NIC — with the binary hash-compared on host
+and guest before every run, and the clone stopped and left in its pre-drill state
+afterwards. It found the **four defects above**, all now fixed: the manifest's double
+hyphen, which stopped the installer from starting at all; `Profiles = 6`, which opened the
+Public profile and rejected a real private-and-domain rule; the `group=` argument, which
+made the printed `netsh` line create nothing; and the argument-list quoting, which left a
+148 MB copy in the temp directory.
 
-- **the Windows installer itself, in any form** — install, upgrade, uninstall,
-  `--remove-data`, `--dry-run`, the Installed-apps entry, the shortcuts, the file
-  associations and the temporary-copy hand-over are all a Windows step;
-- **the LAN-access banner against a real Windows Firewall** — the detection logic is
-  covered by tests on the Mac, the COM read and the elevation are not;
-- **a real GNOME or KDE application menu** — the `.desktop` entry and the MIME
-  registration were inspected as files, not seen in a desktop.
+One caveat colours every step: the clone has **no interactive session** and no password may
+be entered there, so every unelevated run was made as `LOCAL SERVICE` — a non-administrator
+with a real profile — through a scheduled task, and the single elevated step ran as
+`SYSTEM`.
 
-Those belong to portion 7's manual matrix in ROADMAP M5, together with the Windows
-named-pipe and Linux `SO_PEERCRED` paths of the single instance (portion 6). A Mac cannot
-answer them, and none of them may be reported as passing until they are run.
+Verified on Windows with the rebuilt installer: that it starts at all; the whole ordered
+plan, and a `--dry-run` that changes nothing; a clean per-user install by a
+non-administrator into the per-user programs directory; the Start-menu shortcut, and that
+it launches the console; the Installed-apps entry with its name, version, publisher and
+uninstall command; both ProgIds, both associations and their open commands; a
+byte-identical machine after a repeat run; the refusal to install while a console holds its
+lock; document forwarding through the registered command into a running console's import
+flow, for both file types, including a path with spaces and Ukrainian characters; the real
+firewall rules and the profiles Windows reports for them, the banner moving from *missing*
+to *allowed*, a rule belonging to another program correctly not counting as coverage, and
+an uninstall that removed only its own rule while leaving a foreign one for review; the
+unelevated uninstall's firewall policy; the temporary-copy hand-over including its
+self-deletion; all three answers to `--remove-data`, including its refusal with redirected
+input and its insistence on the exact word; and that a lab key sealed by DPAPI still opens
+after the application has been replaced.
+
+Still not verified on Windows:
+
+- **Explorer's own double-click.** It needs a desktop session. The registration, the
+  forwarding and the import are proven; the shell's resolution step from a double-click is
+  not.
+- **A real elevation prompt with a teacher answering yes or no.** With no interactive
+  session Windows cannot show one, so the `--firewall` relaunch was exercised only as
+  `SYSTEM`.
+- **Anything on `win-x64`.** Only the ARM64 package was built and run; the teacher machines
+  are x64.
+- **The installer under an ordinary interactive user profile** rather than a service
+  account.
+- **The unsigned-download warning** (SmartScreen / *More info → Run anyway*).
+
+Not verified anywhere: **a real GNOME or KDE application menu** — the `.desktop` entry and
+the MIME registration were inspected as files, not seen in a desktop.
+
+Rough edges worth a later pass, none of them wrong behaviour: `--dry-run` prints its plan
+header twice; a repeat install reports its steps as *written* where the code's own comments
+promise *already*, so the machine is idempotent but the wording is not; and uninstall leaves
+the now-empty parent programs directory behind.
+
+Forwarding a document into a console that was already running is what portion 6's Windows
+**named pipe** does, so that path is exercised too; the Linux `SO_PEERCRED` path is not, and
+stays in the same matrix. What remains belongs to portion 7's manual matrix in ROADMAP M5,
+and none of it may be reported as passing until it is run.
 
 Packaging references: [Avalonia macOS deployment](https://docs.avaloniaui.net/docs/deployment/macos),
 [Windows Firewall rules](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/rules),

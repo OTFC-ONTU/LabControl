@@ -2611,13 +2611,46 @@ Decisions:
    handler, and becomes the default only when no `UserChoice` exists. `--uninstall`
    removes owned files, keys and rules and keeps the data; `--remove-data` is separate.
    Product and Start-menu name: *LabControl Console* (default chosen 2026-09-08, owner
-   may change).
+   may change). `tools/package-windows.sh` takes the runtime identifier as its second
+   argument (`win-x64` by default, `win-arm64` for the Windows-on-ARM VM that is the only
+   Windows an Apple Silicon Mac can test on).
+
+   **The manifest may never contain two hyphens in a row, not even inside a comment.**
+   XML forbids `--` there, and the failure is an operating-system refusal rather than a
+   compile error: the build embeds the manifest without complaint, Windows then cannot
+   build the activation context, and the executable does not start at all — *"The
+   application has failed to start because its side-by-side configuration is incorrect"*,
+   with an invalid-manifest-XML entry in the event log. The comment therefore names the
+   firewall switch in prose instead of spelling it. The general rule this cost: **a build
+   has to be started once on Windows before it may be called done**, because nothing on
+   the Mac — not the compiler, not the tests, not the packaging script — can see a defect
+   the loader alone reports (found on the first Windows run, 2026-09-09; the installer had
+   never been started on Windows before that day).
 2. **Scoped firewall rules, requested at the point of use.** `NetworkReadiness` checks
    for inbound, port-scoped rules in the group `LabControl Console` (TCP `ConsolePort`
    47800, UDP `BeaconPort` 47801, Private and Domain profiles). When they are missing the
    console shows a banner whose *Allow…* runs `ConsoleSetup.exe --firewall` with `runas`;
    a denied elevation yields a diagnostic with the exact `netsh` lines. Nothing disables
    the firewall and no broad exclusion is created.
+
+   **`NET_FW_PROFILE_TYPE2` numbers the profiles Domain 1, Private 2, Public 4**, so
+   *Private and Domain* is `ConsoleFirewallRuleSpec.Profiles = 3`. It was 6 — which is
+   Private and Public — until the first Windows run, and one constant does two jobs, so a
+   wrong value fails in both directions at once: Windows reported the created rule as
+   *Private, Public*, open on the network this decision says is deliberately never
+   requested and closed on the domain, while the same constant made the check reject a
+   genuine private-and-domain rule (3) as missing and the banner keep saying the LAN was
+   blocked. At 3 the rule reads back as *Domain, Private* and the banner reports the port
+   as allowed.
+
+   **The printed `netsh` line carries no `group=`.** `netsh advfirewall firewall add rule`
+   has no such argument and refuses the whole command when given one — *"'group' is not a
+   valid argument for this command"* — so the fallback the banner prints created nothing
+   at all until it was removed; without it the same line answers *Ok.* The consequence is
+   accepted rather than worked around: a rule made by hand belongs to no group, so
+   uninstall cannot prove it is this installer's own and leaves it for review with the
+   `netsh … delete rule` lines printed. Windows deletes rules by name, and taking a
+   namesake rule somebody else created would be the worse error.
 3. **macOS: a scripted bundle with an ad-hoc signature.** `tools/package-mac.sh` builds
    `LabControl.app/Contents/{Info.plist, MacOS/, Resources/labcontrol.icns}` with
    `CFBundleIdentifier org.ontfk.labcontrol.console` (default chosen 2026-09-08, owner
@@ -2686,8 +2719,8 @@ Decisions:
      returns, so a launch the data directory refuses does not look to a script like a
      console that ran and quit normally.
 
-Nine rules added when the packages themselves were built and reviewed (2026-09-09,
-portion 7); they refine items 1–4:
+Ten rules added while the packages were built and reviewed, and then run on Windows for
+the first time (2026-09-09, portion 7); they refine items 1–4:
 
 - **Uninstall never asks for an administrator.** Installing is unelevated, so removing is
   too. Removing a firewall rule needs an administrator, so unless the uninstall happens to
@@ -2727,6 +2760,15 @@ portion 7); they refine items 1–4:
   the deletes for a bounded budget, then deletes itself; copies an interrupted uninstall
   left behind are swept by any later run. Nothing is scheduled and nothing survives a
   reboot.
+- **A command line for `cmd.exe` is one argument string, never an argument list.**
+  `ProcessStartInfo.ArgumentList` quotes each argument the way a C runtime parses `argv`,
+  so an inner quote comes out as `\"` — an escape `cmd.exe` does not understand. It
+  answered *"The filename, directory name, or volume label syntax is incorrect"*, deleted
+  nothing, and left a 148 MB working installer in the teacher's temp directory on the
+  first Windows run. Written through `Arguments`, with the path in ordinary quotes —
+  which is also what protects a temp path containing a space or an ampersand — the copy
+  deletes itself. The rule generalises: `ArgumentList` is right for a program that parses
+  `argv`, and wrong for every shell.
 - **A registry key that points at another installation is preserved and reported.** A
   second copy of the console owns its own Installed-apps entry and ProgIds; taking them
   would be wrong, and throwing mid-uninstall would leave a machine with no entry to retry
@@ -2762,17 +2804,35 @@ macOS and Linux in ROADMAP M5. Implementation status is tracked in ROADMAP M5. I
 built, reviewed and fixed on 2026-09-09 (portion 6): 16 single-instance tests including
 hostile input, eight concurrent launches, the shutdown window and the socket directory's
 mode, plus a manual macOS run on a copy of the data directory. The Windows named-pipe path
-and the Linux `SO_PEERCRED` path are compile- and logic-checked only; they belong to
-portion 7's manual matrix. Items 1–4 were built, reviewed and fixed on 2026-09-09
+was exercised on Windows by portion 7's drill below, when a registered open command
+forwarded documents into a console that was already running; the Linux `SO_PEERCRED` path
+is still compile- and logic-checked only and stays in portion 7's manual matrix. Items 1–4 were built, reviewed and fixed on 2026-09-09
 (portion 7): `LabControl.ConsoleSetup`, `Shared/Packaging/`, `Services/NetworkReadiness`
 and `tools/package-{windows,mac,linux,all}.sh` into `artifacts/package/`, with
 `tools/publish-all.sh` unchanged. 936 tests pass after the merge with portions 4 and 6
 (726 Shared + 210 Console; 13 macOS bundle tests skip unless the package was built), and
 on the Mac the DMG, its `Info.plist` keys, the ad-hoc signature, the documented Gatekeeper
 refusal and a real `install.sh`/`uninstall.sh` round trip into a throwaway `HOME` were all
-checked by hand. The Windows installer itself, the banner against a real Windows Firewall
-and a real Linux desktop menu have never been run — a Mac cannot answer them — and remain
-part of that manual matrix (ROADMAP M5).
+checked by hand. The Windows installer was then **run on Windows for the first time on
+2026-09-09**, on the isolated UTM clone *M4 isolated native tests 2026-09-08* (Windows 11
+Pro 10.0.26200 ARM64, guest `PC-27`, one host-only NIC, the binary hash-compared on host
+and guest before every run, the clone left in its pre-drill state). It found the four
+defects recorded above — the manifest's double hyphen, `Profiles = 6`, the `group=`
+argument and the argument-list quoting — all fixed, and then verified the ordered plan and
+a dry run, a per-user install by a non-administrator, the shortcut, the Installed-apps
+entry, both associations and their open commands, an idempotent repeat run, the lock
+refusal, document forwarding into a running console (which is portion 6's Windows named
+pipe) for both types including a path with spaces and Ukrainian characters, the real
+firewall rules and their profiles, the banner moving from missing to allowed, a foreign
+rule neither counted as coverage nor removed, the unelevated uninstall's firewall policy,
+the temporary copy and its self-deletion, all three `--remove-data` answers, and a
+DPAPI-sealed lab key still opening after the application was replaced. The clone has no
+interactive session and takes no password, so every unelevated run was made as
+`LOCAL SERVICE` through a scheduled task and the one elevated step as `SYSTEM`. Still
+unrun: Explorer's own double-click, a real elevation prompt answered by a teacher,
+anything on `win-x64`, the installer under an ordinary interactive profile, the
+unsigned-download warning, the Linux `SO_PEERCRED` path and a real Linux desktop menu —
+all part of that manual matrix (ROADMAP M5).
 
 ## D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)
 

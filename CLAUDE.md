@@ -240,15 +240,31 @@ the Windows VM with two consoles and skewed clocks; portion 6:
 console documents on the command line, `--import-only`, a second launch forwarding its file
 paths over a per-data-directory named pipe or private-directory Unix socket instead of
 starting a second console, macOS file activation, 788 tests, checked by hand on the Mac —
-the Windows pipe and the Linux `SO_PEERCRED` path are not yet run on those systems;
+the Windows pipe since exercised by portion 7's Windows drill and the Linux `SO_PEERCRED`
+path still not run;
 portion 7: teacher-console packaging (`D-59` items 1–4) — the single-file per-user Windows
 installer with an untrusted `installed-files.txt`, a finishing temporary copy and an
 uninstall that never elevates, the read-only LAN-access banner that only calls a port
 reachable when a rule opens it for this console and nothing blocks it, the ad-hoc-signed
 macOS `.app`/DMG, the per-user Linux tarball and `tools/package-*.sh` into
 `artifacts/package/`, 936 tests after the merge with portions 4 and 6, packages built and
-the Linux scripts round-tripped on the Mac — the Windows installer itself, the banner
-against a real Windows Firewall and a real Linux desktop menu have never been run);
+the Linux scripts round-tripped on the Mac; **run on Windows for the first time on
+2026-09-09** (isolated Windows 11 ARM64 clone, guest `PC-27`, no interactive session, so
+every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`), which found
+four defects, all fixed and merged (`a7fbe33`): an `app.manifest` double hyphen inside an
+XML comment that made Windows refuse the activation context so the installer would not
+start at all, a firewall profile constant of 6 that opened Public and rejected a real
+private-and-domain rule (`NET_FW_PROFILE_TYPE2` is Domain 1, Private 2, Public 4, so 3),
+a `group=` argument in the printed `netsh` line that `add rule` refuses outright, and an
+`ArgumentList`-built self-delete command `cmd.exe` cannot parse, which left a 148 MB copy
+in the temp directory. The install, the plan and dry run, the shortcut, the Installed-apps
+entry, both file-type registrations, an idempotent repeat run, the lock refusal, document
+forwarding into a running console over the Windows named pipe, the real firewall rules and
+the banner, uninstall with its temporary copy, `--remove-data` and a DPAPI-sealed key
+surviving replacement are now verified. Still unverified: Explorer's own double-click, a
+real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the
+installer under an ordinary interactive profile, the unsigned-download warning, the Linux
+`SO_PEERCRED` path and a real Linux desktop menu);
 portion 8: the acceptance drills and the six gaps an adversarial audit of every M5
 acceptance criterion found (`D-68`) — the combined picker filter that makes a mixed
 selection possible, batched authorization in one folder, the departure flow *Disconnect*,

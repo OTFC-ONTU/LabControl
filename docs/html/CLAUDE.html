@@ -335,8 +335,8 @@ report and results bound to the delivering instance (<code>D-57</code>), take-ov
 clock and observed-only ownership (<code>D-58</code>), the C# per-user Windows installer, scripted
 <code>.app</code>/<code>.dmg</code>, Linux tarball, single instance and scoped firewall rules (<code>D-59</code>), and
 dormant imported enrollment codes (<code>D-60</code>). Eight portions (ROADMAP M5, <em>How it is being
-built</em>); portions 1–4 built and reviewed, 1–3 on 2026-09-08 and portion 4 on 2026-09-09
-(portion 1: profile store, resumable
+built</em>); portions 1–4 and 6 built and reviewed, 1–3 on 2026-09-08 and portions 4 and 6 on
+2026-09-09 (portion 1: profile store, resumable
 migration, <code>lab.json</code> schema 2, <code>console.lock</code>; migration tried on a copy of the owner's
 live data, the live directory migrates on the next M5 launch; portion 2:
 <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, the departure report, bulk
@@ -346,8 +346,12 @@ withdrawal with confirmed delivery, the <em>Teacher devices</em> panel, dormant 
 753 tests, smoke-tested on two copies of the data directory; portion 4: results and progress
 bound to the console instance the agent's TLS handshake validated, <code>jobs-inflight.json</code>
 restoration with narrow re-send rules, 785 tests, verified with a real agent on the isolated
-Windows clone — instance X's result waited for X while instance Y saw nothing);
-portion 5 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
+Windows clone — instance X's result waited for X while instance Y saw nothing; portion 6:
+console documents on the command line, <code>--import-only</code>, a second launch forwarding its file
+paths over a per-data-directory named pipe or private-directory Unix socket instead of
+starting a second console, macOS file activation, 788 tests, checked by hand on the Mac —
+the Windows pipe and the Linux <code>SO_PEERCRED</code> path are not yet run on those systems);
+portion 5 in progress, portion 7 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
 (<em>Files exchanged offline</em>, <em>M5 additions</em>) describe the design; the <code>Welcome.console_access</code>
 <code>.proto</code> change lands with portion 5 and must update PROTOCOL again in that commit.</p>
 <p><strong>M0 is done (2026-09-04). M1 is done (2026-09-05)</strong>: the trust model, beacon discovery,
@@ -536,7 +540,7 @@ snapshot, refresh after repair and remain visible while the PC is offline. Physi
 is informational until tested; unsupported configuration and antivirus issues need attention.</p>
 
 </article>
-<footer>Generated 2026-09-09 05:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 05:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

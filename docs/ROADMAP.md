@@ -19,7 +19,7 @@ implement.
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
-| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–4 built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone; portion 5 next; real-Mac switch timing under investigation** | M4 |
+| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–4 and 6 built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portion 6 checked by hand on the owner's Mac; portions 5 and 7 in progress; real-Mac switch timing under investigation; the Windows pipe and the Linux `SO_PEERCRED` path of the single instance are not yet run on those systems** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
@@ -1555,6 +1555,66 @@ contract, then desktop integration (`D-54` item 6).
   replaced it — a library script would have been re-offered and re-sent instead. Hand-over
   took 15–20 s. Not done on the VM: the network push of this build from an administrator
   console, and `run_as: user` (the clone has no interactive user). Portion 5 is next.
+- *Portion 6 (built, reviewed and fixed 2026-09-09, on the Mac).* Command-line documents,
+  the single instance and macOS file activation (`D-59` item 5); the review's blocker and
+  should-fix items were all fixed before the merge. `ConsoleOptions.TryParse` takes
+  positional documents — the four extensions in `Defaults.ConsoleDocumentExtensions`
+  (`.lclab`, `.lcbak`, `.lcgrant`, `.lcreq`) — and `--import-only`, the forwarder mode of a
+  file-type registration. A second launch on the same data directory does not start a
+  second console: `console.lock` (`D-55`) decides who serves, the lock holder listens on
+  `Services/SingleInstance.cs`, and a launch that cannot take the lock sends its paths
+  there and exits (0 when they were taken; 1 with `--import-only` when nothing answered).
+  The endpoint is a Windows named pipe `labcontrol-console-<hash>` (`CurrentUserOnly`) or a
+  Unix socket `console-<hash>.sock` (0600) inside this user's `labcontrol-<uid>` directory
+  (mode 0700, under `$XDG_RUNTIME_DIR` or the temp directory), the hash being the first 16
+  hex digits of `sha256(<data directory>)`, so two `--data` directories never collide. The
+  wire is one UTF-8 JSON line carrying only file paths, at most
+  `Defaults.SingleInstanceMaxOpenPaths` (64) — the cap is checked by the forwarder before it
+  connects and again by the server, which also drops duplicates within a batch; every
+  forwarded path is validated exactly like a command-line path and additionally required to
+  be absolute. On macOS a LaunchServices open arrives through Avalonia's
+  `IActivatableLifetime`/`FileActivatedEventArgs`; files that arrive before the chooser
+  exists are queued, and the first activation is filtered against the process's own
+  arguments (`ConsoleOptions.WithoutArgumentEcho`), which AppKit echoes back as opened
+  files. All three routes end in `App.OnFilesArrived` and run through the same `LabImports`
+  batch as *Add labs…*; none of them activates a lab. What the review changed: a forwarded
+  batch used to be acknowledged and then dropped while the console was shutting down — the
+  launcher exited 0 and the teacher's file was never imported — so the endpoint is now
+  disposed first in `StopAsync` and answers *the console is shutting down* while stopping,
+  and the launcher starts its own console instead; the socket had been placed directly in a
+  possibly world-writable temp directory under a predictable name, where another local user
+  could pre-create the path and receive the teacher's document paths, so the private
+  directory is verified (a real directory, not a symbolic link, mode 0700) by the server
+  before it binds and by every client before it connects, and accepted connections are
+  checked with `LOCAL_PEERCRED` (macOS) or `SO_PEERCRED` (Linux), falling back to that
+  directory as the guard when the kernel answers neither; a path longer than the platform's
+  `sun_path` limit threw an unhandled exception that could leave the console running with
+  no window at all, and is now reported as an unusable endpoint that never costs the console
+  its startup; document validation now requires an ordinary file within
+  `Defaults.ConsoleDocumentMaxBytes` (8 MiB), because a FIFO or a huge file read on the UI
+  thread froze the console permanently; imports from the drop target, *Add labs…* and
+  forwarded launches are serialised — one pump in `App`, a counted busy flag for the
+  chooser's nested file flows — because two concurrent imports could stack two passphrase
+  prompts over the same profile store; and `Main` returns
+  the lifetime's exit code, so a refused launch exits non-zero. Tests: 788 (625 Shared + 163
+  Console), 16 of them for the single instance — hostile input (over-long lines, malformed
+  and non-UTF-8 JSON, null and blank entries, 200 and 5000 paths), a silent client that must
+  not block the accept loop, eight concurrent launches, the socket directory's mode with a
+  planted symlink, the shutdown window, batch serialisation, the argv echo filter, and FIFO,
+  symlink-to-FIFO, oversize, empty and directory documents; plus a real child process that
+  forwards and exits 0 (and 1 when nothing serves), and a genuine stale `AF_UNIX` node
+  recovered. *Manual check on the owner's Mac, on a copy of the data directory*: the socket
+  appeared as 0600 inside a 0700 directory; a second launch forwarded a lab file and exited
+  0 while the running console logged the hand-over and showed the import result; a bare
+  second launch delivered an empty batch and brought the window forward; and after a
+  `kill -9` the next launch exited immediately instead of hanging, while a restart removed
+  the stale socket and served again. Open items: the Windows named-pipe path and the Linux
+  `SO_PEERCRED` path are compile- and logic-checked only, with no Windows or Linux run (they
+  belong to portion 7's matrix); the shutdown-window refusal has an automated test but could
+  not be reproduced in the real GUI, because there is no way to ask a running console to
+  quit from the shell; and after a refusal the forwarding launch may briefly report that a
+  console is already running while the departing one still holds the lock for up to ten
+  seconds — the file is surfaced to the teacher rather than lost.
 
 **Not in scope.** Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs

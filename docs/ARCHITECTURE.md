@@ -419,7 +419,10 @@ profiles.json     ProfilesDocument: last_used_lab_id and one entry per saved lab
 console-<date>.log  app-level Serilog log at the root (not per lab); a pre-M5 console's
                   copies under logs/ are moved here once by the migration
 console.lock      held open with FileShare.None for the process lifetime: one console
-                  process per data directory (D-55 item 12)
+                  process per data directory (D-55 item 12). The holder also listens on
+                  the single-instance endpoint named after this directory (D-59 item 5),
+                  so a second launch hands over its documents instead of starting a
+                  second console
 migration-conflict-<timestamp>/
                   only after a downgrade: root files that no longer matched the
                   committed copy, moved aside instead of deleted (D-55 item 6)
@@ -435,6 +438,15 @@ labs/
     packages/
     logs/         events-*, jobs-*, batches/ — per lab
 ```
+
+**The single-instance endpoint** (`D-59` item 5) is the only thing outside this directory
+that belongs to it: a Windows named pipe `labcontrol-console-<hash>` (`CurrentUserOnly`)
+or a Unix socket `console-<hash>.sock` (0600) inside this user's `labcontrol-<uid>`
+directory (mode 0700, under `$XDG_RUNTIME_DIR` or the temp directory), where `<hash>` is
+the first 16 hex digits of `sha256(<data directory>)` — so two `--data` directories get
+two endpoints. It carries one UTF-8 JSON line of file paths and nothing else: no key, no
+passphrase, no lab data. Whoever holds `console.lock` listens; every other launch forwards
+its documents there, and they enter the same import flow as *Add labs…*.
 
 **Migration** (`D-55`): on the first M5 start, when `profiles.json` is absent and
 `lab-key.lck` or `instance.json` is present at the root, the console copies (never

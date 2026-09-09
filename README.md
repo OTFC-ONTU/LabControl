@@ -135,6 +135,20 @@ dotnet run --project src/LabControl.Console -- --data ~/labA --port 47800
 dotnet run --project src/LabControl.Console -- --data ~/labB --port 47810   # import the backup from A
 ```
 
+The console also takes documents to open as positional arguments — `.lclab` lab files,
+`.lcbak` backups, `.lcgrant` grants and `.lcreq` requests — which is what a double-click
+or *Open with* passes it. They are imported exactly like *Add labs…* and never open a lab:
+
+```bash
+dotnet run --project src/LabControl.Console -- ~/Downloads/room-444.lclab
+dotnet run --project src/LabControl.Console -- --import-only ~/Downloads/room-444.lclab
+```
+
+One console runs per data directory. A second launch does not start a second console: it
+hands its file paths to the running one and exits (0 once they were taken). `--import-only`
+never starts a console of its own — it exits 1 when none is running — and is what a
+file-type registration uses.
+
 `FakeAgent --fail 7:never --fail 8:late=20 --fail 9:die-mid-job --fail 10:job-error
 --fail 11:burned-code --fail 12:forged-revocation --fail 13:outdated` injects failures;
 `--reinstall 7` plays a reinstalled PC; `burned-code` implies a reinstall of that PC,

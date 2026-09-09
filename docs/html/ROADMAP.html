@@ -187,7 +187,7 @@ implement.</p>
 <tr>
 <td><strong>M5</strong></td>
 <td>Lab files, teacher access and fast switching between rooms</td>
-<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–4 built and reviewed (1–3 on 2026-09-08 — profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes — and portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone; portion 5 next; real-Mac switch timing under investigation</strong></td>
+<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–4 and 6 built and reviewed (1–3 on 2026-09-08 — profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portion 6 checked by hand on the owner's Mac; portions 5 and 7 in progress; real-Mac switch timing under investigation; the Windows pipe and the Linux <code>SO_PEERCRED</code> path of the single instance are not yet run on those systems</strong></td>
 <td>M4</td>
 </tr>
 <tr>
@@ -1741,6 +1741,66 @@ outcome unknown and the agent's pending-result flush then delivered the true res
 replaced it — a library script would have been re-offered and re-sent instead. Hand-over
 took 15–20 s. Not done on the VM: the network push of this build from an administrator
 console, and <code>run_as: user</code> (the clone has no interactive user). Portion 5 is next.</li>
+<li><em>Portion 6 (built, reviewed and fixed 2026-09-09, on the Mac).</em> Command-line documents,
+the single instance and macOS file activation (<code>D-59</code> item 5); the review's blocker and
+should-fix items were all fixed before the merge. <code>ConsoleOptions.TryParse</code> takes
+positional documents — the four extensions in <code>Defaults.ConsoleDocumentExtensions</code>
+(<code>.lclab</code>, <code>.lcbak</code>, <code>.lcgrant</code>, <code>.lcreq</code>) — and <code>--import-only</code>, the forwarder mode of a
+file-type registration. A second launch on the same data directory does not start a
+second console: <code>console.lock</code> (<code>D-55</code>) decides who serves, the lock holder listens on
+<code>Services/SingleInstance.cs</code>, and a launch that cannot take the lock sends its paths
+there and exits (0 when they were taken; 1 with <code>--import-only</code> when nothing answered).
+The endpoint is a Windows named pipe <code>labcontrol-console-&lt;hash&gt;</code> (<code>CurrentUserOnly</code>) or a
+Unix socket <code>console-&lt;hash&gt;.sock</code> (0600) inside this user's <code>labcontrol-&lt;uid&gt;</code> directory
+(mode 0700, under <code>$XDG_RUNTIME_DIR</code> or the temp directory), the hash being the first 16
+hex digits of <code>sha256(&lt;data directory&gt;)</code>, so two <code>--data</code> directories never collide. The
+wire is one UTF-8 JSON line carrying only file paths, at most
+<code>Defaults.SingleInstanceMaxOpenPaths</code> (64) — the cap is checked by the forwarder before it
+connects and again by the server, which also drops duplicates within a batch; every
+forwarded path is validated exactly like a command-line path and additionally required to
+be absolute. On macOS a LaunchServices open arrives through Avalonia's
+<code>IActivatableLifetime</code>/<code>FileActivatedEventArgs</code>; files that arrive before the chooser
+exists are queued, and the first activation is filtered against the process's own
+arguments (<code>ConsoleOptions.WithoutArgumentEcho</code>), which AppKit echoes back as opened
+files. All three routes end in <code>App.OnFilesArrived</code> and run through the same <code>LabImports</code>
+batch as <em>Add labs…</em>; none of them activates a lab. What the review changed: a forwarded
+batch used to be acknowledged and then dropped while the console was shutting down — the
+launcher exited 0 and the teacher's file was never imported — so the endpoint is now
+disposed first in <code>StopAsync</code> and answers <em>the console is shutting down</em> while stopping,
+and the launcher starts its own console instead; the socket had been placed directly in a
+possibly world-writable temp directory under a predictable name, where another local user
+could pre-create the path and receive the teacher's document paths, so the private
+directory is verified (a real directory, not a symbolic link, mode 0700) by the server
+before it binds and by every client before it connects, and accepted connections are
+checked with <code>LOCAL_PEERCRED</code> (macOS) or <code>SO_PEERCRED</code> (Linux), falling back to that
+directory as the guard when the kernel answers neither; a path longer than the platform's
+<code>sun_path</code> limit threw an unhandled exception that could leave the console running with
+no window at all, and is now reported as an unusable endpoint that never costs the console
+its startup; document validation now requires an ordinary file within
+<code>Defaults.ConsoleDocumentMaxBytes</code> (8 MiB), because a FIFO or a huge file read on the UI
+thread froze the console permanently; imports from the drop target, <em>Add labs…</em> and
+forwarded launches are serialised — one pump in <code>App</code>, a counted busy flag for the
+chooser's nested file flows — because two concurrent imports could stack two passphrase
+prompts over the same profile store; and <code>Main</code> returns
+the lifetime's exit code, so a refused launch exits non-zero. Tests: 788 (625 Shared + 163
+Console), 16 of them for the single instance — hostile input (over-long lines, malformed
+and non-UTF-8 JSON, null and blank entries, 200 and 5000 paths), a silent client that must
+not block the accept loop, eight concurrent launches, the socket directory's mode with a
+planted symlink, the shutdown window, batch serialisation, the argv echo filter, and FIFO,
+symlink-to-FIFO, oversize, empty and directory documents; plus a real child process that
+forwards and exits 0 (and 1 when nothing serves), and a genuine stale <code>AF_UNIX</code> node
+recovered. <em>Manual check on the owner's Mac, on a copy of the data directory</em>: the socket
+appeared as 0600 inside a 0700 directory; a second launch forwarded a lab file and exited
+0 while the running console logged the hand-over and showed the import result; a bare
+second launch delivered an empty batch and brought the window forward; and after a
+<code>kill -9</code> the next launch exited immediately instead of hanging, while a restart removed
+the stale socket and served again. Open items: the Windows named-pipe path and the Linux
+<code>SO_PEERCRED</code> path are compile- and logic-checked only, with no Windows or Linux run (they
+belong to portion 7's matrix); the shutdown-window refusal has an automated test but could
+not be reproduced in the real GUI, because there is no way to ask a running console to
+quit from the shell; and after a refusal the forwarding launch may briefly report that a
+console is already running while the departing one still holds the lock for up to ten
+seconds — the file is surfaced to the teacher rather than lost.</li>
 </ul>
 <p><strong>Not in scope.</strong> Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs
@@ -2011,7 +2071,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-09 05:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 05:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

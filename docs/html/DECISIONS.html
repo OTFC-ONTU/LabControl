@@ -2532,7 +2532,7 @@ packages; the console has no document activation and no notion of a second launc
 <code>D-54</code> items 2–5 fixed the lifecycle rules and left the tooling open.</p>
 <p>Decisions:</p>
 <ol>
-<li><strong>Windows: a C# per-user self-installer, no third-party toolchain.</strong>
+<li><p><strong>Windows: a C# per-user self-installer, no third-party toolchain.</strong>
 <code>src/LabControl.ConsoleSetup/</code> is a single-file, self-contained <code>asInvoker</code> exe;
 <code>tools/package-windows.sh</code> publishes the console for <code>win-x64</code> and embeds it as a
 resource. It installs to <code>%LOCALAPPDATA%\Programs\LabControl\Console\</code>, creates the
@@ -2542,14 +2542,16 @@ Start-menu <code>.lnk</code> (<code>IShellLinkW</code> via CsWin32) and an optio
 handler, and becomes the default only when no <code>UserChoice</code> exists. <code>--uninstall</code>
 removes owned files, keys and rules and keeps the data; <code>--remove-data</code> is separate.
 Product and Start-menu name: <em>LabControl Console</em> (default chosen 2026-09-08, owner
-may change).</li>
-<li><strong>Scoped firewall rules, requested at the point of use.</strong> <code>NetworkReadiness</code> checks
+may change).</p>
+</li>
+<li><p><strong>Scoped firewall rules, requested at the point of use.</strong> <code>NetworkReadiness</code> checks
 for inbound, port-scoped rules in the group <code>LabControl Console</code> (TCP <code>ConsolePort</code>
 47800, UDP <code>BeaconPort</code> 47801, Private and Domain profiles). When they are missing the
 console shows a banner whose <em>Allow…</em> runs <code>ConsoleSetup.exe --firewall</code> with <code>runas</code>;
 a denied elevation yields a diagnostic with the exact <code>netsh</code> lines. Nothing disables
-the firewall and no broad exclusion is created.</li>
-<li><strong>macOS: a scripted bundle with an ad-hoc signature.</strong> <code>tools/package-mac.sh</code> builds
+the firewall and no broad exclusion is created.</p>
+</li>
+<li><p><strong>macOS: a scripted bundle with an ad-hoc signature.</strong> <code>tools/package-mac.sh</code> builds
 <code>LabControl.app/Contents/{Info.plist, MacOS/, Resources/labcontrol.icns}</code> with
 <code>CFBundleIdentifier org.ontfk.labcontrol.console</code> (default chosen 2026-09-08, owner
 may change), <code>CFBundleDocumentTypes</code> and <code>UTExportedTypeDeclarations</code> for <code>lclab</code> and
@@ -2557,8 +2559,9 @@ may change), <code>CFBundleDocumentTypes</code> and <code>UTExportedTypeDeclarat
 and wraps it with <code>hdiutil</code> in a DMG carrying an Applications symlink. The Gatekeeper
 prompt is documented, not promised away (<code>D-15</code>). File activation goes through
 Avalonia 12's <code>IActivatableLifetime</code>/<code>FileActivatedEventArgs</code>; files that arrive before
-the chooser exists are queued. <em>Remove local data…</em> lives inside the app.</li>
-<li><strong>Linux: a tarball with per-user scripts and XDG registration.</strong> <code>tools/package-linux.sh</code>
+the chooser exists are queued. <em>Remove local data…</em> lives inside the app.</p>
+</li>
+<li><p><strong>Linux: a tarball with per-user scripts and XDG registration.</strong> <code>tools/package-linux.sh</code>
 produces <code>install.sh</code>/<code>uninstall.sh</code> installing to <code>~/.local/opt/labcontrol/console/</code>,
 a <code>.desktop</code> entry (<code>Exec=… %F</code>, <code>MimeType</code>), MIME XML and icons, then runs
 <code>update-mime-database</code>/<code>update-desktop-database</code> and <code>xdg-mime default</code> only when no
@@ -2566,17 +2569,58 @@ default exists. Prerequisites: <code>libicu</code>, <code>libfontconfig1</code>,
 <code>libsm6</code>, <code>libgl1</code>; <code>libsecret-1-0</code> optional (its absence means the file-backed secret
 protector, shown per profile). The documented matrix is Ubuntu 22.04 and 24.04, and
 Linux acceptance in the first M5 pass is documented and manual (default chosen
-2026-09-08, owner may change).</li>
-<li><strong>Document activation and the single instance.</strong> <code>ConsoleOptions.TryParse</code> accepts
+2026-09-08, owner may change).</p>
+</li>
+<li><p><strong>Document activation and the single instance.</strong> <code>ConsoleOptions.TryParse</code> accepts
 positional existing files with a known extension as <code>FilesToOpen</code> and <code>--import-only</code>
 for the forwarder. <code>Services/SingleInstance.cs</code> derives a name from the first 16 hex
 digits of <code>sha256(DataDirectory)</code>: a Windows named pipe <code>labcontrol-console-&lt;hash&gt;</code>
-(<code>CurrentUserOnly</code>) or a Unix socket <code>labcontrol-console-&lt;hash&gt;.sock</code> (0600) in
-<code>$XDG_RUNTIME_DIR</code> or the temp directory. The client sends one JSON line
-<code>{&quot;schema_version&quot;:1,&quot;open&quot;:[…]}</code>, the server validates it and raises <code>FilesArrived</code>
-on the UI thread, and the client exits 0 after the acknowledgement. <code>console.lock</code>
-(<code>D-55</code>) distinguishes a stale socket from a running console. Files opened this way
-enter the same import flow; they never activate a lab.</li>
+(<code>CurrentUserOnly</code>) or a Unix socket <code>console-&lt;hash&gt;.sock</code> (0600) inside this user's
+private directory <code>labcontrol-&lt;uid&gt;</code> (mode 0700) under <code>$XDG_RUNTIME_DIR</code> or the temp
+directory. The client sends one JSON line <code>{&quot;schema_version&quot;:1,&quot;open&quot;:[…]}</code>, the
+server validates it and raises <code>FilesArrived</code> on the UI thread, and the client exits 0
+after the acknowledgement. <code>console.lock</code> (<code>D-55</code>) distinguishes a stale socket from a
+running console. Files opened this way enter the same import flow; they never activate
+a lab. On macOS a LaunchServices open reaches the same path through Avalonia's
+<code>IActivatableLifetime</code>/<code>FileActivatedEventArgs</code> (item 3), with the first activation
+filtered against the process's own arguments, which AppKit echoes back as opened files.</p>
+<p>Six rules added when portion 6 was built and reviewed (2026-09-09):</p>
+<ul>
+<li><strong>The socket lives in this user's private directory, and the peer is checked.</strong> The
+original path — <code>labcontrol-console-&lt;hash&gt;.sock</code> directly in the runtime or temp
+directory — was both too long and unsafe: <code>sun_path</code> holds 104 bytes on macOS (108 on
+Linux) including the terminator, and the temp directory there is already 48 of them,
+while in a world-writable <code>/tmp</code> another local user could pre-create that predictable
+path and receive the teacher's document paths. The directory is therefore verified — a
+real directory, not a symbolic link, mode 0700 — by the server before it binds and by
+every client before it connects, and each accepted connection is additionally checked
+with <code>LOCAL_PEERCRED</code> (macOS) or <code>SO_PEERCRED</code> (Linux); a kernel that answers neither
+leaves the 0700 directory as the guard.</li>
+<li><strong>An unusable endpoint never costs the console its startup.</strong> A path longer than
+<code>sun_path</code>, or a directory that is not ours, is an <code>EndpointUnusableException</code> the
+app logs and continues from — a second launch is then refused rather than forwarded.
+Before the fix it was an unhandled exception that could leave the console running
+with no window at all.</li>
+<li><strong>A departing console refuses instead of acknowledging.</strong> The endpoint is disposed
+first in the shutdown and answers <em>the console is shutting down</em> while stopping, so
+the launcher starts its own console. Previously the batch was acknowledged, the
+launcher exited 0, and the file was dropped on the way to the UI.</li>
+<li><strong>Caps and an ordinary-file rule.</strong> At most <code>Defaults.SingleInstanceMaxOpenPaths</code>
+(64) paths per launch — refused by the forwarder before it connects and again by the
+server, which also drops duplicates within a batch — a line size cap, and every
+forwarded path validated exactly like a command-line path and additionally required
+to be absolute. A document must be an ordinary file no larger than
+<code>Defaults.ConsoleDocumentMaxBytes</code> (8 MiB): reading a FIFO or a huge file on the UI
+thread froze the console permanently.</li>
+<li><strong>One import at a time.</strong> The drop target, <em>Add labs…</em> and forwarded launches queue
+behind a single pump in <code>App</code> and the chooser's counted busy flag (file flows nest);
+two concurrent imports could otherwise stack two passphrase prompts over the same
+profile store.</li>
+<li><strong>The exit code is the lifetime's.</strong> <code>Main</code> returns what the Avalonia lifetime
+returns, so a launch the data directory refuses does not look to a script like a
+console that ran and quit normally.</li>
+</ul>
+</li>
 </ol>
 <p>Rejected: WiX, Inno Setup or MSIX for the console (a second toolchain to maintain, or
 store/signing prerequisites); the Windows student <code>Setup.exe</code> as the console installer
@@ -2585,7 +2629,12 @@ file activation; a mutex without a data-directory key (two <code>--data</code> d
 legitimate at once).</p>
 <p>Validation: forwarder → running server → import; a second process exits 0; a stale socket
 is recovered; dry-run step tests for the Windows installer; the manual matrix on Windows,
-macOS and Linux in ROADMAP M5. Implementation status is tracked in ROADMAP M5.</p>
+macOS and Linux in ROADMAP M5. Implementation status is tracked in ROADMAP M5. Item 5 was
+built, reviewed and fixed on 2026-09-09 (portion 6): 16 single-instance tests including
+hostile input, eight concurrent launches, the shutdown window and the socket directory's
+mode, plus a manual macOS run on a copy of the data directory. The Windows named-pipe path
+and the Linux <code>SO_PEERCRED</code> path are compile- and logic-checked only; they belong to
+portion 7's manual matrix.</p>
 <h2 id="d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)<a class="anchor" href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3" aria-label="Link to this section">#</a></h2>
 <p>Context (2026-09-08): <code>D-54</code> item 7 forbids treating a backup import as concurrent
 enrollment recovery, because two independent holders of the CA cannot enforce single use
@@ -2820,7 +2869,7 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-09 05:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 05:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-34-the-screen-stream-one-jpeg-per-frame-latest-wins-the-console-asks-m3-portion-1">D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)</a></li><li class="lvl2"><a href="#d-35-real-capture-one-producer-for-the-helper-and-the-simulator-dxgi-with-a-gdi-fallback-the-service-relays-m3-portion-2">D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)</a></li><li class="lvl2"><a href="#d-36-remote-control-text-as-text-shortcuts-by-position-the-service-raises-ctrlaltdel-m3-portion-3">D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)</a></li><li class="lvl2"><a href="#d-37-full-mode-quality-auto-by-default-three-manual-steps-the-frame-says-what-it-used-m3-portion-3">D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)</a></li><li class="lvl2"><a href="#d-38-m4-in-four-portions-and-the-script-library-as-the-first-m4-portion-1">D-38 — M4 in four portions, and the script library as the first (M4 portion 1)</a></li><li class="lvl2"><a href="#d-39-script-editor-quick-launch-and-desktop-application-templates">D-39 — Script editor, quick launch and desktop application templates</a></li><li class="lvl2"><a href="#d-40-optional-student-provisioning-and-standalone-removal-for-home-pc-testing">D-40 — Optional student provisioning and standalone removal for home-PC testing</a></li><li class="lvl2"><a href="#d-41-resume-a-running-file-pull-at-completed-chunk-boundaries-m4-portion-2">D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)</a></li><li class="lvl2"><a href="#d-42-explicit-upload-grants-and-a-committed-offset-query-m4-portion-2">D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)</a></li><li class="lvl2"><a href="#d-43-per-pc-result-bundles-from-the-existing-job-stream-m4-portion-2">D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)</a></li><li class="lvl2"><a href="#d-44-handout-dispatch-and-simulator-delivery-before-managed-windows-profiles">D-44 — Handout dispatch and simulator delivery before managed Windows profiles</a></li><li class="lvl2"><a href="#d-45-persist-account-mode-and-creation-evidence-before-windows-setup-integration">D-45 — Persist account mode and creation evidence before Windows Setup integration</a></li><li class="lvl2"><a href="#d-46-windows-account-preparation-under-private-storage-and-an-exclusive-lock">D-46 — Windows account preparation under private storage and an exclusive lock</a></li><li class="lvl2"><a href="#d-47-encrypt-the-settings-journal-and-restore-only-confirmed-unchanged-values">D-47 — Encrypt the settings journal and restore only confirmed, unchanged values</a></li><li class="lvl2"><a href="#d-48-start-native-settings-integration-with-two-fixed-dword-policies">D-48 — Start native settings integration with two fixed DWORD policies</a></li><li class="lvl2"><a href="#d-49-bind-ac-power-timeouts-to-a-scheme-and-confirm-native-activation">D-49 — Bind AC power timeouts to a scheme and confirm native activation</a></li><li class="lvl2"><a href="#d-50-journal-the-windows-update-active-hours-tuple-as-one-policy">D-50 — Journal the Windows Update active-hours tuple as one policy</a></li><li class="lvl2"><a href="#d-51-gate-the-lsa-autologon-secret-on-recorded-student-ownership">D-51 — Gate the LSA autologon secret on recorded student ownership</a></li><li class="lvl2"><a href="#d-52-integrate-m4-with-guarded-native-ownership-and-external-recovery">D-52 — Integrate M4 with guarded native ownership and external recovery</a></li><li class="lvl2"><a href="#d-53-lab-files-and-one-active-room-per-teacher-console-planned-m5">D-53 — Lab files and one active room per teacher console (planned M5)</a></li><li class="lvl2"><a href="#d-54-administrator-backup-onboarding-and-lightweight-console-installation-planned-m5">D-54 — Administrator backup onboarding and lightweight console installation (planned M5)</a></li><li class="lvl2"><a href="#d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1">D-55 — The profile store: profiles.json, labs/&lt;lab_id&gt;/, and a resumable migration (M5 portion 1)</a></li><li class="lvl2"><a href="#d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3">D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, instance: revocation (M5 portion 3)</a></li><li class="lvl2"><a href="#d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4">D-57 — One active session: ActiveLabController, release before acquire, the departure report, result ownership (M5 portions 2 and 4)</a></li><li class="lvl2"><a href="#d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5">D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)</a></li><li class="lvl2"><a href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted .app/.dmg, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)</a></li><li class="lvl2"><a href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>

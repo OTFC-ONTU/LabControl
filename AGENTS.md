@@ -42,7 +42,7 @@ the documents relevant to the task:
   `ActiveLabController` with release-before-acquire and result ownership, take-over on
   the agent's clock, per-user console packaging with single-instance forwarding, dormant
   imported enrollment codes. Follow those entries and ROADMAP M5 *How it is being built*
-  (eight portions; portions 1–4 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
+  (eight portions; portions 1–4 and 6 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
   store, resumable migration, `lab.json` schema 2, `console.lock`; portion 2:
   `ActiveLabController`, the *My labs* chooser, *Disconnect*, the departure report and bulk
   `.lcbak` import; portion 3: the signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher
@@ -50,7 +50,12 @@ the documents relevant to the task:
   devices* panel and dormant imported codes, 753 tests — and portion 4 on 2026-09-09:
   results and progress bound to the console instance the agent's TLS handshake validated,
   `jobs-inflight.json` restoration with narrow re-send rules, 785 tests, verified with a
-  real agent on the isolated Windows clone; portion 5 in progress); the
+  real agent on the isolated Windows clone — and portion 6 on 2026-09-09: console documents
+  on the command line, `--import-only`, a second launch forwarding its file paths over a
+  per-data-directory named pipe or private-directory Unix socket instead of starting a
+  second console, macOS file activation, 788 tests, checked by hand on the Mac, with the
+  Windows pipe and the Linux `SO_PEERCRED` path not yet run on those systems; portion 5 in
+  progress, portion 7 in progress); the
   `Welcome.console_access`
   `.proto` change belongs to portion 5 and must update `docs/PROTOCOL.md` in its commit.
 - The Windows student agent must survive reboots and must not let a failed Win32

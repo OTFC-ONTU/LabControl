@@ -272,6 +272,16 @@ tools/make-icon.py                                     # regenerate the console 
 <pre><code class="language-bash">dotnet run --project src/LabControl.Console -- --data ~/labA --port 47800
 dotnet run --project src/LabControl.Console -- --data ~/labB --port 47810   # import the backup from A
 </code></pre>
+<p>The console also takes documents to open as positional arguments — <code>.lclab</code> lab files,
+<code>.lcbak</code> backups, <code>.lcgrant</code> grants and <code>.lcreq</code> requests — which is what a double-click
+or <em>Open with</em> passes it. They are imported exactly like <em>Add labs…</em> and never open a lab:</p>
+<pre><code class="language-bash">dotnet run --project src/LabControl.Console -- ~/Downloads/room-444.lclab
+dotnet run --project src/LabControl.Console -- --import-only ~/Downloads/room-444.lclab
+</code></pre>
+<p>One console runs per data directory. A second launch does not start a second console: it
+hands its file paths to the running one and exits (0 once they were taken). <code>--import-only</code>
+never starts a console of its own — it exits 1 when none is running — and is what a
+file-type registration uses.</p>
 <p><code>FakeAgent --fail 7:never --fail 8:late=20 --fail 9:die-mid-job --fail 10:job-error --fail 11:burned-code --fail 12:forged-revocation --fail 13:outdated</code> injects failures;
 <code>--reinstall 7</code> plays a reinstalled PC; <code>burned-code</code> implies a reinstall of that PC,
 since only an enrolment can present a code; <code>--console 127.0.0.1</code> pins the console on a
@@ -344,7 +354,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-09 05:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 05:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

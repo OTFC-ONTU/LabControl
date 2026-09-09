@@ -2519,12 +2519,51 @@ Decisions:
    positional existing files with a known extension as `FilesToOpen` and `--import-only`
    for the forwarder. `Services/SingleInstance.cs` derives a name from the first 16 hex
    digits of `sha256(DataDirectory)`: a Windows named pipe `labcontrol-console-<hash>`
-   (`CurrentUserOnly`) or a Unix socket `labcontrol-console-<hash>.sock` (0600) in
-   `$XDG_RUNTIME_DIR` or the temp directory. The client sends one JSON line
-   `{"schema_version":1,"open":[…]}`, the server validates it and raises `FilesArrived`
-   on the UI thread, and the client exits 0 after the acknowledgement. `console.lock`
-   (`D-55`) distinguishes a stale socket from a running console. Files opened this way
-   enter the same import flow; they never activate a lab.
+   (`CurrentUserOnly`) or a Unix socket `console-<hash>.sock` (0600) inside this user's
+   private directory `labcontrol-<uid>` (mode 0700) under `$XDG_RUNTIME_DIR` or the temp
+   directory. The client sends one JSON line `{"schema_version":1,"open":[…]}`, the
+   server validates it and raises `FilesArrived` on the UI thread, and the client exits 0
+   after the acknowledgement. `console.lock` (`D-55`) distinguishes a stale socket from a
+   running console. Files opened this way enter the same import flow; they never activate
+   a lab. On macOS a LaunchServices open reaches the same path through Avalonia's
+   `IActivatableLifetime`/`FileActivatedEventArgs` (item 3), with the first activation
+   filtered against the process's own arguments, which AppKit echoes back as opened files.
+
+   Six rules added when portion 6 was built and reviewed (2026-09-09):
+
+   - **The socket lives in this user's private directory, and the peer is checked.** The
+     original path — `labcontrol-console-<hash>.sock` directly in the runtime or temp
+     directory — was both too long and unsafe: `sun_path` holds 104 bytes on macOS (108 on
+     Linux) including the terminator, and the temp directory there is already 48 of them,
+     while in a world-writable `/tmp` another local user could pre-create that predictable
+     path and receive the teacher's document paths. The directory is therefore verified — a
+     real directory, not a symbolic link, mode 0700 — by the server before it binds and by
+     every client before it connects, and each accepted connection is additionally checked
+     with `LOCAL_PEERCRED` (macOS) or `SO_PEERCRED` (Linux); a kernel that answers neither
+     leaves the 0700 directory as the guard.
+   - **An unusable endpoint never costs the console its startup.** A path longer than
+     `sun_path`, or a directory that is not ours, is an `EndpointUnusableException` the
+     app logs and continues from — a second launch is then refused rather than forwarded.
+     Before the fix it was an unhandled exception that could leave the console running
+     with no window at all.
+   - **A departing console refuses instead of acknowledging.** The endpoint is disposed
+     first in the shutdown and answers *the console is shutting down* while stopping, so
+     the launcher starts its own console. Previously the batch was acknowledged, the
+     launcher exited 0, and the file was dropped on the way to the UI.
+   - **Caps and an ordinary-file rule.** At most `Defaults.SingleInstanceMaxOpenPaths`
+     (64) paths per launch — refused by the forwarder before it connects and again by the
+     server, which also drops duplicates within a batch — a line size cap, and every
+     forwarded path validated exactly like a command-line path and additionally required
+     to be absolute. A document must be an ordinary file no larger than
+     `Defaults.ConsoleDocumentMaxBytes` (8 MiB): reading a FIFO or a huge file on the UI
+     thread froze the console permanently.
+   - **One import at a time.** The drop target, *Add labs…* and forwarded launches queue
+     behind a single pump in `App` and the chooser's counted busy flag (file flows nest);
+     two concurrent imports could otherwise stack two passphrase prompts over the same
+     profile store.
+   - **The exit code is the lifetime's.** `Main` returns what the Avalonia lifetime
+     returns, so a launch the data directory refuses does not look to a script like a
+     console that ran and quit normally.
 
 Rejected: WiX, Inno Setup or MSIX for the console (a second toolchain to maintain, or
 store/signing prerequisites); the Windows student `Setup.exe` as the console installer
@@ -2534,7 +2573,12 @@ legitimate at once).
 
 Validation: forwarder → running server → import; a second process exits 0; a stale socket
 is recovered; dry-run step tests for the Windows installer; the manual matrix on Windows,
-macOS and Linux in ROADMAP M5. Implementation status is tracked in ROADMAP M5.
+macOS and Linux in ROADMAP M5. Implementation status is tracked in ROADMAP M5. Item 5 was
+built, reviewed and fixed on 2026-09-09 (portion 6): 16 single-instance tests including
+hostile input, eight concurrent launches, the shutdown window and the socket directory's
+mode, plus a manual macOS run on a copy of the data directory. The Windows named-pipe path
+and the Linux `SO_PEERCRED` path are compile- and logic-checked only; they belong to
+portion 7's manual matrix.
 
 ## D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)
 

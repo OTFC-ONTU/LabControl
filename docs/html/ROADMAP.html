@@ -1848,9 +1848,11 @@ appeared as 0600 inside a 0700 directory; a second launch forwarded a lab file a
 0 while the running console logged the hand-over and showed the import result; a bare
 second launch delivered an empty batch and brought the window forward; and after a
 <code>kill -9</code> the next launch exited immediately instead of hanging, while a restart removed
-the stale socket and served again. Open items: the Windows named-pipe path and the Linux
-<code>SO_PEERCRED</code> path are compile- and logic-checked only, with no Windows or Linux run (they
-belong to portion 7's matrix); the shutdown-window refusal has an automated test but could
+the stale socket and served again. Open items: the Windows named-pipe path was
+exercised on 2026-09-09 by portion 7's Windows drill, where a second launch handed both a
+<code>.lclab</code> and a <code>.lcbak</code> to a running console over <code>\\.\pipe\labcontrol-console-&lt;hash&gt;</code>
+and exited 0; the Linux <code>SO_PEERCRED</code> path is still compile- and logic-checked only, with
+no Linux run; the shutdown-window refusal has an automated test but could
 not be reproduced in the real GUI, because there is no way to ask a running console to
 quit from the shell; and after a refusal the forwarding launch may briefly report that a
 console is already running while the departing one still holds the lock for up to ten
@@ -2328,7 +2330,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-09 13:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 13:36 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

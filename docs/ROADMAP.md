@@ -1662,9 +1662,11 @@ contract, then desktop integration (`D-54` item 6).
   0 while the running console logged the hand-over and showed the import result; a bare
   second launch delivered an empty batch and brought the window forward; and after a
   `kill -9` the next launch exited immediately instead of hanging, while a restart removed
-  the stale socket and served again. Open items: the Windows named-pipe path and the Linux
-  `SO_PEERCRED` path are compile- and logic-checked only, with no Windows or Linux run (they
-  belong to portion 7's matrix); the shutdown-window refusal has an automated test but could
+  the stale socket and served again. Open items: the Windows named-pipe path was
+  exercised on 2026-09-09 by portion 7's Windows drill, where a second launch handed both a
+  `.lclab` and a `.lcbak` to a running console over `\\.\pipe\labcontrol-console-<hash>`
+  and exited 0; the Linux `SO_PEERCRED` path is still compile- and logic-checked only, with
+  no Linux run; the shutdown-window refusal has an automated test but could
   not be reproduced in the real GUI, because there is no way to ask a running console to
   quit from the shell; and after a refusal the forwarding launch may briefly report that a
   console is already running while the departing one still holds the lock for up to ten

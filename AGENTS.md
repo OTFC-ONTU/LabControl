@@ -36,13 +36,13 @@ the documents relevant to the task:
   no agent services or student preparation. Verify scoped LAN permissions and native
   prerequisites separately from copying files; retain profiles/keys on upgrade and by
   default on uninstall (`D-54`, `docs/INSTALLER.md`).
-- The M5 design is recorded in `D-55`…`D-60` (2026-09-08) and implementation started the
-  same day: profile store and resumable migration, signed `.lclab`/`.lcreq`/`.lcgrant`
+- The M5 design is recorded in `D-55`…`D-60` (2026-09-08), extended by `D-68`
+  (2026-09-09): profile store and resumable migration, signed `.lclab`/`.lcreq`/`.lcgrant`
   files with the role in the subject OU and `instance:` revocation, one
   `ActiveLabController` with release-before-acquire and result ownership, take-over on
   the agent's clock, per-user console packaging with single-instance forwarding, dormant
   imported enrollment codes. Follow those entries and ROADMAP M5 *How it is being built*
-  (eight portions; portions 1–7 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
+  (eight portions; **all eight built and reviewed**, 1–3 on 2026-09-08 — portion 1: profile
   store, resumable migration, `lab.json` schema 2, `console.lock`; portion 2:
   `ActiveLabController`, the *My labs* chooser, *Disconnect*, the departure report and bulk
   `.lcbak` import; portion 3: the signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher
@@ -55,7 +55,11 @@ the documents relevant to the task:
   once), the four ownership states a console can prove — linked here, observed elsewhere
   within `Defaults.OwnershipObservationLifetime`, unknown, offline — the banner's *holds at
   least N*, and the additive informational `Welcome.console_access` that never decides a
-  refusal, 960 tests after the merge, not yet run on the Windows VM with two consoles and
+  refusal, followed the same day by the portion-5 security fixes — a withdrawn instance's
+  beacon refused where the beacon is judged (the agent ahead of both the take-over and the
+  dial branch, the console in the same way), ownership attributed only on the PC's own
+  `link.taken_over` departure report, an expiring banner and the arrival stamped in the
+  listener's receive loop — still not run on the Windows VM with two consoles and
   skewed clocks — and portion 6 on 2026-09-09: console documents
   on the command line, `--import-only`, a second launch forwarding its file paths over a
   per-data-directory named pipe or private-directory Unix socket instead of starting a
@@ -68,9 +72,17 @@ the documents relevant to the task:
   ad-hoc-signed macOS `.app`/DMG, the per-user Linux tarball and `tools/package-*.sh` into
   `artifacts/package/`, 936 tests after the merge with portions 4 and 6, packages built and
   the Linux scripts round-tripped on the Mac, with the Windows installer itself, the banner
-  against a real Windows Firewall and a real Linux desktop menu never run; portion 8 — the
-  acceptance drills, the documentation close-out and the dial backoff a verified beacon for
-  the agent's own lab should shorten — is in progress); the `Welcome.console_access`
+  against a real Windows Firewall and a real Linux desktop menu never run — and portion 8
+  on 2026-09-09: the acceptance drills and the six gaps an adversarial audit of every M5
+  acceptance criterion found (`D-68`) — the combined picker filter that makes a mixed
+  selection possible, batched authorization written into one folder, the departure flow
+  *Disconnect*, the window close and quit all ask, the beacon-resume step-over that relinks
+  thirty refused PCs in 2.7 s instead of 30.3 s, and agent events bound to the console that
+  delivered their job while machine events stay unbound; main stands at 984 tests, 755
+  Shared + 229 Console, run twice on the merged tree). Still unverified: the Windows and
+  Linux runs of the console packaging, portion 5 on Windows with two consoles and skewed
+  clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the
+  physical lab. The `Welcome.console_access`
   `.proto` change landed with portion 5 and `docs/PROTOCOL.md` was updated in that commit.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.

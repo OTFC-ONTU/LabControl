@@ -74,6 +74,12 @@ Consequences:
   same `end` chain to the same CA, so every agent follows it without being touched.
 - Forged beacons cost a rejected TLS handshake. Agents ignore beacons while connected,
   and rate-limit dial attempts (≥ 2 s apart, exponential backoff per endpoint).
+- A beacon from an instance under an `instance:<instance_id>` revocation is **dropped as
+  soon as its signature verifies**, before anything it could cause: the agent refuses it
+  ahead of both the take-over branch and the dial branch, and a console drops it instead of
+  listing that machine (`D-56` item 6, `D-58`). Enforcing withdrawal only at the TLS
+  handshake would be too late — a beacon is what makes a linked PC *leave*, and by the
+  handshake the room has already been given up.
 - The one exception to "ignore while connected" is `take`: a linked agent that receives a
   fully verified beacon from a **different** instance carrying a non-zero `take` closes
   that link and dials the taker, provided all three hold — (a) that `(inst, take)` token
@@ -81,14 +87,27 @@ Consequences:
   timed on the agent's own clock, and (c) `take` is within `TakeOverWindow + BeaconMaxSkew`
   of the beacon's own `ts`, which the agent has already checked against its clock. The
   taker's timestamp is never compared with the agent's link time, so a teacher machine
-  whose clock is out of step still takes its room (`D-58`). Each `take` value is honoured
+  whose clock is out of step by anything the ±60 s check tolerates still takes its room
+  (`D-58`); further out its beacons verify nowhere and it is invisible to the lab, which is
+  a clock problem to fix, not a take-over that failed. Each `take` value is honoured
   once, so a console rebroadcasting the same value for 30 s does not cause a re-dial loop,
   and two consoles pressing the button alternately simply move the room back and forth —
   never split a PC between them. A press made moments before the PC linked elsewhere still
   moves it, as long as its beacon arrives after that link and inside the window.
+- An agent that honours a `take` **says so before it goes**: it sends the fixed-code
+  `Event` `link.taken_over` whose message is the taker's instance id, then half-closes its
+  request stream (never resets it) so the notice is delivered in order, and drops the link
+  anyway after `Defaults.DepartureNoticeGrace` if the console does not answer (`D-58`). No
+  field and no negotiation: an agent that predates this says nothing and its departure is
+  credited to nobody. A console attributes a PC to another teacher machine **only** on this
+  report, and only to an instance it has itself heard beaconing and has not withdrawn — the
+  end of a stream is not evidence, because a PC switched off, a dropped cable and a crash
+  look identical from the console's side.
 - Consoles listen on the beacon port too. A verified beacon from another instance of the
   same lab is recorded in `lab.json` `instances[]` and drives the *other teacher machine*
-  banner; a beacon that fails verification is dropped exactly as an agent would drop it.
+  banner; a beacon that fails verification is dropped exactly as an agent would drop it,
+  and one rejected only for a stale `ts` raises a rate-limited `console.clock_skew` warning,
+  because past ±60 s the two consoles cannot see each other at all.
 
 ## gRPC services (`labcontrol.v1`)
 
@@ -187,6 +206,16 @@ pulled cable in the same time.
 warning, info), `Pong`, `ExamState`, `InternetState` (see *Internet policy*), `RevocationState` (every signed revocation entry the
 agent holds — sent right after `Hello`, so a console that was not running when another
 teacher machine revoked something learns of it from the first agent that connects).
+
+An `Event` about **a console's own work** — why a job was refused, how it ended — is bound
+to the instance that delivered that job exactly as a `JobResult` is (`D-57` item 4, `D-68`):
+it is sent only to that console and waits for it, because the next teacher in the room must
+not be handed the previous one's output. **Machine events are deliberately unbound** and go
+to whoever is linked: a dead session helper, a capture failure, a wrong ACL, a Setup
+readiness advisory, and the capacity line `job.result_dropped` saying old results had to be
+discarded — all of these are facts about the PC that whoever is in the room needs. The
+wire is unchanged; the binding is the agent's own bookkeeping. The departure notice
+`link.taken_over` (above) travels the same way, unbound, on the link being left.
 
 `ConsoleMessage` (oneof): `Welcome` (server time, instance id and name, the serials the
 console holds revoked, and `console_access` — informational, see *M5 additions*),
@@ -771,8 +800,11 @@ item 6 — the versioning wording — is untouched by this portion.
    `TakeOverWindow + BeaconMaxSkew` of the beacon's own `ts`. The taker's timestamp is
    never compared with the agent's link time. No field change. The console side of the same
    decision changed too, without touching the wire: a console credits another teacher
-   machine with a PC only when it watched that PC leave while that machine's signed `take`
-   beacon was arriving here, and its banner therefore says *holds at least N* (`D-58`).
+   machine with a PC only when the PC itself reported leaving for it (`link.taken_over`,
+   above) and that machine is one this console has heard beaconing and has not withdrawn,
+   and its banner therefore says *holds at least N* (`D-58`). A beacon from a withdrawn
+   instance is refused by agent and console alike before the take-over decision is even
+   reached, not only at the handshake.
 6. **Versioning** *(pending, portions 4–5)*: an M5 console accepts every older agent as before and shows the
    *update available* badge; the two behaviours it cannot get from an older agent —
    role-based refusal of `self_update`/`rekey` and result binding to the delivering

@@ -215,7 +215,7 @@ report and results bound to the delivering instance (`D-57`), take-over on the a
 clock and observed-only ownership (`D-58`), the C# per-user Windows installer, scripted
 `.app`/`.dmg`, Linux tarball, single instance and scoped firewall rules (`D-59`), and
 dormant imported enrollment codes (`D-60`). Eight portions (ROADMAP M5, *How it is being
-built*); portions 1–7 built and reviewed, 1–3 on 2026-09-08 and portions 4–7
+built*); **all eight built and reviewed**, 1–3 on 2026-09-08 and portions 4–8
 on 2026-09-09 (portion 1: profile store, resumable
 migration, `lab.json` schema 2, `console.lock`; migration tried on a copy of the owner's
 live data, the live directory migrates on the next M5 launch; portion 2:
@@ -231,8 +231,12 @@ take-over decided on the agent's own clock (arrival order, the press bound to it
 beacon, honoured once), the four ownership states a console can prove — linked here,
 observed elsewhere within `Defaults.OwnershipObservationLifetime`, unknown, offline — the
 banner's *holds at least N*, and the additive informational `Welcome.console_access` that
-never decides a refusal; 960 tests after the merge, not yet run on the Windows VM with two
-consoles and skewed clocks; portion 6:
+never decides a refusal; the portion-5 security fixes of 2026-09-09 then made a withdrawn
+instance's beacon refused where the beacon is judged — by the agent ahead of both the
+take-over and the dial branch, and by the console — and made ownership follow the PC's own
+`link.taken_over` departure report instead of any stream that ends, with the banner wording
+expiring and the beacon's arrival stamped in the listener's receive loop; still not run on
+the Windows VM with two consoles and skewed clocks; portion 6:
 console documents on the command line, `--import-only`, a second launch forwarding its file
 paths over a per-data-directory named pipe or private-directory Unix socket instead of
 starting a second console, macOS file activation, 788 tests, checked by hand on the Mac —
@@ -245,11 +249,18 @@ macOS `.app`/DMG, the per-user Linux tarball and `tools/package-*.sh` into
 `artifacts/package/`, 936 tests after the merge with portions 4 and 6, packages built and
 the Linux scripts round-tripped on the Mac — the Windows installer itself, the banner
 against a real Windows Firewall and a real Linux desktop menu have never been run);
-portion 8 (the acceptance drills and the documentation close-out) is in progress, and it
-also owns the dial backoff a verified beacon for the agent's own lab should shorten.
-ARCHITECTURE §3.9/§4 and PROTOCOL (*Files exchanged offline*, *M5 additions*) describe the
-design; the `Welcome.console_access` `.proto` change landed with portion 5, and PROTOCOL
-was updated in that commit.
+portion 8: the acceptance drills and the six gaps an adversarial audit of every M5
+acceptance criterion found (`D-68`) — the combined picker filter that makes a mixed
+selection possible, batched authorization in one folder, the departure flow *Disconnect*,
+the window close and quit all ask, the beacon-resume step-over that relinks thirty refused
+PCs in 2.7 s instead of 30.3 s, and agent events bound to the console that delivered their
+job while machine events stay unbound. Main stands at 984 tests (755 Shared + 229 Console),
+run twice on the merged tree. **Still unverified:** the Windows and Linux runs of the
+console packaging, portion 5 on Windows with two consoles and skewed clocks against a real
+agent, the Avalonia quit hook by hand, and the milestone in the physical lab.
+ARCHITECTURE §3.9/§4 and PROTOCOL (*Discovery beacon*, *Files exchanged offline*,
+*M5 additions*) describe the design; the `Welcome.console_access` `.proto` change landed
+with portion 5, and PROTOCOL was updated in that commit.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

@@ -234,20 +234,36 @@ The behaviour is defined and dull:
   each PC happened to connect to first. No PC ever takes commands from two consoles.
 - Each console sees the other's beacon and shows a **persistent, informational** banner:
   *"Lab PC (instance `…`) is also running this lab and holds at least 6 of 14 PCs."* The
-  count is what this console watched leave during the other machine's signed take-over —
-  not what agents report in `Hello` — and the banner lists exactly those PCs by number; it
-  says *at least* because the PCs it knows nothing about may be anywhere, and when it has
-  seen none leave it says so plainly instead of guessing (`D-58`). This banner has **no
-  revoke button**; revocation is a security action for a stolen machine, not a way to win
-  an argument about who is teaching.
+  count is the PCs that **said themselves** they were leaving for that machine — each sent
+  a `link.taken_over` notice naming it before its stream ended (`D-58`) — not what agents
+  report in `Hello`, and not every PC whose link happened to drop, because a PC switched
+  off, a dropped cable and a crash end a stream exactly the same way. The banner lists
+  those PCs by number; it says *at least* because the PCs it knows nothing about may be
+  anywhere, and when it has seen none leave it says so plainly instead of guessing. A
+  machine whose access has been withdrawn is not one of these consoles at all: its beacon
+  is dropped, it leaves this list at once, it gets no banner and it can never be named as
+  holding a PC. This banner has **no revoke button**; revocation is a security action for
+  a stolen machine, not a way to win an argument about who is teaching.
 - The banner offers **Take over the lab**. For the next 30 s the console adds a `take`
   timestamp to its beacon. An agent linked to *another* instance disconnects and dials the
   taker when an endorsed beacon carrying a `take` **arrives after the link was made** — the
   order is judged on the agent's own clock alone, the press must belong to the beacon that
   carries it, and each press is honoured once (`D-58`), so a console whose clock is out of
-  step still takes its own room back.
-  The other console watches its PCs leave and shows *"MacBook-2026 took over the lab at
-  10:32."* No arbitration, no locking, no shared state between consoles: the last person
+  step by anything a beacon may carry still takes its own room back. Further out than that
+  it is not merely unable to take over: past the tolerated skew its beacons verify nowhere
+  and the two consoles cannot see each other at all, which the console says in the log
+  rather than leaving two teachers guessing.
+  Before any of this is decided, a beacon from an instance whose access has been
+  **withdrawn** is refused — by the agent as soon as the signature verifies, ahead of both
+  the take-over and the dial, and by the console in the same way (`D-56` item 6). The TLS
+  handshake used to be the only place withdrawal was enforced, and it comes too late: by
+  then the PC has already given up the room it was told to leave.
+  On its way out the PC sends a `link.taken_over` notice naming the taker and half-closes
+  its stream so the notice arrives in order, and the console it is leaving shows
+  *"MacBook-2026 took over the lab at 10:32."* That wording is news and expires with the
+  observations the press produced, and pressing *Take over* here clears it outright, so a
+  console that has just taken the room back never goes on claiming it lost it.
+  No arbitration, no locking, no shared state between consoles: the last person
   to press the button has the room, and every PC always answers to exactly one console.
   The `take` field only works for endorsed beacons, so it is no more forgeable than the
   beacon itself.

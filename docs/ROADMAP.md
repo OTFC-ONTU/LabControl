@@ -19,7 +19,7 @@ implement.
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
-| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–7 built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 5 on 2026-09-09: the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation; portion 7 on 2026-09-09: the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6 and 7 checked by hand on the owner's Mac; portion 5 has not been run on the Windows VM, where two consoles with skewed clocks must move a real agent, and portion 8 (the acceptance drills and the documentation close-out) is in progress; real-Mac switch timing under investigation; the Windows pipe and the Linux `SO_PEERCRED` path of the single instance, the Windows installer itself, the LAN banner against a real Windows Firewall and a real Linux desktop menu are not yet run on those systems** | M4 |
+| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** the Windows and Linux runs of the console packaging (the installer itself, the LAN banner against a real Windows Firewall, the Windows named pipe, the Linux `SO_PEERCRED` path and a real desktop menu), portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
@@ -1438,7 +1438,7 @@ contract, then desktop integration (`D-54` item 6).
   no leaked session. Two limits: under sustained refusal load a departure can spend
   Kestrel's 2 s stop budget, and a PC refused for a long stretch returns within the 30 s
   reconnect cap rather than the 15 s target — a `BeaconGate` follow-up that portion 5 did
-  not make and that is now portion 8's.
+  not make and that portion 8 then made (`D-68` item 4).
   Tests: 728 (603 Shared + 125 Console; the Console run twice, `LabSwitchTests` a
   non-parallel collection). *On the owner's Mac* (Debug build, ad-hoc signed) the server
   was up 4–6 s after *Open* and after a re-open; the Keychain prompt per rebuilt ad-hoc
@@ -1604,8 +1604,11 @@ contract, then desktop integration (`D-54` item 6).
   portion has **not been run on the Windows VM**, and the design calls for two consoles
   with skewed clocks against a real agent; and a PC refused across many switches still
   returns on the reconnect ceiling rather than the 15 s target, because a verified beacon
-  for the agent's own lab does not yet shorten its dial backoff — that is portion 8's, and
-  portion 8 is in progress.
+  for the agent's own lab does not yet shorten its dial backoff — that was portion 8's and
+  is built (`D-68` item 4). Two parts of this portion were also superseded the same day by
+  the portion-5 security fixes below: withdrawal is now judged on the beacon itself, and a
+  PC is credited to a taker only on its own departure report, never on a stream that ended
+  while the press was live.
 - *Portion 6 (built, reviewed and fixed 2026-09-09, on the Mac).* Command-line documents,
   the single instance and macOS file activation (`D-59` item 5); the review's blocker and
   should-fix items were all fixed before the merge. `ConsoleOptions.TryParse` takes
@@ -1733,6 +1736,97 @@ contract, then desktop integration (`D-54` item 6).
   any form, the LAN banner against a real Windows Firewall, and a real GNOME or KDE
   application menu. Those join portion 6's Windows named-pipe and Linux `SO_PEERCRED` paths
   in portion 7's manual matrix and must not be reported as passing until they are.
+- *Portion 8 (built and reviewed 2026-09-09, on the Mac).* The acceptance drills, and
+  the six gaps an adversarial audit of every M5 acceptance criterion found (`D-68`).
+  **The file picker could not take a mixed selection**: `LabImports` registered one
+  filter per extension and both the macOS panel and the Windows common dialog apply
+  exactly one filter at a time, so *Add labs…* opened with only backups selectable;
+  `LabImports.Filters` now puts one combined filter over every extension in
+  `Defaults.ConsoleDocumentExtensions` first and keeps the per-type filters after it.
+  **Authorization was not batched**: one request per lab meant a teacher with three
+  rooms made three selections and three save dialogs, so
+  `DeviceAccess.NeedingAuthorization`/`WriteRequests` write a request for every lab that
+  needs authorization or renewal into one chosen folder, deduplicating the file name
+  when two rooms share a display name, writing nothing for a lab that needs nothing and
+  failing one lab alone exactly like one file of an import batch; the chooser's
+  *Authorize all (N)…* (`AuthorizeAllCommand`, `PendingAuthorizations`) is that one
+  gesture and the single-row action stays. **Three drills the criteria name were
+  added**: three independent labs of 30 PCs each imported and authorized in one
+  workflow, with the source files deleted before a restart to prove they are no longer
+  needed (`AcceptanceDrillTests`); switching while a screen streams and a PC is
+  controlled, asserting that no frame, no released buffer and no keystroke reaches the
+  wrong room; and the departure flow itself, which leaves at once when nothing runs,
+  stays when asked, and waits and then leaves when asked (both in `LabSwitchTests`).
+  **Quitting the application bypassed the departure report entirely**: the report, the
+  wait and the choices moved into `Services/DepartureFlow.cs` (`IDeparturePrompt`,
+  `MayLeaveAsync`, `MayQuitAsync`, `DepartureChoice`), which *Disconnect*, the main
+  window's close and `App.QuitAsync` now all ask, with a guard so a second quit cannot
+  open a second report and a catch so a dialog that cannot be shown never traps the
+  teacher in an application that will not quit. **A PC refused across many switches came
+  back only on the 30-second reconnect ceiling** instead of the 15-second target:
+  `BeaconGate` now records when a verified beacon of the agent's own lab last arrived
+  from each endpoint, and a serving gap of at least the new `Defaults.BeaconResumeGap`
+  (two beacon intervals) re-arms a one-shot permission to step over the wait a failed
+  dial imposed. The exponential escalation is deliberately not reset, and a console
+  beaconing without a pause produces no gap and so earns at most one extra dial.
+  Measured in the sixty-switch drill on the same machine: **30.3 s to relink thirty PCs
+  without it, 2.7 s with it**; what the step-over is worth on its own is asserted
+  deterministically in `BeaconGateTests`. **Agent events were not bound to the
+  delivering console** the way results and progress are: `AgentLink.Report` takes a
+  `forInstance` and `ReportForJob` reads the deliverer out of the ledger, so an event
+  about a console's work reaches that console and waits for it, while machine events
+  stay unbound on purpose — a dead helper or a broken permission must reach whoever is
+  in the room — and the capacity line about dropped results (`job.result_dropped`) stays
+  unbound for the same reason. Four audit claims were checked and all four hold, two of
+  them previously untested and now covered: re-import preserves this device's identity,
+  the same room on two devices does not clone one private identity, a backup re-imported
+  over an existing administrator profile does not duplicate the room, and the same lab
+  id arriving with different trust is refused for `.lcbak` as it already was for
+  `.lclab`. Honest limit: the Avalonia shutdown hook itself is two lines calling that
+  flow and is not covered by a headless test, because the harness never gives the
+  application a classic desktop lifetime; it needs a manual quit check.
+- *Portion 5 security fixes (built 2026-09-09 on the Mac, merged into main the same
+  day).* An adversarial review of the built portion reproduced two blockers; both are
+  fixed, with the hardening around them (`D-58`, amended). **A withdrawn console could
+  still seize the room, repeatedly**: the take-over decision rested on the certificate
+  authority's endorsement alone, so the instance-level withdrawal was enforced only at
+  the TLS handshake — which happens after the agent has already dropped its link — and
+  each press carried a fresh `take` value, defeating the honour-once rule. `BeaconGate`
+  now takes the agent's live `RevocationSet` (the same object `AgentLink` merges into)
+  through a required three-argument constructor, so no call site can skip it, and
+  refuses a revoked instance's beacon immediately after signature verification, ahead of
+  both the take-over and the dial branch. The console mirrors it: a withdrawn instance's
+  beacon is dropped, `ForgetOtherConsole` removes the machine from the other-console
+  list the moment access is withdrawn, and it can never be named as a holder. **A PC
+  that merely died during the take-over window was credited to the taker**: any linked
+  PC whose stream ended inside the window was attributed, so a student shutdown, a Wi-Fi
+  blip or a crash all counted as evidence — exactly the presumption the ownership work
+  exists to delete. Attribution is now the agent's own positive report: on a take-over
+  the agent writes the fixed-code `link.taken_over` departure notice naming the taker
+  (`Shared/Link/DepartureNotice.cs`, an ordinary `Event`, no `.proto` change),
+  half-closes the request stream rather than resetting it so the notice is delivered in
+  order, and cuts the link anyway after `Defaults.DepartureNoticeGrace` (two seconds);
+  `LabSession.NoteDeparture` attributes only on that report, and only to an instance
+  this console has itself heard beaconing and has not withdrawn. Also fixed: the *took
+  over the lab at …* wording never expired and now shows only while the press this
+  console saw is younger than the observations it produced, and is cleared outright when
+  this console takes over; the *arrived after the link* condition could not fire in
+  production because the arrival clock was read inside the handler, so `BeaconListener`
+  stamps each datagram once in its receive loop before the fan-out and
+  `AgentLink.OfferBeacon` carries that stamp; the claim that a machine minutes out of
+  step could still move the room was false — past `Defaults.BeaconMaxSkew` such a
+  console is not merely unable to take over, it is invisible to the whole lab — so the
+  comment is corrected and a beacon rejected for a stale timestamp now raises the
+  rate-limited `console.clock_skew` warning saying the two consoles cannot see each
+  other until a clock is set; honoured take tokens are pruned once they can never be
+  honoured again; the freshness check clamps the future side to the beacon skew, so a
+  lab file written while the clock was ahead cannot count as fresh; the two fields
+  behind an ownership claim are read as one pair under one lock; and a PC being woken
+  says so instead of reading as held elsewhere. Tests: after both merges **main stands
+  at 984 (755 Shared + 229 Console)**, 13 of them macOS bundle tests that skip unless
+  `tools/package-mac.sh` has been run, and the full suite was run twice on the merged
+  tree with no failures. Still open: this portion has not been run on the Windows VM,
+  where two consoles with skewed clocks must move a real agent.
 
 **Not in scope.** Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs

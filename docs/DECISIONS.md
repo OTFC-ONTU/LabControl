@@ -2497,6 +2497,76 @@ Decisions:
    still decided from the certificate the TLS handshake validated, never from this field,
    and a disagreement is only logged.
 
+Amended 2026-09-09 (the portion-5 security fixes, after an adversarial review of the
+built portion reproduced two blockers):
+
+6. **Withdrawal is enforced where a beacon is judged, not only at the handshake.** The
+   take-over decision above rested on the CA endorsement alone, so an `instance:`
+   withdrawal (`D-56` item 6) took effect only at the TLS handshake — which happens
+   *after* the agent has dropped the link it was told to leave — and every press carried
+   a fresh `take` value, so the honour-once rule stopped nothing: a withdrawn console
+   could empty the room again and again. `BeaconGate` now takes the agent's live
+   `RevocationSet` — the same object `AgentLink` merges into, so an entry that arrives
+   mid-lesson is in force for the very next beacon — through a required three-argument
+   constructor, and refuses a revoked instance's beacon immediately after signature
+   verification, ahead of both the take branch and the dial branch. The console mirrors
+   it: such a beacon is dropped, `LabSession.ForgetOtherConsole` removes the machine
+   from the other-console list the moment access is withdrawn as well as on the next
+   beacon, and a withdrawn instance can never be named as a holder.
+
+7. **Ownership is attributed only on the PC's own departure report.** Decision 3
+   credited the taker with any linked PC whose stream ended while that machine's press
+   was live here — but a student switching the PC off, a Wi-Fi blip, a crash and an
+   agent restart all end a stream the same way, so the presumption this entry exists to
+   delete had merely been narrowed to a thirty-second window. The agent knows why it is
+   leaving, so it says so: on a take-over it writes the fixed-code `link.taken_over`
+   event naming the taker's instance (`Shared/Link/DepartureNotice.cs` — an ordinary
+   `Event`, no `.proto` change and nothing added to the frozen subset), half-closes the
+   request stream rather than resetting it so the notice is delivered in order, and cuts
+   the link anyway after `Defaults.DepartureNoticeGrace` (two seconds), because a
+   console that has stopped answering must never keep a PC from following the taker.
+   `LabSession.NoteDeparture` attributes only on that report, and only to an instance
+   this console has itself heard beaconing and has not withdrawn; the message is
+   checked, not believed. An agent too old to send the notice leaves no observation
+   behind — the honest answer. This supersedes the attribution half of decision 2:
+   `OtherConsole.TookOverSeenAt` no longer decides who holds a PC, it bounds how long
+   the press is still news (item 8).
+
+8. **The took-over banner expires, and taking the room back clears it.** *"MacBook-2026
+   took over the lab at 10:32"* is news, and news goes stale: it is worded that way only
+   while the press this console *saw* is younger than the observations it produced
+   (`Defaults.OwnershipObservationLifetime`), and pressing *Take over* here clears the
+   press outright, so a console that has just taken the room back never claims to have
+   lost it. The observations that press produced stand until the PCs supersede them by
+   saying `Hello` here.
+
+9. **The arrival time is stamped in the receive loop.** Decision 1(b) could not fire in
+   production: the arrival clock was read inside the handler, after the datagram had
+   been fanned out to every listener and possibly after another thread recorded the
+   link, so a beacon already in flight could look like a fresh press. `BeaconListener`
+   now stamps each datagram once as the socket produces it and passes that stamp through
+   `AgentLink.OfferBeacon`, which takes the wait since the stamp off this PC's own clock
+   — like compared with like.
+
+10. **Past the allowed skew a console is invisible, not merely unable to take over.**
+   The gate's comment claimed a machine minutes out of step still takes its own room
+   back; it does not — beyond `Defaults.BeaconMaxSkew` its beacons fail verification
+   everywhere, so neither console can see the other at all. The comment is corrected,
+   and a beacon rejected for a stale timestamp (which only happens after the endorsement
+   and the signature verified, so it really is another machine of this lab) now raises
+   the rate-limited `console.clock_skew` warning in the teacher's own words instead of a
+   silent debug line: how far apart the clocks are, that neither console can see the
+   other, and that setting both clocks fixes it.
+
+11. **Hardening.** Honoured `take` tokens are pruned once no arriving beacon could
+   honour them again, so a lab left running for a term does not keep one entry per
+   press; the freshness check of decision 3 clamps the future side to the beacon skew,
+   so a `lab.json` written while the clock was ahead cannot count as fresh for a second
+   lifetime; the instance and the moment behind an ownership claim are read as one pair
+   under the registry's own lock, so no tile can show one console's name with another's
+   timestamp; and a PC with a magic packet just sent to it says *waking* rather than
+   repeating where it was last seen.
+
 Rejected: a clock-sync step between consoles (no server, no channel between them, `D-21`);
 correcting the taker's `take` by the `Welcome.server_time_unix` skew the agent knows (the
 agent knows the skew of the console it is linked to, not of the taker); treating every PC
@@ -2508,12 +2578,20 @@ arrived before the link came up and a press made just before the PC linked elsew
 `OwnershipTests` run two consoles with skewed clocks and check the room coming back, an
 offline PC against an unknown one, the named holder and the *holds at least N* count; a
 teacher console that announces administrator access in `Welcome` is still refused `rekey`.
-Main stands at 960 tests (744 Shared + 216 Console) after the merge, 13 macOS bundle tests
-skipping unless the package has been built. Not yet done: two consoles with skewed clocks
-against a real agent on the Windows VM; and a PC refused across many switches still returns
-on the reconnect ceiling rather than the 15 s target, because a verified beacon for the
-agent's own lab does not yet shorten its dial backoff — that belongs to portion 8.
-Implementation status is tracked in ROADMAP M5.
+Main stood at 960 tests (744 Shared + 216 Console) after that merge.
+
+The amendment's own validation (2026-09-09): a withdrawn instance moves nothing and is
+not dialled, on the agent and on the console; a PC that leaves during the window without
+reaching the taker is credited to nobody, while one that sends the notice is credited to
+the taker alone; the departure notice's payload is parsed and refused as data (a wrong
+code, an empty, over-long or non-instance message); the banner after the press has aged
+and after the room comes back; the observation lifetime at session level; a holder that
+stopped beaconing; a beacon just past the skew limit; and a `lab.json` written before
+this feature. With the portion-8 merge (`D-68`) main stands at 984 tests (755 Shared +
+229 Console), 13 macOS bundle tests skipping unless the package has been built. Still
+not done: two consoles with skewed clocks against a real agent on the Windows VM. The
+dial backoff a verified beacon of the agent's own lab should shorten was portion 8's and
+is built (`D-68` item 4). Implementation status is tracked in ROADMAP M5.
 
 ## D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted `.app`/`.dmg`, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)
 
@@ -2727,6 +2805,112 @@ tests import a backup and see the codes dormant. Implemented 2026-09-08 (M5 port
 `EnrollmentOutcome.DormantCode`, *Settings → Enrollment → Use codes from the imported
 backup* activates them, and `Supersede` voids dormant codes together with the active
 ones, so a fresh batch is always the whole truth. Status in ROADMAP M5.
+
+## D-68 — The M5 acceptance drills and the gaps they found: a combined picker filter, batched authorization, one departure flow, a beacon that shortens a stale backoff, events bound to their console (M5 portion 8)
+
+Context (2026-09-09): portions 1–7 were built and the milestone's acceptance criteria
+had never been read back against the code as an adversary would read them. Doing so
+produced six findings — four missing capabilities and two missing drills — each cheap on
+its own and each able to make the milestone fail its own criteria in a lesson.
+
+Decisions:
+
+1. **One combined picker filter comes first, the per-type filters after it.**
+   `LabImports.Filters` registered one filter per extension, and both the macOS open
+   panel and the Windows common dialog apply exactly one filter at a time — so *Add
+   labs…* could never return a `.lclab` and a `.lcbak` in the same batch, however many
+   files the teacher selected, and the criterion "teacher lab files, administrator
+   backups, or a mixed batch" was unreachable through the UI. The combined filter
+   carries every extension in `Defaults.ConsoleDocumentExtensions` in their own order,
+   then anything a later `Register` added; the per-type filters stay for a teacher who
+   wants to see only one kind.
+
+2. **Authorization is written for every lab that needs it in one gesture.**
+   `DeviceAccess.WriteRequests(folder, now)` writes one `.lcreq` per lab that
+   `NeedingAuthorization` lists, into one chosen folder: a teacher with three rooms
+   makes one gesture and carries one folder to the administrator instead of repeating a
+   row action and a save dialog per room (*Deliverables*, "one batched onboarding
+   workflow"). Two rooms with the same display name would write over each other, so
+   names are deduplicated; a lab that needs nothing is not written; a lab whose request
+   cannot be written fails alone, exactly like one file of an import batch. The chooser
+   shows *Authorize all (N)…* only while N > 0 (`AuthorizeAllCommand`,
+   `PendingAuthorizations`), and the single-row *Authorize…* stays for one room.
+
+3. **Every way out of a room asks the same question.** The departure report, the wait
+   and the three choices live in `DepartureFlow` (`IDeparturePrompt`, `MayLeaveAsync`,
+   `MayQuitAsync`, `DepartureChoice`), and *Disconnect*, the main window's close and
+   quitting the application all ask it. Quitting used to release the room straight from
+   the shutdown handler, so ⌘Q — or the window manager's close on the last window — left
+   a script, a transfer or an update probation behind without a word, which is what the
+   criterion "surface any running scripts, transfers or update probation before leaving"
+   forbids. *Stay* means the console keeps running with the lab still active. Two guards
+   make the change safe rather than dangerous: a second quit while the report is up
+   cannot open a second report, and a dialog that cannot be shown at all is logged and
+   the quit continues — a courtesy may never trap the teacher in an application that
+   will not quit.
+
+4. **A gap in this lab's own beacons re-arms one step over the dial backoff.** A PC
+   refused across many switches sat at `Defaults.ReconnectDelayMax` and came back in
+   about thirty seconds, against a fifteen-second acceptance target. The agent's
+   exponential backoff cannot know that the room stopped being served and is being
+   served again; its own lab's beacons can. `BeaconGate` records when a verified beacon
+   of this lab last arrived from each endpoint, and a serving gap of at least
+   `Defaults.BeaconResumeGap` (two beacon intervals) re-arms a one-shot permission to
+   step over the wait a failed dial imposed. Three properties make it anti-storm rather
+   than a hole in the flood guard: only a wait a *failed dial* imposed may be stepped
+   over, never the two-second spacing between beacon-driven dials; the permission is
+   spent once per gap; and the exponential escalation is deliberately not reset, so a
+   dial that fails again carries on from where it was. A console that is up but cannot
+   be linked beacons without a pause, produces no gap, and therefore earns at most one
+   extra dial in total. Measured in the sixty-switch drill on the same machine: thirty
+   PCs relink in 2.7 s with the step-over where they took the full 30.3 s without it.
+
+5. **An event about a console's work belongs to that console; a machine event belongs to
+   the room.** `JobResult` and `JobProgress` were bound to the delivering instance in
+   portion 4 (`D-57` item 4), but events were still handed to whoever linked next, so
+   the next teacher in the room could be shown the previous one's refusals and job
+   outcomes. `AgentLink.Report` takes an optional `forInstance` and holds the event for
+   that console; `ReportForJob` reads the deliverer out of the ledger. Machine events
+   stay unbound **on purpose**: a dead helper, a capture failure or a broken permission
+   is a fact about the PC that whoever is in the room must see, and so is the capacity
+   line saying old results were dropped (`job.result_dropped`) — it says nothing about
+   anyone's output. The bound queue is the same bounded one, so an event for a console
+   that never returns is dropped like any other.
+
+6. **The drills the criteria name are tests, not a promise.** Three independent labs of
+   thirty PCs each are imported and authorized in one workflow and reopened after the
+   source files are deleted, which is what proves an imported lab no longer needs its
+   file; a switch while a screen streams and a PC is being controlled asserts that no
+   frame, no released buffer and no keystroke reaches the wrong room; and the departure
+   flow is driven through all three choices. Four claims the audit could not otherwise
+   settle are asserted too, two of them previously untested: re-import preserves this
+   device's identity, the same room on two devices does not clone one private identity,
+   a backup re-imported over an existing administrator profile does not duplicate the
+   room, and the same lab id arriving with different trust is refused for `.lcbak` as it
+   already was for `.lclab`.
+
+Rejected: registering only the combined filter (a teacher who wants to see just the
+backups loses that); resetting the backoff on a verified beacon instead of stepping over
+it once (a console that is up but refusing links would then be dialled at the beacon
+rate for ever); letting a beacon arriving without any gap step over the wait (the same
+storm, with extra steps); binding every agent event to a console (a dead helper would
+then be invisible to the teacher actually in the room); asking the departure question
+only from *Disconnect* and documenting that quitting skips it (the criterion is about
+what the teacher is told, not about which button was pressed).
+
+Validation (built and reviewed on the Mac, 2026-09-09): the three named drills plus the
+four audit claims in `AcceptanceDrillTests` and `LabSwitchTests`; `BeaconGateTests`
+assert the step-over deterministically — after a gap once, never on a steady stream,
+re-armed by every new gap, with the escalation kept — and the sixty-switch drill
+measures it end to end; the batched authorization and the combined filter have their own
+tests. Main stands at 984 tests (755 Shared + 229 Console) after the merge with the
+portion-5 security fixes, 13 macOS bundle tests skipping unless the package has been
+built, and the full suite was run twice on the merged tree. Honest limit: the Avalonia
+shutdown hook itself — the two lines that call `DepartureFlow` from `ShutdownRequested`
+— has no headless test, because the test harness never gives the application a classic
+desktop lifetime; a manual quit check on each desktop remains open, alongside the rest
+of M5's unverified Windows and Linux matrix. Implementation status is tracked in ROADMAP
+M5.
 
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 

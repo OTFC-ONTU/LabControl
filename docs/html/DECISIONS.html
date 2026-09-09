@@ -2553,6 +2553,77 @@ leaf's subject OU (<code>ConsoleInstance.Access</code>) and the agent keeps it i
 still decided from the certificate the TLS handshake validated, never from this field,
 and a disagreement is only logged.</li>
 </ol>
+<p>Amended 2026-09-09 (the portion-5 security fixes, after an adversarial review of the
+built portion reproduced two blockers):</p>
+<ol start="6">
+<li><p><strong>Withdrawal is enforced where a beacon is judged, not only at the handshake.</strong> The
+take-over decision above rested on the CA endorsement alone, so an <code>instance:</code>
+withdrawal (<code>D-56</code> item 6) took effect only at the TLS handshake — which happens
+<em>after</em> the agent has dropped the link it was told to leave — and every press carried
+a fresh <code>take</code> value, so the honour-once rule stopped nothing: a withdrawn console
+could empty the room again and again. <code>BeaconGate</code> now takes the agent's live
+<code>RevocationSet</code> — the same object <code>AgentLink</code> merges into, so an entry that arrives
+mid-lesson is in force for the very next beacon — through a required three-argument
+constructor, and refuses a revoked instance's beacon immediately after signature
+verification, ahead of both the take branch and the dial branch. The console mirrors
+it: such a beacon is dropped, <code>LabSession.ForgetOtherConsole</code> removes the machine
+from the other-console list the moment access is withdrawn as well as on the next
+beacon, and a withdrawn instance can never be named as a holder.</p>
+</li>
+<li><p><strong>Ownership is attributed only on the PC's own departure report.</strong> Decision 3
+credited the taker with any linked PC whose stream ended while that machine's press
+was live here — but a student switching the PC off, a Wi-Fi blip, a crash and an
+agent restart all end a stream the same way, so the presumption this entry exists to
+delete had merely been narrowed to a thirty-second window. The agent knows why it is
+leaving, so it says so: on a take-over it writes the fixed-code <code>link.taken_over</code>
+event naming the taker's instance (<code>Shared/Link/DepartureNotice.cs</code> — an ordinary
+<code>Event</code>, no <code>.proto</code> change and nothing added to the frozen subset), half-closes the
+request stream rather than resetting it so the notice is delivered in order, and cuts
+the link anyway after <code>Defaults.DepartureNoticeGrace</code> (two seconds), because a
+console that has stopped answering must never keep a PC from following the taker.
+<code>LabSession.NoteDeparture</code> attributes only on that report, and only to an instance
+this console has itself heard beaconing and has not withdrawn; the message is
+checked, not believed. An agent too old to send the notice leaves no observation
+behind — the honest answer. This supersedes the attribution half of decision 2:
+<code>OtherConsole.TookOverSeenAt</code> no longer decides who holds a PC, it bounds how long
+the press is still news (item 8).</p>
+</li>
+<li><p><strong>The took-over banner expires, and taking the room back clears it.</strong> <em>&quot;MacBook-2026
+took over the lab at 10:32&quot;</em> is news, and news goes stale: it is worded that way only
+while the press this console <em>saw</em> is younger than the observations it produced
+(<code>Defaults.OwnershipObservationLifetime</code>), and pressing <em>Take over</em> here clears the
+press outright, so a console that has just taken the room back never claims to have
+lost it. The observations that press produced stand until the PCs supersede them by
+saying <code>Hello</code> here.</p>
+</li>
+<li><p><strong>The arrival time is stamped in the receive loop.</strong> Decision 1(b) could not fire in
+production: the arrival clock was read inside the handler, after the datagram had
+been fanned out to every listener and possibly after another thread recorded the
+link, so a beacon already in flight could look like a fresh press. <code>BeaconListener</code>
+now stamps each datagram once as the socket produces it and passes that stamp through
+<code>AgentLink.OfferBeacon</code>, which takes the wait since the stamp off this PC's own clock
+— like compared with like.</p>
+</li>
+<li><p><strong>Past the allowed skew a console is invisible, not merely unable to take over.</strong>
+The gate's comment claimed a machine minutes out of step still takes its own room
+back; it does not — beyond <code>Defaults.BeaconMaxSkew</code> its beacons fail verification
+everywhere, so neither console can see the other at all. The comment is corrected,
+and a beacon rejected for a stale timestamp (which only happens after the endorsement
+and the signature verified, so it really is another machine of this lab) now raises
+the rate-limited <code>console.clock_skew</code> warning in the teacher's own words instead of a
+silent debug line: how far apart the clocks are, that neither console can see the
+other, and that setting both clocks fixes it.</p>
+</li>
+<li><p><strong>Hardening.</strong> Honoured <code>take</code> tokens are pruned once no arriving beacon could
+honour them again, so a lab left running for a term does not keep one entry per
+press; the freshness check of decision 3 clamps the future side to the beacon skew,
+so a <code>lab.json</code> written while the clock was ahead cannot count as fresh for a second
+lifetime; the instance and the moment behind an ownership claim are read as one pair
+under the registry's own lock, so no tile can show one console's name with another's
+timestamp; and a PC with a magic packet just sent to it says <em>waking</em> rather than
+repeating where it was last seen.</p>
+</li>
+</ol>
 <p>Rejected: a clock-sync step between consoles (no server, no channel between them, <code>D-21</code>);
 correcting the taker's <code>take</code> by the <code>Welcome.server_time_unix</code> skew the agent knows (the
 agent knows the skew of the console it is linked to, not of the taker); treating every PC
@@ -2563,12 +2634,19 @@ arrived before the link came up and a press made just before the PC linked elsew
 <code>OwnershipTests</code> run two consoles with skewed clocks and check the room coming back, an
 offline PC against an unknown one, the named holder and the <em>holds at least N</em> count; a
 teacher console that announces administrator access in <code>Welcome</code> is still refused <code>rekey</code>.
-Main stands at 960 tests (744 Shared + 216 Console) after the merge, 13 macOS bundle tests
-skipping unless the package has been built. Not yet done: two consoles with skewed clocks
-against a real agent on the Windows VM; and a PC refused across many switches still returns
-on the reconnect ceiling rather than the 15 s target, because a verified beacon for the
-agent's own lab does not yet shorten its dial backoff — that belongs to portion 8.
-Implementation status is tracked in ROADMAP M5.</p>
+Main stood at 960 tests (744 Shared + 216 Console) after that merge.</p>
+<p>The amendment's own validation (2026-09-09): a withdrawn instance moves nothing and is
+not dialled, on the agent and on the console; a PC that leaves during the window without
+reaching the taker is credited to nobody, while one that sends the notice is credited to
+the taker alone; the departure notice's payload is parsed and refused as data (a wrong
+code, an empty, over-long or non-instance message); the banner after the press has aged
+and after the room comes back; the observation lifetime at session level; a holder that
+stopped beaconing; a beacon just past the skew limit; and a <code>lab.json</code> written before
+this feature. With the portion-8 merge (<code>D-68</code>) main stands at 984 tests (755 Shared +
+229 Console), 13 macOS bundle tests skipping unless the package has been built. Still
+not done: two consoles with skewed clocks against a real agent on the Windows VM. The
+dial backoff a verified beacon of the agent's own lab should shorten was portion 8's and
+is built (<code>D-68</code> item 4). Implementation status is tracked in ROADMAP M5.</p>
 <h2 id="d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted <code>.app</code>/<code>.dmg</code>, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)<a class="anchor" href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7" aria-label="Link to this section">#</a></h2>
 <p>Context (2026-09-08): <code>tools/publish-all.sh</code> produces executable directories, not
 packages; the console has no document activation and no notion of a second launch;
@@ -2779,6 +2857,109 @@ tests import a backup and see the codes dormant. Implemented 2026-09-08 (M5 port
 <code>EnrollmentOutcome.DormantCode</code>, <em>Settings → Enrollment → Use codes from the imported
 backup</em> activates them, and <code>Supersede</code> voids dormant codes together with the active
 ones, so a fresh batch is always the whole truth. Status in ROADMAP M5.</p>
+<h2 id="d-68-the-m5-acceptance-drills-and-the-gaps-they-found-a-combined-picker-filter-batched-authorization-one-departure-flow-a-beacon-that-shortens-a-stale-backoff-events-bound-to-their-console-m5-portion-8">D-68 — The M5 acceptance drills and the gaps they found: a combined picker filter, batched authorization, one departure flow, a beacon that shortens a stale backoff, events bound to their console (M5 portion 8)<a class="anchor" href="#d-68-the-m5-acceptance-drills-and-the-gaps-they-found-a-combined-picker-filter-batched-authorization-one-departure-flow-a-beacon-that-shortens-a-stale-backoff-events-bound-to-their-console-m5-portion-8" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-09): portions 1–7 were built and the milestone's acceptance criteria
+had never been read back against the code as an adversary would read them. Doing so
+produced six findings — four missing capabilities and two missing drills — each cheap on
+its own and each able to make the milestone fail its own criteria in a lesson.</p>
+<p>Decisions:</p>
+<ol>
+<li><p><strong>One combined picker filter comes first, the per-type filters after it.</strong>
+<code>LabImports.Filters</code> registered one filter per extension, and both the macOS open
+panel and the Windows common dialog apply exactly one filter at a time — so <em>Add
+labs…</em> could never return a <code>.lclab</code> and a <code>.lcbak</code> in the same batch, however many
+files the teacher selected, and the criterion &quot;teacher lab files, administrator
+backups, or a mixed batch&quot; was unreachable through the UI. The combined filter
+carries every extension in <code>Defaults.ConsoleDocumentExtensions</code> in their own order,
+then anything a later <code>Register</code> added; the per-type filters stay for a teacher who
+wants to see only one kind.</p>
+</li>
+<li><p><strong>Authorization is written for every lab that needs it in one gesture.</strong>
+<code>DeviceAccess.WriteRequests(folder, now)</code> writes one <code>.lcreq</code> per lab that
+<code>NeedingAuthorization</code> lists, into one chosen folder: a teacher with three rooms
+makes one gesture and carries one folder to the administrator instead of repeating a
+row action and a save dialog per room (<em>Deliverables</em>, &quot;one batched onboarding
+workflow&quot;). Two rooms with the same display name would write over each other, so
+names are deduplicated; a lab that needs nothing is not written; a lab whose request
+cannot be written fails alone, exactly like one file of an import batch. The chooser
+shows <em>Authorize all (N)…</em> only while N &gt; 0 (<code>AuthorizeAllCommand</code>,
+<code>PendingAuthorizations</code>), and the single-row <em>Authorize…</em> stays for one room.</p>
+</li>
+<li><p><strong>Every way out of a room asks the same question.</strong> The departure report, the wait
+and the three choices live in <code>DepartureFlow</code> (<code>IDeparturePrompt</code>, <code>MayLeaveAsync</code>,
+<code>MayQuitAsync</code>, <code>DepartureChoice</code>), and <em>Disconnect</em>, the main window's close and
+quitting the application all ask it. Quitting used to release the room straight from
+the shutdown handler, so ⌘Q — or the window manager's close on the last window — left
+a script, a transfer or an update probation behind without a word, which is what the
+criterion &quot;surface any running scripts, transfers or update probation before leaving&quot;
+forbids. <em>Stay</em> means the console keeps running with the lab still active. Two guards
+make the change safe rather than dangerous: a second quit while the report is up
+cannot open a second report, and a dialog that cannot be shown at all is logged and
+the quit continues — a courtesy may never trap the teacher in an application that
+will not quit.</p>
+</li>
+<li><p><strong>A gap in this lab's own beacons re-arms one step over the dial backoff.</strong> A PC
+refused across many switches sat at <code>Defaults.ReconnectDelayMax</code> and came back in
+about thirty seconds, against a fifteen-second acceptance target. The agent's
+exponential backoff cannot know that the room stopped being served and is being
+served again; its own lab's beacons can. <code>BeaconGate</code> records when a verified beacon
+of this lab last arrived from each endpoint, and a serving gap of at least
+<code>Defaults.BeaconResumeGap</code> (two beacon intervals) re-arms a one-shot permission to
+step over the wait a failed dial imposed. Three properties make it anti-storm rather
+than a hole in the flood guard: only a wait a <em>failed dial</em> imposed may be stepped
+over, never the two-second spacing between beacon-driven dials; the permission is
+spent once per gap; and the exponential escalation is deliberately not reset, so a
+dial that fails again carries on from where it was. A console that is up but cannot
+be linked beacons without a pause, produces no gap, and therefore earns at most one
+extra dial in total. Measured in the sixty-switch drill on the same machine: thirty
+PCs relink in 2.7 s with the step-over where they took the full 30.3 s without it.</p>
+</li>
+<li><p><strong>An event about a console's work belongs to that console; a machine event belongs to
+the room.</strong> <code>JobResult</code> and <code>JobProgress</code> were bound to the delivering instance in
+portion 4 (<code>D-57</code> item 4), but events were still handed to whoever linked next, so
+the next teacher in the room could be shown the previous one's refusals and job
+outcomes. <code>AgentLink.Report</code> takes an optional <code>forInstance</code> and holds the event for
+that console; <code>ReportForJob</code> reads the deliverer out of the ledger. Machine events
+stay unbound <strong>on purpose</strong>: a dead helper, a capture failure or a broken permission
+is a fact about the PC that whoever is in the room must see, and so is the capacity
+line saying old results were dropped (<code>job.result_dropped</code>) — it says nothing about
+anyone's output. The bound queue is the same bounded one, so an event for a console
+that never returns is dropped like any other.</p>
+</li>
+<li><p><strong>The drills the criteria name are tests, not a promise.</strong> Three independent labs of
+thirty PCs each are imported and authorized in one workflow and reopened after the
+source files are deleted, which is what proves an imported lab no longer needs its
+file; a switch while a screen streams and a PC is being controlled asserts that no
+frame, no released buffer and no keystroke reaches the wrong room; and the departure
+flow is driven through all three choices. Four claims the audit could not otherwise
+settle are asserted too, two of them previously untested: re-import preserves this
+device's identity, the same room on two devices does not clone one private identity,
+a backup re-imported over an existing administrator profile does not duplicate the
+room, and the same lab id arriving with different trust is refused for <code>.lcbak</code> as it
+already was for <code>.lclab</code>.</p>
+</li>
+</ol>
+<p>Rejected: registering only the combined filter (a teacher who wants to see just the
+backups loses that); resetting the backoff on a verified beacon instead of stepping over
+it once (a console that is up but refusing links would then be dialled at the beacon
+rate for ever); letting a beacon arriving without any gap step over the wait (the same
+storm, with extra steps); binding every agent event to a console (a dead helper would
+then be invisible to the teacher actually in the room); asking the departure question
+only from <em>Disconnect</em> and documenting that quitting skips it (the criterion is about
+what the teacher is told, not about which button was pressed).</p>
+<p>Validation (built and reviewed on the Mac, 2026-09-09): the three named drills plus the
+four audit claims in <code>AcceptanceDrillTests</code> and <code>LabSwitchTests</code>; <code>BeaconGateTests</code>
+assert the step-over deterministically — after a gap once, never on a steady stream,
+re-armed by every new gap, with the escalation kept — and the sixty-switch drill
+measures it end to end; the batched authorization and the combined filter have their own
+tests. Main stands at 984 tests (755 Shared + 229 Console) after the merge with the
+portion-5 security fixes, 13 macOS bundle tests skipping unless the package has been
+built, and the full suite was run twice on the merged tree. Honest limit: the Avalonia
+shutdown hook itself — the two lines that call <code>DepartureFlow</code> from <code>ShutdownRequested</code>
+— has no headless test, because the test harness never gives the application a classic
+desktop lifetime; a manual quit check on each desktop remains open, alongside the rest
+of M5's unverified Windows and Linux matrix. Implementation status is tracked in ROADMAP
+M5.</p>
 <h2 id="d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated<a class="anchor" href="#d-12-documentation-markdown-is-the-source-html-is-generated" aria-label="Link to this section">#</a></h2>
 <p>Context: the owner wants every document available as a readable <code>.html</code> next to the
 <code>.md</code>. Maintaining two hand-written copies guarantees they drift apart, and a drifted
@@ -2985,9 +3166,9 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-09 10:37 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 12:46 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-34-the-screen-stream-one-jpeg-per-frame-latest-wins-the-console-asks-m3-portion-1">D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)</a></li><li class="lvl2"><a href="#d-35-real-capture-one-producer-for-the-helper-and-the-simulator-dxgi-with-a-gdi-fallback-the-service-relays-m3-portion-2">D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)</a></li><li class="lvl2"><a href="#d-36-remote-control-text-as-text-shortcuts-by-position-the-service-raises-ctrlaltdel-m3-portion-3">D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)</a></li><li class="lvl2"><a href="#d-37-full-mode-quality-auto-by-default-three-manual-steps-the-frame-says-what-it-used-m3-portion-3">D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)</a></li><li class="lvl2"><a href="#d-38-m4-in-four-portions-and-the-script-library-as-the-first-m4-portion-1">D-38 — M4 in four portions, and the script library as the first (M4 portion 1)</a></li><li class="lvl2"><a href="#d-39-script-editor-quick-launch-and-desktop-application-templates">D-39 — Script editor, quick launch and desktop application templates</a></li><li class="lvl2"><a href="#d-40-optional-student-provisioning-and-standalone-removal-for-home-pc-testing">D-40 — Optional student provisioning and standalone removal for home-PC testing</a></li><li class="lvl2"><a href="#d-41-resume-a-running-file-pull-at-completed-chunk-boundaries-m4-portion-2">D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)</a></li><li class="lvl2"><a href="#d-42-explicit-upload-grants-and-a-committed-offset-query-m4-portion-2">D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)</a></li><li class="lvl2"><a href="#d-43-per-pc-result-bundles-from-the-existing-job-stream-m4-portion-2">D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)</a></li><li class="lvl2"><a href="#d-44-handout-dispatch-and-simulator-delivery-before-managed-windows-profiles">D-44 — Handout dispatch and simulator delivery before managed Windows profiles</a></li><li class="lvl2"><a href="#d-45-persist-account-mode-and-creation-evidence-before-windows-setup-integration">D-45 — Persist account mode and creation evidence before Windows Setup integration</a></li><li class="lvl2"><a href="#d-46-windows-account-preparation-under-private-storage-and-an-exclusive-lock">D-46 — Windows account preparation under private storage and an exclusive lock</a></li><li class="lvl2"><a href="#d-47-encrypt-the-settings-journal-and-restore-only-confirmed-unchanged-values">D-47 — Encrypt the settings journal and restore only confirmed, unchanged values</a></li><li class="lvl2"><a href="#d-48-start-native-settings-integration-with-two-fixed-dword-policies">D-48 — Start native settings integration with two fixed DWORD policies</a></li><li class="lvl2"><a href="#d-49-bind-ac-power-timeouts-to-a-scheme-and-confirm-native-activation">D-49 — Bind AC power timeouts to a scheme and confirm native activation</a></li><li class="lvl2"><a href="#d-50-journal-the-windows-update-active-hours-tuple-as-one-policy">D-50 — Journal the Windows Update active-hours tuple as one policy</a></li><li class="lvl2"><a href="#d-51-gate-the-lsa-autologon-secret-on-recorded-student-ownership">D-51 — Gate the LSA autologon secret on recorded student ownership</a></li><li class="lvl2"><a href="#d-52-integrate-m4-with-guarded-native-ownership-and-external-recovery">D-52 — Integrate M4 with guarded native ownership and external recovery</a></li><li class="lvl2"><a href="#d-53-lab-files-and-one-active-room-per-teacher-console-planned-m5">D-53 — Lab files and one active room per teacher console (planned M5)</a></li><li class="lvl2"><a href="#d-54-administrator-backup-onboarding-and-lightweight-console-installation-planned-m5">D-54 — Administrator backup onboarding and lightweight console installation (planned M5)</a></li><li class="lvl2"><a href="#d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1">D-55 — The profile store: profiles.json, labs/&lt;lab_id&gt;/, and a resumable migration (M5 portion 1)</a></li><li class="lvl2"><a href="#d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3">D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, instance: revocation (M5 portion 3)</a></li><li class="lvl2"><a href="#d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4">D-57 — One active session: ActiveLabController, release before acquire, the departure report, result ownership (M5 portions 2 and 4)</a></li><li class="lvl2"><a href="#d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5">D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)</a></li><li class="lvl2"><a href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted .app/.dmg, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)</a></li><li class="lvl2"><a href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-34-the-screen-stream-one-jpeg-per-frame-latest-wins-the-console-asks-m3-portion-1">D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)</a></li><li class="lvl2"><a href="#d-35-real-capture-one-producer-for-the-helper-and-the-simulator-dxgi-with-a-gdi-fallback-the-service-relays-m3-portion-2">D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)</a></li><li class="lvl2"><a href="#d-36-remote-control-text-as-text-shortcuts-by-position-the-service-raises-ctrlaltdel-m3-portion-3">D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)</a></li><li class="lvl2"><a href="#d-37-full-mode-quality-auto-by-default-three-manual-steps-the-frame-says-what-it-used-m3-portion-3">D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)</a></li><li class="lvl2"><a href="#d-38-m4-in-four-portions-and-the-script-library-as-the-first-m4-portion-1">D-38 — M4 in four portions, and the script library as the first (M4 portion 1)</a></li><li class="lvl2"><a href="#d-39-script-editor-quick-launch-and-desktop-application-templates">D-39 — Script editor, quick launch and desktop application templates</a></li><li class="lvl2"><a href="#d-40-optional-student-provisioning-and-standalone-removal-for-home-pc-testing">D-40 — Optional student provisioning and standalone removal for home-PC testing</a></li><li class="lvl2"><a href="#d-41-resume-a-running-file-pull-at-completed-chunk-boundaries-m4-portion-2">D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)</a></li><li class="lvl2"><a href="#d-42-explicit-upload-grants-and-a-committed-offset-query-m4-portion-2">D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)</a></li><li class="lvl2"><a href="#d-43-per-pc-result-bundles-from-the-existing-job-stream-m4-portion-2">D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)</a></li><li class="lvl2"><a href="#d-44-handout-dispatch-and-simulator-delivery-before-managed-windows-profiles">D-44 — Handout dispatch and simulator delivery before managed Windows profiles</a></li><li class="lvl2"><a href="#d-45-persist-account-mode-and-creation-evidence-before-windows-setup-integration">D-45 — Persist account mode and creation evidence before Windows Setup integration</a></li><li class="lvl2"><a href="#d-46-windows-account-preparation-under-private-storage-and-an-exclusive-lock">D-46 — Windows account preparation under private storage and an exclusive lock</a></li><li class="lvl2"><a href="#d-47-encrypt-the-settings-journal-and-restore-only-confirmed-unchanged-values">D-47 — Encrypt the settings journal and restore only confirmed, unchanged values</a></li><li class="lvl2"><a href="#d-48-start-native-settings-integration-with-two-fixed-dword-policies">D-48 — Start native settings integration with two fixed DWORD policies</a></li><li class="lvl2"><a href="#d-49-bind-ac-power-timeouts-to-a-scheme-and-confirm-native-activation">D-49 — Bind AC power timeouts to a scheme and confirm native activation</a></li><li class="lvl2"><a href="#d-50-journal-the-windows-update-active-hours-tuple-as-one-policy">D-50 — Journal the Windows Update active-hours tuple as one policy</a></li><li class="lvl2"><a href="#d-51-gate-the-lsa-autologon-secret-on-recorded-student-ownership">D-51 — Gate the LSA autologon secret on recorded student ownership</a></li><li class="lvl2"><a href="#d-52-integrate-m4-with-guarded-native-ownership-and-external-recovery">D-52 — Integrate M4 with guarded native ownership and external recovery</a></li><li class="lvl2"><a href="#d-53-lab-files-and-one-active-room-per-teacher-console-planned-m5">D-53 — Lab files and one active room per teacher console (planned M5)</a></li><li class="lvl2"><a href="#d-54-administrator-backup-onboarding-and-lightweight-console-installation-planned-m5">D-54 — Administrator backup onboarding and lightweight console installation (planned M5)</a></li><li class="lvl2"><a href="#d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1">D-55 — The profile store: profiles.json, labs/&lt;lab_id&gt;/, and a resumable migration (M5 portion 1)</a></li><li class="lvl2"><a href="#d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3">D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, instance: revocation (M5 portion 3)</a></li><li class="lvl2"><a href="#d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4">D-57 — One active session: ActiveLabController, release before acquire, the departure report, result ownership (M5 portions 2 and 4)</a></li><li class="lvl2"><a href="#d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5">D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)</a></li><li class="lvl2"><a href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted .app/.dmg, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)</a></li><li class="lvl2"><a href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)</a></li><li class="lvl2"><a href="#d-68-the-m5-acceptance-drills-and-the-gaps-they-found-a-combined-picker-filter-batched-authorization-one-departure-flow-a-beacon-that-shortens-a-stale-backoff-events-bound-to-their-console-m5-portion-8">D-68 — The M5 acceptance drills and the gaps they found: a combined picker filter, batched authorization, one departure flow, a beacon that shortens a stale backoff, events bound to their console (M5 portion 8)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>
 </body>
 </html>

@@ -2,9 +2,9 @@
 # The Windows teacher-console package (D-59 item 1): one self-contained
 # LabControl.ConsoleSetup.exe that carries the published console inside it.
 #
-#   1. publish the console for win-x64, self-contained, single file
+#   1. publish the console for the chosen runtime (win-x64 by default), self-contained, single file
 #   2. zip that publish into artifacts/package/windows/console-payload.zip
-#   3. publish LabControl.ConsoleSetup for win-x64 — the zip is embedded as a resource
+#   3. publish LabControl.ConsoleSetup for that same runtime — the zip is embedded as a resource
 #
 # The result is ONE file to copy to a teacher's Windows PC. It installs per user, into
 # %LOCALAPPDATA%\Programs\LabControl\Console\, and needs no administrator except for the
@@ -17,7 +17,13 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$root/artifacts/package/windows"
 configuration="${1:-Release}"
-rid=win-x64
+# The teacher machines are win-x64; a Windows-on-ARM VM (the only Windows this project can
+# be tested on from an Apple Silicon Mac) needs win-arm64. Everything else is identical.
+rid="${2:-win-x64}"
+case "$rid" in
+  win-x64|win-arm64) ;;
+  *) echo "package-windows: unsupported runtime identifier \"$rid\" (win-x64 or win-arm64)" >&2; exit 1 ;;
+esac
 
 version="$(dotnet msbuild "$root/src/LabControl.Console/LabControl.Console.csproj" -getProperty:Version -nologo | tr -d '[:space:]')"
 [ -n "$version" ] || { echo "package-windows: could not read the console version" >&2; exit 1; }
@@ -63,7 +69,7 @@ dotnet publish "$root/src/LabControl.ConsoleSetup/LabControl.ConsoleSetup.csproj
   -p:DebugType=embedded \
   -p:ConsolePayloadZip="$out/console-payload.zip"
 
-installer="$out/LabControl-Console-$version-win-x64-Setup.exe"
+installer="$out/LabControl-Console-$version-$rid-Setup.exe"
 mv "$out/installer/LabControl.ConsoleSetup.exe" "$installer"
 rm -rf "$out/installer"
 

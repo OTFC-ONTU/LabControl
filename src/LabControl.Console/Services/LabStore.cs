@@ -31,6 +31,9 @@ public sealed class LabStore
 
     public string LogsDirectory => Path.Combine(Directory, Defaults.LogsDirectoryName);
 
+    /// <summary>Delivered, unanswered jobs kept across a switch away from this lab (M5, D-57 item 4).</summary>
+    public string InFlightJobsPath => Path.Combine(LogsDirectory, Defaults.InFlightJobsFileName);
+
     /// <summary>A teacher profile's authorization state (M5 portion 3); the path is reserved here.</summary>
     public string AccessPath => Path.Combine(Directory, Defaults.AccessFileName);
 

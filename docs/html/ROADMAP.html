@@ -187,7 +187,7 @@ implement.</p>
 <tr>
 <td><strong>M5</strong></td>
 <td>Lab files, teacher access and fast switching between rooms</td>
-<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–3 built and reviewed 2026-09-08 (profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes), migration tried on a copy of the live data, portion 3 smoke-tested on two copies; portion 4 next; real-Mac switch timing under investigation</strong></td>
+<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–4 built and reviewed (1–3 on 2026-09-08 — profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes — and portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone; portion 5 next; real-Mac switch timing under investigation</strong></td>
 <td>M4</td>
 </tr>
 <tr>
@@ -1687,9 +1687,60 @@ Chooser states for a teacher profile: <em>Needs authorization</em>, <em>Request 
 <em>Withdrawn</em>. Tests: 753 (622 Shared + 131 Console). <em>Manual smoke on two copies of the
 data directory</em>: export → import → request → approve → grant import → &quot;Access expires
 08.09.2027&quot;, a teacher session opened with a teacher leaf and no vault; re-importing
-the old file reported &quot;older snapshot; nothing rolled back&quot;. Not run on Windows or a
-real agent yet: the real agent receives these <code>AgentLink</code> changes with the portion-4/5
-push. Portion 4 is next.</li>
+the old file reported &quot;older snapshot; nothing rolled back&quot;. Not run on Windows at the
+time; portion 4's VM session then confirmed the role refusal against a real agent (below),
+while the rest of these <code>AgentLink</code> changes still reach the lab with the portion-4/5 push.</li>
+<li><em>Portion 4 (built, reviewed and fixed 2026-09-09, on the Mac; proved on the VM the same
+day).</em> Result ownership and in-flight jobs (<code>D-57</code> item 4 and the new items 12–13). The
+review found three blockers, all fixed. Job rows carry <code>lab_id</code> and <code>instance_id</code>
+(<code>JobRecord</code>, <code>JobLogSnapshot</code>, <code>JobJournal</code>, <code>JobBatchLogs</code>). The agent's <code>JobLedger</code>
+binds a job to the instance id in the SAN URI of the console leaf the TLS handshake
+validated (<code>ConsoleChannel.PeerName</code>), never to <code>Welcome.instance_id</code> — a claim: a link
+whose validated peer has no console identity is refused, and a disagreeing <code>Welcome</code>
+raises <code>console.instance_mismatch</code> with the certificate winning and being used for
+<code>LinkedInstanceId</code>, the beacon gate, the stored <code>LastInstanceId</code> and the next
+<code>Hello.previous_instance_id</code>. Results and progress lines go only to the delivering
+instance; another console's copy of the job id is refused (<code>job.other_instance</code>), not
+answered from the cache and not run again. The wait is bounded and stated honestly: at
+most <code>Defaults.MaxPendingJobResults</code> (500) finished results per PC wait for a console
+that is not linked, the oldest dropped with a <code>job.result_dropped</code> event; the ledger's
+own 500 entries are a separate cache; nothing survives an agent restart; progress
+produced while the deliverer is away is dropped rather than buffered; and nobody is told
+if that console never comes back. Restoration: <code>logs/jobs-inflight.json</code>
+(<code>InFlightJobsDocument</code>, schema 1) carries delivered-and-unanswered rows across a switch;
+<code>InFlightJobPolicy</code> with <code>LabSession.RefuseRestore</code> re-sends only a <code>run_script</code> whose
+text is still in <code>scripts.json</code> (re-offered through the new session's <code>FileOffers</code>), only
+while the row is younger than the smaller of the job's timeout and
+<code>Defaults.InFlightJobsMaxAge</code> (one hour), and only to a PC whose <code>Hello.boot_time_unix</code>
+predates the delivery — a rebooted PC has lost its ledger and would run the job a second
+time. Never restored: <code>shutdown</code>, <code>reboot</code>, <code>logoff</code>, <code>reset_profile</code>, <code>self_update</code>,
+<code>rekey</code>, <code>send_file</code>, <code>install_package</code>, <code>collect_files</code>; every other saved row appears
+as a closed row in <code>TimedOut</code> reading <em>Outcome unknown — the console left this lab</em>, with
+a <code>job.outcome_unknown</code> event, so a late result can still replace it. A restored row is
+marked <code>RestoredFromDisk</code> and excluded from the next snapshot, so it cannot outlive two
+sessions, and an unreadable, newer-schema or foreign-lab file means nothing is owed and
+never blocks activation. The in-flight save is coalesced like <code>lab.json</code>'s;
+<code>JsonStore.Save</code> claims the familiar <code>&lt;document&gt;.tmp</code> when it is free and a unique name
+when it is taken, and a saver whose rival has already moved its temporary away now falls
+back instead of rethrowing. A restored batch merges into the batch document already on
+disk instead of overwriting it, so the PCs that finished first keep their results, and
+restored rows appear in the jobs panel. Tests: 785 (637 Shared + 148 Console). <em>On the
+Windows VM (2026-09-09, the isolated clone &quot;M4 isolated native tests 2026-09-08&quot; only,
+host-only network; the classroom VM and the owner's live lab untouched):</em> a real agent
+<code>1.0.0</code> (<code>win-arm64</code>, hash-verified in the guest) ran a 110-second SYSTEM script
+delivered by fixture console instance X; X was stopped 21 s in; the agent linked to
+instance Y of the same lab, the script finished under Y, and Y never saw the job (its job
+list stayed empty and the agent logged that the result waits for the console that sent
+it); X came back with the same instance id and received the result with its output and
+exit code. The same session confirmed portion 3's role refusal natively: a fixture-minted
+teacher leaf was refused for <code>self_update</code> with <code>job.refused_by_role</code> before any manifest
+pull, and the installed app directories were unchanged. Two honest caveats: progress
+produced while the deliverer was away reached nobody (as designed), and the drill's
+ad-hoc script was not a library script, so the console first closed the restored row as
+outcome unknown and the agent's pending-result flush then delivered the true result and
+replaced it — a library script would have been re-offered and re-sent instead. Hand-over
+took 15–20 s. Not done on the VM: the network push of this build from an administrator
+console, and <code>run_as: user</code> (the clone has no interactive user). Portion 5 is next.</li>
 </ul>
 <p><strong>Not in scope.</strong> Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs
@@ -1960,7 +2011,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-08 21:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 05:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

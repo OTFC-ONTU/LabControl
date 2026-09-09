@@ -215,15 +215,19 @@ report and results bound to the delivering instance (`D-57`), take-over on the a
 clock and observed-only ownership (`D-58`), the C# per-user Windows installer, scripted
 `.app`/`.dmg`, Linux tarball, single instance and scoped firewall rules (`D-59`), and
 dormant imported enrollment codes (`D-60`). Eight portions (ROADMAP M5, *How it is being
-built*); portions 1–2 built and reviewed 2026-09-08 (portion 1: profile store, resumable
+built*); portions 1–4 built and reviewed, 1–3 on 2026-09-08 and portion 4 on 2026-09-09
+(portion 1: profile store, resumable
 migration, `lab.json` schema 2, `console.lock`; migration tried on a copy of the owner's
 live data, the live directory migrates on the next M5 launch; portion 2:
 `ActiveLabController`, the *My labs* chooser, *Disconnect*, the departure report, bulk
 `.lcbak` import; real-Mac switch timing under investigation, `D-57` item 11; portion 3:
 signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:`
 withdrawal with confirmed delivery, the *Teacher devices* panel, dormant imported codes;
-753 tests, smoke-tested on two copies of the data directory, no Windows run yet);
-portion 4 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
+753 tests, smoke-tested on two copies of the data directory; portion 4: results and progress
+bound to the console instance the agent's TLS handshake validated, `jobs-inflight.json`
+restoration with narrow re-send rules, 785 tests, verified with a real agent on the isolated
+Windows clone — instance X's result waited for X while instance Y saw nothing);
+portion 5 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
 (*Files exchanged offline*, *M5 additions*) describe the design; the `Welcome.console_access`
 `.proto` change lands with portion 5 and must update PROTOCOL again in that commit.
 

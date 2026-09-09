@@ -87,9 +87,35 @@ unparseable handshake is a failed fixture, never evidence of non-execution.
 ## Disposable console
 
 Build `TestLabHost/TestLabHost.csproj` on macOS. Start its executable with an explicit
-VM-facing IPv4 address and a nonproduction port (or port zero). Each run creates a fresh
-private directory, CA and lab; it never accepts an existing console directory. Its JSON
-output identifies the public USB payload, command inbox and status file.
+VM-facing IPv4 address and a nonproduction port (or port zero). By default each run creates
+a fresh private directory, CA and lab, and it never accepts an ordinary console directory.
+Its JSON output identifies the public USB payload, command inbox, results directory and
+status file; the inbox, results and status are named after the instance
+(`console.commands`, `console.results`, `console.status.json`), so two instances of one
+disposable lab never read each other's commands.
+
+`--root <dir>` starts again in a disposable root this fixture created earlier (it requires
+the `fixture-root.json` marker), and `--instance <name>` chooses the console directory
+inside it. A reused directory keeps its lab, its instance identity and its event log, and
+its lab key stays **locked**: only the run that creates a lab holds the passphrase, so
+`unlock`, `push` and `fork` work only there, while existing links, jobs and results do not
+need the key. The payload is written once, by the creating run, because enrolment codes are
+single use.
+
+The `fork` command mints a second console instance of the same disposable lab into a new
+directory (`instance`, a short alphanumeric name) — the same lab, the same PCs, its own
+instance id — which is what the D-57 result-ownership drill needs: instance X delivers a
+job, X is stopped, instance Y links, and only X may be given the result. `long-script`
+(`agent_id`, `seconds` 5…600) runs a fixed SYSTEM PowerShell script that prints a marker,
+waits, prints it again and exits 57, so a job can be made to outlive a dropped link; the
+status file reports each job's `job_instance_id`, `message`, first output lines and
+`ownership_marker_received`, plus the last 25 console events.
+
+With `fork`'s `"teacher": true`, or `--teacher-leaf true` at startup, the fixture's leaf
+carries `OU=LabControl Teacher` (D-56 items 4–5) instead of the console OU. This is a
+deliberate fixture-only mismatch — it still holds the lab key, which a real teacher device
+never does — and exists only so an agent can be offered a signed `self_update` from a
+console whose certificate says teacher and be seen refusing it (`job.refused_by_role`).
 
 Copy only the reported `usb/LabControl` directory into the fixture media. Never copy its
 `console` directory. When using read-only ISO media, copy the USB payload to a writable

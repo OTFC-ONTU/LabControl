@@ -56,6 +56,14 @@ public sealed partial class MainViewModel : ObservableObject
             Events.Insert(0, new EventRowViewModel(record));
         }
 
+        // Jobs the session already holds before this view model exists: the rows it brought
+        // back from jobs-inflight.json when the lab was opened (M5, D-57 item 4). Without this
+        // the teacher would be told N jobs are still running and see an empty panel.
+        foreach (var job in session.Jobs.All())
+        {
+            UpdateJob(job);
+        }
+
         // Kept as fields so Detach can unsubscribe every one of them (M5, D-57 item 2).
         _onMachinesChanged = () => Post(RefreshMachines);
         _onOtherConsolesChanged = () => Post(() => { RefreshMachines(); RefreshBanners(); Settings.Refresh(); });

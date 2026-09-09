@@ -176,8 +176,10 @@ public sealed class InstallationStateTests : IDisposable
         Assert.Throws<SchemaVersionException>(() => state.Configure(true));
         File.Delete(state.FilePath);
         state.Configure(false);
+        // A directory where the save's temporary goes: the write fails, whichever name it
+        // picks (JsonStore.Save claims the usual one first, then a unique one).
         Directory.CreateDirectory(state.FilePath + ".tmp");
-        Assert.Throws<UnauthorizedAccessException>(() => state.BeginStudentCreation(null));
+        Assert.True(Record.Exception(() => state.BeginStudentCreation(null)) is IOException or UnauthorizedAccessException);
         Assert.False(Open().Read()!.StudentCreationPending);
         Assert.Throws<InvalidOperationException>(() => state.CompleteStudentCreation(OwnedSid));
     }
@@ -189,7 +191,7 @@ public sealed class InstallationStateTests : IDisposable
         state.Configure(false);
         state.BeginStudentCreation(null);
         Directory.CreateDirectory(state.FilePath + ".tmp");
-        Assert.Throws<UnauthorizedAccessException>(() => state.CompleteStudentCreation(OwnedSid));
+        Assert.True(Record.Exception(() => state.CompleteStudentCreation(OwnedSid)) is IOException or UnauthorizedAccessException);
         var restarted = Open();
         Assert.True(restarted.Read()!.StudentCreationPending);
         Assert.Null(restarted.Read()!.CreatedStudentSid);

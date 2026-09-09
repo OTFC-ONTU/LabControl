@@ -87,7 +87,7 @@ public sealed class StudentAccountProvisioningTests : IDisposable
     {
         var accounts = new FakeAccounts();
         accounts.BeforeLookup = () => Directory.CreateDirectory(State.FilePath + ".tmp");
-        Assert.Throws<UnauthorizedAccessException>(() => Open(accounts).Prepare(false));
+        Assert.True(Record.Exception(() => Open(accounts).Prepare(false)) is IOException or UnauthorizedAccessException);
         Assert.Equal(0, accounts.Creations);
         Assert.False(State.Read()!.StudentCreationPending);
     }
@@ -99,7 +99,7 @@ public sealed class StudentAccountProvisioningTests : IDisposable
         {
             BeforeCreate = () => Directory.CreateDirectory(State.FilePath + ".tmp"),
         };
-        Assert.Throws<UnauthorizedAccessException>(() => Open(accounts).Prepare(false));
+        Assert.True(Record.Exception(() => Open(accounts).Prepare(false)) is IOException or UnauthorizedAccessException);
         Assert.Equal(OwnedSid, accounts.Sid);
         Assert.True(State.Read()!.StudentCreationPending);
         Assert.Null(State.Read()!.CreatedStudentSid);

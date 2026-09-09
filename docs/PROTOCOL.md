@@ -694,7 +694,11 @@ whose serial the console has never seen is **added to the machine list from `Hel
 not refused — the console's list is a cache of the lab, and another teacher machine may
 have enrolled the PC (§3.7). `Hello.previous_instance_id` names the console the agent
 was linked to before this one (empty on first link since boot); it is what lets a console
-say which PCs the *other* teacher machine currently holds. `Hello` carries no hostname;
+say which PCs the *other* teacher machine currently holds. `Hello.boot_time_unix` is no
+longer merely informational: a console returning to a lab compares it with the delivery
+time of a job it saved as in flight, and re-sends the job only when the PC has *not*
+restarted since — a restart loses the agent's ledger, so the re-sent copy would run a
+second time instead of being answered (`D-57` item 12). `Hello` carries no hostname;
 that arrives with `Inventory`, so a PC a console first met through `Hello` shows its
 number until then.
 
@@ -707,8 +711,8 @@ records an event naming both agent ids and the old certificate serial.
 
 Recorded from the design on 2026-09-08; the portion that lands each item is in ROADMAP
 M5, and the `.proto` change below must be reflected here again in the commit that makes it.
-**Status (2026-09-08, after portion 3):** items 2, 3, the refusal half of 4 and 7 are
-implemented; item 1, the result-ownership half of 4, 5 and 6 remain for portions 4–5.
+**Status (2026-09-09, after portion 4):** items 2, 3, 4 and 7 are implemented; items 1, 5
+and 6 remain for portion 5.
 
 1. **`Welcome.console_access = 6`** *(not yet made — portion 5)* — `enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0;
    ADMINISTRATOR = 1; TEACHER = 2; }`. Additive and informational: the authoritative role
@@ -730,16 +734,27 @@ implemented; item 1, the result-ownership half of 4, 5 and 6 remain for portions
    pre-M5 agent cannot hold an `instance:` entry: its serial normalisation breaks the
    signature, it drops the entry and the console re-pushes it on every link, showing the
    PC as *cannot hold* until the agent is updated (`D-56` item 9). No message change.
-4. **`Job`** *(refusal implemented, portion 3; ownership pending, portion 4)*: an M5
+4. **`Job`** *(implemented, portions 3–4)*: an M5
    agent refuses `self_update` and `rekey` on a link whose console is not an
    administrator — `JobResult{ok: false, message: "refused: this console has teacher
    access"}` (or *carries no known access level*) plus the event `job.refused_by_role`,
    before any manifest is pulled. The agent's renewal loop is run only on an
-   administrator link. **`JobResult` ownership**: an M5
-   agent records the delivering console's `instance_id` (from `Welcome`) in its ledger and
-   drains a kept result only to a link with that instance id; any other console receives
-   the result only when it re-sends the job after its own `Welcome`, which it already does
-   for jobs it had in flight. No field change; the frozen subset is untouched.
+   administrator link. **`JobResult` ownership** *(portion 4, `D-57` item 4)*: an M5 agent
+   binds every job to the instance id in the SAN URI of the console leaf its TLS handshake
+   validated, never to `Welcome.instance_id` — that field is only what a peer *says* about
+   itself. A link whose validated peer carries no console identity is refused; a `Welcome`
+   that names another instance raises the event `console.instance_mismatch` and the
+   certificate wins. Results and `JobProgress` lines go only to the delivering instance. A
+   different console that sends the same `job_id` is refused with
+   `JobResult{ok: false, exit_code: -1, message: "refused: this job was delivered by
+   another console; its result is kept for that console"}` and the event
+   `job.other_instance` — not answered from the ledger's cache and not run again — while
+   the delivering console receives the kept result when it re-sends the job after its own
+   `Welcome`, which it already does for jobs it had in flight. The wait is bounded: at most
+   500 finished results per PC are kept for consoles that are not linked, the oldest
+   dropped with the event `job.result_dropped`; nothing survives an agent restart, and
+   progress produced while the delivering console is away is dropped rather than buffered.
+   No field change; the frozen subset is untouched.
 5. **Beacon `take`** *(pending, portion 5)*: honoured when the `(inst, take)` token is unhonoured, the beacon
    arrived after the link was established on the agent's own clock, and `take` is within
    `TakeOverWindow + BeaconMaxSkew` of the beacon's own `ts`. The taker's timestamp is

@@ -51,11 +51,17 @@ public sealed class FileOffers
     }
 
     /// <summary>Offers text as UTF-8 with a byte-order mark: what Windows PowerShell 5.1 needs to read Cyrillic correctly (D-29 item 7).</summary>
-    public FileOffer OfferText(string text, string name)
+    public FileOffer OfferText(string text, string name) => OfferBytes(TextBytes(text), name);
+
+    /// <summary>
+    /// The exact bytes <see cref="OfferText"/> would offer, so a caller can work out the
+    /// reference of a text without offering it — the reference <b>is</b> their SHA-256, which
+    /// is how a returning session finds the script a saved job was running (M5, D-57 item 4).
+    /// </summary>
+    public static byte[] TextBytes(string text)
     {
         var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
-        var bytes = encoding.GetPreamble().Concat(encoding.GetBytes(text)).ToArray();
-        return OfferBytes(bytes, name);
+        return [.. encoding.GetPreamble(), .. encoding.GetBytes(text)];
     }
 
     /// <summary>Offers a file on disk; hashed once, now, and re-read on every pull.</summary>

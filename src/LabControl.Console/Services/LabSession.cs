@@ -132,7 +132,7 @@ public sealed class LabSession : IAsyncDisposable
         Trust = new LabTrust(Authority, identity.LabId);
         Registry = new LabRegistry(store.LoadLab(identity.LabId, identity.LabName), Authority);
         Enrollment = new EnrollmentAuthority(store.LoadEnrollment(identity.LabId));
-        Jobs = new JobQueue();
+        Jobs = new JobQueue(identity.LabId, instance.InstanceId);
         Files = new FileOffers();
         Screens = new ScreenStore(_clock);
         Screens.KeyframeNeeded += screen => RequestKeyframe(screen.AgentId);
@@ -144,6 +144,7 @@ public sealed class LabSession : IAsyncDisposable
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
         Jobs.Updated += OnJobUpdated;
+        RestoreInFlightJobs();
 
         var self = Registry.RecordInstance(instance.InstanceId, instance.InstanceName, instance.CertificateSerial, _clock(), isThisMachine: true);
         if (self.Access == ProfileAccess.Unknown)
@@ -334,7 +335,11 @@ public sealed class LabSession : IAsyncDisposable
         finally
         {
             // 6–9. Persist, drop the pictures, lock the CA key, release the instance key.
-            Step(LabCloseStep.Save, SaveLab);
+            Step(LabCloseStep.Save, () =>
+            {
+                SaveLab();
+                SaveInFlightJobs();
+            });
             Step(LabCloseStep.Screens, Screens.Dispose);
             Step(LabCloseStep.Vault, () => Vault?.Dispose());
             Step(LabCloseStep.Instance, () =>
@@ -356,6 +361,13 @@ public sealed class LabSession : IAsyncDisposable
     /// counts as that step failing. <c>null</c> in production.
     /// </summary>
     public Action<LabCloseStep>? BeforeCloseStep { get; set; }
+
+    /// <summary>
+    /// A hook that may rewrite the <c>Welcome</c> before it goes out, for the test that makes a
+    /// console claim an instance id its certificate does not carry (D-57 item 4). <c>null</c>
+    /// in production.
+    /// </summary>
+    public Action<Welcome>? BeforeWelcome { get; set; }
 
     private void Step(LabCloseStep step, Action action)
     {
@@ -765,10 +777,11 @@ public sealed class LabSession : IAsyncDisposable
             InstanceName = Instance.InstanceName,
         };
         welcome.RevokedSerials.AddRange(Registry.Revocations.Serials);
+        BeforeWelcome?.Invoke(welcome);
         connection.TrySend(new ConsoleMessage { Welcome = welcome });
 
         NoteWoke(hello.AgentId, who, now);
-        DeliverJobs(connection, resendInFlight: true);
+        DeliverJobs(connection, resendInFlight: true, hello.BootTimeUnix);
 
         // Screens (M3): every linked PC streams a thumbnail; the full view asks for more.
         // An M2-era agent answers with session.not_in_this_build once and is otherwise unhurt.
@@ -1093,7 +1106,7 @@ public sealed class LabSession : IAsyncDisposable
         return CreateJobs(agentIds, Job.Types.Kind.SelfUpdate, request.ToArgs(), Defaults.SelfUpdateJobTimeout);
     }
 
-    private void DeliverJobs(AgentConnection connection, bool resendInFlight)
+    private void DeliverJobs(AgentConnection connection, bool resendInFlight, long bootTimeUnix = 0)
     {
         var now = _clock();
 
@@ -1101,6 +1114,22 @@ public sealed class LabSession : IAsyncDisposable
         {
             foreach (var job in Jobs.InFlight(connection.AgentId))
             {
+                // A row this session brought back from disk (D-57 item 4) is only worth sending
+                // again while the agent's in-memory ledger can still answer it. The PC's own
+                // boot time says whether that ledger survived; if it did not, the re-sent copy
+                // would run a second time, so the row is closed as outcome unknown instead.
+                if (job.RestoredFromDisk && InFlightJobPolicy.RebootedSinceDelivery(job.DeliveredAtUnix, bootTimeUnix))
+                {
+                    if (Jobs.CloseAsOutcomeUnknown(job.Id, now, "the PC has restarted since, so it no longer remembers this job") is { } closed)
+                    {
+                        Events.Warning("job.outcome_unknown",
+                            $"{string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, connection.Number)}: {closed.Kind} — {closed.Message}",
+                            connection.AgentId, connection.Number);
+                    }
+
+                    continue;
+                }
+
                 connection.TrySend(new ConsoleMessage { Job = job.ToMessage() });
             }
         }
@@ -1118,13 +1147,179 @@ public sealed class LabSession : IAsyncDisposable
             _journal.Record(job);
             TryWriteBatchLogs(job.BatchId);
         }
+
+        // The durable in-flight set follows deliveries and closures; progress lines are
+        // saved with the session's close, not on every line from thirty PCs. This runs on
+        // whichever gRPC handler thread reported the change, so the write is coalesced the
+        // way lab.json's is — thirty PCs finishing one batch must not race on one file.
+        if (job.State == JobState.Delivered || job.IsFinished)
+        {
+            SaveInFlightJobsSoon();
+        }
     }
 
-    private void TryWriteBatchLogs(string batchId, bool register = false)
+    /// <summary>
+    /// What the previous session of this lab, on this same instance, left running on the PCs
+    /// (D-57 item 4). A row comes back live only when sending it a second time is harmless and
+    /// this session can still serve what it needs — in practice a <c>run_script</c> whose text
+    /// is still in the library (<see cref="InFlightJobPolicy"/>). Every other row comes back as
+    /// a closed <i>outcome unknown</i> line, because silence would be a lie. The file is
+    /// consumed here and a restored row is never written back, so it cannot outlive two
+    /// sessions. Nothing in here may stop the lab from opening.
+    /// </summary>
+    private void RestoreInFlightJobs()
+    {
+        var kept = InFlightJobs.Load(Store, LabId, Instance.InstanceId, out var problem);
+        if (problem is not null)
+        {
+            Events.Warning("jobs.inflight_unreadable",
+                $"{Defaults.InFlightJobsFileName} was ignored and the jobs it listed will not be sent again: {problem}");
+        }
+
+        if (kept.Jobs.Count == 0)
+        {
+            return;
+        }
+
+        var now = _clock();
+        var restored = Jobs.Restore(kept.Jobs, now, job => RefuseRestore(job, kept.SavedAt, now));
+        foreach (var batch in restored.Resent.Concat(restored.Unknown)
+                     .Select(j => j.BatchId).Where(b => b.Length > 0).Distinct(StringComparer.Ordinal))
+        {
+            TryWriteBatchLogs(batch, restore: true);
+        }
+
+        _log.LogInformation("{Lab}: {Resent} in-flight job(s) restored for re-sending, {Unknown} closed as outcome unknown, {Foreign} row(s) of another lab or instance dropped",
+            LabName, restored.Resent.Count, restored.Unknown.Count, restored.Foreign);
+
+        if (restored.Resent.Count > 0)
+        {
+            Events.Info("jobs.restored", $"{restored.Resent.Count} job(s) were still running on PCs when this console last left the lab; their results arrive as the PCs link.");
+        }
+
+        foreach (var job in restored.Unknown)
+        {
+            Events.Warning("job.outcome_unknown", $"{job.Kind} on agent {job.AgentId}: {job.Message}", job.AgentId);
+        }
+
+        if (restored.Foreign > 0)
+        {
+            Events.Warning("jobs.inflight_foreign",
+                $"{restored.Foreign} saved job row(s) were not this console's to take up again — another lab, another console instance, or already finished — and were dropped.");
+        }
+
+        SaveInFlightJobs();
+    }
+
+    /// <summary>
+    /// Why one saved row must not be sent to its PC again, or <c>null</c> when it may be. On
+    /// top of <see cref="InFlightJobPolicy"/>'s kind and age rules this session has to be able
+    /// to serve the payload: a script travels through <c>PullFile</c>, and the offer died with
+    /// the session that made it, so the text is looked up in the library by the reference the
+    /// job carries — the reference is the content's SHA-256 (D-31) — and offered again.
+    /// </summary>
+    private string? RefuseRestore(InFlightJob job, DateTimeOffset savedAt, DateTimeOffset now)
+    {
+        if (InFlightJobPolicy.RefuseReason(job, savedAt, now) is { } refusal)
+        {
+            return refusal;
+        }
+
+        var message = new Job { Id = job.Id, Kind = job.Kind, TimeoutSeconds = job.TimeoutSeconds };
+        message.Args.Add(job.Args);
+        if (!RunScriptRequest.TryParse(message, out var request, out var error))
+        {
+            return $"its arguments cannot be read ({error})";
+        }
+
+        if (Files.Find(request.Reference) is not null)
+        {
+            return null;
+        }
+
+        var script = Scripts.Scripts.FirstOrDefault(s =>
+            string.Equals(FileHash.Sha256Hex(FileOffers.TextBytes(s.Text)), request.Sha256, StringComparison.OrdinalIgnoreCase));
+        if (script is null)
+        {
+            return "the script it was running is no longer in this console's library, so the PC could not fetch it again";
+        }
+
+        Files.OfferText(script.Text, request.Name);
+        return null;
+    }
+
+    private int _inFlightSavePending;
+    private readonly Lock _inFlightSaveGate = new();
+
+    /// <summary>
+    /// Coalesces the in-flight save the way <see cref="SaveLabSoon"/> coalesces <c>lab.json</c>:
+    /// thirty PCs closing one batch at once produce one write, not thirty racing ones.
+    /// </summary>
+    private void SaveInFlightJobsSoon()
+    {
+        if (IsDisposed || Interlocked.Exchange(ref _inFlightSavePending, 1) == 1)
+        {
+            return;
+        }
+
+        CancellationToken stopping;
+        try
+        {
+            // A change reported by a link that is only now finishing, after the close: the
+            // close already wrote the file, so there is nothing left to coalesce.
+            stopping = _stopping.Token;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(500, stopping);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            Interlocked.Exchange(ref _inFlightSavePending, 0);
+            if (!IsDisposed)
+            {
+                SaveInFlightJobs();
+            }
+        });
+    }
+
+    private void SaveInFlightJobs()
     {
         try
         {
-            if (register)
+            Interlocked.Exchange(ref _inFlightSavePending, 0);
+            lock (_inFlightSaveGate)
+            {
+                InFlightJobs.Save(Store, Jobs, _clock());
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Events.Warning("jobs.inflight_save_failed", $"Could not save {Defaults.InFlightJobsFileName}: {ex.Message}");
+        }
+    }
+
+    private void TryWriteBatchLogs(string batchId, bool register = false, bool restore = false)
+    {
+        try
+        {
+            if (restore)
+            {
+                // A batch whose rows this session brought back already has a file with the
+                // results of the PCs that finished before the console left; registering it
+                // again must add to that document, never replace it (D-43, D-57 item 4).
+                BatchLogs.Restore(batchId);
+            }
+            else if (register)
             {
                 BatchLogs.Register(batchId);
             }
@@ -1133,8 +1328,10 @@ public sealed class LabSession : IAsyncDisposable
                 BatchLogs.Record(batchId);
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidDataException or SchemaVersionException)
         {
+            // A batch id that is not a GUID, or a log a newer build wrote, is a log problem:
+            // it is reported and the lab carries on.
             Events.Warning("jobs.log_failed", "Could not save the batch job logs: " + ex.Message);
         }
     }

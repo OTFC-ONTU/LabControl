@@ -389,10 +389,19 @@ internal sealed class ScriptedBehaviour : IAgentBehaviour
 
     public Func<Job, Task<JobResult>>? OnJob { get; set; }
 
+    /// <summary>Like <see cref="OnJob"/>, with the progress callback, for tests about output lines.</summary>
+    public Func<Job, Func<JobProgress, Task>, Task<JobResult>>? OnJobProgress { get; set; }
+
+    /// <summary>
+    /// What the PC reports as its boot time (M5, D-57 item 4): a later one than a job's
+    /// delivery is how a test says the PC restarted and lost its ledger.
+    /// </summary>
+    public DateTimeOffset BootTime { get; set; } = DateTimeOffset.UtcNow.AddMinutes(-5);
+
     public void Describe(Hello hello)
     {
         hello.AgentVersion = Version;
-        hello.BootTimeUnix = DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeSeconds();
+        hello.BootTimeUnix = BootTime.ToUnixTimeSeconds();
     }
 
     public Inventory? DescribeInventory() => new() { Hostname = "test-host", LoggedOnUser = "student" };
@@ -402,6 +411,11 @@ internal sealed class ScriptedBehaviour : IAgentBehaviour
         lock (JobsRun)
         {
             JobsRun.Add(job);
+        }
+
+        if (OnJobProgress is not null)
+        {
+            return await OnJobProgress(job, report);
         }
 
         if (OnJob is not null)

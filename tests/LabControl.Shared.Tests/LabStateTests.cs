@@ -491,17 +491,17 @@ public sealed class LabStateTests
         var ledger = new LabControl.Shared.Link.JobLedger();
         var job = new Job { Id = Guid.NewGuid().ToString("d"), Kind = Job.Types.Kind.Reboot };
 
-        var first = ledger.Admit(job);
+        var first = ledger.Admit(job, "console-1");
         Assert.True(first.ShouldRun);
 
         // The console re-sent it while the PC was still working: do not reboot twice.
-        var duplicate = ledger.Admit(job);
+        var duplicate = ledger.Admit(job, "console-1");
         Assert.False(duplicate.ShouldRun);
         Assert.True(duplicate.DuplicateOfRunning);
 
         ledger.Complete(new JobResult { JobId = job.Id, Ok = true, Message = "rebooting" });
 
-        var afterReconnect = ledger.Admit(job);
+        var afterReconnect = ledger.Admit(job, "console-1");
         Assert.False(afterReconnect.ShouldRun);
         Assert.False(afterReconnect.DuplicateOfRunning);
         Assert.Equal("rebooting", afterReconnect.CachedResult!.Message);
@@ -518,8 +518,228 @@ public sealed class LabStateTests
         }
 
         Assert.Equal(4, ledger.CompletedCount);
-        Assert.True(ledger.Admit(new Job { Id = "job-9" }).CachedResult is not null);
-        Assert.True(ledger.Admit(new Job { Id = "job-0" }).ShouldRun);
+        Assert.True(ledger.Admit(new Job { Id = "job-9" }, "").CachedResult is not null);
+        Assert.True(ledger.Admit(new Job { Id = "job-0" }, "").ShouldRun);
+    }
+
+    [Fact]
+    public void A_result_is_answered_only_to_the_instance_that_delivered_the_job()
+    {
+        // D-57 item 4: the ledger binds every job to the console instance that delivered it.
+        var ledger = new LabControl.Shared.Link.JobLedger();
+        var job = new Job { Id = Guid.NewGuid().ToString("d"), Kind = Job.Types.Kind.RunScript };
+
+        Assert.True(ledger.Admit(job, "macbook").ShouldRun);
+        Assert.Equal("macbook", ledger.DeliveringInstanceOf(job.Id));
+
+        // Another console of the same lab re-sends the id while it runs: not a duplicate it may
+        // wait for, not a second run — refused as another instance's job.
+        var foreignWhileRunning = ledger.Admit(job, "lab-pc");
+        Assert.False(foreignWhileRunning.ShouldRun);
+        Assert.False(foreignWhileRunning.DuplicateOfRunning);
+        Assert.Null(foreignWhileRunning.CachedResult);
+        Assert.True(foreignWhileRunning.BelongsToAnotherInstance);
+        Assert.Equal("macbook", foreignWhileRunning.OtherInstanceId);
+        Assert.Equal(1, ledger.RunningCount);
+
+        var entry = ledger.Complete(new JobResult { JobId = job.Id, Ok = true, Message = "secret output" });
+        Assert.Equal("macbook", entry.InstanceId);
+        Assert.Equal("macbook", ledger.DeliveringInstanceOf(job.Id));
+
+        // Finished: the other instance still gets nothing of the result; the deliverer gets it, case-insensitively.
+        var foreignAfter = ledger.Admit(job, "lab-pc");
+        Assert.Null(foreignAfter.CachedResult);
+        Assert.True(foreignAfter.BelongsToAnotherInstance);
+        Assert.Equal("secret output", ledger.Admit(job, "MACBOOK").CachedResult!.Message);
+        Assert.Null(ledger.DeliveringInstanceOf("unknown"));
+    }
+
+    [Fact]
+    public void A_result_completed_without_an_admission_keeps_the_instance_it_is_given()
+    {
+        var ledger = new LabControl.Shared.Link.JobLedger();
+        var entry = ledger.Complete(new JobResult { JobId = "j", Ok = true }, "macbook");
+        Assert.Equal("macbook", entry.InstanceId);
+        Assert.True(ledger.Admit(new Job { Id = "j" }, "lab-pc").BelongsToAnotherInstance);
+        Assert.NotNull(ledger.Admit(new Job { Id = "j" }, "macbook").CachedResult);
+
+        // A second completion of the same id keeps the first entry and its owner.
+        var again = ledger.Complete(new JobResult { JobId = "j", Ok = false }, "lab-pc");
+        Assert.Equal("macbook", again.InstanceId);
+        Assert.True(again.Result.Ok);
+    }
+
+    [Fact]
+    public void In_flight_jobs_are_restored_only_for_the_same_lab_and_instance()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var queue = new JobQueue("lab-a", "macbook");
+        var delivered = queue.Create("pc-1", Job.Types.Kind.RunScript, now.AddMinutes(-20), agentOnline: true, args: new Dictionary<string, string> { ["name"] = "wait" }, batchId: "batch-1");
+        var pending = queue.Create("pc-2", Job.Types.Kind.RunScript, now.AddMinutes(-20), agentOnline: false, batchId: "batch-1");
+        Assert.Equal("lab-a", delivered.LabId);
+        Assert.Equal("macbook", delivered.InstanceId);
+        Assert.Single(queue.TakePending("pc-1", now.AddMinutes(-19)));
+        queue.Progress(new JobProgress { JobId = delivered.Id, Percent = 40, Line = "half" }, now.AddMinutes(-18));
+        Assert.Equal(JobState.Pending, pending.State);
+
+        // Only the delivered job is in flight; the queued one is never carried over (D-57 item 2).
+        var snapshot = queue.SnapshotInFlight();
+        var row = Assert.Single(snapshot);
+        Assert.Equal(delivered.Id, row.Id);
+        Assert.Equal(JobState.Running, row.State);
+        Assert.Equal(["half"], row.Output);
+        Assert.Equal("wait", row.Args["name"]);
+        Assert.Equal("lab-a", row.LabId);
+        Assert.Equal("macbook", row.InstanceId);
+
+        var foreignLab = new InFlightJob { Id = "x", AgentId = "pc-9", Kind = Job.Types.Kind.RunScript, LabId = "lab-b", InstanceId = "macbook", State = JobState.Delivered };
+        var foreignInstance = new InFlightJob { Id = "y", AgentId = "pc-9", Kind = Job.Types.Kind.RunScript, LabId = "lab-a", InstanceId = "lab-pc", State = JobState.Delivered };
+        var finished = new InFlightJob { Id = "z", AgentId = "pc-9", Kind = Job.Types.Kind.RunScript, LabId = "lab-a", InstanceId = "macbook", State = JobState.Succeeded };
+
+        var next = new JobQueue("lab-a", "macbook");
+        var seen = new List<JobRecord>();
+        next.Updated += seen.Add;
+        var restored = next.Restore([row, foreignLab, foreignInstance, finished], now, _ => null);
+        var back = Assert.Single(restored.Resent);
+        Assert.Empty(restored.Unknown);
+        Assert.Equal(3, restored.Foreign);
+        Assert.Same(back, Assert.Single(seen));                         // the jobs panel is told (S6)
+        Assert.Equal(delivered.Id, back.Id);
+        Assert.Equal(JobState.Running, back.State);
+        Assert.True(back.RestoredFromDisk);
+        Assert.Equal(now.ToUnixTimeSeconds(), back.LastActivityUnix);   // the inactivity clock restarts
+        Assert.Equal(delivered.DeliveredAtUnix, back.DeliveredAtUnix);
+        Assert.Equal("wait", back.Args["name"]);
+        Assert.Equal(["half"], back.Output);
+        Assert.Single(next.InFlight("pc-1"));
+        Assert.Empty(next.TimeOutStale(now.AddSeconds(back.TimeoutSeconds - 1)));
+
+        // A restored row is never written back: it has had its one re-send and must not
+        // chase the teacher from lesson to lesson (D-57 item 4).
+        Assert.Empty(next.SnapshotInFlight());
+
+        // The snapshot row carries the lab and instance for the batch export.
+        var log = Assert.Single(next.SnapshotBatch("batch-1"));
+        Assert.Equal("lab-a", log.LabId);
+        Assert.Equal("macbook", log.InstanceId);
+
+        // A second result for a closed job changes nothing (the drained result and the
+        // re-sent copy's cached answer both arrive after a reconnect).
+        Assert.NotNull(next.Complete(new JobResult { JobId = back.Id, Ok = true, Message = "first" }, now));
+        Assert.Null(next.Complete(new JobResult { JobId = back.Id, Ok = false, Message = "second" }, now));
+        Assert.Equal("first", back.Message);
+        Assert.True(back.Ok);
+    }
+
+    [Theory]
+    [InlineData(Job.Types.Kind.Reboot)]
+    [InlineData(Job.Types.Kind.Shutdown)]
+    [InlineData(Job.Types.Kind.Logoff)]
+    [InlineData(Job.Types.Kind.ResetProfile)]
+    [InlineData(Job.Types.Kind.SelfUpdate)]
+    [InlineData(Job.Types.Kind.Rekey)]
+    [InlineData(Job.Types.Kind.SendFile)]
+    [InlineData(Job.Types.Kind.InstallPackage)]
+    [InlineData(Job.Types.Kind.CollectFiles)]
+    public void A_saved_job_that_must_not_run_twice_comes_back_closed_as_outcome_unknown(Job.Types.Kind kind)
+    {
+        // *Shut down all* followed by Disconnect must never power the class off the next
+        // morning: only run_script is ever sent again (D-57 item 4).
+        var now = DateTimeOffset.UtcNow;
+        var savedAt = now.AddMinutes(-1);
+        var row = new InFlightJob
+        {
+            Id = "j", AgentId = "pc-1", Kind = kind, LabId = "lab-a", InstanceId = "macbook",
+            State = JobState.Delivered, TimeoutSeconds = 600, DeliveredAtUnix = savedAt.ToUnixTimeSeconds(),
+        };
+
+        Assert.False(InFlightJobPolicy.IsResendable(kind));
+        var queue = new JobQueue("lab-a", "macbook");
+        var restored = queue.Restore([row], now, job => InFlightJobPolicy.RefuseReason(job, savedAt, now));
+
+        Assert.Empty(restored.Resent);
+        var closed = Assert.Single(restored.Unknown);
+        Assert.Equal(JobState.TimedOut, closed.State);
+        Assert.False(closed.Ok);
+        Assert.Contains("Outcome unknown", closed.Message, StringComparison.Ordinal);
+        Assert.Contains("never sent to a PC a second time", closed.Message, StringComparison.Ordinal);
+        Assert.Empty(queue.InFlight("pc-1"));           // nothing is delivered to the PC
+        Assert.Empty(queue.SnapshotInFlight());
+
+        // A result that does arrive later still replaces it — the row is honest, not final.
+        Assert.NotNull(queue.Complete(new JobResult { JobId = "j", Ok = true, Message = "done after all" }, now));
+        Assert.Equal(JobState.Succeeded, closed.State);
+    }
+
+    [Fact]
+    public void A_saved_row_older_than_its_own_bound_is_not_sent_again()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var script = new InFlightJob
+        {
+            Id = "j", AgentId = "pc-1", Kind = Job.Types.Kind.RunScript, LabId = "lab-a", InstanceId = "macbook",
+            State = JobState.Delivered, TimeoutSeconds = 120,
+        };
+
+        // The bound is the job's own timeout or an hour, whichever is smaller.
+        Assert.Equal(TimeSpan.FromMinutes(2), InFlightJobPolicy.MaxAgeOf(script));
+        Assert.Equal(Defaults.InFlightJobsMaxAge, InFlightJobPolicy.MaxAgeOf(new InFlightJob { Kind = Job.Types.Kind.RunScript, TimeoutSeconds = 86_400 }));
+        Assert.Null(InFlightJobPolicy.RefuseReason(script, now.AddMinutes(-1), now));
+
+        var stale = InFlightJobPolicy.RefuseReason(script, now.AddMinutes(-3), now);
+        Assert.NotNull(stale);
+        Assert.Contains("longer than", stale, StringComparison.Ordinal);
+
+        var queue = new JobQueue("lab-a", "macbook");
+        var restored = queue.Restore([script], now, job => InFlightJobPolicy.RefuseReason(job, now.AddHours(-9), now));
+        Assert.Empty(restored.Resent);
+        Assert.Equal(JobState.TimedOut, Assert.Single(restored.Unknown).State);
+    }
+
+    [Fact]
+    public void A_job_delivered_before_the_PC_booted_is_not_sent_again()
+    {
+        // The agent's ledger lives in its memory; a reboot takes it with it, so the re-sent
+        // copy would run instead of being answered (D-57 item 4, D-32 item 7).
+        var boot = DateTimeOffset.UtcNow.AddMinutes(-5);
+        Assert.True(InFlightJobPolicy.RebootedSinceDelivery(boot.AddMinutes(-10).ToUnixTimeSeconds(), boot.ToUnixTimeSeconds()));
+        Assert.False(InFlightJobPolicy.RebootedSinceDelivery(boot.AddMinutes(10).ToUnixTimeSeconds(), boot.ToUnixTimeSeconds()));
+
+        // An agent that reports no boot time at all is never taken to have rebooted.
+        Assert.False(InFlightJobPolicy.RebootedSinceDelivery(boot.ToUnixTimeSeconds(), 0));
+        Assert.False(InFlightJobPolicy.RebootedSinceDelivery(0, boot.ToUnixTimeSeconds()));
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new JobQueue("lab-a", "macbook");
+        var restored = queue.Restore([new InFlightJob
+        {
+            Id = "j", AgentId = "pc-1", Kind = Job.Types.Kind.RunScript, LabId = "lab-a", InstanceId = "macbook",
+            State = JobState.Delivered, TimeoutSeconds = 600, DeliveredAtUnix = boot.AddMinutes(-10).ToUnixTimeSeconds(),
+        }], now, _ => null);
+        Assert.Single(restored.Resent);
+
+        var closed = queue.CloseAsOutcomeUnknown("j", now, "the PC has restarted since, so it no longer remembers this job");
+        Assert.NotNull(closed);
+        Assert.Equal(JobState.TimedOut, closed.State);
+        Assert.Contains("restarted since", closed.Message, StringComparison.Ordinal);
+        Assert.Empty(queue.InFlight("pc-1"));
+        Assert.Null(queue.CloseAsOutcomeUnknown("j", now, "again"));     // a closed row closes once
+        Assert.Null(queue.CloseAsOutcomeUnknown("unknown-id", now, "no such job"));
+    }
+
+    [Fact]
+    public void An_online_only_job_stays_online_only_when_it_is_restored()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var queue = new JobQueue("lab-a", "macbook");
+        var job = queue.Create("pc-1", Job.Types.Kind.RunScript, now, agentOnline: true, delivery: JobDelivery.OnlineOnly);
+        queue.TakePending("pc-1", now);
+        var row = Assert.Single(queue.SnapshotInFlight());
+        Assert.Equal(JobDelivery.OnlineOnly, row.Delivery);
+
+        var next = new JobQueue("lab-a", "macbook");
+        Assert.Equal(JobDelivery.OnlineOnly, Assert.Single(next.Restore([row], now, _ => null).Resent).Delivery);
+        Assert.Equal(job.Id, row.Id);
     }
 
     private static EnrollRequest Request(string labId, int number, string code)

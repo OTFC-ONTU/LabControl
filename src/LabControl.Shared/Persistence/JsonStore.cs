@@ -34,8 +34,29 @@ public static class JsonStore
     /// </summary>
     public const string TemporarySuffix = ".tmp";
 
-    /// <summary>The temporary file <see cref="Save{T}"/> uses for a document path.</summary>
+    /// <summary>
+    /// The temporary <see cref="Save{T}"/> writes when nothing occupies it. A save that finds it
+    /// taken — by a leftover, or by another thread saving the same document at this very moment —
+    /// picks a unique name of its own instead, so two savers can never write one file between them.
+    /// </summary>
     public static string TemporaryPathFor(string path) => path + TemporarySuffix;
+
+    /// <summary>Every temporary a save of this document may have left behind, the fixed old name included.</summary>
+    public static IEnumerable<string> TemporaryPathsFor(string path)
+    {
+        yield return TemporaryPathFor(path);
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
+        {
+            yield break;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(directory, Path.GetFileName(path) + ".*" + TemporarySuffix))
+        {
+            yield return file;
+        }
+    }
 
     /// <summary>
     /// SHA-256 of a document's text, lowercase hex. Used to tell whether the backup on record
@@ -102,11 +123,61 @@ public static class JsonStore
             Directory.CreateDirectory(directory);
         }
 
+        // Every saver claims its own temporary. Several threads may save the same document at
+        // the same moment — thirty PCs finishing one batch, the job book following each of them
+        // — and a shared temporary name means two of them interleave their bytes and move a
+        // torn file into place. The usual name is taken first, so a crash still leaves the
+        // familiar "<document>.tmp" beside the document; whoever finds it taken names its own.
+        var text = Serialize(document, migrations);
         var temporary = TemporaryPathFor(path);
-        File.WriteAllText(temporary, Serialize(document, migrations));
-        RestrictPermissions(temporary, ownerOnly);
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                using (var writer = new StreamWriter(stream))
+                {
+                    writer.Write(text);
+                }
 
-        File.Move(temporary, path, overwrite: true);
+                break;
+            }
+            catch (IOException) when (attempt < 16 && !Directory.Exists(temporary))
+            {
+                // Another saver holds this name. The retry cannot be conditioned on the file
+                // still being there: the holder may already have moved its temporary onto the
+                // document, and the saver that lost the race would then rethrow a collision
+                // that has resolved itself. Take a name nobody can be holding instead. A
+                // directory sitting on the name is not a race but broken storage, and is
+                // reported rather than worked around.
+                temporary = $"{path}.{Guid.NewGuid():n}{TemporarySuffix}";
+            }
+        }
+
+        try
+        {
+            RestrictPermissions(temporary, ownerOnly);
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch
+        {
+            TryDelete(temporary);
+            throw;
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>

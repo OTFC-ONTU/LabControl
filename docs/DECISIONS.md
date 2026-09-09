@@ -2326,11 +2326,22 @@ Decisions:
    jobs*. Timing targets: 2 s to the cached mosaic, 15 s for reachable agents; a
    `SwitchTimings` record is logged per switch and asserted in the drill.
 4. **A result belongs to the instance that delivered the job.** The console journals
-   under `labs/<id>/logs/` and `JobJournal`/`JobBatchLogs` rows gain `instance_id` and
-   `lab_id`. The agent's `JobLedger` records the delivering console's `instance_id` (from
-   `Welcome`); `_pendingResults` are drained only to a link with that instance id, and any
-   other result is answered when that console re-sends the job after its `Welcome`, which
-   it already does for in-flight jobs. No proto change is needed.
+   under `labs/<id>/logs/` and `JobRecord`, `JobLogSnapshot`, `JobJournal` and
+   `JobBatchLogs` rows carry `lab_id` and `instance_id`. The agent's `JobLedger` binds
+   each job to the instance id read from the SAN URI of the console leaf the TLS handshake
+   validated (`ConsoleChannel.PeerName`) and **never** from `Welcome.instance_id`, which is
+   only a claim: a link whose validated peer carries no console identity is refused, and a
+   `Welcome` that disagrees raises `console.instance_mismatch` with the certificate winning
+   — the certified id is what `LinkedInstanceId`, the beacon gate, the stored
+   `LastInstanceId` and the next `Hello.previous_instance_id` use. `_pendingResults` and
+   progress lines are drained only to a link with that instance id; another instance's copy
+   of the job id is refused (`job.other_instance`), never answered from the cache and never
+   run a second time. Retention is bounded and stated honestly: at most
+   `Defaults.MaxPendingJobResults` (500) finished results per PC wait for a console that is
+   not linked, the oldest dropped with a `job.result_dropped` event; the ledger's own 500
+   entries are a separate cache; nothing survives an agent restart; progress produced while
+   the deliverer is away is dropped rather than buffered; and nobody is told if that console
+   never returns. No proto change is needed.
 
 Recorded with portion 2 (built and reviewed 2026-09-08):
 
@@ -2384,6 +2395,37 @@ Recorded with portion 2 (built and reviewed 2026-09-08):
    open/build/start split isolates it, and it is expected to disappear with the signed
    packaged app (portion 7); to be re-measured.
 
+Recorded with portion 4 (built, reviewed and fixed 2026-09-09):
+
+12. **What a returning console may send again.** `logs/jobs-inflight.json`
+   (`InFlightJobsDocument`, schema 1, stamped with the lab and instance that wrote it)
+   holds the rows a session had delivered and not closed. `InFlightJobPolicy` with
+   `LabSession.RefuseRestore` sends a row again only when it is a `run_script` whose text
+   is still in `scripts.json` — found by the SHA-256 the job carries and re-offered through
+   the new session's `FileOffers`, because the old session's offer died with it — only
+   while the row is younger than the smaller of the job's own timeout and
+   `Defaults.InFlightJobsMaxAge` (one hour), and only to a PC whose `Hello.boot_time_unix`
+   predates the delivery: a rebooted PC has lost the ledger that would answer the re-send,
+   so the copy would *run*. Never restored: `shutdown`, `reboot`, `logoff`,
+   `reset_profile`, `self_update`, `rekey`, `send_file`, `install_package`,
+   `collect_files`. Every other saved row appears as a closed row in `JobState.TimedOut`
+   reading *Outcome unknown — the console left this lab*, with a `job.outcome_unknown`
+   event — `TimedOut` and not `Failed`, so a result that does arrive later still replaces
+   it (`D-43`). A restored row is marked `JobRecord.RestoredFromDisk` and left out of the
+   next `SnapshotInFlight`, so it cannot outlive two sessions. An unreadable, newer-schema
+   or foreign-lab file means nothing is owed, is reported as `jobs.inflight_unreadable` or
+   `jobs.inflight_foreign`, and never blocks activation: a lab must not fail to open
+   because of a log.
+13. **The write side.** `SaveInFlightJobsSoon` coalesces the save the way `lab.json`'s is
+   coalesced, so thirty PCs closing one batch produce one write. `JsonStore.Save` claims
+   the familiar `<document>.tmp` when it is free and a unique `<document>.<guid>.tmp` when
+   it is taken, so two savers never interleave their bytes into one temporary; the
+   collision filter cannot ask "does the name still exist", because the holder may already
+   have moved its temporary onto the document, so a saver that loses the race takes a fresh
+   name instead of rethrowing. `JobBatchLogs.Restore` merges a restored batch into the
+   document already on disk rather than overwriting it, so the PCs that finished before the
+   console left keep their results, and restored rows show in the jobs panel.
+
 Rejected: keeping inactive labs connected in the background (`D-53` item 2); one Kestrel
 shared across sessions with per-lab routing (trust is per lab and the listener would
 outlive its session); a process restart per switch (slow, and loses the departure
@@ -2395,9 +2437,7 @@ A → B → A with 30 agents per lab, no lab-A beacon within 5 s of departure, a
 closed, B agents linked within 15 s, an A agent refused with the lab-mismatch event, rapid
 A, B, C, A ending with one active lab and one Kestrel, a failed activation leaving `Failed`,
 `ScreenStore` disposed, a mixed batch with one wrong passphrase importing the rest, and a
-headless chooser render. Portion 4 on the VM: a script on A, switch to B and back, the
-result arrives; the other instance never receives A's result; uploads fail with the report;
-probation is reported. Portion 2 (2026-09-08): the `TestRig` tests above pass, plus a close step that throws and the rest still running, a release that throws never leaving the controller `Activating`, a selection arriving while the previous lab starts, disposal cancelling an activation waiting on a prompt, 20 rounds of switching leaking neither sessions nor threads nor handles, and an import that fails after writing leaving no directory, index entry or keystore item — 728 tests in all (603 Shared + 125 Console, `LabSwitchTests` a non-parallel collection). The measured numbers are item 11; the real-Mac 4–6 s is under investigation. Implementation status is tracked in ROADMAP M5.
+headless chooser render. Portion 2 (2026-09-08): the `TestRig` tests above pass, plus a close step that throws and the rest still running, a release that throws never leaving the controller `Activating`, a selection arriving while the previous lab starts, disposal cancelling an activation waiting on a prompt, 20 rounds of switching leaking neither sessions nor threads nor handles, and an import that fails after writing leaving no directory, index entry or keystore item — 728 tests in all (603 Shared + 125 Console, `LabSwitchTests` a non-parallel collection). Portion 4 (2026-09-09): 785 tests (637 Shared + 148 Console), including the ownership and restoration rules above, and a drill on the isolated Windows VM clone with a real agent — a 110-second SYSTEM script delivered by console instance X, X stopped 21 s in, the agent linked to instance Y of the same lab, the script finished under Y, Y never saw the job, and X came back with the same instance id and received the result with its output and exit code (hand-over 15–20 s); the same session saw a teacher leaf refused for `self_update` with `job.refused_by_role` before any manifest pull. Two limits of that drill, recorded rather than smoothed over: progress produced while X was away reached nobody, as designed, and its ad-hoc script was not a library script, so the console first closed the restored row as *outcome unknown* and the agent's pending-result flush then replaced it with the true result — a library script would have been re-offered and re-sent instead. Not covered there: a network push of this build from an administrator console, and `run_as: user` (the clone has no interactive user). The measured numbers are item 11; the real-Mac 4–6 s is under investigation. Implementation status is tracked in ROADMAP M5.
 
 ## D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)
 

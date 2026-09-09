@@ -19,7 +19,7 @@ implement.
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
-| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–3 built and reviewed 2026-09-08 (profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes), migration tried on a copy of the live data, portion 3 smoke-tested on two copies; portion 4 next; real-Mac switch timing under investigation** | M4 |
+| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–4 built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone; portion 5 next; real-Mac switch timing under investigation** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
@@ -1501,9 +1501,60 @@ contract, then desktop integration (`D-54` item 6).
   *Withdrawn*. Tests: 753 (622 Shared + 131 Console). *Manual smoke on two copies of the
   data directory*: export → import → request → approve → grant import → "Access expires
   08.09.2027", a teacher session opened with a teacher leaf and no vault; re-importing
-  the old file reported "older snapshot; nothing rolled back". Not run on Windows or a
-  real agent yet: the real agent receives these `AgentLink` changes with the portion-4/5
-  push. Portion 4 is next.
+  the old file reported "older snapshot; nothing rolled back". Not run on Windows at the
+  time; portion 4's VM session then confirmed the role refusal against a real agent (below),
+  while the rest of these `AgentLink` changes still reach the lab with the portion-4/5 push.
+- *Portion 4 (built, reviewed and fixed 2026-09-09, on the Mac; proved on the VM the same
+  day).* Result ownership and in-flight jobs (`D-57` item 4 and the new items 12–13). The
+  review found three blockers, all fixed. Job rows carry `lab_id` and `instance_id`
+  (`JobRecord`, `JobLogSnapshot`, `JobJournal`, `JobBatchLogs`). The agent's `JobLedger`
+  binds a job to the instance id in the SAN URI of the console leaf the TLS handshake
+  validated (`ConsoleChannel.PeerName`), never to `Welcome.instance_id` — a claim: a link
+  whose validated peer has no console identity is refused, and a disagreeing `Welcome`
+  raises `console.instance_mismatch` with the certificate winning and being used for
+  `LinkedInstanceId`, the beacon gate, the stored `LastInstanceId` and the next
+  `Hello.previous_instance_id`. Results and progress lines go only to the delivering
+  instance; another console's copy of the job id is refused (`job.other_instance`), not
+  answered from the cache and not run again. The wait is bounded and stated honestly: at
+  most `Defaults.MaxPendingJobResults` (500) finished results per PC wait for a console
+  that is not linked, the oldest dropped with a `job.result_dropped` event; the ledger's
+  own 500 entries are a separate cache; nothing survives an agent restart; progress
+  produced while the deliverer is away is dropped rather than buffered; and nobody is told
+  if that console never comes back. Restoration: `logs/jobs-inflight.json`
+  (`InFlightJobsDocument`, schema 1) carries delivered-and-unanswered rows across a switch;
+  `InFlightJobPolicy` with `LabSession.RefuseRestore` re-sends only a `run_script` whose
+  text is still in `scripts.json` (re-offered through the new session's `FileOffers`), only
+  while the row is younger than the smaller of the job's timeout and
+  `Defaults.InFlightJobsMaxAge` (one hour), and only to a PC whose `Hello.boot_time_unix`
+  predates the delivery — a rebooted PC has lost its ledger and would run the job a second
+  time. Never restored: `shutdown`, `reboot`, `logoff`, `reset_profile`, `self_update`,
+  `rekey`, `send_file`, `install_package`, `collect_files`; every other saved row appears
+  as a closed row in `TimedOut` reading *Outcome unknown — the console left this lab*, with
+  a `job.outcome_unknown` event, so a late result can still replace it. A restored row is
+  marked `RestoredFromDisk` and excluded from the next snapshot, so it cannot outlive two
+  sessions, and an unreadable, newer-schema or foreign-lab file means nothing is owed and
+  never blocks activation. The in-flight save is coalesced like `lab.json`'s;
+  `JsonStore.Save` claims the familiar `<document>.tmp` when it is free and a unique name
+  when it is taken, and a saver whose rival has already moved its temporary away now falls
+  back instead of rethrowing. A restored batch merges into the batch document already on
+  disk instead of overwriting it, so the PCs that finished first keep their results, and
+  restored rows appear in the jobs panel. Tests: 785 (637 Shared + 148 Console). *On the
+  Windows VM (2026-09-09, the isolated clone "M4 isolated native tests 2026-09-08" only,
+  host-only network; the classroom VM and the owner's live lab untouched):* a real agent
+  `1.0.0` (`win-arm64`, hash-verified in the guest) ran a 110-second SYSTEM script
+  delivered by fixture console instance X; X was stopped 21 s in; the agent linked to
+  instance Y of the same lab, the script finished under Y, and Y never saw the job (its job
+  list stayed empty and the agent logged that the result waits for the console that sent
+  it); X came back with the same instance id and received the result with its output and
+  exit code. The same session confirmed portion 3's role refusal natively: a fixture-minted
+  teacher leaf was refused for `self_update` with `job.refused_by_role` before any manifest
+  pull, and the installed app directories were unchanged. Two honest caveats: progress
+  produced while the deliverer was away reached nobody (as designed), and the drill's
+  ad-hoc script was not a library script, so the console first closed the restored row as
+  outcome unknown and the agent's pending-result flush then delivered the true result and
+  replaced it — a library script would have been re-offered and re-sent instead. Hand-over
+  took 15–20 s. Not done on the VM: the network push of this build from an administrator
+  console, and `run_as: user` (the clone has no interactive user). Portion 5 is next.
 
 **Not in scope.** Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs

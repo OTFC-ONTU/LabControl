@@ -8,6 +8,7 @@ using LabControl.Console.Services;
 using LabControl.Shared;
 using LabControl.Shared.Discovery;
 using LabControl.Shared.Files;
+using LabControl.Shared.Lab;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protection;
@@ -638,6 +639,125 @@ public sealed class LabSwitchTests
         Assert.True(session.IsDisposed);
         Assert.Equal(ActivationState.Idle, rig.Controller.Status.State);
         Assert.Null(rig.Controller.Active);
+    }
+
+    [Fact]
+    public async Task A_script_running_on_A_yields_its_result_in_A_after_a_switch_to_B_and_back_and_nothing_of_A_reaches_B()
+    {
+        await using var rig = new Rig("Lab A", "Lab B");
+        var a = rig.Labs[0];
+        var b = rig.Labs[1];
+        var agentsA = rig.AddAgents(a, 2, pinHost: true);
+        var agentsB = rig.AddAgents(b, 1, pinHost: true);
+        a.RecordMachines(agentsA);
+        b.RecordMachines(agentsB);
+        rig.Start();
+
+        var toA = await rig.Controller.ActivateAsync(a.LabId, Ct);
+        Assert.True(toA.Ok, toA.Error);
+        var sessionA = Assert.IsType<LabSession>(rig.Controller.Active);
+        Assert.True(await Wait.UntilAsync(() => sessionA.Linked.Count == 2, TimeSpan.FromSeconds(15)));
+        Assert.Equal(a.InstanceId, sessionA.Instance.InstanceId);
+
+        // PC-01 of lab A runs a script that outlives the switch; an upload to A is in progress too.
+        var busy = agentsA[0];
+        var finish = new TaskCompletionSource();
+        busy.Behaviour.OnJob = async job =>
+        {
+            await finish.Task.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+            return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = "lab A's script output" };
+        };
+        // Saved in the library, so the session that comes back can offer the same text again
+        // and re-send the row (D-57 item 4); unsaved text runs once and cannot be restored.
+        var script = new ScriptRecord { Id = "s", Name = "long", Text = "Start-Sleep 60\n", TimeoutSeconds = 300 };
+        Assert.True(sessionA.Scripts.TrySave(script, out var scriptError), scriptError);
+        var job = Assert.Single(sessionA.RunScript([busy.AgentId], script));
+        Assert.True(await Wait.UntilAsync(() => busy.Behaviour.JobsRun.Count == 1));
+        Assert.Equal(a.InstanceId, busy.Link.DeliveringInstanceOf(job.Id));
+
+        using var uploadGate = new SemaphoreSlim(0);
+        using var destination = new GatedStream(uploadGate);
+        using var source = new MemoryStream(new byte[Defaults.FileChunkBytes * 4]);
+        var hash = FileHash.Sha256Hex(source.ToArray());
+        var grant = sessionA.Uploads.Expect(busy.AgentId, destination, source.Length, hash);
+        var upload = busy.Link.PushFileAsync(grant.Reference, hash, source, Ct);
+        Assert.True(await Wait.UntilAsync(() => destination.Writes >= 1, TimeSpan.FromSeconds(10)));
+
+        var report = sessionA.DescribeDeparture();
+        var group = Assert.Single(report.RunningJobs);
+        Assert.Equal(Job.Types.Kind.RunScript, group.Kind);
+        Assert.Equal(DepartureConsequence.ContinuesOnPc, group.Consequence);
+        Assert.Equal(1, report.UploadsInProgress);
+
+        // A -> B. The in-flight row is saved under A; B starts with no job at all.
+        // The console's write stays blocked until the switch is over: the abort of A's server
+        // cancels it, so the upload is caught mid-flight, not finished before A leaves.
+        var toB = await rig.Controller.ActivateAsync(b.LabId, Ct);
+        uploadGate.Release(100);
+        Assert.True(toB.Ok, toB.Error);
+        var sessionB = Assert.IsType<LabSession>(rig.Controller.Active);
+        Assert.True(File.Exists(a.Store.InFlightJobsPath));
+        Assert.Empty(sessionB.Jobs.All());
+        var resultsSeenByB = 0;
+        sessionB.Jobs.Updated += _ => Interlocked.Increment(ref resultsSeenByB);
+        Assert.True(await Wait.UntilAsync(() => sessionB.Linked.Count == 1, TimeSpan.FromSeconds(15)));
+
+        // The script finishes while A is away: the result waits on the PC, and B sees nothing.
+        finish.SetResult();
+        Assert.True(await Wait.UntilAsync(() => busy.Link.PendingResults == 1));
+        await Task.Delay(500, Ct);
+        Assert.Empty(sessionB.Jobs.All());
+        Assert.Equal(0, resultsSeenByB);
+        Assert.DoesNotContain(sessionB.Events.Recent, e => e.Message.Contains("lab A's script output", StringComparison.Ordinal));
+
+        // B -> A: the restored row is re-sent, the PC answers from its ledger, the panel shows it.
+        var backToA = await rig.Controller.ActivateAsync(a.LabId, Ct);
+        Assert.True(backToA.Ok, backToA.Error);
+        var sessionA2 = Assert.IsType<LabSession>(rig.Controller.Active);
+        Assert.NotSame(sessionA, sessionA2);
+        var restored = Assert.Single(sessionA2.Jobs.All());
+        Assert.Equal(job.Id, restored.Id);
+        Assert.True(restored.State is JobState.Delivered or JobState.Running, restored.State.ToString());
+        Assert.Equal(a.LabId, restored.LabId);
+        Assert.Equal(a.InstanceId, restored.InstanceId);
+        Assert.Contains(sessionA2.Events.Recent, e => e.Code == "jobs.restored");
+
+        Assert.True(await Wait.UntilAsync(() => restored.State == JobState.Succeeded, TimeSpan.FromSeconds(20)), restored.State.ToString());
+        Assert.Equal("lab A's script output", restored.Message);
+        Assert.Single(busy.Behaviour.JobsRun);
+        Assert.Equal(0, busy.Link.PendingResults);
+        Assert.False(File.Exists(a.Store.InFlightJobsPath));
+
+        var row = await ResultOwnershipTests.JournalRowAsync(a.Store.LogsDirectory, job.Id);
+        Assert.Equal(a.InstanceId, row.GetProperty("instance_id").GetString());
+        Assert.Equal(a.LabId, row.GetProperty("lab_id").GetString());
+        Assert.False(Directory.Exists(b.Store.LogsDirectory) && Directory.EnumerateFiles(b.Store.LogsDirectory, "jobs-*.jsonl").Any(),
+            "lab B's logs must hold no job rows");
+
+        // The upload died with A's first session, as the report said: the grant is gone.
+        var failure = await Assert.ThrowsAsync<FilePushException>(() => upload.WaitAsync(TimeSpan.FromSeconds(Defaults.FileChunkTimeout.TotalSeconds + 10), Ct));
+        Assert.Contains("Uploading failed", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(sessionB.Jobs.All());
+    }
+
+    /// <summary>A destination that holds every write until the gate lets it through, so an upload can be caught mid-flight.</summary>
+    private sealed class GatedStream(SemaphoreSlim gate) : MemoryStream
+    {
+        public int Writes { get; private set; }
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Writes++;
+            await gate.WaitAsync(cancellationToken);
+            await base.WriteAsync(buffer, cancellationToken);
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            Writes++;
+            gate.Wait();
+            base.Write(buffer, offset, count);
+        }
     }
 
     [Fact]

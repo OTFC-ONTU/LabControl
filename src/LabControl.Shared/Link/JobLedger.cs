@@ -8,10 +8,17 @@ namespace LabControl.Shared.Link;
 /// the link drops and reconnects — a console that never saw the result will send the job
 /// again, and a PC must not reboot twice because of it.
 /// </summary>
+/// <remarks>
+/// Since M5 (D-57 item 4) every entry also remembers which console <b>instance</b> delivered
+/// the job. A result belongs to that instance: it is answered only to the same instance id,
+/// so a teacher who takes the room next never sees the previous teacher's output, and the
+/// delivering console gets it when it comes back and re-sends the job. The instance id is
+/// the validated peer certificate's, not anything the console claims in a message.
+/// </remarks>
 public sealed class JobLedger
 {
-    private readonly Dictionary<string, JobResult> _completed = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _running = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, JobLedgerEntry> _completed = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _running = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
 
     /// <summary>How many finished results to remember; older ones fall off oldest-first.</summary>
@@ -22,38 +29,65 @@ public sealed class JobLedger
     public JobLedger(int capacity = 500) => _capacity = capacity;
 
     /// <summary>
-    /// Decides what to do with an incoming job: run it, do nothing because it is already
-    /// running, or answer at once with the result it produced last time.
+    /// Decides what to do with an incoming job from the console instance <paramref name="instanceId"/>:
+    /// run it, do nothing because it is already running, answer at once with the result it
+    /// produced last time, or refuse because another instance delivered it.
     /// </summary>
-    public JobAdmission Admit(Job job)
+    public JobAdmission Admit(Job job, string instanceId)
     {
+        ArgumentNullException.ThrowIfNull(instanceId);
+
         lock (_gate)
         {
             if (_completed.TryGetValue(job.Id, out var cached))
             {
-                return JobAdmission.Cached(cached);
+                return SameInstance(cached.InstanceId, instanceId)
+                    ? JobAdmission.Cached(cached.Result)
+                    : JobAdmission.DeliveredByAnotherInstance(cached.InstanceId);
             }
 
-            return _running.Add(job.Id) ? JobAdmission.Run() : JobAdmission.AlreadyRunning();
+            if (_running.TryGetValue(job.Id, out var runningFor))
+            {
+                return SameInstance(runningFor, instanceId)
+                    ? JobAdmission.AlreadyRunning()
+                    : JobAdmission.DeliveredByAnotherInstance(runningFor);
+            }
+
+            _running.Add(job.Id, instanceId);
+            return JobAdmission.Run();
         }
     }
 
-    /// <summary>Records the outcome, so a re-sent job answers from here instead of running again.</summary>
-    public void Complete(JobResult result)
+    /// <summary>
+    /// Records the outcome, so a re-sent job answers from here instead of running again. The
+    /// entry keeps the instance the job was admitted for; a result completed without a prior
+    /// <see cref="Admit"/> takes <paramref name="instanceId"/>, or belongs to no instance.
+    /// </summary>
+    public JobLedgerEntry Complete(JobResult result, string? instanceId = null)
     {
         lock (_gate)
         {
-            _running.Remove(result.JobId);
+            if (_running.Remove(result.JobId, out var admittedFor))
+            {
+                instanceId ??= admittedFor;
+            }
 
-            if (_completed.TryAdd(result.JobId, result))
+            var entry = new JobLedgerEntry(result, instanceId ?? string.Empty);
+            if (_completed.TryAdd(result.JobId, entry))
             {
                 _order.Enqueue(result.JobId);
+            }
+            else
+            {
+                entry = _completed[result.JobId];
             }
 
             while (_order.Count > _capacity)
             {
                 _completed.Remove(_order.Dequeue());
             }
+
+            return entry;
         }
     }
 
@@ -74,7 +108,21 @@ public sealed class JobLedger
     {
         lock (_gate)
         {
-            return _running.Contains(jobId);
+            return _running.ContainsKey(jobId);
+        }
+    }
+
+    /// <summary>The instance a job was delivered by, whether it is running or finished; <c>null</c> for an unknown id.</summary>
+    public string? DeliveringInstanceOf(string jobId)
+    {
+        lock (_gate)
+        {
+            if (_running.TryGetValue(jobId, out var running))
+            {
+                return running;
+            }
+
+            return _completed.TryGetValue(jobId, out var completed) ? completed.InstanceId : null;
         }
     }
 
@@ -99,14 +147,28 @@ public sealed class JobLedger
             }
         }
     }
+
+    internal static bool SameInstance(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>A finished job and the console instance that delivered it.</summary>
+public sealed record JobLedgerEntry(JobResult Result, string InstanceId);
+
 /// <summary>What the ledger decided about an incoming job.</summary>
-public sealed record JobAdmission(bool ShouldRun, JobResult? CachedResult, bool DuplicateOfRunning)
+/// <param name="OtherInstanceId">
+/// Set when the job id is known but was delivered by a different console instance (D-57
+/// item 4): the caller must refuse it without revealing the result, running it again or
+/// treating it as a duplicate the other console may wait for.
+/// </param>
+public sealed record JobAdmission(bool ShouldRun, JobResult? CachedResult, bool DuplicateOfRunning, string? OtherInstanceId = null)
 {
     public static JobAdmission Run() => new(true, null, false);
 
     public static JobAdmission Cached(JobResult result) => new(false, result, false);
 
     public static JobAdmission AlreadyRunning() => new(false, null, true);
+
+    public static JobAdmission DeliveredByAnotherInstance(string instanceId) => new(false, null, false, instanceId);
+
+    public bool BelongsToAnotherInstance => OtherInstanceId is not null;
 }

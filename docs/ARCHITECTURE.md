@@ -354,9 +354,13 @@ two half-active labs. A lab-A agent reaching the lab-B server is refused as *bel
 lab A, which is not the active lab*. Leaving with work in flight shows a departure report:
 scripts and file deliveries continue on the PC and report on return, power jobs complete,
 an update cannot be aborted and is safe to leave, uploads in progress fail, probation is
-reported on return. Results belong to the instance that delivered the job: the agent
-drains a result only to that instance and answers anyone else only when that console
-re-sends the job. Targets: 2 s to the cached mosaic, 15 s for reachable running agents,
+reported on return. Results belong to the instance that delivered the job — the id in the
+console leaf the agent's TLS handshake validated, not the one the `Welcome` claims: the
+agent drains a result and its progress lines only to that instance, hands the result over
+when that console re-sends the job, and refuses another console's copy of the same job id
+(`job.other_instance`) instead of answering it. A returning console re-sends only a saved
+job whose second run is harmless and whose PC has not restarted since; everything else it
+left behind is shown as an honest *outcome unknown* row (`D-57` items 4 and 12). Targets: 2 s to the cached mosaic, 15 s for reachable running agents,
 measured per switch.
 
 **Take-over and ownership** (`D-58`). An agent honours a `take` beacon by its own clock

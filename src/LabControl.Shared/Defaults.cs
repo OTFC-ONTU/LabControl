@@ -278,6 +278,28 @@ public static class Defaults
     public const string EventLogFilePattern = "events-{0:yyyy-MM-dd}.jsonl";
     public const string JobLogFilePattern = "jobs-{0:yyyy-MM-dd}.jsonl";
     public const string JobBatchesDirectoryName = "batches";
+
+    /// <summary>
+    /// Jobs delivered to PCs and not yet answered when the console left the lab, under the
+    /// lab's <c>logs/</c> (M5, D-57 item 4); the next session of the same lab on the same
+    /// instance re-sends them and the PCs answer from their ledgers.
+    /// </summary>
+    public const string InFlightJobsFileName = "jobs-inflight.json";
+
+    /// <summary>
+    /// How many finished job results one PC keeps for consoles that have not come back
+    /// (M5, D-57 item 4). In memory only: nothing survives an agent restart, and past this
+    /// the oldest are dropped with a <c>job.result_dropped</c> event.
+    /// </summary>
+    public const int MaxPendingJobResults = 500;
+    public const int InFlightJobsSchemaVersion = 1;
+
+    /// <summary>
+    /// How long a saved in-flight row may wait for its console before its outcome is called
+    /// unknown (M5, D-57 item 4). The bound is this or the job's own timeout, whichever is
+    /// shorter: an overnight file must never re-send this morning's class a job.
+    /// </summary>
+    public static readonly TimeSpan InFlightJobsMaxAge = TimeSpan.FromHours(1);
     public const string JobBatchManifestFileName = "manifest.json";
     public const string JobBatchArchiveExtension = ".zip";
     public const int JobBatchSchemaVersion = 1;

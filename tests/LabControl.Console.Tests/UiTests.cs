@@ -596,6 +596,50 @@ public sealed class UiTests
         }, TestContext.Current.CancellationToken);
     }
 
+    [Fact]
+    public async Task Restored_jobs_are_visible_in_the_jobs_panel_of_the_session_that_owes_them()
+    {
+        // The departure report counts the rows a returning session brought back (D-57 items 3–4),
+        // so the panel must show them: they exist before the view model does.
+        var console = await TestConsole.CreateLabAsync("MacBook", port: 0);
+        var port = console.Port;
+        var script = new ScriptRecord { Id = Guid.NewGuid().ToString("d"), Name = "long", Text = "Start-Sleep 60\n", TimeoutSeconds = 300 };
+        Assert.True(console.Session.Scripts.TrySave(script, out var error), error);
+        var jobs = console.Session.RunScript(["pc-a", "pc-b"], script);
+        var now = DateTimeOffset.UtcNow;
+        foreach (var job in jobs)
+        {
+            console.Session.Jobs.TakePending(job.AgentId, now);
+        }
+
+        Assert.Equal(2, console.Session.DescribeDeparture().RunningJobs.Sum(g => g.Count));
+        var bootstrap = console.Bootstrap;
+        await console.Session.DisposeAsync();
+
+        await using var again = ResultOwnershipTests.Reopen(console.Directory, port);
+        await again.StartAsync();
+        Assert.Equal(2, again.DescribeDeparture().RunningJobs.Sum(g => g.Count));
+
+        await Session.Dispatch<bool>(async () =>
+        {
+            var window = new MainWindow();
+            var vm = new MainViewModel(again, bootstrap, window, action => Dispatcher.UIThread.Post(action));
+            window.DataContext = vm;
+            window.Show();
+            var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
+            tabs.SelectedIndex = 2;
+            await Render(window, "main-9-restored-jobs");
+
+            Assert.Equal(2, vm.Jobs.Count);
+            Assert.All(vm.Jobs, row => Assert.False(row.IsFinished));
+            vm.Detach();
+            window.Close();
+            return true;
+        }, TestContext.Current.CancellationToken);
+
+        await console.DisposeAsync();
+    }
+
     private static async Task Render(Window window, string name)
     {
         for (var i = 0; i < 3; i++)

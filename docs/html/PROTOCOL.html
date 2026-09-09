@@ -927,7 +927,11 @@ whose serial the console has never seen is <strong>added to the machine list fro
 not refused — the console's list is a cache of the lab, and another teacher machine may
 have enrolled the PC (§3.7). <code>Hello.previous_instance_id</code> names the console the agent
 was linked to before this one (empty on first link since boot); it is what lets a console
-say which PCs the <em>other</em> teacher machine currently holds. <code>Hello</code> carries no hostname;
+say which PCs the <em>other</em> teacher machine currently holds. <code>Hello.boot_time_unix</code> is no
+longer merely informational: a console returning to a lab compares it with the delivery
+time of a job it saved as in flight, and re-sends the job only when the PC has <em>not</em>
+restarted since — a restart loses the agent's ledger, so the re-sent copy would run a
+second time instead of being answered (<code>D-57</code> item 12). <code>Hello</code> carries no hostname;
 that arrives with <code>Inventory</code>, so a PC a console first met through <code>Hello</code> shows its
 number until then.</p>
 <p><strong>The PC number is the identity</strong> (<code>D-25</code>). A <code>Hello</code> or an <code>Enroll</code> whose number another
@@ -937,8 +941,8 @@ records an event naming both agent ids and the old certificate serial.</p>
 <h3 id="m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, <code>D-55</code>…<code>D-60</code>)<a class="anchor" href="#m5-additions-being-implemented-d-55.d-60" aria-label="Link to this section">#</a></h3>
 <p>Recorded from the design on 2026-09-08; the portion that lands each item is in ROADMAP
 M5, and the <code>.proto</code> change below must be reflected here again in the commit that makes it.
-<strong>Status (2026-09-08, after portion 3):</strong> items 2, 3, the refusal half of 4 and 7 are
-implemented; item 1, the result-ownership half of 4, 5 and 6 remain for portions 4–5.</p>
+<strong>Status (2026-09-09, after portion 4):</strong> items 2, 3, 4 and 7 are implemented; items 1, 5
+and 6 remain for portion 5.</p>
 <ol>
 <li><strong><code>Welcome.console_access = 6</code></strong> <em>(not yet made — portion 5)</em> — <code>enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0; ADMINISTRATOR = 1; TEACHER = 2; }</code>. Additive and informational: the authoritative role
 is the subject OU of the console leaf the agent already validated; the field lets an
@@ -958,15 +962,25 @@ a console whose serial or instance id becomes revoked (event <code>console.revok
 pre-M5 agent cannot hold an <code>instance:</code> entry: its serial normalisation breaks the
 signature, it drops the entry and the console re-pushes it on every link, showing the
 PC as <em>cannot hold</em> until the agent is updated (<code>D-56</code> item 9). No message change.</li>
-<li><strong><code>Job</code></strong> <em>(refusal implemented, portion 3; ownership pending, portion 4)</em>: an M5
+<li><strong><code>Job</code></strong> <em>(implemented, portions 3–4)</em>: an M5
 agent refuses <code>self_update</code> and <code>rekey</code> on a link whose console is not an
 administrator — <code>JobResult{ok: false, message: &quot;refused: this console has teacher access&quot;}</code> (or <em>carries no known access level</em>) plus the event <code>job.refused_by_role</code>,
 before any manifest is pulled. The agent's renewal loop is run only on an
-administrator link. <strong><code>JobResult</code> ownership</strong>: an M5
-agent records the delivering console's <code>instance_id</code> (from <code>Welcome</code>) in its ledger and
-drains a kept result only to a link with that instance id; any other console receives
-the result only when it re-sends the job after its own <code>Welcome</code>, which it already does
-for jobs it had in flight. No field change; the frozen subset is untouched.</li>
+administrator link. <strong><code>JobResult</code> ownership</strong> <em>(portion 4, <code>D-57</code> item 4)</em>: an M5 agent
+binds every job to the instance id in the SAN URI of the console leaf its TLS handshake
+validated, never to <code>Welcome.instance_id</code> — that field is only what a peer <em>says</em> about
+itself. A link whose validated peer carries no console identity is refused; a <code>Welcome</code>
+that names another instance raises the event <code>console.instance_mismatch</code> and the
+certificate wins. Results and <code>JobProgress</code> lines go only to the delivering instance. A
+different console that sends the same <code>job_id</code> is refused with
+<code>JobResult{ok: false, exit_code: -1, message: &quot;refused: this job was delivered by another console; its result is kept for that console&quot;}</code> and the event
+<code>job.other_instance</code> — not answered from the ledger's cache and not run again — while
+the delivering console receives the kept result when it re-sends the job after its own
+<code>Welcome</code>, which it already does for jobs it had in flight. The wait is bounded: at most
+500 finished results per PC are kept for consoles that are not linked, the oldest
+dropped with the event <code>job.result_dropped</code>; nothing survives an agent restart, and
+progress produced while the delivering console is away is dropped rather than buffered.
+No field change; the frozen subset is untouched.</li>
 <li><strong>Beacon <code>take</code></strong> <em>(pending, portion 5)</em>: honoured when the <code>(inst, take)</code> token is unhonoured, the beacon
 arrived after the link was established on the agent's own clock, and <code>take</code> is within
 <code>TakeOverWindow + BeaconMaxSkew</code> of the beacon's own <code>ts</code>. The taker's timestamp is
@@ -1118,7 +1132,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-08 21:07 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 05:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

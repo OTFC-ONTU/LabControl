@@ -530,7 +530,10 @@ public sealed class ProfileMigration
             }
 
             // A leftover of an atomic save that never finished; the document beside it was the good one.
-            File.Delete(JsonStore.TemporaryPathFor(source));
+            foreach (var temporary in JsonStore.TemporaryPathsFor(source))
+            {
+                File.Delete(temporary);
+            }
         }
     }
 
@@ -577,7 +580,7 @@ public sealed class ProfileMigration
                 MoveLabDirectoriesTo(conflict);
             }
 
-            foreach (var file in new[] { Path.Combine(_dataDirectory, name), JsonStore.TemporaryPathFor(Path.Combine(_dataDirectory, name)) })
+            foreach (var file in JsonStore.TemporaryPathsFor(Path.Combine(_dataDirectory, name)).Prepend(Path.Combine(_dataDirectory, name)).ToArray())
             {
                 if (File.Exists(file))
                 {

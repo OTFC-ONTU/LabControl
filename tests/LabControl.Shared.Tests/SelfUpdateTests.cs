@@ -224,11 +224,11 @@ public sealed class SelfUpdateTests
         var ledger = new JobLedger();
         var job = new Job { Id = "update-1", Kind = Job.Types.Kind.SelfUpdate };
 
-        Assert.True(ledger.Admit(job).ShouldRun);
-        Assert.True(ledger.Admit(job).DuplicateOfRunning);
+        Assert.True(ledger.Admit(job, "console-1").ShouldRun);
+        Assert.True(ledger.Admit(job, "console-1").DuplicateOfRunning);
 
         ledger.Forget(job.Id);
         Assert.Equal(0, ledger.RunningCount);
-        Assert.True(ledger.Admit(job).ShouldRun);
+        Assert.True(ledger.Admit(job, "console-1").ShouldRun);
     }
 }

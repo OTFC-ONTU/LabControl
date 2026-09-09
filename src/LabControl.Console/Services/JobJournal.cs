@@ -9,7 +9,8 @@ namespace LabControl.Console.Services;
 /// <summary>
 /// Appends every finished job to <c>logs/jobs-&lt;day&gt;.jsonl</c> (ARCHITECTURE §8, "Jobs
 /// persist in logs/"). One line per PC per job, with the captured output, so an install
-/// that failed on PC-07 last Tuesday can still be read.
+/// that failed on PC-07 last Tuesday can still be read. Every row names the lab and the
+/// console instance that delivered the job (M5, D-57 item 4).
 /// </summary>
 public sealed class JobJournal
 {
@@ -29,6 +30,8 @@ public sealed class JobJournal
         {
             job.Id,
             job.BatchId,
+            job.LabId,
+            job.InstanceId,
             job.AgentId,
             Kind = job.Kind.ToString(),
             State = job.State.ToString(),

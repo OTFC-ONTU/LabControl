@@ -38,6 +38,12 @@ public sealed class AgentLinkOptions
 
     /// <summary>Send a forged revocation entry in <c>RevocationState</c>, to prove the console drops it.</summary>
     public Func<IEnumerable<RevocationEntry>>? ExtraRevocations { get; init; }
+
+    /// <summary>
+    /// How many finished job results this PC keeps for consoles that have not come back
+    /// (D-57 item 4); the oldest are dropped, with an event, past it. Lowered in tests.
+    /// </summary>
+    public int MaxPendingResults { get; init; } = Defaults.MaxPendingJobResults;
 }
 
 /// <summary>
@@ -64,7 +70,7 @@ public sealed partial class AgentLink : IAsyncDisposable
     private readonly Lock _gateLock = new();
 
     private readonly Queue<Event> _pendingEvents = new();
-    private readonly Queue<JobResult> _pendingResults = new();
+    private readonly List<JobLedgerEntry> _pendingResults = [];
     private ChannelWriter<AgentMessage>? _outgoing;
     private AgentService.AgentServiceClient? _client;
     private SessionState? _latestSessionState;
@@ -112,6 +118,14 @@ public sealed partial class AgentLink : IAsyncDisposable
 
     /// <summary>The serial of the linked console's leaf, from the TLS handshake; <c>null</c> while unlinked.</summary>
     private string? _linkedConsoleSerial;
+
+    /// <summary>
+    /// The instance id every job on this link is bound to (M5, D-57 item 4): the id in the
+    /// validated console leaf, so a result can only ever go back to the console that delivered
+    /// the job — never to the next console that links. <c>null</c> while unlinked.
+    /// </summary>
+    private string? _boundInstanceId;
+
 
     /// <summary>Console clock minus PC clock, learned from <c>Welcome</c>; deadlines are corrected by it.</summary>
     public TimeSpan ClockSkew { get; private set; }
@@ -578,9 +592,15 @@ public sealed partial class AgentLink : IAsyncDisposable
             }
 
             var welcome = call.ResponseStream.Current.Welcome;
+            if (BindInstance(channel.PeerName, welcome) is not { } boundInstanceId)
+            {
+                endedBy = "the console presented no validated console identity";
+                return false;
+            }
+
             LinkedConsoleAccess = channel.PeerName?.Access ?? ConsoleAccess.Unknown;
             _linkedConsoleSerial = channel.PeerSerial;
-            OnWelcome(welcome, endpoint);
+            OnWelcome(welcome, boundInstanceId, endpoint);
             linked = true;
 
             var outgoing = Channel.CreateUnbounded<AgentMessage>(new UnboundedChannelOptions { SingleReader = true });
@@ -612,10 +632,27 @@ public sealed partial class AgentLink : IAsyncDisposable
 
                 // Results of jobs that finished while there was no link (D-32): the console
                 // re-sends its in-flight jobs after Welcome and the ledger answers those from
-                // the cache too, so a result is never lost and never runs twice.
-                while (_pendingResults.TryDequeue(out var finished))
+                // the cache too, so a result is never lost and never runs twice. Only the
+                // results this console's own instance is owed go out (D-57 item 4); the rest
+                // stay here for the console that delivered them.
+                var kept = new List<JobLedgerEntry>();
+                foreach (var finished in _pendingResults)
                 {
-                    outgoing.Writer.TryWrite(new AgentMessage { JobResult = finished });
+                    if (JobLedger.SameInstance(finished.InstanceId, boundInstanceId))
+                    {
+                        outgoing.Writer.TryWrite(new AgentMessage { JobResult = finished.Result });
+                    }
+                    else
+                    {
+                        kept.Add(finished);
+                    }
+                }
+
+                _pendingResults.Clear();
+                _pendingResults.AddRange(kept);
+                if (kept.Count > 0)
+                {
+                    _log.LogInformation("{Pc}: {Count} finished job result(s) belong to another console and wait for it", Name, kept.Count);
                 }
             }
 
@@ -690,6 +727,11 @@ public sealed partial class AgentLink : IAsyncDisposable
                 LinkedEndpoint = null;
                 LinkedConsoleAccess = ConsoleAccess.Unknown;
                 _linkedConsoleSerial = null;
+                lock (_gateLock)
+                {
+                    _boundInstanceId = null;
+                }
+
                 _gate.Unlinked();
                 _log.LogInformation("{Pc}: unlinked — {Reason}", Name, endedBy);
                 Unlinked?.Invoke(endedBy);
@@ -697,27 +739,66 @@ public sealed partial class AgentLink : IAsyncDisposable
         }
     }
 
-    private void OnWelcome(Welcome welcome, string endpoint)
+    /// <summary>
+    /// The identity everything on this link is bound to: the instance id in the SAN URI of the
+    /// console leaf the TLS handshake validated (<c>labcontrol://&lt;lab&gt;/console/&lt;instance&gt;</c>).
+    /// <c>Welcome.instance_id</c> is only what the console <i>says</i> about itself, and a peer
+    /// can say anything, so it is never used: not for job ownership, not for the take-over gate,
+    /// not for <c>LastInstanceId</c>. Returns <c>null</c> when the validated identity is missing
+    /// — then this PC has no console to be bound to and the link is not kept.
+    /// </summary>
+    private string? BindInstance(LabName? peer, Welcome welcome)
+    {
+        var certified = peer?.Role == LabRole.Console && peer.Id.Length > 0 ? peer.Id : null;
+        if (certified is null)
+        {
+            _log.LogWarning("{Pc}: the console presented no validated console identity; the link is refused", Name);
+            Report("the console presented no validated console identity");
+            return null;
+        }
+
+        if (welcome.InstanceId.Length > 0 && !JobLedger.SameInstance(certified, welcome.InstanceId))
+        {
+            _log.LogWarning("{Pc}: the console's certificate names instance {Certified} but its Welcome says {Claimed}; the certificate is the one that counts", Name, certified, welcome.InstanceId);
+            Report(Event.Types.Severity.Warning, "console.instance_mismatch",
+                $"The console's certificate names instance {certified} but its Welcome says {welcome.InstanceId}; the certificate is the one this PC uses.");
+        }
+
+        lock (_gateLock)
+        {
+            _boundInstanceId = certified;
+        }
+
+        return certified;
+    }
+
+    /// <param name="instanceId">
+    /// The instance id from the validated console certificate (D-57 item 4). Everything that
+    /// outlives the message — the take-over gate, <c>LastInstanceId</c>, the
+    /// <c>previous_instance_id</c> of the next <c>Hello</c> — uses this, never the claim in
+    /// <c>Welcome</c>. The name is cosmetic and may come from the message.
+    /// </param>
+    private void OnWelcome(Welcome welcome, string instanceId, string endpoint)
     {
         var now = _options.Clock();
         ClockSkew = DateTimeOffset.FromUnixTimeSeconds(welcome.ServerTimeUnix) - now;
 
-        LinkedInstanceId = welcome.InstanceId;
+        LinkedInstanceId = instanceId;
         LinkedInstanceName = welcome.InstanceName;
         LinkedEndpoint = endpoint;
         State = LinkState.Linked;
         _lastRefusal = string.Empty;
         _pinnedBackoff.Reset();
-        _gate.Linked(welcome.InstanceId, endpoint, now);
+        _gate.Linked(instanceId, endpoint, now);
 
-        if (!string.Equals(_store.Config.LastInstanceId, welcome.InstanceId, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(_store.Config.LastInstanceId, instanceId, StringComparison.OrdinalIgnoreCase))
         {
-            _store.Config.LastInstanceId = welcome.InstanceId;
+            _store.Config.LastInstanceId = instanceId;
             _store.SaveConfig();
         }
 
-        _log.LogInformation("{Pc}: linked to {Console} ({Instance}) at {Endpoint}", Name, welcome.InstanceName, welcome.InstanceId, endpoint);
-        Linked?.Invoke(welcome.InstanceId, welcome.InstanceName);
+        _log.LogInformation("{Pc}: linked to {Console} ({Instance}) at {Endpoint}", Name, welcome.InstanceName, instanceId, endpoint);
+        Linked?.Invoke(instanceId, welcome.InstanceName);
     }
 
     private async Task HandleAsync(ConsoleMessage message, ChannelWriter<AgentMessage> outgoing, CancellationToken token)
@@ -887,7 +968,32 @@ public sealed partial class AgentLink : IAsyncDisposable
             return;
         }
 
-        var admission = _ledger.Admit(job);
+        string? instanceId;
+        lock (_gateLock)
+        {
+            instanceId = _boundInstanceId;
+        }
+
+        if (instanceId is null)
+        {
+            // The link is already coming down; the console will re-send after the next Welcome.
+            _log.LogDebug("{Pc}: job {Job} arrived on a link that is no longer bound to a console; ignored", Name, job.Id);
+            return;
+        }
+
+        var admission = _ledger.Admit(job, instanceId);
+
+        if (admission.BelongsToAnotherInstance)
+        {
+            // Another console delivered this id (D-57 item 4). Its result — finished or still
+            // to come — is that console's alone: not revealed, not run a second time, and not
+            // silently swallowed either, so this console's row closes with the reason.
+            const string refusal = "refused: this job was delivered by another console; its result is kept for that console";
+            _log.LogWarning("{Pc}: job {Job} was delivered by instance {Other}, not {This}; refused", Name, job.Id, admission.OtherInstanceId, instanceId);
+            Report(Event.Types.Severity.Warning, "job.other_instance", $"Job {job.Id} was delivered by another console; its result is kept for that console.");
+            await outgoing.WriteAsync(new AgentMessage { JobResult = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = refusal } }, token);
+            return;
+        }
 
         if (admission.CachedResult is { } cached)
         {
@@ -912,7 +1018,7 @@ public sealed partial class AgentLink : IAsyncDisposable
             JobResult result;
             try
             {
-                result = await _behaviour.RunJobAsync(job, progress => SendProgressAsync(progress), stopping);
+                result = await _behaviour.RunJobAsync(job, progress => SendProgressAsync(progress, instanceId), stopping);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -927,32 +1033,76 @@ public sealed partial class AgentLink : IAsyncDisposable
             }
 
             result.JobId = job.Id;
-            _ledger.Complete(result);
-            SendResult(result);
+            SendResult(_ledger.Complete(result, instanceId));
         }, CancellationToken.None);
     }
 
-    private Task SendProgressAsync(JobProgress progress)
+    /// <summary>
+    /// A line of a job's output goes to the console that sent the job, or nowhere (D-57 item 4).
+    /// Progress is not durable — while the delivering console is away the lines are dropped,
+    /// and only the <see cref="JobResult"/> survives to be handed over when it returns — but a
+    /// teacher who has taken the room over must not see the previous teacher's output either.
+    /// </summary>
+    private Task SendProgressAsync(JobProgress progress, string instanceId)
     {
         lock (_gateLock)
         {
-            _outgoing?.TryWrite(new AgentMessage { JobProgress = progress });
+            if (JobLedger.SameInstance(_boundInstanceId, instanceId))
+            {
+                _outgoing?.TryWrite(new AgentMessage { JobProgress = progress });
+            }
         }
 
         return Task.CompletedTask;
     }
 
-    private void SendResult(JobResult result)
+    private void SendResult(JobLedgerEntry finished)
     {
+        var evicted = 0;
         lock (_gateLock)
         {
-            if (_outgoing is { } outgoing && outgoing.TryWrite(new AgentMessage { JobResult = result }))
+            // Only the console that delivered the job may receive its result (D-57 item 4):
+            // a link to any other instance is treated like no link at all.
+            if (_outgoing is { } outgoing && JobLedger.SameInstance(_boundInstanceId, finished.InstanceId)
+                && outgoing.TryWrite(new AgentMessage { JobResult = finished.Result }))
             {
                 return;
             }
 
-            _pendingResults.Enqueue(result);
-            _log.LogInformation("{Pc}: job {Job} finished while unlinked; its result waits for the next link", Name, result.JobId);
+            _pendingResults.Add(finished);
+            // The wait is bounded and lives only in this process: a console that never comes
+            // back is never told, and nothing here survives an agent restart (D-57 item 4).
+            // Dropping the oldest silently would be the one loss nobody could explain, so it
+            // is an event on the very next link.
+            while (_pendingResults.Count > _options.MaxPendingResults)
+            {
+                _pendingResults.RemoveAt(0);
+                evicted++;
+            }
+
+            _log.LogInformation("{Pc}: job {Job} finished while not linked to the console that sent it; its result waits for that console", Name, finished.Result.JobId);
+        }
+
+        if (evicted > 0)
+        {
+            _log.LogWarning("{Pc}: {Count} oldest job result(s) were dropped; {Max} results are kept for consoles that have not returned", Name, evicted, _options.MaxPendingResults);
+            Report(Event.Types.Severity.Warning, "job.result_dropped",
+                $"This PC keeps at most {_options.MaxPendingResults} finished job results for consoles that have not come back; {evicted} of the oldest were dropped and cannot be shown any more.");
+        }
+    }
+
+    /// <summary>The instance id a job was delivered by, as the ledger remembers it (tests and diagnostics).</summary>
+    public string? DeliveringInstanceOf(string jobId) => _ledger.DeliveringInstanceOf(jobId);
+
+    /// <summary>Finished results still waiting for the console that delivered their jobs.</summary>
+    public int PendingResults
+    {
+        get
+        {
+            lock (_gateLock)
+            {
+                return _pendingResults.Count;
+            }
         }
     }
 

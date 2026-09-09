@@ -404,6 +404,45 @@ public sealed class TeacherAccessTests
     }
 
     [Fact]
+    public async Task Welcome_announces_the_access_the_console_leaf_carries_and_the_certificate_still_decides()
+    {
+        // Welcome.console_access (M5, D-58, PROTOCOL "M5 additions" item 1) is additive and
+        // informational: it says what the serving console's own leaf says, so an agent can
+        // name the access level without re-parsing the certificate. What a job is refused on
+        // stays the validated leaf, which is why both are asserted separately here.
+        await using var admin = await TestConsole.CreateLabAsync("Admin MacBook");
+        await using var teacher = await TestConsole.JoinAsTeacherAsync(admin, "Teacher laptop");
+        var lab = admin.Session.Vault!.Peek()!;
+
+        await using var onAdmin = TestAgent.InstallEnrolled(lab, 1, admin.Port, pinHost: true).Start();
+        await using var onTeacher = TestAgent.InstallEnrolled(lab, 2, teacher.Port, pinHost: true).Start();
+
+        Assert.True(await Wait.UntilAsync(() => admin.Session.Linked.Count == 1 && teacher.Session.Linked.Count == 1, TimeSpan.FromSeconds(20)));
+
+        Assert.Equal(ConsoleAccess.Administrator, onAdmin.Link.AnnouncedConsoleAccess);
+        Assert.Equal(ConsoleAccess.Administrator, onAdmin.Link.LinkedConsoleAccess);
+        Assert.Equal(ConsoleAccess.Teacher, onTeacher.Link.AnnouncedConsoleAccess);
+        Assert.Equal(ConsoleAccess.Teacher, onTeacher.Link.LinkedConsoleAccess);
+
+        // The announcement comes off the console's own leaf, so it can never claim more than
+        // the OU an agent reads out of the same certificate.
+        Assert.Equal(LabName.AccessOf(admin.Session.Instance.Certificate), onAdmin.Link.AnnouncedConsoleAccess);
+        Assert.Equal(LabName.AccessOf(teacher.Session.Instance.Certificate), onTeacher.Link.AnnouncedConsoleAccess);
+
+        // A console that lies in Welcome changes nothing: the refusal is decided by the leaf.
+        teacher.Session.BeforeWelcome = welcome => welcome.ConsoleAccess = Welcome.Types.ConsoleAccess.Administrator;
+        await using var lied = TestAgent.InstallEnrolled(lab, 3, teacher.Port, pinHost: true).Start();
+        Assert.True(await Wait.UntilAsync(() => teacher.Session.Linked.Count == 2, TimeSpan.FromSeconds(20)));
+
+        Assert.Equal(ConsoleAccess.Administrator, lied.Link.AnnouncedConsoleAccess);
+        Assert.Equal(ConsoleAccess.Teacher, lied.Link.LinkedConsoleAccess);
+
+        var rekey = teacher.Session.CreateJobs([lied.AgentId], Job.Types.Kind.Rekey).Single();
+        Assert.True(await Wait.UntilAsync(() => rekey.State == JobState.Failed, TimeSpan.FromSeconds(20)), rekey.State.ToString());
+        Assert.Contains("teacher access", rekey.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_lab_file_is_refused_over_an_occupied_directory_and_removing_a_teacher_profile_forgets_its_pending_key()
     {
         await using var admin = await TestConsole.CreateLabAsync("Admin MacBook");

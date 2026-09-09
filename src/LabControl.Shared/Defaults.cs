@@ -110,6 +110,15 @@ public static class Defaults
     /// </summary>
     public static readonly TimeSpan OtherConsoleTimeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// How long a positive observation that another teacher machine holds a PC stays worth
+    /// showing (M5, D-58). The observation is made when a PC leaves this console during that
+    /// machine's own signed <i>Take over</i>; nothing ever confirms it afterwards, so past
+    /// this age the console says it does not know rather than keep repeating it — and a
+    /// yesterday's observation read back out of <c>lab.json</c> never becomes today's claim.
+    /// </summary>
+    public static readonly TimeSpan OwnershipObservationLifetime = TimeSpan.FromMinutes(15);
+
     // ---------------------------------------------------------------- lab shape
 
     /// <summary>

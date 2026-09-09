@@ -255,13 +255,17 @@ same <code>end</code> chain to the same CA, so every agent follows it without be
 <li>Forged beacons cost a rejected TLS handshake. Agents ignore beacons while connected,
 and rate-limit dial attempts (≥ 2 s apart, exponential backoff per endpoint).</li>
 <li>The one exception to &quot;ignore while connected&quot; is <code>take</code>: a linked agent that receives a
-fully verified beacon from a <strong>different</strong> instance whose <code>take</code> is newer than the
-moment its current link was established closes that link and dials the taker. Each
-<code>take</code> value is honoured once, so a console rebroadcasting the same value for 30 s does
-not cause a re-dial loop, and two consoles pressing the button alternately simply move
-the room back and forth — never split a PC between them.
-This &quot;newer than the link&quot; comparison sets the taker's clock against the agent's; M5
-replaces it with an arrival-order rule on the agent's clock alone (<code>D-58</code>, <em>M5 additions</em>).</li>
+fully verified beacon from a <strong>different</strong> instance carrying a non-zero <code>take</code> closes
+that link and dials the taker, provided all three hold — (a) that <code>(inst, take)</code> token
+has not been honoured before, (b) the beacon <strong>arrived</strong> after the link was established,
+timed on the agent's own clock, and (c) <code>take</code> is within <code>TakeOverWindow + BeaconMaxSkew</code>
+of the beacon's own <code>ts</code>, which the agent has already checked against its clock. The
+taker's timestamp is never compared with the agent's link time, so a teacher machine
+whose clock is out of step still takes its room (<code>D-58</code>). Each <code>take</code> value is honoured
+once, so a console rebroadcasting the same value for 30 s does not cause a re-dial loop,
+and two consoles pressing the button alternately simply move the room back and forth —
+never split a PC between them. A press made moments before the PC linked elsewhere still
+moves it, as long as its beacon arrives after that link and inside the window.</li>
 <li>Consoles listen on the beacon port too. A verified beacon from another instance of the
 same lab is recorded in <code>lab.json</code> <code>instances[]</code> and drives the <em>other teacher machine</em>
 banner; a beacon that fails verification is dropped exactly as an agent would drop it.</li>
@@ -368,7 +372,8 @@ warning, info), <code>Pong</code>, <code>ExamState</code>, <code>InternetState</
 agent holds — sent right after <code>Hello</code>, so a console that was not running when another
 teacher machine revoked something learns of it from the first agent that connects).</p>
 <p><code>ConsoleMessage</code> (oneof): <code>Welcome</code> (server time, instance id and name, the serials the
-console holds revoked), <code>Ping</code>, <code>Job</code> (see below), <code>VideoControl</code> (start/stop, mode
+console holds revoked, and <code>console_access</code> — informational, see <em>M5 additions</em>),
+<code>Ping</code>, <code>Job</code> (see below), <code>VideoControl</code> (start/stop, mode
 <code>thumbnail|full</code>, fps, quality), <code>Input</code> (mouse move/button/wheel, key down/up, unicode
 text), <code>Overlay</code> (lock / unlock / broadcast start / broadcast stop, message text),
 <code>ExamMode</code> (see below), <code>InternetPolicy</code> (see below), <code>Revocation</code> (signed revocation entries — the console sends the
@@ -941,13 +946,20 @@ records an event naming both agent ids and the old certificate serial.</p>
 <h3 id="m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, <code>D-55</code>…<code>D-60</code>)<a class="anchor" href="#m5-additions-being-implemented-d-55.d-60" aria-label="Link to this section">#</a></h3>
 <p>Recorded from the design on 2026-09-08; the portion that lands each item is in ROADMAP
 M5, and the <code>.proto</code> change below must be reflected here again in the commit that makes it.
-<strong>Status (2026-09-09, after portion 4):</strong> items 2, 3, 4 and 7 are implemented; items 1, 5
-and 6 remain for portion 5.</p>
+<strong>Status (2026-09-09, after portion 5):</strong> items 1, 2, 3, 4, 5 and 7 are implemented;
+item 6 — the versioning wording — is untouched by this portion.</p>
 <ol>
-<li><strong><code>Welcome.console_access = 6</code></strong> <em>(not yet made — portion 5)</em> — <code>enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0; ADMINISTRATOR = 1; TEACHER = 2; }</code>. Additive and informational: the authoritative role
-is the subject OU of the console leaf the agent already validated; the field lets an
-agent name the access level in events without re-parsing the certificate. Agents that
-do not know the field ignore it.</li>
+<li><strong><code>Welcome.console_access = 6</code></strong> <em>(implemented, portion 5)</em> — a nested
+<code>enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0; ADMINISTRATOR = 1; TEACHER = 2; }</code>
+on <code>Welcome</code>; field 6 was free (4 is reserved from <code>D-21</code>) and the frozen subset does not
+contain <code>Welcome</code>. The console fills it from <strong>its own leaf</strong> — the same certificate the
+agent's handshake validated — so it can never claim more than the subject OU does. It is
+additive and informational: the authoritative role stays the OU of that leaf
+(<code>AgentLink.LinkedConsoleAccess</code>), every refusal is decided from it, and the announced
+value is kept apart in <code>AgentLink.AnnouncedConsoleAccess</code> purely so an agent can name the
+access level without re-parsing the certificate. A disagreement between the two is logged
+and changes nothing. Agents that do not know the field ignore it; a console that does not
+send it leaves the announced value unspecified.</li>
 <li><strong>Role in the certificate table</strong> (above) <em>(implemented, portion 3)</em>: <code>OU=LabControl Console</code> versus <code>OU=LabControl Teacher</code> with an unchanged SAN. <code>LabName.Access</code> reads
 exactly one single-valued OU — <code>Administrator</code>, <code>Teacher</code>, otherwise <code>Unknown</code> — from
 the validated peer (<code>ConsoleChannel.PeerName</code>, <code>AgentLink.LinkedConsoleAccess</code>).
@@ -981,10 +993,13 @@ the delivering console receives the kept result when it re-sends the job after i
 dropped with the event <code>job.result_dropped</code>; nothing survives an agent restart, and
 progress produced while the delivering console is away is dropped rather than buffered.
 No field change; the frozen subset is untouched.</li>
-<li><strong>Beacon <code>take</code></strong> <em>(pending, portion 5)</em>: honoured when the <code>(inst, take)</code> token is unhonoured, the beacon
+<li><strong>Beacon <code>take</code></strong> <em>(implemented, portion 5)</em>: honoured when the <code>(inst, take)</code> token is unhonoured, the beacon
 arrived after the link was established on the agent's own clock, and <code>take</code> is within
 <code>TakeOverWindow + BeaconMaxSkew</code> of the beacon's own <code>ts</code>. The taker's timestamp is
-never compared with the agent's link time. No field change.</li>
+never compared with the agent's link time. No field change. The console side of the same
+decision changed too, without touching the wire: a console credits another teacher
+machine with a PC only when it watched that PC leave while that machine's signed <code>take</code>
+beacon was arriving here, and its banner therefore says <em>holds at least N</em> (<code>D-58</code>).</li>
 <li><strong>Versioning</strong> <em>(pending, portions 4–5)</em>: an M5 console accepts every older agent as before and shows the
 <em>update available</em> badge; the two behaviours it cannot get from an older agent —
 role-based refusal of <code>self_update</code>/<code>rekey</code> and result binding to the delivering
@@ -1132,7 +1147,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-09 05:23 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 06:05 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

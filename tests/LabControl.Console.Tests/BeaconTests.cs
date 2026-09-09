@@ -1,5 +1,6 @@
 using Xunit;
 
+using LabControl.Console.Services;
 using LabControl.Shared;
 using LabControl.Shared.Discovery;
 using LabControl.Shared.Link;
@@ -54,8 +55,15 @@ public sealed class BeaconTests
             Assert.All(agents, agent => Assert.Equal(b.Session.Instance.InstanceId, agent.Link.LinkedInstanceId));
             Assert.Contains(a.Session.Events.Recent, e => e.Code == "console.taken_over" && e.Message.Contains("Console B", StringComparison.Ordinal));
 
-            // The banner on A now lists the PCs it does not hold; B has all three in its list.
-            Assert.Equal(3, a.Session.HeldElsewhere().Count);
+            // A watched all three leave during B's own take-over, so its banner credits B
+            // with exactly those three — positively observed, not presumed (M5 §4.6, D-58).
+            // A's link count drops before the departure is attributed, so this waits.
+            Assert.True(await Wait.UntilAsync(
+                () => a.Session.Registry.Document.Machines.All(m => a.Session.Ownership(m).Kind == OwnershipKind.ObservedElsewhere),
+                TimeSpan.FromSeconds(10)),
+                "A does not credit every PC to B: " +
+                string.Join(", ", a.Session.Registry.Document.Machines.Select(m => m.Number + "=" + a.Session.Ownership(m).Kind)));
+            Assert.Equal(3, a.Session.ObservedElsewhere(b.Session.Instance.InstanceId).Count);
             Assert.Equal(3, b.Session.Registry.Document.Machines.Count);
 
             // The same take-over value is not honoured twice: the room stays with B.

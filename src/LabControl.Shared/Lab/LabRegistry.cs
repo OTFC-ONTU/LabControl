@@ -87,7 +87,12 @@ public sealed class LabRegistry
             machine.AgentVersion = hello.AgentVersion;
             machine.ProtocolVersion = hello.ProtocolVersion;
             machine.LastSeenUnix = now.ToUnixTimeSeconds();
+
+            // The strongest observation there is: the PC is talking to this console right
+            // now (M5, D-58). It also supersedes any earlier observation of another teacher
+            // machine, so a PC this console has held cannot later be claimed for that one.
             machine.LastInstanceId = thisInstanceId;
+            machine.LastInstanceObservedUnix = now.ToUnixTimeSeconds();
 
             Document.Machines.Sort((a, b) => a.Number.CompareTo(b.Number));
         }
@@ -317,20 +322,68 @@ public sealed class LabRegistry
     }
 
     /// <summary>
-    /// The PCs another console is holding: the ones that last reported being linked to it
-    /// and are not linked here now. This is what fills in the §3.7.2 banner —
-    /// <i>"Lab PC is also running this lab and holds 6 of 14 PCs"</i>.
+    /// Records that another teacher machine has taken a PC over (M5, D-58). This is the one
+    /// way a console learns of a holder that is not itself, and it is a <b>positive</b>
+    /// observation rather than an inference from silence: the taker's signed <c>take</c>
+    /// beacon arrived here, and the PC left this console while that press was live.
     /// </summary>
-    public IReadOnlyList<MachineRecord> HeldElsewhere(string thisInstanceId, IReadOnlyCollection<string> linkedHere)
+    public MachineRecord? RecordObservedElsewhere(string agentId, string instanceId, DateTimeOffset now)
+    {
+        MachineRecord? machine;
+        lock (_gate)
+        {
+            machine = Document.Machines.FirstOrDefault(
+                m => string.Equals(m.AgentId, agentId, StringComparison.OrdinalIgnoreCase));
+
+            if (machine is null)
+            {
+                return null;
+            }
+
+            machine.LastInstanceId = instanceId;
+            machine.LastInstanceObservedUnix = now.ToUnixTimeSeconds();
+        }
+
+        Changed?.Invoke();
+        return machine;
+    }
+
+    /// <summary>
+    /// The PCs this console positively knows are with <paramref name="instanceId"/>: the last
+    /// observation names that instance and is younger than
+    /// <see cref="Defaults.OwnershipObservationLifetime"/>. Whether that machine is still on
+    /// the network, and whether the PC has since come back here, is the caller's business —
+    /// this answers only what was learned, never what is presumed (§3.7.2 banner).
+    /// </summary>
+    public IReadOnlyList<MachineRecord> ObservedElsewhere(string instanceId, DateTimeOffset now)
     {
         lock (_gate)
         {
             return Document.Machines
-                .Where(m => m.LastInstanceId is { Length: > 0 } &&
-                            !string.Equals(m.LastInstanceId, thisInstanceId, StringComparison.OrdinalIgnoreCase) &&
-                            !linkedHere.Contains(m.AgentId, StringComparer.OrdinalIgnoreCase))
+                .Where(m => IsObservedWith(m, instanceId, now))
+                .OrderBy(m => m.Number)
                 .ToArray();
         }
+    }
+
+    /// <summary>
+    /// Whether a machine's last positive observation names <paramref name="instanceId"/> and
+    /// is still fresh. The age is worked out in whole seconds rather than by building a
+    /// <see cref="DateTimeOffset"/>, so a <c>lab.json</c> that has been corrupted into an
+    /// impossible timestamp is answered "no" instead of throwing under the lab view.
+    /// </summary>
+    public static bool IsObservedWith(MachineRecord machine, string instanceId, DateTimeOffset now)
+    {
+        if (machine.LastInstanceObservedUnix <= 0 || instanceId.Length == 0 ||
+            machine.LastInstanceId is not { Length: > 0 } observed ||
+            !string.Equals(observed, instanceId, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var age = now.ToUnixTimeSeconds() - machine.LastInstanceObservedUnix;
+        var lifetime = (long)Defaults.OwnershipObservationLifetime.TotalSeconds;
+        return age >= -lifetime && age <= lifetime;
     }
 
     // ------------------------------------------------------------------ revocation

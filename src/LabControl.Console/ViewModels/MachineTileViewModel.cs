@@ -15,8 +15,14 @@ public enum TileStatus
     /// <summary>Linked, but below the console's minimum protocol version (D-19).</summary>
     Outdated = 2,
 
-    /// <summary>Not linked here while another console is live: presumed held by it (§3.7.2).</summary>
+    /// <summary>Positively observed with another teacher machine that is still live (§3.7.2, D-58).</summary>
     HeldElsewhere = 3,
+
+    /// <summary>
+    /// Another console is running this lab and this one does not know where the PC is
+    /// (M5 §4.6, D-58). The honest middle state: it is not claimed for anybody.
+    /// </summary>
+    NotSeen = 4,
 }
 
 /// <summary>One PC in the lab view. Refreshed in place from the machine record and the live link.</summary>
@@ -108,6 +114,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
     public partial string CertificateSerial { get; set; } = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
     public partial string LastSeen { get; set; } = string.Empty;
 
     [ObservableProperty]
@@ -151,6 +158,10 @@ public sealed partial class MachineTileViewModel : ObservableObject
         TileStatus.Online => Strings.Get("Tile.Online"),
         TileStatus.Outdated => Strings.Get("Tile.Outdated"),
         TileStatus.HeldElsewhere => Strings.Format("Tile.HeldBy", HeldBy),
+        TileStatus.NotSeen when IsWaking => Strings.Get("Tile.Waking"),
+        TileStatus.NotSeen => LastSeen.Length == 0 || LastSeen == Strings.Get("Tile.Never")
+            ? Strings.Get("Tile.NotSeenYet")
+            : Strings.Format("Tile.NotSeenSince", LastSeen),
         _ => IsWaking ? Strings.Get("Tile.Waking") : Strings.Get("Tile.Offline"),
     };
 
@@ -191,7 +202,12 @@ public sealed partial class MachineTileViewModel : ObservableObject
             ? Strings.Get("Capture." + reason)
             : reason.Replace('_', ' ');
 
-    public void Refresh(MachineRecord machine, AgentConnection? connection, string? heldBy, DateTimeOffset now, bool waking = false)
+    /// <param name="ownership">
+    /// What the session actually knows about this PC (M5 §4.6, D-58). <c>null</c> means
+    /// "nothing is known and no other console is live", which is what an offline PC looks
+    /// like; a PC is shown as held by another machine only for a positive observation.
+    /// </param>
+    public void Refresh(MachineRecord machine, AgentConnection? connection, MachineOwnership? ownership, DateTimeOffset now, bool waking = false)
     {
         IsWaking = waking && connection is null;
         Number = machine.Number;
@@ -234,11 +250,16 @@ public sealed partial class MachineTileViewModel : ObservableObject
         }
         else
         {
-            HeldBy = heldBy ?? string.Empty;
-            Status = heldBy is null ? TileStatus.Offline : TileStatus.HeldElsewhere;
             LastSeen = machine.LastSeenUnix == 0
                 ? Strings.Get("Tile.Never")
                 : DateTimeOffset.FromUnixTimeSeconds(machine.LastSeenUnix).ToLocalTime().ToString("g", Strings.Culture);
+            HeldBy = ownership?.HolderName ?? string.Empty;
+            Status = ownership?.Kind switch
+            {
+                OwnershipKind.ObservedElsewhere => TileStatus.HeldElsewhere,
+                OwnershipKind.Unknown => TileStatus.NotSeen,
+                _ => TileStatus.Offline,
+            };
         }
 
         RefreshPicture(now, connection is not null);

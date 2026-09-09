@@ -141,6 +141,18 @@ message Welcome {
   repeated string revoked_serials = 5;  // what this console holds; the agent answers
                                         // with RevocationState and the console sends
                                         // the entries the agent is missing
+
+  // M5 (D-58): what the console serving this link may do, so an agent can name the access
+  // level in an event without re-parsing the certificate. Additive and INFORMATIONAL: the
+  // authority is the subject OU of the console leaf the TLS handshake validated, and every
+  // refusal is decided from that leaf, never from this field. Agents that do not know the
+  // field ignore it.
+  enum ConsoleAccess {
+    CONSOLE_ACCESS_UNSPECIFIED = 0;
+    ADMINISTRATOR              = 1;
+    TEACHER                    = 2;
+  }
+  ConsoleAccess console_access = 6;
 }
 
 message Heartbeat { int64 sent_at_unix = 1; }

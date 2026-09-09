@@ -245,7 +245,6 @@ public sealed partial class MainViewModel : ObservableObject
     private void RefreshMachines()
     {
         var now = _session.Now;
-        var others = _session.OtherConsoles;
         var layout = _session.Registry.EffectiveLayout().ToDictionary(t => t.Number);
         var machines = _session.Registry.Document.Machines.ToArray();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -268,14 +267,14 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             var connection = _session.FindLinked(machine.AgentId);
-            string? heldBy = null;
-            if (connection is null && others.Count > 0)
-            {
-                heldBy = others.FirstOrDefault(o => string.Equals(o.InstanceId, machine.LastInstanceId, StringComparison.OrdinalIgnoreCase))?.Name
-                         ?? (others.Count == 1 ? others[0].Name : Strings.Get("Tile.AnotherConsole"));
-            }
 
-            tile.Refresh(machine, connection, heldBy, now, _session.Waking(machine.AgentId) is not null);
+            // What this console knows, not what it can guess (M5 §4.6, D-58): a PC that is
+            // simply not linked here shows offline, or "not seen since" while another
+            // console is live, and is credited to that console only when it was observed
+            // leaving for it.
+            var ownership = connection is null ? _session.Ownership(machine) : null;
+
+            tile.Refresh(machine, connection, ownership, now, _session.Waking(machine.AgentId) is not null);
 
             if (layout.TryGetValue(machine.Number, out var cell))
             {
@@ -651,12 +650,20 @@ public sealed partial class MainViewModel : ObservableObject
 
         foreach (var other in _session.OtherConsoles)
         {
-            var held = _session.HeldElsewhere();
+            // Only the PCs this console watched leave for that machine are counted, and the
+            // wording says "at least" because the ones it knows nothing about may be
+            // anywhere — including switched off (M5 §4.6, D-58).
+            var observed = _session.ObservedElsewhere(other.InstanceId);
             var total = _session.Registry.Document.Machines.Count;
-            var numbers = string.Join(", ", held.Select(m => string.Format(Strings.Culture, Defaults.MachineNameFormat, m.Number)));
-            var text = other.TookOverAt is { } at && held.Count == total && total > 0
-                ? Strings.Format("Banner.TookOver", other.Name, at.ToLocalTime().ToString("t", Strings.Culture), held.Count, total, numbers)
-                : Strings.Format("Banner.OtherConsole", other.Name, held.Count, total, numbers);
+            var numbers = string.Join(", ", observed.Select(m => string.Format(Strings.Culture, Defaults.MachineNameFormat, m.Number)));
+            var when = other.TookOverAt?.ToLocalTime().ToString("t", Strings.Culture) ?? string.Empty;
+            var text = other.TookOverAt is not null
+                ? observed.Count > 0
+                    ? Strings.Format("Banner.TookOver", other.Name, when, observed.Count, total, numbers)
+                    : Strings.Format("Banner.TookOverUnknown", other.Name, when)
+                : observed.Count > 0
+                    ? Strings.Format("Banner.OtherConsole", other.Name, observed.Count, total, numbers)
+                    : Strings.Format("Banner.OtherConsoleUnknown", other.Name);
 
             wanted.Add(new BannerViewModel("other:" + other.InstanceId, text, Strings.Get("Banner.TakeOver"),
                 () => { _session.TakeOver(); return Task.CompletedTask; }, isWarning: false));

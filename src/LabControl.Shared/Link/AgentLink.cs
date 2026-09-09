@@ -116,6 +116,15 @@ public sealed partial class AgentLink : IAsyncDisposable
     /// </summary>
     public ConsoleAccess LinkedConsoleAccess { get; private set; }
 
+    /// <summary>
+    /// What the console <i>said</i> about its own access in <c>Welcome.console_access</c>
+    /// (M5, D-58). Informational: it is here so an event can name the access level, and it
+    /// is never used to decide anything — <see cref="LinkedConsoleAccess"/>, read off the
+    /// validated leaf, is what refuses a job. <see cref="ConsoleAccess.Unknown"/> while
+    /// unlinked and from a console that predates the field.
+    /// </summary>
+    public ConsoleAccess AnnouncedConsoleAccess { get; private set; }
+
     /// <summary>The serial of the linked console's leaf, from the TLS handshake; <c>null</c> while unlinked.</summary>
     private string? _linkedConsoleSerial;
 
@@ -726,6 +735,7 @@ public sealed partial class AgentLink : IAsyncDisposable
                 LinkedInstanceName = null;
                 LinkedEndpoint = null;
                 LinkedConsoleAccess = ConsoleAccess.Unknown;
+                AnnouncedConsoleAccess = ConsoleAccess.Unknown;
                 _linkedConsoleSerial = null;
                 lock (_gateLock)
                 {
@@ -786,7 +796,16 @@ public sealed partial class AgentLink : IAsyncDisposable
         LinkedInstanceId = instanceId;
         LinkedInstanceName = welcome.InstanceName;
         LinkedEndpoint = endpoint;
+        AnnouncedConsoleAccess = FromWelcome(welcome.ConsoleAccess);
         State = LinkState.Linked;
+
+        // The field is informational (D-58): the certificate has already decided what this
+        // console may do, and a disagreement is worth a line in the log and nothing more.
+        if (AnnouncedConsoleAccess != ConsoleAccess.Unknown && AnnouncedConsoleAccess != LinkedConsoleAccess)
+        {
+            _log.LogWarning("{Pc}: {Console} announces {Announced} access but its certificate says {Certified}; the certificate is the one that counts",
+                Name, welcome.InstanceName, AnnouncedConsoleAccess, LinkedConsoleAccess);
+        }
         _lastRefusal = string.Empty;
         _pinnedBackoff.Reset();
         _gate.Linked(instanceId, endpoint, now);
@@ -800,6 +819,14 @@ public sealed partial class AgentLink : IAsyncDisposable
         _log.LogInformation("{Pc}: linked to {Console} ({Instance}) at {Endpoint}", Name, welcome.InstanceName, instanceId, endpoint);
         Linked?.Invoke(instanceId, welcome.InstanceName);
     }
+
+    /// <summary>The informational <c>Welcome</c> field in this build's terms; anything unknown stays unknown.</summary>
+    private static ConsoleAccess FromWelcome(Welcome.Types.ConsoleAccess announced) => announced switch
+    {
+        Welcome.Types.ConsoleAccess.Administrator => ConsoleAccess.Administrator,
+        Welcome.Types.ConsoleAccess.Teacher => ConsoleAccess.Teacher,
+        _ => ConsoleAccess.Unknown,
+    };
 
     private async Task HandleAsync(ConsoleMessage message, ChannelWriter<AgentMessage> outgoing, CancellationToken token)
     {

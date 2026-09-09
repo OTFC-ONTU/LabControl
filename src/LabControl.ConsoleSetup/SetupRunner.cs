@@ -463,11 +463,15 @@ internal sealed class SetupRunner(ConsoleInstallLayout layout, SetupLog log, str
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                ArgumentList =
-                {
-                    "/d", "/c",
-                    "ping 127.0.0.1 -n 5 > nul & del /f /q \"" + self + "\"",
-                },
+
+                // Arguments, not ArgumentList: ArgumentList quotes each argument the way a C
+                // runtime parses argv — the inner quotes come out as \" — and cmd.exe does not
+                // understand that escape. It answers "The filename, directory name, or volume
+                // label syntax is incorrect", deletes nothing, and leaves a ~150 MB working
+                // installer in the teacher's temp directory. cmd's own rules want the line
+                // written out as it is, with the path in ordinary quotes: that is also what
+                // protects a temp path containing a space or an ampersand.
+                Arguments = "/d /c ping 127.0.0.1 -n 5 > nul & del /f /q \"" + self + "\"",
             });
         }
         catch (Exception error) when (error is IOException or System.ComponentModel.Win32Exception)

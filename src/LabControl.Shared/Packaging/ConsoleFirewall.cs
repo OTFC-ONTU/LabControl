@@ -21,8 +21,14 @@ public sealed record ConsoleFirewallRuleSpec(string Name, string Description, in
     /// <summary>Block; the COM API calls it <c>NET_FW_ACTION_BLOCK</c>. A matching block rule wins over every allow rule.</summary>
     public const int ActionBlock = 0;
 
-    /// <summary>Private (2) | Domain (4). Public is deliberately not requested.</summary>
-    public const int Profiles = 6;
+    /// <summary>
+    /// Domain (1) | Private (2). Public (4) is deliberately not requested.
+    /// <c>NET_FW_PROFILE_TYPE2</c> numbers the profiles Domain 1, Private 2, Public 4 — not
+    /// Private 2, Domain 4 — and this one constant both creates the rules and decides whether
+    /// somebody else's rule already covers a port, so a wrong value opens the teacher's
+    /// machine on a café network and rejects the very rule the printed netsh line creates.
+    /// </summary>
+    public const int Profiles = 3;
 
     /// <summary>What the COM API reports for a rule that is on every profile.</summary>
     public const int AllProfiles = 0x7FFFFFFF;
@@ -31,10 +37,17 @@ public sealed record ConsoleFirewallRuleSpec(string Name, string Description, in
 
     public string LocalPorts => Port.ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>The exact command line a teacher can run in an elevated prompt when the console cannot add the rule itself.</summary>
+    /// <summary>
+    /// The exact command line a teacher can run in an elevated prompt when the console cannot
+    /// add the rule itself. There is no <c>group=</c> here on purpose: <c>netsh advfirewall
+    /// firewall add rule</c> rejects that argument outright ("'group' is not a valid argument
+    /// for this command"), so a line carrying it creates nothing at all. A rule made by hand
+    /// therefore has no group, which is why uninstall leaves it for review instead of removing
+    /// it by name — the safe half of the trade.
+    /// </summary>
     public string NetshLine =>
         $"netsh advfirewall firewall add rule name=\"{Name}\" dir=in action=allow protocol={ProtocolName} " +
-        $"localport={LocalPorts} profile=private,domain group=\"{ConsoleFirewallRules.Group}\" enable=yes";
+        $"localport={LocalPorts} profile=private,domain enable=yes";
 
     /// <summary>The matching removal, for the uninstall that could not elevate itself (D-59 item 1).</summary>
     public string NetshDeleteLine =>

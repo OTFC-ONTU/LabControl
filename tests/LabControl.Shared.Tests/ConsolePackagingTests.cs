@@ -220,8 +220,9 @@ public class ConsolePackagingTests
         Assert.Equal(Defaults.BeaconPort, ConsoleFirewallRules.Discovery.Port);
         Assert.Equal(ConsoleFirewallRuleSpec.Udp, ConsoleFirewallRules.Discovery.Protocol);
         Assert.Equal(Defaults.ConsoleProductName, ConsoleFirewallRules.Group);
-        // Private | Domain, never Public.
-        Assert.Equal(6, ConsoleFirewallRuleSpec.Profiles);
+        // Domain (1) | Private (2), never Public (4) — the NET_FW_PROFILE_TYPE2 numbering, which
+        // a real Windows Firewall reports back as "Private, Public" when this is 6.
+        Assert.Equal(3, ConsoleFirewallRuleSpec.Profiles);
     }
 
     [Fact]
@@ -325,7 +326,9 @@ public class ConsolePackagingTests
             Assert.StartsWith("netsh advfirewall firewall add rule ", line, StringComparison.Ordinal);
             Assert.Contains("dir=in action=allow", line, StringComparison.Ordinal);
             Assert.Contains("profile=private,domain", line, StringComparison.Ordinal);
-            Assert.Contains("group=\"" + ConsoleFirewallRules.Group + "\"", line, StringComparison.Ordinal);
+            // netsh's "add rule" has no group= argument and refuses the whole command when it
+            // is given one, so the line a teacher is told to run must not carry it.
+            Assert.DoesNotContain("group=", line, StringComparison.Ordinal);
         });
         Assert.Contains("protocol=TCP localport=47800", lines[0], StringComparison.Ordinal);
         Assert.Contains("protocol=UDP localport=47801", lines[1], StringComparison.Ordinal);
@@ -495,7 +498,7 @@ public class ConsolePackagingTests
                  {
                      narrowBlock with { LocalPorts = "47999" },
                      narrowBlock with { ApplicationName = @"C:\Games\game.exe" },
-                     narrowBlock with { Profiles = 1 },
+                     narrowBlock with { Profiles = 4 },
                      narrowBlock with { Enabled = false },
                      narrowBlock with { Direction = 2 },
                  })

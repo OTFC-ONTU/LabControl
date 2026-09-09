@@ -19,7 +19,7 @@ implement.
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
-| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–4 and 6 built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portion 6 checked by hand on the owner's Mac; portions 5 and 7 in progress; real-Mac switch timing under investigation; the Windows pipe and the Linux `SO_PEERCRED` path of the single instance are not yet run on those systems** | M4 |
+| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–4, 6 and 7 built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation; portion 7 on 2026-09-09: the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6 and 7 checked by hand on the owner's Mac; portion 5 in progress and portion 8 (the acceptance drills and the documentation close-out) not started; real-Mac switch timing under investigation; the Windows pipe and the Linux `SO_PEERCRED` path of the single instance, the Windows installer itself, the LAN banner against a real Windows Firewall and a real Linux desktop menu are not yet run on those systems** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
@@ -1615,6 +1615,73 @@ contract, then desktop integration (`D-54` item 6).
   quit from the shell; and after a refusal the forwarding launch may briefly report that a
   console is already running while the departing one still holds the lock for up to ten
   seconds — the file is surfaced to the teacher rather than lost.
+- *Portion 7 (built, reviewed and fixed 2026-09-09, on the Mac).* Desktop packaging and the
+  LAN-access banner (`D-59` items 1–4; INSTALLER, *Teacher console installation*). One file
+  per platform, no administrator, no runtime download, and nothing that installs a service,
+  touches an account or adds an antivirus exclusion. **Windows**:
+  `src/LabControl.ConsoleSetup/` is a single-file, self-contained `asInvoker` `win-x64`
+  executable carrying the published console as an embedded zip. It installs into
+  `%LOCALAPPDATA%\Programs\LabControl\Console\`, writes the Start-menu `.lnk`
+  (`IShellLinkW` via CsWin32), the optional desktop shortcut, the HKCU Installed-apps entry
+  and the `LabControl.LabFile` (`.lclab`) / `LabControl.Backup` (`.lcbak`) ProgIds with a
+  quoted `"%1"`, adds itself to `OpenWithProgids` always and takes the default only where
+  Windows holds no `UserChoice`, and changes no firewall rule at install time. The whole run
+  is data (`ConsoleInstallPlan`), so `--dry-run` prints exactly the steps the same run would
+  execute and every step is idempotent; a build without the payload refuses to install and
+  names `tools/package-windows.sh`. `--uninstall` removes what `installed-files.txt` lists
+  plus its keys and shortcuts, and its firewall rules only when that run is already
+  elevated, and keeps the labs; `--remove-data` is a
+  separate switch that makes the teacher type REMOVE and refuses with redirected input;
+  `--firewall` is the one elevated step. Everything is appended to
+  `%LOCALAPPDATA%\LabControl\console-setup.log`, and the installer never opens the data
+  directory beyond testing `console.lock`. **The banner**: `NetworkReadiness` over
+  `WindowsConsoleFirewall` reads the firewall read-only when a lab activates and, when
+  inbound TCP 47800 or UDP 47801 is not open on the Private and Domain profiles, raises a
+  non-blocking banner whose *Allow…* runs `--firewall` elevated and then re-reads the rules;
+  a refusal, a missing helper or still-absent rules turn it into the two exact `netsh` lines
+  with *Check again*. **macOS**: `tools/package-mac.sh` builds `LabControl.app` with both
+  document types over the exported UTIs `org.ontfk.labcontrol.lab`/`.backup`, signs it ad
+  hoc, wraps it in a DMG with an Applications symlink and prints the expected `spctl`
+  refusal instead of hiding it (`D-15`). **Linux**: `tools/package-linux.sh` builds a
+  tarball with per-user `install.sh`/`uninstall.sh` into `~/.local/opt/labcontrol/console/`,
+  the `.desktop` entry, MIME XML, icons and the Ubuntu 22.04/24.04 prerequisite list.
+  `tools/package-all.sh` runs the three into `artifacts/package/`; `tools/publish-all.sh` is
+  unchanged. What the review changed: `installed-files.txt` is untrusted input, so a line
+  that is rooted, names a drive, climbs out with `..` or lands outside the install directory
+  is refused and logged rather than deleted, and the same guard resolves every payload
+  entry; no usable manifest falls back to the two program files instead of reporting a clean
+  removal; `--finish-removal` accepts only this layout's own install directory, and the
+  temporary copy is told the uninstaller's process id, waits for it, retries, deletes itself
+  and is swept by later runs; a registry key pointing at another installation is preserved
+  and reported instead of throwing the uninstall away half-finished; the lock check also
+  asks whether a console process is running, which a console started with `--data` elsewhere
+  would not reveal; **firewall coverage became honest** — a rule scoped to another program
+  or to a Windows service, cut down to one address range or to one interface type opens
+  nothing for this console, and one matching block rule (judged generously) vetoes every
+  allow rule; the banner believes the rules rather than the helper's exit code, and neither
+  fire-and-forget task can fault; only a step that provably wrote nothing may claim nothing
+  changed; uninstall never asks for an administrator — unless that run is already elevated
+  the rules stay and the `netsh … delete rule` lines are printed, and a rule name shared
+  with another group is preserved for review, because Windows deletes by name; a rule
+  Windows will not describe is skipped rather than turning a healthy machine into *Failed*;
+  a root Windows will not name refuses the run instead of writing blind; a payload-less
+  build may still print its plan; `--remove-data` removes the installer log too; the copied
+  uninstaller loses its `Zone.Identifier`; `install.sh` rewrites `Exec` and `TryExec` to the
+  absolute launcher path, because `~/.local/bin` joins the PATH only at the next login and
+  an unresolvable `TryExec` hides the entry; and the Windows setup manifest carries the
+  build's own version, generated into `obj/` instead of a frozen `1.0.0.0`. Tests: 888 at
+  the portion's own head (711 Shared + 177 Console) and **936 after merging with portions 4
+  and 6** (726 Shared + 210 Console), 13 of them macOS bundle tests that skip unless
+  `tools/package-mac.sh` has been run. *On the owner's Mac*: the full build; all three
+  packages produced, the installer assembly really carrying its ~59 MB payload; the DMG
+  built, its `Info.plist` keys and ad-hoc signature verified, the Gatekeeper refusal
+  observed as documented, and the bundle launched once against a copy of a data directory;
+  the Linux tarball installed and uninstalled into a throwaway `HOME`, with the generated
+  `.desktop` entry inspected (absolute `Exec`/`TryExec`, an executable launcher, nothing
+  left behind). **Never run, and not runnable on a Mac**: the Windows installer itself in
+  any form, the LAN banner against a real Windows Firewall, and a real GNOME or KDE
+  application menu. Those join portion 6's Windows named-pipe and Linux `SO_PEERCRED` paths
+  in portion 7's manual matrix and must not be reported as passing until they are.
 
 **Not in scope.** Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs

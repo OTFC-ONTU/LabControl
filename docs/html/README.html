@@ -198,7 +198,7 @@ and roadmap.</p>
 </tr>
 <tr>
 <td><a href="docs/INSTALLER.md"><code>docs/INSTALLER.md</code></a></td>
-<td>Student USB Setup and planned lightweight teacher-console installation</td>
+<td>Student USB Setup and the teacher-console packages for Windows, macOS and Linux</td>
 </tr>
 <tr>
 <td><a href="docs/DECISIONS.md"><code>docs/DECISIONS.md</code></a></td>
@@ -265,9 +265,23 @@ dotnet run --project src/LabControl.Console            # first run: the wizard c
 dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb
 #   in the console: Enrol PCs… → passphrase → the PCs enrol and appear
 tools/publish-all.sh
+tools/package-all.sh                                   # the teacher-console packages (below)
 tools/docs-build.sh
 tools/make-icon.py                                     # regenerate the console icon (png/ico/icns)
 </code></pre>
+<p>The console is installed from one file per platform — no administrator, no runtime
+download, nothing that installs a service or touches an account. The packages are built
+on any machine that can run <code>dotnet</code> (the macOS <code>.app</code> and DMG need macOS) and land in
+<code>artifacts/package/</code>:</p>
+<pre><code class="language-bash">tools/package-windows.sh   # one self-contained Setup.exe, installs per user; --dry-run prints the plan
+tools/package-mac.sh       # LabControl.app, ad-hoc signed, in a DMG with an Applications symlink
+tools/package-linux.sh     # a tarball with per-user install.sh / uninstall.sh
+tools/package-all.sh       # all three; the macOS part is skipped off macOS
+</code></pre>
+<p><code>tools/publish-all.sh</code> is unchanged and still produces the plain executable directories
+used for development and for the USB payload. See
+<a href="docs/INSTALLER.md">the teacher-console chapter</a> for what each package does, and for the
+Windows LAN-access banner and the first-open steps on macOS.</p>
 <p>Two console profiles on one machine (the alternation and take-over tests):</p>
 <pre><code class="language-bash">dotnet run --project src/LabControl.Console -- --data ~/labA --port 47800
 dotnet run --project src/LabControl.Console -- --data ~/labB --port 47810   # import the backup from A
@@ -354,7 +368,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-09 05:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 06:05 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

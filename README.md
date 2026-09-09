@@ -50,7 +50,7 @@ and roadmap.
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | What gets built, in what order, and how each milestone is judged done |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components, processes, data flow, threat model |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | gRPC services, discovery, video encoding, job lifecycle |
-| [`docs/INSTALLER.md`](docs/INSTALLER.md) | Student USB Setup and planned lightweight teacher-console installation |
+| [`docs/INSTALLER.md`](docs/INSTALLER.md) | Student USB Setup and the teacher-console packages for Windows, macOS and Linux |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why each choice was made, and what was rejected |
 
 The same documents are mirrored as a small self-contained website in
@@ -124,9 +124,27 @@ dotnet run --project src/LabControl.Console            # first run: the wizard c
 dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb
 #   in the console: Enrol PCs… → passphrase → the PCs enrol and appear
 tools/publish-all.sh
+tools/package-all.sh                                   # the teacher-console packages (below)
 tools/docs-build.sh
 tools/make-icon.py                                     # regenerate the console icon (png/ico/icns)
 ```
+
+The console is installed from one file per platform — no administrator, no runtime
+download, nothing that installs a service or touches an account. The packages are built
+on any machine that can run `dotnet` (the macOS `.app` and DMG need macOS) and land in
+`artifacts/package/`:
+
+```bash
+tools/package-windows.sh   # one self-contained Setup.exe, installs per user; --dry-run prints the plan
+tools/package-mac.sh       # LabControl.app, ad-hoc signed, in a DMG with an Applications symlink
+tools/package-linux.sh     # a tarball with per-user install.sh / uninstall.sh
+tools/package-all.sh       # all three; the macOS part is skipped off macOS
+```
+
+`tools/publish-all.sh` is unchanged and still produces the plain executable directories
+used for development and for the USB payload. See
+[the teacher-console chapter](docs/INSTALLER.md) for what each package does, and for the
+Windows LAN-access banner and the first-open steps on macOS.
 
 Two console profiles on one machine (the alternation and take-over tests):
 

@@ -721,16 +721,20 @@ The console's difficulty is not the binary but the data it leaves behind: `lab.j
 by builds written months apart. That is what `schema_version` and the load-time migrations
 of `D-20` exist for, and why they are built in M1 rather than retrofitted.
 
-Because the binaries are unsigned (`D-15`), macOS quarantines a freshly downloaded console
-once; this is a one-time `xattr -d com.apple.quarantine`, documented in the README rather
-than engineered around.
+Because the binaries are unsigned (`D-15`), Gatekeeper refuses the packaged console the
+first time: the `.app` in the DMG is signed ad hoc, which loads on Apple Silicon but does
+not satisfy Gatekeeper. The teacher opens it once with right-click → *Open* or through
+*Privacy & Security*; that refusal is printed by the packaging script and documented in
+INSTALLER's teacher-console chapter rather than engineered around.
 
 ## 8. Console UI (Avalonia)
 
-- **Desktop installation (planned M5, D-54)**: simple self-contained teacher packages
-  copy/register the application, launchers and lab-file/backup opening. They install no
-  agent service, background server or student-machine preparation. The gRPC server
-  remains embedded in the interactive console; see INSTALLER's teacher-console section.
+- **Desktop installation (M5, `D-54`/`D-59`)**: one self-contained package per platform
+  copies and registers the application, its launcher and lab-file/backup opening. They
+  install no agent service, background server or student-machine preparation, and change
+  no account or system setting. The gRPC server remains embedded in the interactive
+  console, which asks for inbound LAN access on Windows at the point of use; see
+  INSTALLER's teacher-console chapter.
 - **My labs and active-room selector (planned M5)**: bulk-add lab files, choose exactly
   one room, switch or disconnect without restarting. Inactive entries show cached
   metadata, not live presence; the active room is named beside every set of controls.

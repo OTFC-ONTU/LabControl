@@ -187,7 +187,7 @@ implement.</p>
 <tr>
 <td><strong>M5</strong></td>
 <td>Lab files, teacher access and fast switching between rooms</td>
-<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–4 and 6 built and reviewed (1–3 on 2026-09-08 — profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portion 6 checked by hand on the owner's Mac; portions 5 and 7 in progress; real-Mac switch timing under investigation; the Windows pipe and the Linux <code>SO_PEERCRED</code> path of the single instance are not yet run on those systems</strong></td>
+<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–4, 6 and 7 built and reviewed (1–3 on 2026-09-08 — profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation; portion 7 on 2026-09-09: the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6 and 7 checked by hand on the owner's Mac; portion 5 in progress and portion 8 (the acceptance drills and the documentation close-out) not started; real-Mac switch timing under investigation; the Windows pipe and the Linux <code>SO_PEERCRED</code> path of the single instance, the Windows installer itself, the LAN banner against a real Windows Firewall and a real Linux desktop menu are not yet run on those systems</strong></td>
 <td>M4</td>
 </tr>
 <tr>
@@ -1801,6 +1801,73 @@ not be reproduced in the real GUI, because there is no way to ask a running cons
 quit from the shell; and after a refusal the forwarding launch may briefly report that a
 console is already running while the departing one still holds the lock for up to ten
 seconds — the file is surfaced to the teacher rather than lost.</li>
+<li><em>Portion 7 (built, reviewed and fixed 2026-09-09, on the Mac).</em> Desktop packaging and the
+LAN-access banner (<code>D-59</code> items 1–4; INSTALLER, <em>Teacher console installation</em>). One file
+per platform, no administrator, no runtime download, and nothing that installs a service,
+touches an account or adds an antivirus exclusion. <strong>Windows</strong>:
+<code>src/LabControl.ConsoleSetup/</code> is a single-file, self-contained <code>asInvoker</code> <code>win-x64</code>
+executable carrying the published console as an embedded zip. It installs into
+<code>%LOCALAPPDATA%\Programs\LabControl\Console\</code>, writes the Start-menu <code>.lnk</code>
+(<code>IShellLinkW</code> via CsWin32), the optional desktop shortcut, the HKCU Installed-apps entry
+and the <code>LabControl.LabFile</code> (<code>.lclab</code>) / <code>LabControl.Backup</code> (<code>.lcbak</code>) ProgIds with a
+quoted <code>&quot;%1&quot;</code>, adds itself to <code>OpenWithProgids</code> always and takes the default only where
+Windows holds no <code>UserChoice</code>, and changes no firewall rule at install time. The whole run
+is data (<code>ConsoleInstallPlan</code>), so <code>--dry-run</code> prints exactly the steps the same run would
+execute and every step is idempotent; a build without the payload refuses to install and
+names <code>tools/package-windows.sh</code>. <code>--uninstall</code> removes what <code>installed-files.txt</code> lists
+plus its keys and shortcuts, and its firewall rules only when that run is already
+elevated, and keeps the labs; <code>--remove-data</code> is a
+separate switch that makes the teacher type REMOVE and refuses with redirected input;
+<code>--firewall</code> is the one elevated step. Everything is appended to
+<code>%LOCALAPPDATA%\LabControl\console-setup.log</code>, and the installer never opens the data
+directory beyond testing <code>console.lock</code>. <strong>The banner</strong>: <code>NetworkReadiness</code> over
+<code>WindowsConsoleFirewall</code> reads the firewall read-only when a lab activates and, when
+inbound TCP 47800 or UDP 47801 is not open on the Private and Domain profiles, raises a
+non-blocking banner whose <em>Allow…</em> runs <code>--firewall</code> elevated and then re-reads the rules;
+a refusal, a missing helper or still-absent rules turn it into the two exact <code>netsh</code> lines
+with <em>Check again</em>. <strong>macOS</strong>: <code>tools/package-mac.sh</code> builds <code>LabControl.app</code> with both
+document types over the exported UTIs <code>org.ontfk.labcontrol.lab</code>/<code>.backup</code>, signs it ad
+hoc, wraps it in a DMG with an Applications symlink and prints the expected <code>spctl</code>
+refusal instead of hiding it (<code>D-15</code>). <strong>Linux</strong>: <code>tools/package-linux.sh</code> builds a
+tarball with per-user <code>install.sh</code>/<code>uninstall.sh</code> into <code>~/.local/opt/labcontrol/console/</code>,
+the <code>.desktop</code> entry, MIME XML, icons and the Ubuntu 22.04/24.04 prerequisite list.
+<code>tools/package-all.sh</code> runs the three into <code>artifacts/package/</code>; <code>tools/publish-all.sh</code> is
+unchanged. What the review changed: <code>installed-files.txt</code> is untrusted input, so a line
+that is rooted, names a drive, climbs out with <code>..</code> or lands outside the install directory
+is refused and logged rather than deleted, and the same guard resolves every payload
+entry; no usable manifest falls back to the two program files instead of reporting a clean
+removal; <code>--finish-removal</code> accepts only this layout's own install directory, and the
+temporary copy is told the uninstaller's process id, waits for it, retries, deletes itself
+and is swept by later runs; a registry key pointing at another installation is preserved
+and reported instead of throwing the uninstall away half-finished; the lock check also
+asks whether a console process is running, which a console started with <code>--data</code> elsewhere
+would not reveal; <strong>firewall coverage became honest</strong> — a rule scoped to another program
+or to a Windows service, cut down to one address range or to one interface type opens
+nothing for this console, and one matching block rule (judged generously) vetoes every
+allow rule; the banner believes the rules rather than the helper's exit code, and neither
+fire-and-forget task can fault; only a step that provably wrote nothing may claim nothing
+changed; uninstall never asks for an administrator — unless that run is already elevated
+the rules stay and the <code>netsh … delete rule</code> lines are printed, and a rule name shared
+with another group is preserved for review, because Windows deletes by name; a rule
+Windows will not describe is skipped rather than turning a healthy machine into <em>Failed</em>;
+a root Windows will not name refuses the run instead of writing blind; a payload-less
+build may still print its plan; <code>--remove-data</code> removes the installer log too; the copied
+uninstaller loses its <code>Zone.Identifier</code>; <code>install.sh</code> rewrites <code>Exec</code> and <code>TryExec</code> to the
+absolute launcher path, because <code>~/.local/bin</code> joins the PATH only at the next login and
+an unresolvable <code>TryExec</code> hides the entry; and the Windows setup manifest carries the
+build's own version, generated into <code>obj/</code> instead of a frozen <code>1.0.0.0</code>. Tests: 888 at
+the portion's own head (711 Shared + 177 Console) and <strong>936 after merging with portions 4
+and 6</strong> (726 Shared + 210 Console), 13 of them macOS bundle tests that skip unless
+<code>tools/package-mac.sh</code> has been run. <em>On the owner's Mac</em>: the full build; all three
+packages produced, the installer assembly really carrying its ~59 MB payload; the DMG
+built, its <code>Info.plist</code> keys and ad-hoc signature verified, the Gatekeeper refusal
+observed as documented, and the bundle launched once against a copy of a data directory;
+the Linux tarball installed and uninstalled into a throwaway <code>HOME</code>, with the generated
+<code>.desktop</code> entry inspected (absolute <code>Exec</code>/<code>TryExec</code>, an executable launcher, nothing
+left behind). <strong>Never run, and not runnable on a Mac</strong>: the Windows installer itself in
+any form, the LAN banner against a real Windows Firewall, and a real GNOME or KDE
+application menu. Those join portion 6's Windows named-pipe and Linux <code>SO_PEERCRED</code> paths
+in portion 7's manual matrix and must not be reported as passing until they are.</li>
 </ul>
 <p><strong>Not in scope.</strong> Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs
@@ -2071,7 +2138,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-09 05:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 06:05 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

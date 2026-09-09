@@ -215,8 +215,8 @@ report and results bound to the delivering instance (`D-57`), take-over on the a
 clock and observed-only ownership (`D-58`), the C# per-user Windows installer, scripted
 `.app`/`.dmg`, Linux tarball, single instance and scoped firewall rules (`D-59`), and
 dormant imported enrollment codes (`D-60`). Eight portions (ROADMAP M5, *How it is being
-built*); portions 1–4 and 6 built and reviewed, 1–3 on 2026-09-08 and portions 4 and 6 on
-2026-09-09 (portion 1: profile store, resumable
+built*); portions 1–4, 6 and 7 built and reviewed, 1–3 on 2026-09-08 and portions 4, 6
+and 7 on 2026-09-09 (portion 1: profile store, resumable
 migration, `lab.json` schema 2, `console.lock`; migration tried on a copy of the owner's
 live data, the live directory migrates on the next M5 launch; portion 2:
 `ActiveLabController`, the *My labs* chooser, *Disconnect*, the departure report, bulk
@@ -230,8 +230,16 @@ Windows clone — instance X's result waited for X while instance Y saw nothing;
 console documents on the command line, `--import-only`, a second launch forwarding its file
 paths over a per-data-directory named pipe or private-directory Unix socket instead of
 starting a second console, macOS file activation, 788 tests, checked by hand on the Mac —
-the Windows pipe and the Linux `SO_PEERCRED` path are not yet run on those systems);
-portion 5 in progress, portion 7 in progress. ARCHITECTURE §3.9/§4 and PROTOCOL
+the Windows pipe and the Linux `SO_PEERCRED` path are not yet run on those systems;
+portion 7: teacher-console packaging (`D-59` items 1–4) — the single-file per-user Windows
+installer with an untrusted `installed-files.txt`, a finishing temporary copy and an
+uninstall that never elevates, the read-only LAN-access banner that only calls a port
+reachable when a rule opens it for this console and nothing blocks it, the ad-hoc-signed
+macOS `.app`/DMG, the per-user Linux tarball and `tools/package-*.sh` into
+`artifacts/package/`, 936 tests after the merge with portions 4 and 6, packages built and
+the Linux scripts round-tripped on the Mac — the Windows installer itself, the banner
+against a real Windows Firewall and a real Linux desktop menu have never been run);
+portion 5 in progress, portion 8 not started. ARCHITECTURE §3.9/§4 and PROTOCOL
 (*Files exchanged offline*, *M5 additions*) describe the design; the `Welcome.console_access`
 `.proto` change lands with portion 5 and must update PROTOCOL again in that commit.
 

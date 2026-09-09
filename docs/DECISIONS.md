@@ -2565,6 +2565,70 @@ Decisions:
      returns, so a launch the data directory refuses does not look to a script like a
      console that ran and quit normally.
 
+Nine rules added when the packages themselves were built and reviewed (2026-09-09,
+portion 7); they refine items 1–4:
+
+- **Uninstall never asks for an administrator.** Installing is unelevated, so removing is
+  too. Removing a firewall rule needs an administrator, so unless the uninstall happens to
+  be running elevated the two rules are left exactly as they are and the exact
+  `netsh advfirewall firewall delete rule …` lines are printed instead. An open port with
+  nothing listening on it is not a hazard; a UAC prompt in the middle of an uninstall
+  started from Installed apps, or deleting a namesake rule somebody else created, is worse.
+  Even elevated, a rule of that name outside the installer's own group is preserved for
+  review, because Windows deletes rules by name.
+- **A port counts as reachable only when a rule really opens it for this console.** The
+  first check accepted any inbound allow rule for the port. It now also requires an
+  unrestricted or console-scoped `ApplicationName`, no `ServiceName`, unrestricted or
+  `LocalSubnet` local and remote addresses, and all interface types — the teacher machine
+  is on Wi-Fi one day and on the wire the next (`D-21`) — and requires that no matching
+  block rule exists. A block rule is judged generously (any of the lab's profiles, any
+  addresses, any interfaces), because Windows applies the most specific block first.
+  Somebody else's port-scoped rule is still a perfectly good answer and is never
+  duplicated. Saying *allowed* while the classroom cannot connect is the one answer the
+  banner must never give.
+- **The banner believes the rules, not the helper's exit code.** A window closed after both
+  rules were added exits non-zero and has still opened the ports; a helper that exits 0
+  without adding them has not. *Allow…* therefore always re-reads the firewall, and the
+  exit code only decides how a still-blocked port is explained (*Denied* or *Failed*).
+  Neither background task may fault: an unobserved faulted task is a crash waiting for the
+  finalizer.
+- **`installed-files.txt` is untrusted input.** It lives where the signed-in user can edit
+  it, so a line that is rooted, names a drive, contains `..` or resolves outside the
+  install directory is refused and logged, never deleted; the same guard resolves every
+  entry of the embedded payload. A missing or entirely unusable manifest falls back to the
+  two known program files, so an interrupted installation is still removed instead of
+  reported clean, and only a manifest this installation really wrote may prune an older
+  payload's leftovers.
+- **`--finish-removal` accepts only the installer's own install directory.** A running
+  executable cannot delete itself, so uninstall copies itself to the temp directory and
+  hands that copy the directory and its own process id. The copy compares the directory
+  with the layout's own and refuses anything else, waits for the parent to exit, retries
+  the deletes for a bounded budget, then deletes itself; copies an interrupted uninstall
+  left behind are swept by any later run. Nothing is scheduled and nothing survives a
+  reboot.
+- **A registry key that points at another installation is preserved and reported.** A
+  second copy of the console owns its own Installed-apps entry and ProgIds; taking them
+  would be wrong, and throwing mid-uninstall would leave a machine with no entry to retry
+  from. The step says so and the run continues.
+- **Only a step that provably wrote nothing may say nothing changed.** `check.lock`,
+  `firewall.hint` and `data.keep` merely look; any other failing step has predecessors that
+  already ran and may itself be half done, so the run says that and asks for a second run,
+  which is safe because every step is idempotent.
+- **The Linux `.desktop` entry gets absolute `Exec` and `TryExec`.** `~/.local/bin` joins
+  the PATH only at the next login, and an application menu hides an entry whose `TryExec`
+  it cannot resolve — the teacher would install the console and find nothing. `install.sh`
+  rewrites both to the launcher's full path with `awk`, not `sed`, because the replacement
+  is a home directory nobody chose with a regular expression in mind.
+- **Smaller ones, all from the same review.** The Windows setup manifest is generated into
+  `obj/` with the build's own version instead of a frozen `1.0.0.0`; the lock check also
+  asks whether a console *process* is running, which a console started with `--data`
+  elsewhere would not reveal through the lock file; a rule Windows will not describe is
+  skipped rather than turning a healthy machine into *Failed*; a shell root Windows will
+  not name refuses the run instead of writing blind; a payload-less build may still print
+  its plan; `--remove-data` deletes the installer log too, since it would otherwise be the
+  last file naming the labs; and the copied uninstaller loses its `Zone.Identifier` so
+  Installed apps does not raise SmartScreen every time.
+
 Rejected: WiX, Inno Setup or MSIX for the console (a second toolchain to maintain, or
 store/signing prerequisites); the Windows student `Setup.exe` as the console installer
 (`D-54`); a machine-wide install (elevation for every update); an always-on helper for
@@ -2578,7 +2642,16 @@ built, reviewed and fixed on 2026-09-09 (portion 6): 16 single-instance tests in
 hostile input, eight concurrent launches, the shutdown window and the socket directory's
 mode, plus a manual macOS run on a copy of the data directory. The Windows named-pipe path
 and the Linux `SO_PEERCRED` path are compile- and logic-checked only; they belong to
-portion 7's manual matrix.
+portion 7's manual matrix. Items 1–4 were built, reviewed and fixed on 2026-09-09
+(portion 7): `LabControl.ConsoleSetup`, `Shared/Packaging/`, `Services/NetworkReadiness`
+and `tools/package-{windows,mac,linux,all}.sh` into `artifacts/package/`, with
+`tools/publish-all.sh` unchanged. 936 tests pass after the merge with portions 4 and 6
+(726 Shared + 210 Console; 13 macOS bundle tests skip unless the package was built), and
+on the Mac the DMG, its `Info.plist` keys, the ad-hoc signature, the documented Gatekeeper
+refusal and a real `install.sh`/`uninstall.sh` round trip into a throwaway `HOME` were all
+checked by hand. The Windows installer itself, the banner against a real Windows Firewall
+and a real Linux desktop menu have never been run — a Mac cannot answer them — and remain
+part of that manual matrix (ROADMAP M5).
 
 ## D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)
 

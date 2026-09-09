@@ -7,7 +7,7 @@ copy of Setup; no loose icon file is required on the USB or student PC.
 
 
 This document describes student-PC Setup and, in the final section, the separate
-lightweight teacher-console packaging planned for M5 (`D-54`). Teacher installation
+teacher-console packaging built in M5 (`D-54`, `D-59`). Teacher installation
 does not run the student preparation pipeline below.
 
 Goal: **plug in the USB stick, run one file as the local admin, answer one question
@@ -512,77 +512,265 @@ and the lab has to be re-issued (`docs/ARCHITECTURE.md` §3.6, last row).
 - Full run on `PC-00` (the designated test PC) or a Windows VM snapshot that can be
   reverted between runs.
 
-## Teacher-console installation (planned M5, D-54)
+## Teacher console installation (M5 portion 7, `D-59`)
 
-Goal: install the interactive console, add several teacher lab files or administrator
-`.lcbak` backups, and select a room. The same console serves both roles; importing a
-backup adds a normal selectable lab with administrator authority. There is no separate
-server product or system service to provision. The server starts with the selected lab
-inside the console and stops when disconnected or closed.
+This is how the console gets onto a teacher's machine: **one file per platform, no
+administrator, no runtime download.** The console is an ordinary interactive desktop
+application, and its packages behave like one. Nothing here installs a service, a daemon,
+a scheduled task or an agent; nothing touches an account, automatic sign-in, the
+hostname, power settings or student policy; nothing adds an antivirus exclusion.
+Everything above in this document belongs to the student PCs and stays there.
 
-Distribute the .NET runtime and application native assets for each currently supported teacher target
-(`win-x64`, `osx-arm64`, `linux-x64`) so installation works without internet or a runtime
-download. Linux still needs compatible system libraries; record tested distributions,
-versions and prerequisites, with local prerequisite packages where needed for offline
-installation. Packaging is planned, not implemented; choose/document the build tooling in
-M5 and keep the ordinary solution build/test workflow intact.
+The packages carry program files and nothing else — no lab, no key, no enrollment code,
+no backup. Labs arrive later, inside the application, through *Add labs…* or by opening a
+`.lclab` or `.lcbak` file.
 
-| Platform | Installation and desktop integration |
+### Building the packages
+
+```bash
+tools/package-all.sh          # all three; the macOS part is skipped off macOS
+tools/package-windows.sh      # LabControl-Console-<version>-win-x64-Setup.exe
+tools/package-mac.sh          # LabControl-Console-<version>-osx-arm64.dmg
+tools/package-linux.sh        # labcontrol-console-<version>-linux-x64.tar.gz
+```
+
+Everything lands under `artifacts/package/{windows,mac,linux}/`. Each script reads the
+version from the console project, so the file name, the Installed-apps entry, the
+`Info.plist` and the tarball all say the same number. `tools/publish-all.sh` is
+unchanged: it still produces the plain executable directories used for development and
+for the USB payload — these scripts produce the things a teacher installs.
+
+The native `.pdb` symbol files SkiaSharp and HarfBuzzSharp ship (105 MB of them for
+`win-x64` alone) are dropped from every package; LabControl's own symbols are embedded in
+its executables.
+
+### Windows: one self-contained Setup executable
+
+`src/LabControl.ConsoleSetup/` is a single-file, self-contained `win-x64` executable that
+carries the published console inside it as an embedded zip, so a Windows teacher machine
+needs nothing else — no .NET install, no second download, no packaging toolchain (`D-59`
+item 1; WiX, Inno Setup and MSIX were rejected there).
+
+Its manifest is **`asInvoker`, never `requireAdministrator`**. The console installs into
+the signed-in user's own profile, so installing it — and, far more often, updating it —
+is not a UAC prompt. `--firewall` is the one step that elevates, and it does so by
+relaunching itself once (see *LAN access* below).
+
+The payload is the published console, zipped by `tools/package-windows.sh` and embedded
+as a resource. The project deliberately compiles without it, so a plain `dotnet build`
+still builds the executable on any machine; an executable built that way **refuses to
+install and names the script that produces the real one** rather than writing an empty
+program directory. `--dry-run` still works on such a build and says the plan counts no
+files.
+
+**Every step is data.** `ConsoleInstallPlan` builds the whole run before anything is
+touched, `--dry-run` prints exactly those steps in exactly that order and changes
+nothing, and every step is idempotent — a second run produces the same machine and a log
+that says *already* instead of *done*.
+
+| Step | What one install does |
 |---|---|
-| Windows | Simple installer copying the console to its application directory; Start-menu entry, optional desktop shortcut, Installed apps/uninstall registration and lab-file/`.lcbak` opening |
-| macOS | `.app` bundle distributed in a `.dmg`, copied to Applications (user Applications where appropriate); bundle registration for both file types |
-| Linux | Self-contained desktop package/install flow with a launcher, file-type opening and documented removal; no requirement to publish every distribution's native package format |
+| `check.lock` | Refuses while a console is using the program files. Both questions are asked, because either alone lies: a `LabControl.Console` process may be running, and `console.lock` (`D-55`) in the data directory may be held — a console started with `--data` on another directory holds no lock this installer can see |
+| `files.replace` | Writes the payload into `%LOCALAPPDATA%\Programs\LabControl\Console\`, skipping any file already there byte for byte and retrying a write an antivirus still holds (`D-33` item 9). It copies itself in beside the console as `LabControl.ConsoleSetup.exe` — that copy is the uninstaller, with its `Zone.Identifier` cleared so Installed apps does not raise SmartScreen — and records every file it owns in `installed-files.txt`. Only a manifest this installation really wrote may prune what an older payload left behind |
+| `shortcut.start-menu` | The Start-menu `.lnk`, through `IShellLinkW` (CsWin32) |
+| `shortcut.desktop` | The same shortcut on the desktop, only with `--desktop-shortcut`: a desktop icon is a preference, not part of installing |
+| `registry.uninstall` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\LabControl Console` — display name, version, icon, publisher, install location, uninstall command, `NoModify` and `NoRepair` |
+| `progid.lclab`, `progid.lcbak` | The two ProgIds `LabControl.LabFile` and `LabControl.Backup` under `HKCU\Software\Classes`, each with the console's icon and an open command of the form `"<console>" "%1"` — always quoted, always one `%1`, so a path with spaces arrives as a single argument |
+| `assoc.lclab`, `assoc.lcbak` | Adds the ProgId to the extension's `OpenWithProgids` **always**, and becomes the default **only** where Windows holds no `UserChoice` and the extension has no default yet. A teacher's own choice is never overwritten (`D-54` item 4) |
+| `shell.notify` | `SHChangeNotify(SHCNE_ASSOCCHANGED)`, so Explorer notices the new file types |
+| `firewall.hint` | Nothing. Installing changes no firewall rule; the console asks for LAN access at the point of use |
 
-Prefer per-user installation where supported. The base installer lays down app files
-and app-owned desktop registrations. It does not install Agent/Session, Windows services,
-daemons, scheduled tasks or automatic control at login, and does not change accounts,
-autologon, hostname, power/NIC settings or student policies. The student antivirus
-exclusion policy does not apply to the teacher installer. OS firewall/network or privacy
-consent needed for LAN operation and later capture is handled through the supported
-platform flow with a clear explanation; do not disable protections to avoid prompts.
-The console hosts Kestrel and receives incoming connections: Windows needs inbound TCP
-`Defaults.ConsolePort` (47800) and UDP `Defaults.BeaconPort` (47801) for discovery of
-other consoles, scoped to the intended LAN/network profile. A network-setup action may
-need elevation even when file installation does not. Keep the executable path stable
-across updates, preserve existing firewall rules, and remove only rules this installation
-owns. A denied prompt/policy needs an actionable diagnostic, not a false success.
+Everything is appended to `%LOCALAPPDATA%\LabControl\console-setup.log`: the plan header,
+one line per step with its outcome, and the failure if there is one. The installer never
+opens the console's data directory beyond testing the lock file, so no lab, key or
+passphrase can reach that log.
 
-The current publishing script creates executable directories; it does not make desktop
-packages. On macOS create a real bundle with stable identifier, `Info.plist`, icons,
-version and file-type declarations. Under the current no-paid-signing policy (`D-15`),
-document and test the actual unsigned/ad-hoc distribution path and supported user
-approval flow. SmartScreen/Gatekeeper may still prompt or block; a `.dmg` alone does
-not confer trust. Do not disable OS security or quietly make paid signing/notarization a
-prerequisite; a later change to that distribution policy needs a recorded decision.
+Note the two different directories: the program lives under `%LOCALAPPDATA%`, the labs
+under `%APPDATA%\LabControl` (ARCHITECTURE §4). Uninstall touches only the first.
 
-The installer contains no lab keys, backups or teacher credentials. The application
-handles file import/unlock into its protected stores; installers never receive secrets
-through command arguments or logs. File associations for both formats invoke the same
-*Add labs…* flow and forward to an already running app. Opening a file imports it without
-acquiring its room or creating a second active session. Files can also be selected in
-bulk inside the app, so associations are a convenience rather than the sole entry point.
-Implement the application-side command-line/document activation and same-user instance
-forwarding before claiming file support; the current parser only handles developer
-options. Quote paths safely, accept multi-file opening and preserve the user's default
-handler choice. The process receiving forwarded files validates them as ordinary imports.
+#### Uninstall, and removing the data
 
-Upgrade/repair replaces app files and owned registrations after closing the application;
-preserve saved labs, device identities, protected keys and history. Do not copy the
-student agent's service-restart/rollback machinery. Removal deletes app-owned binaries
-and registrations, retains user lab data by default, and leaves external backup files
-and all student installations intact. Offer local data/credential deletion only as an
-explicit separate choice; it must not revoke other devices or delete the lab itself.
-Reinstallation must reopen retained profiles without another import.
-That guarantee applies to the same device and OS account, with the protected store
-retained. Verify Keychain/DPAPI/libsecret or file-fallback access after changing the app
-binary; copying user files to another device/account is not credential migration.
-On macOS app-bundle removal alone does not run a custom uninstaller; provide the explicit
-local-data cleanup action inside the app before removal, and document retained data.
+`LabControl.ConsoleSetup.exe --uninstall` — which is what Installed apps runs — asks the
+same lock question and then removes exactly what this installation owns, roughly in
+reverse: the associations (a `UserChoice` is left alone), the two ProgIds, the
+Installed-apps entry, both shortcuts, this installer's firewall rules (only when that run
+happens to be elevated — see below), the shell notification, and finally the files listed
+in `installed-files.txt`. **The saved labs, lab keys, scripts and logs stay**, and the
+last step says where they are.
 
-Acceptance in ROADMAP M5 covers clean offline installation, launch, both file types,
-upgrade/repair/reinstall/removal and the one-active-lab invariant on all three platforms.
-Verify LAN connectivity separately from installation, including the platform's required
-network permissions. M6 verifies capture/broadcast permissions when that feature exists.
+`--remove-data` is a separate switch, never part of uninstalling. It prints what will be
+lost — every saved lab, lab key, script and log — and requires the word `REMOVE` typed at
+the keyboard; with redirected input it refuses rather than assuming a yes. It deletes the
+console's data directory and, at the end, the installer log itself, because that log
+would otherwise be the last file on the computer still naming the labs that were on it.
+It never touches an exported `.lcbak` backup and never touches a student installation.
+
+The removal rules the security review added, all of them because the pieces involved sit
+where the signed-in user can edit them:
+
+- **`installed-files.txt` is untrusted input.** A manifest line that is rooted, names a
+  drive, climbs out with `..` or resolves anywhere but inside the install directory is
+  refused and reported in the log — never deleted. The same guard resolves every entry of
+  the embedded payload, so a hostile zip cannot write outside either. When there is no
+  usable manifest at all, uninstall falls back to the two known program files rather than
+  reporting a clean removal over a directory it never touched.
+- **`--finish-removal` accepts only this installer's own install directory.** An
+  uninstaller cannot delete the file it is running from, so it copies itself into the
+  temp directory and hands that copy the directory to finish and its own process id. The
+  copy compares the directory against the layout's own and refuses anything else, waits
+  for the parent to exit (up to five minutes), retries the deletes for two minutes, then
+  deletes itself. Copies an interrupted uninstall left behind are swept by any later run
+  of the installer — each one is a working ~60 MB installer and must not sit in the temp
+  directory waiting to be double-clicked.
+- **A registry key that points at another installation is preserved and reported.** A
+  second copy of the console, or one installed elsewhere, owns its own Installed-apps
+  entry and ProgIds; taking them would be wrong, and throwing mid-uninstall would leave a
+  machine with no entry to retry from. The step says *left in place* and the run
+  continues.
+- **Only a step that provably wrote nothing may say nothing changed.** `check.lock`,
+  `firewall.hint` and `data.keep` merely look; any other failing step has predecessors
+  that already ran and may itself be half done, so the log says so and tells the teacher
+  to fix the problem and run the installer again — which is safe, because every step is
+  idempotent.
+- **Uninstall never asks for an administrator**, because installing never did. Removing a
+  firewall rule does need one, so unless that particular run happens to be elevated the
+  two rules are left exactly as they are and the exact `netsh … delete rule` lines are
+  printed instead. An open port with nothing listening on it is not a hazard; a UAC
+  prompt in the middle of an uninstall started from Installed apps, or deleting a
+  namesake rule somebody else created, would be worse. Even when the run *is* elevated, a
+  rule of that name outside this installer's own group is preserved for review, because
+  Windows deletes rules by name.
+
+### LAN access: the console's banner
+
+The console hosts the gRPC server, so the student PCs connect **to** it and Windows
+Firewall is in the way by default. When a lab activates, the console reads the firewall
+**read-only** — no elevation — and asks whether inbound TCP `47800` (`ConsolePort`) and
+UDP `47801` (`BeaconPort`) are open on the **Private and Domain** profiles.
+
+A port counts as reachable only when some enabled inbound *allow* rule really opens it
+**for this console**:
+
+- unrestricted, or scoped to exactly this console's executable — a rule for a
+  conferencing tool that happens to cover the port opens nothing for the classroom;
+- no service name at all — the console is not a Windows service;
+- unrestricted or `LocalSubnet` local *and* remote addresses — a rule cut down to one
+  host is not evidence that the room can connect;
+- all interface types, because the teacher machine is on Wi-Fi one day and on the wire
+  the next (`D-21`);
+
+**and** no matching block rule exists. A block rule is judged generously — any of the
+lab's profiles, any address range, any interface list is enough to stop the classroom, so
+it is never explained away. Windows applies the most specific block first, and saying
+*allowed* while the lab cannot connect is the one answer this check must never give.
+Somebody else's port-scoped rule, on the other hand, is a perfectly good answer: the
+console never adds a second rule for a port that is already open.
+
+When a port is blocked the console raises a **non-blocking** banner — it keeps running
+and serving either way. *Allow…* runs `LabControl.ConsoleSetup.exe --firewall` elevated
+and then **reads the rules again**, because the helper's exit code is not evidence: a
+window closed after both rules were added exits non-zero and has still opened the ports,
+and a helper that exits 0 without adding them has not. If the teacher declines the
+Windows prompt, if no installer sits beside the console (a development run, a copied
+publish directory), or if the rules are still missing afterwards, the banner turns into
+the exact commands with a *Check again* action:
+
+```
+netsh advfirewall firewall add rule name="LabControl Console (control)" dir=in action=allow protocol=TCP localport=47800 profile=private,domain group="LabControl Console" enable=yes
+netsh advfirewall firewall add rule name="LabControl Console (discovery)" dir=in action=allow protocol=UDP localport=47801 profile=private,domain group="LabControl Console" enable=yes
+```
+
+The Public profile is never requested, nothing is ever disabled or excluded, and macOS
+and Linux report *not applicable* and show no banner at all.
+
+### macOS: an app bundle in a DMG
+
+`tools/package-mac.sh` assembles `LabControl.app` — `Contents/Info.plist`,
+`Contents/MacOS/` (the self-contained publish), `Contents/Resources/labcontrol.icns` and
+`PkgInfo` — with `CFBundleIdentifier org.ontfk.labcontrol.console`, the console's version
+in both version keys, `LSMinimumSystemVersion 12.0`, `NSHighResolutionCapable`, an
+education category and `NSLocalNetworkUsageDescription` explaining why the app reaches
+the classroom. Both file types are declared as `CFBundleDocumentTypes` with
+`LSHandlerRank Owner` over two exported UTIs, `org.ontfk.labcontrol.lab` (`lclab`) and
+`org.ontfk.labcontrol.backup` (`lcbak`) — LabControl invented both extensions, so it
+owns them. The plist is checked with `plutil -lint`.
+
+The bundle is signed **ad hoc** (`codesign --force --deep --sign -`) and verified
+(`codesign --verify --deep --strict`), then wrapped by `hdiutil` in a compressed DMG
+containing the app and an `/Applications` symlink.
+
+An ad-hoc signature makes the bundle load on Apple Silicon; it does **not** satisfy
+Gatekeeper, and there is no Developer ID certificate (`D-15`). `spctl --assess`
+therefore fails on purpose and **the script prints that failure instead of hiding it**.
+The teacher opens the app the first time with right-click → *Open*, or through *System
+Settings → Privacy & Security → Open Anyway*; after that macOS remembers.
+
+There is no macOS uninstaller: dragging `LabControl.app` to the Bin removes the
+application. Local data removal is an explicit action inside the console — *My labs →
+Remove from this device*, per lab, with a second confirmation before a lab key is
+deleted.
+
+### Linux: a per-user tarball
+
+`tools/package-linux.sh` builds a tarball with `install.sh` and `uninstall.sh`. No root,
+no sudo, no package manager, no repository. `install.sh` installs into
+`~/.local/opt/labcontrol/console/`, writes a launcher `~/.local/bin/labcontrol-console`,
+and registers under `${XDG_DATA_HOME:-~/.local/share}`: the `.desktop` entry
+(`Exec=… %F`), the MIME definitions of `application/x-labcontrol-lab` and
+`application/x-labcontrol-backup` with their `*.lclab` and `*.lcbak` globs, and the
+icons. It then runs `update-mime-database`, `update-desktop-database` and
+`gtk-update-icon-cache` where they exist. Both scripts refuse while the installed console
+is running.
+
+Two details that are easy to get wrong and are therefore fixed in the script:
+
+- **`Exec` and `TryExec` are rewritten to the absolute launcher path** at install time.
+  On a first install `~/.local/bin` is usually not on the PATH of the session that is
+  running — the shell adds it at the *next* login — and an application menu hides any
+  entry whose `TryExec` it cannot resolve. The teacher would install the console and find
+  nothing.
+- **`xdg-mime default` runs only where the desktop has no handler for that type.** An
+  existing choice is reported and left alone (`D-54` item 4).
+
+`uninstall.sh` removes exactly those files and keeps `~/.labcontrol` — the labs — saying
+so, and saying why a lab key that exists nowhere else cannot be recovered.
+
+The console is self-contained .NET, but a .NET GUI still needs system libraries. The
+tarball's `README.txt` names them: `libicu` (`libicu70` on 22.04, `libicu74` on 24.04),
+`libfontconfig1`, `libx11-6`, `libice6`, `libsm6`, `libgl1`, and optionally
+`libsecret-1-0` — without the keyring the console falls back to its own file-backed
+secret protector and says so per lab. On a machine with no internet those `.deb` files
+are copied across from a connected one; nothing else is needed. The documented, tested
+matrix is **Ubuntu 22.04 LTS and 24.04 LTS**, x86-64; other distributions are expected
+to work and are not verified. Desktop Ubuntu has `ufw` disabled by default; the two `ufw
+allow` lines for 47800/47801 are in the same README for machines where it is on.
+
+### What is verified, and what a Mac cannot answer
+
+Done on the owner's Mac (M5 portion 7, 2026-09-09): the full solution build; 888 tests at
+the portion's own head and **936 after merging with portions 4 and 6** (726 Shared and
+210 Console, of which 13 macOS bundle tests skip unless `tools/package-mac.sh` has
+actually been run); all three packages produced, with the Windows installer assembly
+really carrying its ~59 MB payload; the DMG built, its `Info.plist` keys and ad-hoc
+signature checked and the expected Gatekeeper refusal observed; the app bundle launched
+once against a copy of a data directory; and the Linux tarball genuinely installed and
+uninstalled into a throwaway `HOME`, with the generated `.desktop` entry inspected —
+absolute `Exec`/`TryExec`, an executable launcher, and an uninstall that leaves nothing
+behind.
+
+Never run, and not runnable here:
+
+- **the Windows installer itself, in any form** — install, upgrade, uninstall,
+  `--remove-data`, `--dry-run`, the Installed-apps entry, the shortcuts, the file
+  associations and the temporary-copy hand-over are all a Windows step;
+- **the LAN-access banner against a real Windows Firewall** — the detection logic is
+  covered by tests on the Mac, the COM read and the elevation are not;
+- **a real GNOME or KDE application menu** — the `.desktop` entry and the MIME
+  registration were inspected as files, not seen in a desktop.
+
+Those belong to portion 7's manual matrix in ROADMAP M5, together with the Windows
+named-pipe and Linux `SO_PEERCRED` paths of the single instance (portion 6). A Mac cannot
+answer them, and none of them may be reported as passing until they are run.
 
 Packaging references: [Avalonia macOS deployment](https://docs.avaloniaui.net/docs/deployment/macos),
 [Windows Firewall rules](https://learn.microsoft.com/en-us/windows/security/operating-system-security/network-security/windows-firewall/rules),

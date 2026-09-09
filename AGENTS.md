@@ -42,7 +42,7 @@ the documents relevant to the task:
   `ActiveLabController` with release-before-acquire and result ownership, take-over on
   the agent's clock, per-user console packaging with single-instance forwarding, dormant
   imported enrollment codes. Follow those entries and ROADMAP M5 *How it is being built*
-  (eight portions; portions 1–4 and 6 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
+  (eight portions; portions 1–4, 6 and 7 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
   store, resumable migration, `lab.json` schema 2, `console.lock`; portion 2:
   `ActiveLabController`, the *My labs* chooser, *Disconnect*, the departure report and bulk
   `.lcbak` import; portion 3: the signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher
@@ -54,8 +54,16 @@ the documents relevant to the task:
   on the command line, `--import-only`, a second launch forwarding its file paths over a
   per-data-directory named pipe or private-directory Unix socket instead of starting a
   second console, macOS file activation, 788 tests, checked by hand on the Mac, with the
-  Windows pipe and the Linux `SO_PEERCRED` path not yet run on those systems; portion 5 in
-  progress, portion 7 in progress); the
+  Windows pipe and the Linux `SO_PEERCRED` path not yet run on those systems — and portion 7
+  on 2026-09-09: teacher-console packaging (`D-59` items 1–4) — the single-file per-user
+  Windows installer with an untrusted `installed-files.txt`, a finishing temporary copy and
+  an uninstall that never elevates, the read-only LAN-access banner that calls a port
+  reachable only when a rule opens it for this console and nothing blocks it, the
+  ad-hoc-signed macOS `.app`/DMG, the per-user Linux tarball and `tools/package-*.sh` into
+  `artifacts/package/`, 936 tests after the merge with portions 4 and 6, packages built and
+  the Linux scripts round-tripped on the Mac, with the Windows installer itself, the banner
+  against a real Windows Firewall and a real Linux desktop menu never run; portion 5 in
+  progress, portion 8 not started); the
   `Welcome.console_access`
   `.proto` change belongs to portion 5 and must update `docs/PROTOCOL.md` in its commit.
 - The Windows student agent must survive reboots and must not let a failed Win32

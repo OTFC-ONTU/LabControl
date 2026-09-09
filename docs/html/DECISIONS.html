@@ -2622,6 +2622,70 @@ console that ran and quit normally.</li>
 </ul>
 </li>
 </ol>
+<p>Nine rules added when the packages themselves were built and reviewed (2026-09-09,
+portion 7); they refine items 1–4:</p>
+<ul>
+<li><strong>Uninstall never asks for an administrator.</strong> Installing is unelevated, so removing is
+too. Removing a firewall rule needs an administrator, so unless the uninstall happens to
+be running elevated the two rules are left exactly as they are and the exact
+<code>netsh advfirewall firewall delete rule …</code> lines are printed instead. An open port with
+nothing listening on it is not a hazard; a UAC prompt in the middle of an uninstall
+started from Installed apps, or deleting a namesake rule somebody else created, is worse.
+Even elevated, a rule of that name outside the installer's own group is preserved for
+review, because Windows deletes rules by name.</li>
+<li><strong>A port counts as reachable only when a rule really opens it for this console.</strong> The
+first check accepted any inbound allow rule for the port. It now also requires an
+unrestricted or console-scoped <code>ApplicationName</code>, no <code>ServiceName</code>, unrestricted or
+<code>LocalSubnet</code> local and remote addresses, and all interface types — the teacher machine
+is on Wi-Fi one day and on the wire the next (<code>D-21</code>) — and requires that no matching
+block rule exists. A block rule is judged generously (any of the lab's profiles, any
+addresses, any interfaces), because Windows applies the most specific block first.
+Somebody else's port-scoped rule is still a perfectly good answer and is never
+duplicated. Saying <em>allowed</em> while the classroom cannot connect is the one answer the
+banner must never give.</li>
+<li><strong>The banner believes the rules, not the helper's exit code.</strong> A window closed after both
+rules were added exits non-zero and has still opened the ports; a helper that exits 0
+without adding them has not. <em>Allow…</em> therefore always re-reads the firewall, and the
+exit code only decides how a still-blocked port is explained (<em>Denied</em> or <em>Failed</em>).
+Neither background task may fault: an unobserved faulted task is a crash waiting for the
+finalizer.</li>
+<li><strong><code>installed-files.txt</code> is untrusted input.</strong> It lives where the signed-in user can edit
+it, so a line that is rooted, names a drive, contains <code>..</code> or resolves outside the
+install directory is refused and logged, never deleted; the same guard resolves every
+entry of the embedded payload. A missing or entirely unusable manifest falls back to the
+two known program files, so an interrupted installation is still removed instead of
+reported clean, and only a manifest this installation really wrote may prune an older
+payload's leftovers.</li>
+<li><strong><code>--finish-removal</code> accepts only the installer's own install directory.</strong> A running
+executable cannot delete itself, so uninstall copies itself to the temp directory and
+hands that copy the directory and its own process id. The copy compares the directory
+with the layout's own and refuses anything else, waits for the parent to exit, retries
+the deletes for a bounded budget, then deletes itself; copies an interrupted uninstall
+left behind are swept by any later run. Nothing is scheduled and nothing survives a
+reboot.</li>
+<li><strong>A registry key that points at another installation is preserved and reported.</strong> A
+second copy of the console owns its own Installed-apps entry and ProgIds; taking them
+would be wrong, and throwing mid-uninstall would leave a machine with no entry to retry
+from. The step says so and the run continues.</li>
+<li><strong>Only a step that provably wrote nothing may say nothing changed.</strong> <code>check.lock</code>,
+<code>firewall.hint</code> and <code>data.keep</code> merely look; any other failing step has predecessors that
+already ran and may itself be half done, so the run says that and asks for a second run,
+which is safe because every step is idempotent.</li>
+<li><strong>The Linux <code>.desktop</code> entry gets absolute <code>Exec</code> and <code>TryExec</code>.</strong> <code>~/.local/bin</code> joins
+the PATH only at the next login, and an application menu hides an entry whose <code>TryExec</code>
+it cannot resolve — the teacher would install the console and find nothing. <code>install.sh</code>
+rewrites both to the launcher's full path with <code>awk</code>, not <code>sed</code>, because the replacement
+is a home directory nobody chose with a regular expression in mind.</li>
+<li><strong>Smaller ones, all from the same review.</strong> The Windows setup manifest is generated into
+<code>obj/</code> with the build's own version instead of a frozen <code>1.0.0.0</code>; the lock check also
+asks whether a console <em>process</em> is running, which a console started with <code>--data</code>
+elsewhere would not reveal through the lock file; a rule Windows will not describe is
+skipped rather than turning a healthy machine into <em>Failed</em>; a shell root Windows will
+not name refuses the run instead of writing blind; a payload-less build may still print
+its plan; <code>--remove-data</code> deletes the installer log too, since it would otherwise be the
+last file naming the labs; and the copied uninstaller loses its <code>Zone.Identifier</code> so
+Installed apps does not raise SmartScreen every time.</li>
+</ul>
 <p>Rejected: WiX, Inno Setup or MSIX for the console (a second toolchain to maintain, or
 store/signing prerequisites); the Windows student <code>Setup.exe</code> as the console installer
 (<code>D-54</code>); a machine-wide install (elevation for every update); an always-on helper for
@@ -2634,7 +2698,16 @@ built, reviewed and fixed on 2026-09-09 (portion 6): 16 single-instance tests in
 hostile input, eight concurrent launches, the shutdown window and the socket directory's
 mode, plus a manual macOS run on a copy of the data directory. The Windows named-pipe path
 and the Linux <code>SO_PEERCRED</code> path are compile- and logic-checked only; they belong to
-portion 7's manual matrix.</p>
+portion 7's manual matrix. Items 1–4 were built, reviewed and fixed on 2026-09-09
+(portion 7): <code>LabControl.ConsoleSetup</code>, <code>Shared/Packaging/</code>, <code>Services/NetworkReadiness</code>
+and <code>tools/package-{windows,mac,linux,all}.sh</code> into <code>artifacts/package/</code>, with
+<code>tools/publish-all.sh</code> unchanged. 936 tests pass after the merge with portions 4 and 6
+(726 Shared + 210 Console; 13 macOS bundle tests skip unless the package was built), and
+on the Mac the DMG, its <code>Info.plist</code> keys, the ad-hoc signature, the documented Gatekeeper
+refusal and a real <code>install.sh</code>/<code>uninstall.sh</code> round trip into a throwaway <code>HOME</code> were all
+checked by hand. The Windows installer itself, the banner against a real Windows Firewall
+and a real Linux desktop menu have never been run — a Mac cannot answer them — and remain
+part of that manual matrix (ROADMAP M5).</p>
 <h2 id="d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)<a class="anchor" href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3" aria-label="Link to this section">#</a></h2>
 <p>Context (2026-09-08): <code>D-54</code> item 7 forbids treating a backup import as concurrent
 enrollment recovery, because two independent holders of the CA cannot enforce single use
@@ -2869,7 +2942,7 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-09 05:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 06:05 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-34-the-screen-stream-one-jpeg-per-frame-latest-wins-the-console-asks-m3-portion-1">D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)</a></li><li class="lvl2"><a href="#d-35-real-capture-one-producer-for-the-helper-and-the-simulator-dxgi-with-a-gdi-fallback-the-service-relays-m3-portion-2">D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)</a></li><li class="lvl2"><a href="#d-36-remote-control-text-as-text-shortcuts-by-position-the-service-raises-ctrlaltdel-m3-portion-3">D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)</a></li><li class="lvl2"><a href="#d-37-full-mode-quality-auto-by-default-three-manual-steps-the-frame-says-what-it-used-m3-portion-3">D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)</a></li><li class="lvl2"><a href="#d-38-m4-in-four-portions-and-the-script-library-as-the-first-m4-portion-1">D-38 — M4 in four portions, and the script library as the first (M4 portion 1)</a></li><li class="lvl2"><a href="#d-39-script-editor-quick-launch-and-desktop-application-templates">D-39 — Script editor, quick launch and desktop application templates</a></li><li class="lvl2"><a href="#d-40-optional-student-provisioning-and-standalone-removal-for-home-pc-testing">D-40 — Optional student provisioning and standalone removal for home-PC testing</a></li><li class="lvl2"><a href="#d-41-resume-a-running-file-pull-at-completed-chunk-boundaries-m4-portion-2">D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)</a></li><li class="lvl2"><a href="#d-42-explicit-upload-grants-and-a-committed-offset-query-m4-portion-2">D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)</a></li><li class="lvl2"><a href="#d-43-per-pc-result-bundles-from-the-existing-job-stream-m4-portion-2">D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)</a></li><li class="lvl2"><a href="#d-44-handout-dispatch-and-simulator-delivery-before-managed-windows-profiles">D-44 — Handout dispatch and simulator delivery before managed Windows profiles</a></li><li class="lvl2"><a href="#d-45-persist-account-mode-and-creation-evidence-before-windows-setup-integration">D-45 — Persist account mode and creation evidence before Windows Setup integration</a></li><li class="lvl2"><a href="#d-46-windows-account-preparation-under-private-storage-and-an-exclusive-lock">D-46 — Windows account preparation under private storage and an exclusive lock</a></li><li class="lvl2"><a href="#d-47-encrypt-the-settings-journal-and-restore-only-confirmed-unchanged-values">D-47 — Encrypt the settings journal and restore only confirmed, unchanged values</a></li><li class="lvl2"><a href="#d-48-start-native-settings-integration-with-two-fixed-dword-policies">D-48 — Start native settings integration with two fixed DWORD policies</a></li><li class="lvl2"><a href="#d-49-bind-ac-power-timeouts-to-a-scheme-and-confirm-native-activation">D-49 — Bind AC power timeouts to a scheme and confirm native activation</a></li><li class="lvl2"><a href="#d-50-journal-the-windows-update-active-hours-tuple-as-one-policy">D-50 — Journal the Windows Update active-hours tuple as one policy</a></li><li class="lvl2"><a href="#d-51-gate-the-lsa-autologon-secret-on-recorded-student-ownership">D-51 — Gate the LSA autologon secret on recorded student ownership</a></li><li class="lvl2"><a href="#d-52-integrate-m4-with-guarded-native-ownership-and-external-recovery">D-52 — Integrate M4 with guarded native ownership and external recovery</a></li><li class="lvl2"><a href="#d-53-lab-files-and-one-active-room-per-teacher-console-planned-m5">D-53 — Lab files and one active room per teacher console (planned M5)</a></li><li class="lvl2"><a href="#d-54-administrator-backup-onboarding-and-lightweight-console-installation-planned-m5">D-54 — Administrator backup onboarding and lightweight console installation (planned M5)</a></li><li class="lvl2"><a href="#d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1">D-55 — The profile store: profiles.json, labs/&lt;lab_id&gt;/, and a resumable migration (M5 portion 1)</a></li><li class="lvl2"><a href="#d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3">D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, instance: revocation (M5 portion 3)</a></li><li class="lvl2"><a href="#d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4">D-57 — One active session: ActiveLabController, release before acquire, the departure report, result ownership (M5 portions 2 and 4)</a></li><li class="lvl2"><a href="#d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5">D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)</a></li><li class="lvl2"><a href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted .app/.dmg, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)</a></li><li class="lvl2"><a href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>

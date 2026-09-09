@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using LabControl.Console.Localization;
 using LabControl.Console.Services;
@@ -22,6 +23,13 @@ namespace LabControl.Console;
 /// is <see cref="ActivationState.Active"/> and is replaced by the chooser on
 /// <see cref="ActivationState.Idle"/> or <see cref="ActivationState.Failed"/>. Nothing opens
 /// a lab by itself: launch shows the chooser with the last-used lab highlighted.
+/// <para>
+/// Documents reach the console three ways (D-59 item 5) — the command line, a second launch
+/// forwarding over <see cref="SingleInstance"/>, or a LaunchServices open on macOS — and all
+/// three land in <see cref="OnFilesArrived"/>: queued until a window can show the import
+/// results, then run through the same <see cref="LabImports"/> batch as <i>Add labs…</i>,
+/// which never activates a lab.
+/// </para>
 /// </summary>
 public partial class App : Application
 {
@@ -29,6 +37,10 @@ public partial class App : Application
     private ILoggerFactory? _loggers;
     private Microsoft.Extensions.Logging.ILogger? _log;
     private ConsoleLock? _lock;
+    private SingleInstance? _instance;
+    private readonly List<string> _pendingFiles = [];
+    private bool _importing;
+    private bool _firstActivation = true;
     private ConsoleBootstrap? _bootstrap;
     private ActiveLabController? _controller;
     private LabChooserWindow? _chooser;
@@ -99,8 +111,10 @@ public partial class App : Application
         var options = Program.Options;
         Directory.CreateDirectory(options.DataDirectory);
 
-        // One process per data directory (M5 §2.1): taken before anything is read or written.
-        _lock = ConsoleLock.TryAcquire(options.DataDirectory, out var lockError);
+        // One process per data directory (M5 §2.1): taken before anything is read or written —
+        // by Program.Main when it launched us, here when a host (the headless tests) did not.
+        var lockError = string.Empty;
+        _lock = Program.TakeLock() ?? ConsoleLock.TryAcquire(options.DataDirectory, out lockError);
         if (_lock is null)
         {
             var refused = new ConfirmDialog(Strings.Get("App.Title"), Strings.Format("App.AlreadyRunning", options.DataDirectory, lockError), Strings.Get("Common.Quit"), null, destructive: false);
@@ -122,6 +136,50 @@ public partial class App : Application
             .CreateLogger();
         _loggers = new SerilogLoggerFactory(Log.Logger);
         _log = _loggers.CreateLogger<App>();
+
+        // The lock is ours, so the endpoint is ours too (D-59 item 5): a second launch on this
+        // directory forwards its documents here instead of showing the refusal above. A socket
+        // that cannot be opened costs only that convenience; the console still runs.
+        try
+        {
+            _instance = SingleInstance.Listen(options.DataDirectory, _lock, action => Dispatcher.UIThread.Post(action), _loggers.CreateLogger<SingleInstance>());
+            _instance.FilesArrived += OnFilesArrived;
+        }
+        catch (Exception ex)
+        {
+            // Deliberately every exception: the endpoint is a convenience, and no way of
+            // failing to open it — an unusable socket directory, a path longer than
+            // sun_path, a name someone else holds — may cost the console its startup.
+            _log.LogWarning(ex, "The single-instance endpoint could not be opened; a second launch will be refused instead of forwarded");
+        }
+
+        // Finder/LaunchServices opens on macOS arrive as file activations, before or after
+        // the chooser exists; the queue below holds them until a window can show the result.
+        // AppKit also reports the process's own command-line arguments as opened files on the
+        // first activation (a `.dll` under `dotnet`, or the positional file itself, which
+        // FilesToOpen already holds): that first batch is filtered against the arguments so
+        // nothing is imported twice; a later open of the same file is a real request.
+        if (this.TryGetFeature<IActivatableLifetime>() is { } activatable)
+        {
+            activatable.Activated += (_, e) =>
+            {
+                if (e is not FileActivatedEventArgs files)
+                {
+                    return;
+                }
+
+                IReadOnlyList<string> paths = files.Files.Select(item => item.TryGetLocalPath()).OfType<string>().ToList();
+                if (_firstActivation)
+                {
+                    _firstActivation = false;
+                    paths = ConsoleOptions.WithoutArgumentEcho(paths, Program.Arguments);
+                }
+
+                OnFilesArrived(paths);
+            };
+        }
+
+        _pendingFiles.AddRange(options.FilesToOpen);
 
         // A slow keystore is the usual reason a switch misses its 2 s target on a real Mac:
         // name it in the log rather than leave it inside "open".
@@ -202,7 +260,10 @@ public partial class App : Application
         var viewModel = new LabChooserViewModel(_bootstrap, _controller, chooser, action => Dispatcher.UIThread.Post(action), _log);
         chooser.DataContext = viewModel;
         viewModel.QuitRequested += () => _desktop.Shutdown();
-        viewModel.CreateRequested += () => _ = CreateLabAsync(chooser, viewModel);
+        viewModel.CreateRequested += () => CreateLabAsync(chooser, viewModel);
+        // Files that arrived while the chooser was importing a batch of its own, or running
+        // the create wizard, go as soon as it is free again.
+        viewModel.BecameIdle += () => _ = PumpFilesAsync();
         chooser.Closed += (_, _) =>
         {
             viewModel.Detach();
@@ -220,6 +281,7 @@ public partial class App : Application
         _chooser = chooser;
         _desktop.MainWindow = chooser;
         chooser.Show();
+        _ = PumpFilesAsync();
     }
 
     /// <summary><i>Create a lab…</i> from the chooser: the wizard's create path into a new profile, then that lab is opened.</summary>
@@ -277,6 +339,117 @@ public partial class App : Application
                 CloseMain();
                 ShowChooser();
                 break;
+        }
+
+        // A batch that waited while the chooser was busy opening a lab goes now.
+        _ = PumpFilesAsync();
+    }
+
+    // ------------------------------------------------------------------ documents to open
+
+    /// <summary>
+    /// Documents from the command line, a forwarded launch, a file activation or a drop on a
+    /// window. An empty list is a bare second launch: the console comes to the front and
+    /// nothing is imported. Every one of those routes ends here, so batches are imported one
+    /// at a time and two unlock dialogs can never stack over the same profile store.
+    /// </summary>
+    private void OnFilesArrived(IReadOnlyList<string> files)
+    {
+        if (_stopping)
+        {
+            return;
+        }
+
+        if (files.Count == 0)
+        {
+            BringToFront();
+            return;
+        }
+
+        _pendingFiles.AddRange(files);
+        _ = PumpFilesAsync();
+    }
+
+    /// <summary>
+    /// What a second launch with nothing to open asks for: this console, in front. The
+    /// application itself is raised first — on macOS a process whose windows are all hidden
+    /// stays behind the Finder however often a window is activated — and then whichever
+    /// window is up. With no window at all (startup, or a lab opening) raising the
+    /// application is all there is to do, and it is still worth doing.
+    /// </summary>
+    private void BringToFront()
+    {
+        if (this.TryGetFeature<IActivatableLifetime>() is { } activatable)
+        {
+            try
+            {
+                activatable.TryLeaveBackground();
+            }
+            catch (Exception ex)
+            {
+                _log?.LogDebug(ex, "The application could not be brought out of the background");
+            }
+        }
+
+        if (((Window?)_main ?? _chooser ?? _desktop?.MainWindow) is not { } window)
+        {
+            return;
+        }
+
+        try
+        {
+            if (window.WindowState == WindowState.Minimized)
+            {
+                window.WindowState = WindowState.Normal;
+            }
+
+            window.Show();
+            window.Activate();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            _log?.LogDebug(ex, "The window could not be brought to the front");
+        }
+    }
+
+    /// <summary>
+    /// Imports what has queued, one batch at a time, through whichever window is up: the
+    /// chooser's own import (refreshes its list) or the main window's drop path. With no
+    /// window ready — startup, a lab opening, a dialog in the way — the files stay queued and
+    /// the next window or status change tries again. Nothing here activates a lab.
+    /// </summary>
+    private async Task PumpFilesAsync()
+    {
+        if (_importing || _stopping || _pendingFiles.Count == 0)
+        {
+            return;
+        }
+
+        _importing = true;
+        try
+        {
+            while (_pendingFiles.Count > 0 && !_stopping)
+            {
+                var batch = _pendingFiles.ToList();
+                if (_chooser is { IsVisible: true } chooser && chooser.DataContext is LabChooserViewModel { IsBusy: false } viewModel)
+                {
+                    _pendingFiles.Clear();
+                    await viewModel.ImportFilesAsync(batch);
+                }
+                else if (_main is { IsVisible: true } main && _mainViewModel is { IsDetached: false })
+                {
+                    _pendingFiles.Clear();
+                    await ImportOnMainAsync(main, batch);
+                }
+                else
+                {
+                    return;
+                }
+            }
+        }
+        finally
+        {
+            _importing = false;
         }
     }
 
@@ -374,7 +547,9 @@ public partial class App : Application
         var viewModel = new MainViewModel(session, _bootstrap, main, action => Dispatcher.UIThread.Post(action)) { IsConnecting = connecting };
         main.DataContext = viewModel;
         viewModel.DisconnectRequested += () => _ = DisconnectAsync(main, viewModel, session);
-        main.FilesDropped += paths => _ = ImportOnMainAsync(main, paths);
+        // A drop on the main window goes through the same queue as a forwarded launch: one
+        // import batch at a time, whatever asked for it.
+        main.FilesDropped += OnFilesArrived;
         main.Closing += (_, e) =>
         {
             // The close button on the main window is Disconnect (M5 §5): back to the chooser,
@@ -408,6 +583,7 @@ public partial class App : Application
         var chooser = _chooser;
         _chooser = null;
         chooser?.Close();
+        _ = PumpFilesAsync();
     }
 
     /// <summary>Detaches the view model and closes the main window without ending the process.</summary>
@@ -488,10 +664,18 @@ public partial class App : Application
     // ------------------------------------------------------------------ shutdown
 
     /// <summary>
-    /// Releases everything without holding the UI thread: an activation in flight is
-    /// cancelled (its prompt closed), the active lab is released in the fixed order, the log
-    /// flushed, the lock dropped; then the shutdown that was held is let through. A release
-    /// that takes longer than the budget is abandoned rather than hung on.
+    /// Releases everything without holding the UI thread: the endpoint stops answering, an
+    /// activation in flight is cancelled (its prompt closed), the active lab is released in
+    /// the fixed order, the log flushed, the lock dropped; then the shutdown that was held is
+    /// let through. A release that takes longer than the budget is abandoned rather than hung
+    /// on, and every remaining step runs even if one of them throws — a console that cannot
+    /// quit is worse than one that quits untidily.
+    /// <para>
+    /// The endpoint goes first, before the ten-second wait on the controller. A launch that
+    /// reached it during that wait used to be acknowledged, exit 0, and have its file dropped
+    /// by <see cref="OnFilesArrived"/> — the teacher's document silently gone. Now it is
+    /// refused, and the launcher starts its own console.
+    /// </para>
     /// </summary>
     private async Task StopAsync()
     {
@@ -501,28 +685,47 @@ public partial class App : Application
         }
 
         _stopping = true;
-        _mainViewModel?.Detach();
-
-        var controller = _controller;
-        _controller = null;
-        if (controller is not null)
+        try
         {
-            try
+            if (_instance is { } instance)
             {
-                await controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+                _instance = null;
+                instance.BeginStopping();
+                try
+                {
+                    await instance.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    _log?.LogDebug(ex, "The single-instance endpoint did not close cleanly");
+                }
             }
-            catch (Exception ex)
+
+            _mainViewModel?.Detach();
+
+            var controller = _controller;
+            _controller = null;
+            if (controller is not null)
             {
-                _log?.LogWarning(ex, "The active lab was not released cleanly on shutdown");
+                try
+                {
+                    await controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+                }
+                catch (Exception ex)
+                {
+                    _log?.LogWarning(ex, "The active lab was not released cleanly on shutdown");
+                }
             }
         }
+        finally
+        {
+            Log.CloseAndFlush();
+            _loggers?.Dispose();
+            _lock?.Dispose();
+            _lock = null;
 
-        Log.CloseAndFlush();
-        _loggers?.Dispose();
-        _lock?.Dispose();
-        _lock = null;
-
-        _stopped = true;
-        _desktop?.Shutdown();
+            _stopped = true;
+            _desktop?.Shutdown();
+        }
     }
 }

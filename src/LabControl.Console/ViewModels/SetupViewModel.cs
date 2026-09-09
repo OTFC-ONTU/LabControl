@@ -284,7 +284,9 @@ public sealed partial class SetupViewModel : ObservableObject
 
         try
         {
-            _backup = ConsoleBootstrap.ReadBackup(file);
+            // Off the UI thread like every other document read (D-59 item 5): the wizard must
+            // not freeze on a slow stick or a file that is not what its name claims.
+            _backup = await Task.Run(() => ConsoleBootstrap.ReadBackup(file));
             BackupFile = file;
             var holders = _backup.LabKey.Wrappings.Where(w => w.Kind == KeyWrappingKind.Holder).Select(w => w.Name);
             BackupSummary = Strings.Format("Setup.BackupSummary",

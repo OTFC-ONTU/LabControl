@@ -11,6 +11,7 @@ using LabControl.Shared.Identity;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Setup;
 using LabControl.Shared.Lab;
+using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Power;
 using LabControl.Shared.Protocol;
@@ -117,6 +118,9 @@ public sealed class LabSession : IAsyncDisposable
     private readonly Dictionary<string, AgentConnection> _linked = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, OtherConsole> _others = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, PendingWake> _waking = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>When each other teacher machine was last reported as having a wrong clock (D-58).</summary>
+    private readonly Dictionary<string, DateTimeOffset> _skewReported = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
     private readonly CancellationTokenSource _stopping = new();
     private readonly JobJournal _journal;
@@ -489,6 +493,7 @@ public sealed class LabSession : IAsyncDisposable
         var now = _clock();
         var lastSeen = machine.LastSeenUnix == 0 ? (DateTimeOffset?)null : DateTimeOffset.FromUnixTimeSeconds(machine.LastSeenUnix);
 
+        OtherConsole[] live;
         lock (_gate)
         {
             if (_linked.ContainsKey(machine.AgentId))
@@ -496,16 +501,23 @@ public sealed class LabSession : IAsyncDisposable
                 return new MachineOwnership(OwnershipKind.LinkedHere, LastSeen: now);
             }
 
-            var live = _others.Values.Where(o => now - o.LastSeen <= Defaults.OtherConsoleTimeout).ToArray();
-            var holder = live.FirstOrDefault(o => LabRegistry.IsObservedWith(machine, o.InstanceId, now));
-            if (holder is not null)
-            {
-                return new MachineOwnership(OwnershipKind.ObservedElsewhere, holder,
-                    DateTimeOffset.FromUnixTimeSeconds(machine.LastInstanceObservedUnix), lastSeen);
-            }
-
-            return new MachineOwnership(live.Length > 0 ? OwnershipKind.Unknown : OwnershipKind.Offline, LastSeen: lastSeen);
+            live = _others.Values.Where(o => now - o.LastSeen <= Defaults.OtherConsoleTimeout).ToArray();
         }
+
+        // A machine whose access was withdrawn is nobody's holder, even if its beacon was
+        // heard a moment before the withdrawal landed (D-56 item 6).
+        live = live.Where(o => !Registry.Revocations.IsRevoked(LabCertificates.InstanceSerial(o.InstanceId))).ToArray();
+
+        // The instance and the moment behind a claim are read together, under the registry's
+        // own lock, so no tile can ever show one console's name with another's timestamp.
+        var holder = live.FirstOrDefault(o => Registry.IsObservedWith(machine, o.InstanceId, now));
+        if (holder is not null)
+        {
+            return new MachineOwnership(OwnershipKind.ObservedElsewhere, holder,
+                DateTimeOffset.FromUnixTimeSeconds(machine.LastInstanceObservedUnix), lastSeen);
+        }
+
+        return new MachineOwnership(live.Length > 0 ? OwnershipKind.Unknown : OwnershipKind.Offline, LastSeen: lastSeen);
     }
 
     /// <summary>
@@ -528,12 +540,39 @@ public sealed class LabSession : IAsyncDisposable
     public void TakeOver()
     {
         _broadcaster?.TakeOver();
+
+        // Whatever another machine did before this moment is history: the banner must stop
+        // saying "… took over the lab at 10:32" the instant this console takes it back
+        // (D-58). The observations that press produced stand until the PCs come back here
+        // and supersede them by saying Hello.
+        var changed = false;
+        lock (_gate)
+        {
+            foreach (var (id, other) in _others.ToArray())
+            {
+                if (other.TookOverAt is not null || other.TookOverSeenAt is not null)
+                {
+                    _others[id] = other with { TookOverAt = null, TookOverSeenAt = null };
+                    changed = true;
+                }
+            }
+        }
+
         Events.Info("console.take_over", $"{Instance.InstanceName} is taking over the lab.");
+        if (changed)
+        {
+            OtherConsolesChanged?.Invoke();
+        }
     }
 
     public DateTimeOffset? TakingOverSince => _broadcaster?.TakeOverAt;
 
-    private void OnBeaconReceived(ReadOnlyMemory<byte> datagram, IPEndPoint from)
+    /// <param name="receivedAt">
+    /// When the socket produced the datagram. The console records beacons on its own clock and
+    /// nothing it decides turns on sub-second arrival order — that rule belongs to the agent
+    /// (D-58) — so this is not used here; it is part of the listener's contract for the PCs.
+    /// </param>
+    private void OnBeaconReceived(ReadOnlyMemory<byte> datagram, IPEndPoint from, DateTimeOffset receivedAt)
     {
         if (!Beacon.TryParse(datagram.Span, out var beacon) ||
             string.Equals(beacon.InstanceId, Instance.InstanceId, StringComparison.OrdinalIgnoreCase))
@@ -549,6 +588,26 @@ public sealed class LabSession : IAsyncDisposable
                 _log.LogDebug("Dropped a beacon from {From}: {Failure}", from, failure);
             }
 
+            // A stale timestamp is reached only after the endorsement and the signature have
+            // verified, so this really is another teacher machine of this lab — one whose
+            // clock is far enough out that neither side will hear the other at all. Silence
+            // would leave two teachers wondering why nothing works, so it is said once in a
+            // while, in the teacher's own words (D-58).
+            if (failure == BeaconFailure.StaleTimestamp)
+            {
+                NoteClockSkew(beacon, now);
+            }
+
+            return;
+        }
+
+        // A withdrawn device is not another teacher machine any more (D-56 item 6): it is not
+        // listed, cannot offer a Take over banner and can never be named as holding a PC. The
+        // agents refuse it too; this is the console's own half of the same rule.
+        if (Registry.Revocations.IsRevoked(LabCertificates.InstanceSerial(beacon.InstanceId)))
+        {
+            _log.LogDebug("Dropped a beacon from {From}: the access of {Instance} was withdrawn", from, beacon.InstanceId);
+            ForgetOtherConsole(beacon.InstanceId);
             return;
         }
 
@@ -591,6 +650,72 @@ public sealed class LabSession : IAsyncDisposable
         {
             OtherConsolesChanged?.Invoke();
         }
+    }
+
+    /// <summary>
+    /// A teacher machine's display name, from the beacons heard now or the instances
+    /// <c>lab.json</c> remembers; the bare id when this console has never met it.
+    /// </summary>
+    private string NameOfInstance(string instanceId)
+    {
+        lock (_gate)
+        {
+            if (_others.TryGetValue(instanceId, out var other) && other.Name.Length > 0)
+            {
+                return other.Name;
+            }
+        }
+
+        var record = Registry.OtherTeacherMachines(Instance.InstanceId).FirstOrDefault(
+            i => string.Equals(i.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
+        return record is { Name.Length: > 0 } ? record.Name : instanceId;
+    }
+
+    /// <summary>
+    /// Drops a teacher machine from the live list — used when its access is withdrawn, so the
+    /// banner, the <i>Take over</i> button it carries and any holder it could be named as all
+    /// go away at once rather than at the next beacon timeout.
+    /// </summary>
+    private void ForgetOtherConsole(string instanceId)
+    {
+        bool removed;
+        lock (_gate)
+        {
+            removed = _others.Remove(instanceId);
+        }
+
+        if (removed)
+        {
+            OtherConsolesChanged?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Another teacher machine of this lab whose clock is too far from ours for either side to
+    /// hear the other (M5, D-58). Said at most once every
+    /// <see cref="Defaults.OwnershipObservationLifetime"/> per machine, because the beacon
+    /// repeats every two seconds and the answer is the same every time.
+    /// </summary>
+    private void NoteClockSkew(Beacon beacon, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            if (_skewReported.TryGetValue(beacon.InstanceId, out var said) &&
+                now - said < Defaults.OwnershipObservationLifetime)
+            {
+                return;
+            }
+
+            _skewReported[beacon.InstanceId] = now;
+        }
+
+        var skew = now - DateTimeOffset.FromUnixTimeSeconds(beacon.SentAtUnix);
+        var name = beacon.InstanceName.Length > 0 ? beacon.InstanceName : beacon.InstanceId;
+        Events.Warning("console.clock_skew",
+            $"{name} is running this lab with a clock {Math.Abs(skew.TotalSeconds):0} s " +
+            $"{(skew > TimeSpan.Zero ? "behind" : "ahead of")} this one. More than " +
+            $"{Defaults.BeaconMaxSkew.TotalSeconds:0} s apart the two consoles cannot see each other at all, " +
+            "and neither can take the lab from the other; set both clocks and they will find each other again.");
     }
 
     // ------------------------------------------------------------------ enrolment (gRPC entry point)
@@ -921,7 +1046,7 @@ public sealed class LabSession : IAsyncDisposable
             if (wasCurrent)
             {
                 var wentOffline = _clock();
-                NoteDeparture(connection.Machine, who, wentOffline);
+                NoteDeparture(connection, who, wentOffline);
 
                 var dropped = Jobs.AgentWentOffline(hello.AgentId, wentOffline);
                 foreach (var job in dropped)
@@ -977,31 +1102,36 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>
     /// The only way this console learns that another teacher machine holds a PC (M5 §4.6,
-    /// D-58): the PC left while a take-over by that machine was live here — its signed
-    /// <c>take</c> beacon arrived within the window, measured on this console's own clock.
-    /// A PC that leaves for any other reason leaves no observation behind, and its tile then
-    /// says offline or "not seen", never "held by".
+    /// D-58): <b>the PC said so on its way out</b>. It has just honoured that machine's signed
+    /// <c>take</c> beacon, so it names the taker in a <c>link.taken_over</c> event before it
+    /// half-closes the stream, and that report — not the end of the stream — is what this
+    /// console attributes on. A stream ending for any other reason (the PC switched off, a
+    /// dropped cable or Wi-Fi, a crash, an agent restart, an agent too old to say anything)
+    /// leaves no observation behind, and the tile then says offline or "not seen", never
+    /// "held by". Naming a machine is still only a claim, so it must be one this console has
+    /// itself heard beaconing and has not withdrawn.
     /// </summary>
-    private void NoteDeparture(MachineRecord machine, string who, DateTimeOffset now)
+    private void NoteDeparture(AgentConnection connection, string who, DateTimeOffset now)
     {
-        OtherConsole? taker = null;
-        lock (_gate)
+        var machine = connection.Machine;
+        if (connection.LeavingForInstanceId is not { Length: > 0 } takerId)
         {
-            foreach (var other in _others.Values)
-            {
-                if (other.TookOverSeenAt is not { } seen || now - seen > Defaults.TakeOverWindow)
-                {
-                    continue;
-                }
-
-                if (taker is null || seen > taker.TookOverSeenAt)
-                {
-                    taker = other;
-                }
-            }
+            return;
         }
 
-        if (taker is null || Registry.RecordObservedElsewhere(machine.AgentId, taker.InstanceId, now) is null)
+        OtherConsole? taker;
+        lock (_gate)
+        {
+            taker = _others.GetValueOrDefault(takerId);
+        }
+
+        if (taker is null || Registry.Revocations.IsRevoked(LabCertificates.InstanceSerial(taker.InstanceId)))
+        {
+            _log.LogDebug("{Pc} said it left for {Instance}, which this console has not heard beaconing; nobody is credited with it", who, takerId);
+            return;
+        }
+
+        if (Registry.RecordObservedElsewhere(machine.AgentId, taker.InstanceId, now) is null)
         {
             return;
         }
@@ -1121,12 +1251,26 @@ public sealed class LabSession : IAsyncDisposable
 
             case AgentMessage.PayloadOneofCase.Event:
                 var reported = message.Event;
+
+                // The PC is on its way out because another teacher machine took it over, and
+                // says which one (D-58). It is remembered on the connection and read when the
+                // stream ends: nothing else this console can see tells a take-over apart from
+                // a PC that was simply switched off.
+                if (DepartureNotice.TakerOf(reported) is { } takerInstance)
+                {
+                    connection.NoteLeavingFor(takerInstance);
+                }
+
                 var eventText = reported.Code == SetupReadiness.EventCode
                     ? ReadinessPresentation.EventText(reported.Message)
                     : reported.Code == UpdateTerminalReport.RolledBackCode
                         ? Localization.Strings.Get("Update.RollbackReported") + (InstallLayout.IsValidVersion(reported.Message)
                             ? " " + Localization.Strings.Format("Tile.UpdateRolledBack", reported.Message) : "")
-                        : reported.Code == UpdateTerminalReport.StableCode ? Localization.Strings.Get("Tile.UpdateStable") : reported.Message;
+                        : reported.Code == UpdateTerminalReport.StableCode
+                            ? Localization.Strings.Get("Tile.UpdateStable")
+                            : reported.Code == DepartureNotice.Code
+                                ? Localization.Strings.Format("Event.TakenOver", NameOfInstance(reported.Message))
+                                : reported.Message;
                 Events.Add(reported.Severity switch
                 {
                     Event.Types.Severity.Error => EventSeverity.Error,
@@ -1904,6 +2048,10 @@ public sealed class LabSession : IAsyncDisposable
 
         var name = record.Name.Length > 0 ? record.Name : instanceId;
         Events.Warning("device.withdrawn", $"Access of {name} withdrawn: {reason}. Delivered to the linked PCs now; the others learn it when they link.");
+
+        // It stops being one of the other teacher machines here and now: no banner, no
+        // Take over button of its own, and it can never be named as holding a PC (D-56 item 6).
+        ForgetOtherConsole(instanceId);
         OtherConsolesChanged?.Invoke();
         message = $"Access of {name} is withdrawn.";
         return true;

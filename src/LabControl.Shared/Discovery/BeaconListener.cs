@@ -23,8 +23,14 @@ public sealed class BeaconListener : IDisposable
 
     public BeaconListener(int port = Defaults.BeaconPort) => _port = port;
 
-    /// <summary>A datagram arrived. Called on a background thread; keep it quick.</summary>
-    public event Action<ReadOnlyMemory<byte>, IPEndPoint>? Received;
+    /// <summary>
+    /// A datagram arrived. Called on a background thread; keep it quick. The third argument
+    /// is when the socket produced it, stamped once in the receive loop before the fan-out:
+    /// the agent's take-over rule turns on whether a beacon arrived before or after its link
+    /// came up, and a timestamp read later — after thirty listeners, or after another thread
+    /// recorded the link — would answer that question wrongly (D-58).
+    /// </summary>
+    public event Action<ReadOnlyMemory<byte>, IPEndPoint, DateTimeOffset>? Received;
 
     /// <summary>The socket could not be opened or died; nothing else is heard until restarted.</summary>
     public event Action<string>? Failed;
@@ -48,7 +54,8 @@ public sealed class BeaconListener : IDisposable
         }
     }
 
-    internal void Deliver(ReadOnlyMemory<byte> datagram, IPEndPoint from) => Received?.Invoke(datagram, from);
+    internal void Deliver(ReadOnlyMemory<byte> datagram, IPEndPoint from, DateTimeOffset receivedAt) =>
+        Received?.Invoke(datagram, from, receivedAt);
 
     /// <summary>What the process-wide sockets have seen; for a status line and for tests.</summary>
     public static string Describe() => SharedSocket.Describe();
@@ -153,6 +160,10 @@ public sealed class BeaconListener : IDisposable
                 try
                 {
                     var result = await _socket.ReceiveFromAsync(buffer, SocketFlags.None, anyone, token);
+
+                    // Stamped here, once, before anything is parsed or handed on: this is as
+                    // close to the datagram's arrival as this process can see (D-58).
+                    var receivedAt = DateTimeOffset.UtcNow;
                     Interlocked.Increment(ref _received);
                     if (result.ReceivedBytes is > 0 and <= Defaults.BeaconMaxBytes)
                     {
@@ -162,7 +173,7 @@ public sealed class BeaconListener : IDisposable
                         {
                             try
                             {
-                                listener.Deliver(datagram, from);
+                                listener.Deliver(datagram, from, receivedAt);
                             }
                             catch (Exception ex)
                             {

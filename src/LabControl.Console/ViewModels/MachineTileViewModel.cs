@@ -157,6 +157,10 @@ public sealed partial class MachineTileViewModel : ObservableObject
     {
         TileStatus.Online => Strings.Get("Tile.Online"),
         TileStatus.Outdated => Strings.Get("Tile.Outdated"),
+
+        // A magic packet has just gone out to this PC: what the teacher wants to know is that
+        // it is being woken, not where it was the last time anybody saw it.
+        TileStatus.HeldElsewhere when IsWaking => Strings.Get("Tile.Waking"),
         TileStatus.HeldElsewhere => Strings.Format("Tile.HeldBy", HeldBy),
         TileStatus.NotSeen when IsWaking => Strings.Get("Tile.Waking"),
         TileStatus.NotSeen => LastSeen.Length == 0 || LastSeen == Strings.Get("Tile.Never")

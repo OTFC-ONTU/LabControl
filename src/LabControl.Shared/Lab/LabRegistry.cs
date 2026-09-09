@@ -360,7 +360,7 @@ public sealed class LabRegistry
         lock (_gate)
         {
             return Document.Machines
-                .Where(m => IsObservedWith(m, instanceId, now))
+                .Where(m => IsObservedWith(m.LastInstanceId, m.LastInstanceObservedUnix, instanceId, now))
                 .OrderBy(m => m.Number)
                 .ToArray();
         }
@@ -368,22 +368,44 @@ public sealed class LabRegistry
 
     /// <summary>
     /// Whether a machine's last positive observation names <paramref name="instanceId"/> and
-    /// is still fresh. The age is worked out in whole seconds rather than by building a
-    /// <see cref="DateTimeOffset"/>, so a <c>lab.json</c> that has been corrupted into an
-    /// impossible timestamp is answered "no" instead of throwing under the lab view.
+    /// is still fresh. The instance and the moment are read as one pair under this registry's
+    /// own lock, so a caller cannot catch the two halves of an observation being written
+    /// (<see cref="RecordHello"/> and <see cref="RecordObservedElsewhere"/> both set them
+    /// together) and credit a PC to one console with another console's timestamp.
     /// </summary>
-    public static bool IsObservedWith(MachineRecord machine, string instanceId, DateTimeOffset now)
+    public bool IsObservedWith(MachineRecord machine, string instanceId, DateTimeOffset now)
     {
-        if (machine.LastInstanceObservedUnix <= 0 || instanceId.Length == 0 ||
-            machine.LastInstanceId is not { Length: > 0 } observed ||
-            !string.Equals(observed, instanceId, StringComparison.OrdinalIgnoreCase))
+        string? observed;
+        long observedAtUnix;
+        lock (_gate)
+        {
+            observed = machine.LastInstanceId;
+            observedAtUnix = machine.LastInstanceObservedUnix;
+        }
+
+        return IsObservedWith(observed, observedAtUnix, instanceId, now);
+    }
+
+    /// <summary>
+    /// The same rule on a pair already read together. The age is worked out in whole seconds
+    /// rather than by building a <see cref="DateTimeOffset"/>, so a <c>lab.json</c> that has
+    /// been corrupted into an impossible timestamp is answered "no" instead of throwing under
+    /// the lab view. An observation in the future is tolerated only by the clock skew a
+    /// beacon is allowed anyway: a lab file written while the clock was ahead must not count
+    /// as fresh for a second lifetime on top of the first.
+    /// </summary>
+    public static bool IsObservedWith(string? observed, long observedAtUnix, string instanceId, DateTimeOffset now)
+    {
+        if (observedAtUnix <= 0 || instanceId.Length == 0 ||
+            observed is not { Length: > 0 } instance ||
+            !string.Equals(instance, instanceId, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        var age = now.ToUnixTimeSeconds() - machine.LastInstanceObservedUnix;
-        var lifetime = (long)Defaults.OwnershipObservationLifetime.TotalSeconds;
-        return age >= -lifetime && age <= lifetime;
+        var age = now.ToUnixTimeSeconds() - observedAtUnix;
+        return age >= -(long)Defaults.BeaconMaxSkew.TotalSeconds &&
+               age <= (long)Defaults.OwnershipObservationLifetime.TotalSeconds;
     }
 
     // ------------------------------------------------------------------ revocation

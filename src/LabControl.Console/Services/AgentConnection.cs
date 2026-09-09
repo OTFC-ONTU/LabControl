@@ -51,6 +51,18 @@ public sealed class AgentConnection
     /// <summary>Why the link ended, once it has; for the tile tooltip and the event.</summary>
     public string? ClosedBecause { get; private set; }
 
+    /// <summary>
+    /// The console instance this PC said it was leaving for, from its <c>link.taken_over</c>
+    /// event (M5, D-58); <c>null</c> unless the PC actually said so. It is the only evidence
+    /// this console will accept that another teacher machine now holds the PC — the end of a
+    /// stream on its own says nothing, because a PC that is switched off looks exactly the
+    /// same. Written on the link's read thread and read when the link ends.
+    /// </summary>
+    public string? LeavingForInstanceId { get; private set; }
+
+    /// <summary>The PC named the machine that took it over; remembered until the stream ends.</summary>
+    public void NoteLeavingFor(string instanceId) => LeavingForInstanceId = instanceId;
+
     /// <summary>The lock screen is up on the PC, from the agent's last <c>SessionState</c> (M2).</summary>
     public bool SessionLocked { get; private set; }
 

@@ -682,6 +682,7 @@ public sealed partial class MainViewModel : ObservableObject
                     Strings.Get("Network.Recheck"), () => _network.CheckAsync(), isWarning: true));
         }
 
+        var now = _session.Now;
         foreach (var other in _session.OtherConsoles)
         {
             // Only the PCs this console watched leave for that machine are counted, and the
@@ -690,14 +691,7 @@ public sealed partial class MainViewModel : ObservableObject
             var observed = _session.ObservedElsewhere(other.InstanceId);
             var total = _session.Registry.Document.Machines.Count;
             var numbers = string.Join(", ", observed.Select(m => string.Format(Strings.Culture, Defaults.MachineNameFormat, m.Number)));
-            var when = other.TookOverAt?.ToLocalTime().ToString("t", Strings.Culture) ?? string.Empty;
-            var text = other.TookOverAt is not null
-                ? observed.Count > 0
-                    ? Strings.Format("Banner.TookOver", other.Name, when, observed.Count, total, numbers)
-                    : Strings.Format("Banner.TookOverUnknown", other.Name, when)
-                : observed.Count > 0
-                    ? Strings.Format("Banner.OtherConsole", other.Name, observed.Count, total, numbers)
-                    : Strings.Format("Banner.OtherConsoleUnknown", other.Name);
+            var text = OtherConsoleText(other, observed.Count, total, numbers, now);
 
             wanted.Add(new BannerViewModel("other:" + other.InstanceId, text, Strings.Get("Banner.TakeOver"),
                 () => { _session.TakeOver(); return Task.CompletedTask; }, isWarning: false));
@@ -745,6 +739,36 @@ public sealed partial class MainViewModel : ObservableObject
                 existing.Text = banner.Text;
             }
         }
+    }
+
+    /// <summary>
+    /// What one other-console banner says (ARCHITECTURE §3.7.2). Two things are said at
+    /// most: that the machine is also running this lab, and — while its press is still what
+    /// explains what this console sees — that it took the lab over, with the time it did.
+    /// <para>
+    /// "… took over the lab at 10:32" is news, and news goes stale (D-58). It is worded that
+    /// way while the press this console <i>saw</i> is younger than the observations it
+    /// produced (<see cref="Defaults.OwnershipObservationLifetime"/>), not for the rest of a
+    /// two-console day; and pressing <i>Take over</i> here clears the press outright, so a
+    /// console that has just taken the room back never claims to have lost it. The count is
+    /// only what was positively observed, which is why it says "at least".
+    /// </para>
+    /// </summary>
+    public static string OtherConsoleText(OtherConsole other, int observed, int total, string numbers, DateTimeOffset now)
+    {
+        var tookOver = other.TookOverAt is { } at && other.TookOverSeenAt is { } seen &&
+                       now - seen <= Defaults.OwnershipObservationLifetime
+            ? at
+            : (DateTimeOffset?)null;
+        var when = tookOver?.ToLocalTime().ToString("t", Strings.Culture) ?? string.Empty;
+
+        return tookOver is not null
+            ? observed > 0
+                ? Strings.Format("Banner.TookOver", other.Name, when, observed, total, numbers)
+                : Strings.Format("Banner.TookOverUnknown", other.Name, when)
+            : observed > 0
+                ? Strings.Format("Banner.OtherConsole", other.Name, observed, total, numbers)
+                : Strings.Format("Banner.OtherConsoleUnknown", other.Name);
     }
 
     // ------------------------------------------------------------------ jobs and events

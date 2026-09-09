@@ -5,6 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Channels;
 using Google.Protobuf;
 using Grpc.Core;
+using LabControl.Shared.Discovery;
 using LabControl.Shared.Identity;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
@@ -90,7 +91,11 @@ public sealed partial class AgentLink : IAsyncDisposable
         _behaviour = behaviour;
         _log = log;
         _options = options ?? new AgentLinkOptions();
-        _gate = new BeaconGate(store.Authority, store.Config.LabId);
+
+        // The gate reads the same live set the link merges into (D-56 item 6): a console
+        // withdrawn during the lesson stops being followed from the very next beacon, without
+        // waiting for a handshake this PC would only reach after giving up the room.
+        _gate = new BeaconGate(store.Authority, store.Config.LabId, _revocations);
 
         foreach (var record in store.Config.Revocations.ToArray())
         {
@@ -175,15 +180,34 @@ public sealed partial class AgentLink : IAsyncDisposable
         }
     }
 
-    /// <summary>Hands the PC a beacon datagram, from whatever socket the host listens on.</summary>
-    public void OfferBeacon(ReadOnlyMemory<byte> datagram)
+    /// <summary>
+    /// Hands the PC a beacon datagram, from whatever socket the host listens on.
+    /// <paramref name="receivedAt"/> is when the socket produced it (<see cref="Discovery.BeaconListener"/>
+    /// stamps every datagram in its own receive loop): the take-over rule turns on whether a
+    /// beacon arrived before or after the link came up, and stamping it here instead — after
+    /// a fan-out to thirty listeners, or after the link was recorded on another thread —
+    /// would make a datagram that was already in flight look like a fresh press (D-58).
+    /// The wait since that stamp is measured on the real clock and taken off this PC's own
+    /// clock, so a host with a shifted clock still compares like with like.
+    /// </summary>
+    public void OfferBeacon(ReadOnlyMemory<byte> datagram, DateTimeOffset? receivedAt = null)
     {
         if (State == LinkState.Stopped || _stopping.IsCancellationRequested)
         {
             return;
         }
 
-        var verdict = _gate.Consider(datagram.Span, _options.Clock());
+        var now = _options.Clock();
+        if (receivedAt is { } arrived)
+        {
+            var waited = DateTimeOffset.UtcNow - arrived;
+            if (waited > TimeSpan.Zero)
+            {
+                now -= waited;
+            }
+        }
+
+        var verdict = _gate.Consider(datagram.Span, now);
 
         switch (verdict.Action)
         {
@@ -194,12 +218,82 @@ public sealed partial class AgentLink : IAsyncDisposable
 
             case BeaconAction.TakeOver:
                 _log.LogInformation("{Pc}: {Reason}; leaving {Current}", Name, verdict.Reason, LinkedInstanceName);
-                Redial(verdict.Beacon!.Endpoint, "another console took over the lab");
+                _ = LeaveForTakerAsync(verdict.Beacon!);
                 break;
 
             default:
                 _log.LogTrace("{Pc}: beacon ignored — {Reason}", Name, verdict.Reason);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Leaves the current console for the one that took over — <b>after telling it so</b>
+    /// (D-58). The console credits another teacher machine with this PC only on this report,
+    /// because every other way a stream can end (the PC switched off, the network dropped,
+    /// the service restarted) looks identical from its side. The notice is written first, the
+    /// request stream is then closed gracefully so everything queued is delivered in order,
+    /// and the link is cut anyway after <see cref="Defaults.DepartureNoticeGrace"/> — a
+    /// console that does not answer must never keep this PC from following the taker.
+    /// </summary>
+    private async Task LeaveForTakerAsync(Beacon taker)
+    {
+        const string reason = "another console took over the lab";
+
+        ChannelWriter<AgentMessage>? outgoing;
+        CancellationTokenSource? session;
+        lock (_gateLock)
+        {
+            outgoing = _outgoing;
+            session = _session;
+            _pendingEndpoint = taker.Endpoint;
+            _pendingReason = reason;
+        }
+
+        if (outgoing is not null && session is not null)
+        {
+            // Straight onto this link, never into the queue of events kept for the next one:
+            // a notice that missed this stream is not worth telling the taker about itself.
+            outgoing.TryWrite(new AgentMessage { Event = DepartureNotice.Create(taker.InstanceId, _options.Clock()) });
+
+            // A half-close, not a cancellation: a reset stream can lose the notice that was
+            // the whole point of sending it.
+            outgoing.TryComplete();
+
+            var deadline = _options.Clock() + Defaults.DepartureNoticeGrace;
+            while (IsCurrent(session) && _options.Clock() < deadline && !_stopping.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(20), _stopping.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+
+        lock (_gateLock)
+        {
+            // Only ever the link this take-over was about: by now the PC may already be
+            // linked to the taker, and cutting *that* would be this method undoing its
+            // own work.
+            if (session is null || ReferenceEquals(_session, session))
+            {
+                _pendingEndpoint ??= taker.Endpoint;
+                _pendingReason ??= reason;
+                session?.Cancel();
+            }
+        }
+    }
+
+    /// <summary>Whether <paramref name="session"/> is still the link this PC is running.</summary>
+    private bool IsCurrent(CancellationTokenSource session)
+    {
+        lock (_gateLock)
+        {
+            return ReferenceEquals(_session, session);
         }
     }
 
@@ -1266,6 +1360,12 @@ public sealed partial class AgentLink : IAsyncDisposable
         {
             await stream.WriteAsync(message, token);
         }
+
+        // Reached only when the channel was completed deliberately — the PC leaving for a
+        // console that took over (D-58). Half-closing tells the console this is the end of
+        // what the PC had to say, so the departure notice ahead of it is delivered instead
+        // of being lost with a reset stream.
+        await stream.CompleteAsync();
     }
 
     private async Task HeartbeatLoopAsync(ChannelWriter<AgentMessage> outgoing, CancellationToken token)

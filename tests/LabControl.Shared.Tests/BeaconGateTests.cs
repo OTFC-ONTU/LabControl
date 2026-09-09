@@ -21,7 +21,7 @@ public sealed class BeaconGateTests
         var now = DateTimeOffset.UtcNow;
         using var lab = TestLab.Create();
         using var console = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), now);
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
 
         var verdict = gate.Consider(console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, now).ToDatagram(), now);
 
@@ -35,7 +35,7 @@ public sealed class BeaconGateTests
         var now = DateTimeOffset.UtcNow;
         using var lab = TestLab.Create();
         using var console = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), now);
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
 
         var dials = 0;
         for (var i = 0; i < 1000; i++)
@@ -58,7 +58,7 @@ public sealed class BeaconGateTests
         using var theirs = TestLab.Create();
         using var impostor = ConsoleInstance.Mint(theirs, "Impostor", new FileSecretProtector(), now);
 
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(ours.Authority), ours.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(ours.Authority), ours.LabId, new RevocationSet());
         var beacon = impostor.CreateBeacon("192.168.1.99", Defaults.ConsolePort, now);
         beacon.LabId = ours.LabId;
 
@@ -77,7 +77,7 @@ public sealed class BeaconGateTests
         using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), linkedAt);
         using var deskPc = ConsoleInstance.Mint(lab, "Lab PC", new FileSecretProtector(), linkedAt);
 
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
         gate.Linked(macBook.InstanceId, $"192.168.1.23:{Defaults.ConsolePort}", linkedAt);
 
         // Its own console: nothing to do. The other console: two consoles hold disjoint
@@ -122,7 +122,7 @@ public sealed class BeaconGateTests
         using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), linkedAt);
         using var deskPc = ConsoleInstance.Mint(lab, "Lab PC", new FileSecretProtector(), linkedAt);
 
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
         gate.Linked(macBook.InstanceId, $"192.168.1.23:{Defaults.ConsolePort}", linkedAt);
 
         // The press happens ten seconds later, timestamped on the taker's own wrong clock.
@@ -152,7 +152,7 @@ public sealed class BeaconGateTests
         using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), pressed);
         using var deskPc = ConsoleInstance.Mint(lab, "Lab PC", new FileSecretProtector(), pressed);
 
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
         gate.Linked(macBook.InstanceId, $"192.168.1.23:{Defaults.ConsolePort}", linkedAt);
 
         var arrives = linkedAt.AddSeconds(1);
@@ -173,7 +173,7 @@ public sealed class BeaconGateTests
         using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), pressed);
         using var deskPc = ConsoleInstance.Mint(lab, "Lab PC", new FileSecretProtector(), pressed);
 
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
         gate.Linked(macBook.InstanceId, $"192.168.1.23:{Defaults.ConsolePort}", linkedAt);
 
         var verdict = gate.Consider(deskPc.CreateBeacon("192.168.1.40", Defaults.ConsolePort, arrives, pressed), arrives);
@@ -201,7 +201,7 @@ public sealed class BeaconGateTests
         using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), linkedAt);
         using var deskPc = ConsoleInstance.Mint(lab, "Lab PC", new FileSecretProtector(), linkedAt);
 
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
         gate.Linked(macBook.InstanceId, $"192.168.1.23:{Defaults.ConsolePort}", linkedAt);
 
         var sent = linkedAt.AddSeconds(10);
@@ -222,7 +222,7 @@ public sealed class BeaconGateTests
         using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), start);
         using var deskPc = ConsoleInstance.Mint(lab, "Lab PC", new FileSecretProtector(), start);
 
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
         gate.Linked(macBook.InstanceId, "a", start);
 
         var firstPress = start.AddSeconds(10);
@@ -238,12 +238,150 @@ public sealed class BeaconGateTests
     }
 
     [Fact]
+    public void A_withdrawn_console_cannot_move_a_linked_pc()
+    {
+        // The stolen-laptop case (D-56 item 6). The endorsement in its beacon still verifies —
+        // the CA signed it once and cannot take that back — so nothing but the revocation set
+        // stands between a withdrawn machine and the room. Refusing it at the TLS handshake is
+        // too late: by then this PC has already dropped the console it was on.
+        var linkedAt = Whole(DateTimeOffset.UtcNow);
+        using var lab = TestLab.Create();
+        using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), linkedAt);
+        using var stolen = ConsoleInstance.Mint(lab, "Stolen laptop", new FileSecretProtector(), linkedAt);
+
+        var authority = LabTrustTests.PublicOnly(lab.Authority);
+        var revocations = new RevocationSet();
+        var gate = new BeaconGate(authority, lab.LabId, revocations);
+        gate.Linked(macBook.InstanceId, $"192.168.1.23:{Defaults.ConsolePort}", linkedAt);
+
+        // Before the withdrawal it takes the room, as any teacher machine may.
+        var first = linkedAt.AddSeconds(10);
+        Assert.Equal(BeaconAction.TakeOver,
+            gate.Consider(stolen.CreateBeacon("192.168.1.40", Defaults.ConsolePort, first, first), first).Action);
+
+        gate.Unlinked();
+        gate.Linked(macBook.InstanceId, $"192.168.1.23:{Defaults.ConsolePort}", first);
+
+        Assert.True(revocations.TryAdd(authority, RevocationSet.Create(
+            lab, LabCertificates.InstanceSerial(stolen.InstanceId), "laptop stolen", first)));
+
+        // Every later press is a new value, so honour-once is no defence: the withdrawal is.
+        for (var i = 1; i <= 30; i++)
+        {
+            var at = first.AddSeconds(i);
+            var verdict = gate.Consider(stolen.CreateBeacon("192.168.1.40", Defaults.ConsolePort, at, at), at);
+            Assert.Equal(BeaconAction.Ignore, verdict.Action);
+            Assert.Contains("withdrawn", verdict.Reason, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(macBook.InstanceId, gate.LinkedInstanceId);
+    }
+
+    [Fact]
+    public void A_withdrawn_console_is_not_dialled_by_an_unlinked_pc_either()
+    {
+        // A PC waiting for a beacon must not walk into the withdrawn machine's handshake at
+        // all: the refusal is decided here, before the dial.
+        var now = Whole(DateTimeOffset.UtcNow);
+        using var lab = TestLab.Create();
+        using var stolen = ConsoleInstance.Mint(lab, "Stolen laptop", new FileSecretProtector(), now);
+        using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), now);
+
+        var authority = LabTrustTests.PublicOnly(lab.Authority);
+        var revocations = new RevocationSet();
+        Assert.True(revocations.TryAdd(authority, RevocationSet.Create(
+            lab, LabCertificates.InstanceSerial(stolen.InstanceId), "laptop stolen", now)));
+
+        var gate = new BeaconGate(authority, lab.LabId, revocations);
+
+        Assert.Equal(BeaconAction.Ignore,
+            gate.Consider(stolen.CreateBeacon("192.168.1.40", Defaults.ConsolePort, now).ToDatagram(), now).Action);
+
+        // The lab's other console is untouched by that machine's withdrawal.
+        Assert.Equal(BeaconAction.Dial,
+            gate.Consider(macBook.CreateBeacon("192.168.1.23", Defaults.ConsolePort, now).ToDatagram(), now).Action);
+    }
+
+    [Fact]
+    public void A_beacon_just_past_the_skew_limit_is_rejected()
+    {
+        // Not a matter of taste: past this the two machines cannot see each other at all, in
+        // either direction, which is why the console says so out loud (D-58).
+        var now = Whole(DateTimeOffset.UtcNow);
+        using var lab = TestLab.Create();
+        using var console = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), now);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
+
+        var atTheLimit = console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, now - Defaults.BeaconMaxSkew);
+        var pastIt = console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, now - Defaults.BeaconMaxSkew - TimeSpan.FromSeconds(1));
+        var aheadPastIt = console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, now + Defaults.BeaconMaxSkew + TimeSpan.FromSeconds(1));
+
+        Assert.Equal(BeaconAction.Dial, gate.Consider(atTheLimit, now).Action);
+        Assert.Contains("timestamp", gate.Consider(pastIt, now).Reason, StringComparison.Ordinal);
+        Assert.Contains("timestamp", gate.Consider(aheadPastIt, now).Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Honoured_take_overs_are_forgotten_once_they_can_never_be_honoured_again()
+    {
+        // A console left running for a term must not grow one remembered token per press.
+        var linkedAt = Whole(DateTimeOffset.UtcNow);
+        using var lab = TestLab.Create();
+        using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), linkedAt);
+        using var deskPc = ConsoleInstance.Mint(lab, "Lab PC", new FileSecretProtector(), linkedAt);
+
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
+        gate.Linked(macBook.InstanceId, "a", linkedAt);
+
+        for (var i = 1; i <= 200; i++)
+        {
+            var at = linkedAt.AddMinutes(i);
+            Assert.Equal(BeaconAction.TakeOver,
+                gate.Consider(deskPc.CreateBeacon("192.168.1.40", Defaults.ConsolePort, at, at), at).Action);
+            gate.Linked(macBook.InstanceId, "a", at);
+        }
+
+        Assert.InRange(gate.HonouredTakeCount, 1, 5);
+
+        // And the one press that could still arrive again is still honoured only once.
+        var last = linkedAt.AddMinutes(200);
+        var repeat = deskPc.CreateBeacon("192.168.1.40", Defaults.ConsolePort, last, last);
+        Assert.Equal(BeaconAction.Ignore, gate.Consider(repeat, last).Action);
+    }
+
+    [Fact]
+    public void A_beacon_that_arrived_before_the_link_is_judged_on_when_it_arrived()
+    {
+        // The arrival stamp comes from the listener's receive loop and is carried through
+        // AgentLink; a datagram that waited in the socket while the link came up must not
+        // read as a fresh press (D-58).
+        var pressed = Whole(DateTimeOffset.UtcNow);
+        var arrived = pressed.AddSeconds(1);
+        var linkedAt = arrived.AddSeconds(2);
+        var handled = linkedAt.AddSeconds(1);
+
+        using var lab = TestLab.Create();
+        using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), pressed);
+        using var deskPc = ConsoleInstance.Mint(lab, "Lab PC", new FileSecretProtector(), pressed);
+
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
+        gate.Linked(macBook.InstanceId, "a", linkedAt);
+
+        var beacon = deskPc.CreateBeacon("192.168.1.40", Defaults.ConsolePort, arrived, pressed);
+
+        // Judged on when the handler happened to run, this moves the room; judged on when the
+        // datagram actually arrived, it does not.
+        Assert.Equal(BeaconAction.Ignore, gate.Consider(beacon, arrived).Action);
+        Assert.Equal(BeaconAction.TakeOver, gate.Consider(beacon, handled).Action);
+    }
+
+    [Fact]
     public void A_failed_dial_backs_off_and_a_link_clears_it()
     {
         var now = DateTimeOffset.UtcNow;
         using var lab = TestLab.Create();
         using var console = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), now);
-        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
         const string endpoint = "192.168.1.23:47800";
 
         var first = gate.DialFailed(endpoint, now);

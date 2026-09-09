@@ -58,7 +58,7 @@ internal sealed class AgentService : BackgroundService
             }
 
             using var listener = new BeaconListener();
-            listener.Received += (datagram, _) => link.OfferBeacon(datagram);
+            listener.Received += (datagram, _, receivedAt) => link.OfferBeacon(datagram, receivedAt);
             listener.Failed += message =>
             {
                 _log.LogError("{Message}", message);

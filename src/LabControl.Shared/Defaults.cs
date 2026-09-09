@@ -57,6 +57,14 @@ public static class Defaults
     /// </summary>
     public static readonly TimeSpan TakeOverWindow = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// How long a PC that is leaving for a console that took over waits for its departure
+    /// notice to reach the console it is leaving (M5, D-58). Long enough for a half-closed
+    /// stream on a LAN, short enough that a console which has stopped answering never keeps
+    /// a PC from following the taker.
+    /// </summary>
+    public static readonly TimeSpan DepartureNoticeGrace = TimeSpan.FromSeconds(2);
+
     /// <summary>Wake-on-LAN magic packets.</summary>
     public const int WolPort = 9;
 

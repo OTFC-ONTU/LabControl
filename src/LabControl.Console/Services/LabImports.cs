@@ -61,8 +61,45 @@ public sealed class LabImports
     /// <summary>The lab-file and device-authorization operations behind the handlers (M5, D-56).</summary>
     public DeviceAccess Devices { get; }
 
-    /// <summary>The picker filters, one per known extension, in registration order.</summary>
-    public IReadOnlyList<FileFilter> Filters => _filters;
+    /// <summary>
+    /// The picker filters (M5 §5): one combined filter first, then one per known extension in
+    /// registration order. The combined filter is what makes a mixed selection possible at
+    /// all — both the macOS panel and the Windows common dialog apply exactly one filter at a
+    /// time, so a picker offered only per-type filters can never return a <c>.lclab</c> and a
+    /// <c>.lcbak</c> in the same batch, however many files the teacher selects.
+    /// </summary>
+    public IReadOnlyList<FileFilter> Filters =>
+        [new FileFilter(Strings.Get("Import.AllDocuments"), AllPatterns()), .. _filters];
+
+    /// <summary>
+    /// Every pattern the combined filter carries: the four document types of
+    /// <see cref="Defaults.ConsoleDocumentExtensions"/> first, in their order, and then
+    /// anything a later <see cref="Register"/> added that is not among them.
+    /// </summary>
+    private IReadOnlyList<string> AllPatterns()
+    {
+        var patterns = new List<string>();
+        foreach (var extension in Defaults.ConsoleDocumentExtensions)
+        {
+            if (_handlers.ContainsKey(extension))
+            {
+                patterns.Add("*" + extension);
+            }
+        }
+
+        foreach (var filter in _filters)
+        {
+            foreach (var pattern in filter.Patterns)
+            {
+                if (!patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase))
+                {
+                    patterns.Add(pattern);
+                }
+            }
+        }
+
+        return patterns;
+    }
 
     public IReadOnlyCollection<string> KnownExtensions => _handlers.Keys;
 

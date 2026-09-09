@@ -54,6 +54,8 @@
       <Button Content="{loc:Localize Chooser.Create}" Command="{Binding CreateLabCommand}" />
       <Button Content="{Binding Selected.AuthorizeLabel, FallbackValue=''}" Command="{Binding AuthorizeCommand}"
               IsVisible="{Binding Selected.CanAuthorize, FallbackValue=False}" />
+      <Button Content="{Binding AuthorizeAllLabel}" Command="{Binding AuthorizeAllCommand}"
+              IsVisible="{Binding HasPendingAuthorizations}" />
       <Button Content="{loc:Localize Chooser.RenewCertificate}" Command="{Binding RenewCertificateCommand}"
               IsVisible="{Binding Selected.CanRenewCertificate, FallbackValue=False}" />
       <Button Content="{loc:Localize Chooser.Remove}" Command="{Binding RemoveCommand}" />

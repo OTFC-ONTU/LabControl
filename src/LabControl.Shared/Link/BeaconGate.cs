@@ -38,6 +38,12 @@ public sealed class BeaconGate
     private readonly Dictionary<string, DateTimeOffset> _nextDial = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ReconnectBackoff> _backoff = new(StringComparer.Ordinal);
     private readonly HashSet<string> _honouredTakes = new(StringComparer.Ordinal);
+
+    /// <summary>When a verified beacon of this lab last arrived from an endpoint (M5 portion 8).</summary>
+    private readonly Dictionary<string, DateTimeOffset> _lastBeacon = new(StringComparer.Ordinal);
+
+    /// <summary>Endpoints whose backoff a beacon has already stepped over since the lab was last heard from.</summary>
+    private readonly HashSet<string> _resumed = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
 
     private string? _linkedInstanceId;
@@ -81,6 +87,19 @@ public sealed class BeaconGate
 
         lock (_gate)
         {
+            // A gap in this lab's own beacons means the room stopped being served and is being
+            // served again — the switch away and back (M5 portion 8). That is information the
+            // exponential dial backoff cannot have, so the next beacon after such a gap is
+            // allowed to step over the wait once. A console that beacons without a pause
+            // produces no gap and therefore no extra dial, which is what keeps a console that
+            // is up but cannot be linked from being dialled every beacon interval.
+            var seen = _lastBeacon.TryGetValue(beacon.Endpoint, out var previous);
+            _lastBeacon[beacon.Endpoint] = now;
+            if (!seen || now - previous >= Defaults.BeaconResumeGap)
+            {
+                _resumed.Remove(beacon.Endpoint);
+            }
+
             if (_linkedInstanceId is not null)
             {
                 if (string.Equals(_linkedInstanceId, beacon.InstanceId, StringComparison.OrdinalIgnoreCase))
@@ -129,9 +148,21 @@ public sealed class BeaconGate
 
             if (_nextDial.TryGetValue(beacon.Endpoint, out var earliest) && now < earliest)
             {
-                return new BeaconVerdict(BeaconAction.Ignore, "a dial to this endpoint is already due later", beacon);
+                // Only a wait a failed dial imposed may be stepped over, and only once per
+                // gap: the short spacing between two beacon-driven dials is the flood guard
+                // itself and stays. The escalation is deliberately kept — if this dial fails
+                // too, the next wait carries on from where it was instead of restarting at
+                // the floor.
+                if (!_backoff.ContainsKey(beacon.Endpoint) || !_resumed.Add(beacon.Endpoint))
+                {
+                    return new BeaconVerdict(BeaconAction.Ignore, "a dial to this endpoint is already due later", beacon);
+                }
+
+                _nextDial[beacon.Endpoint] = now + Defaults.MinDialInterval;
+                return new BeaconVerdict(BeaconAction.Dial, $"dialling {beacon.Endpoint} — this lab is being served again", beacon);
             }
 
+            _resumed.Add(beacon.Endpoint);
             _nextDial[beacon.Endpoint] = now + Defaults.MinDialInterval;
             return new BeaconVerdict(BeaconAction.Dial, $"dialling {beacon.Endpoint}", beacon);
         }
@@ -150,6 +181,7 @@ public sealed class BeaconGate
             _linkedAt = at;
             _nextDial.Remove(endpoint);
             _backoff.Remove(endpoint);
+            _resumed.Remove(endpoint);
         }
     }
 

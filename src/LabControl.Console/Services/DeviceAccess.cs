@@ -262,6 +262,55 @@ public sealed class DeviceAccess
         return path;
     }
 
+    /// <summary>
+    /// Every saved lab whose access this device must still ask for or renew (M5 §5): what
+    /// <i>Authorize all…</i> writes a request for, in the order the index holds them.
+    /// </summary>
+    public IReadOnlyList<ProfileRecord> NeedingAuthorization(DateTimeOffset now) =>
+        _bootstrap.Profiles.Profiles.Where(profile => CanRequest(profile, now)).ToList();
+
+    /// <summary>
+    /// Writes one request for every lab that needs authorization or renewal into
+    /// <paramref name="folder"/> — the batched onboarding the acceptance criteria ask for
+    /// (M5 <i>Deliverables</i>, "one batched onboarding workflow"): a teacher with three rooms
+    /// makes one gesture and carries one folder to the administrator, instead of repeating a
+    /// row action and a save dialog per room. A lab that needs nothing is not written at all,
+    /// and a lab whose request cannot be written fails alone, exactly like one file of an
+    /// import batch.
+    /// </summary>
+    public IReadOnlyList<ImportFileResult> WriteRequests(string folder, DateTimeOffset now)
+    {
+        var results = new List<ImportFileResult>();
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var profile in NeedingAuthorization(now))
+        {
+            // Two rooms of the same name on the same device would otherwise write over each
+            // other; the administrator must receive one request per lab.
+            var name = DeviceAuthorization.RequestFileName(
+                profile.InstanceName.Length > 0 ? profile.InstanceName : ConsoleBootstrap.DefaultInstanceName(), profile.LabName);
+            var candidate = name;
+            for (var attempt = 2; !used.Add(candidate); attempt++)
+            {
+                candidate = $"{Path.GetFileNameWithoutExtension(name)} ({attempt}){Defaults.DeviceRequestFileExtension}";
+            }
+
+            var path = Path.Combine(folder, candidate);
+            try
+            {
+                WriteRequest(profile.LabId, path);
+                results.Add(new ImportFileResult(path, true, Strings.Format("Access.RequestWrittenFor", profile.LabName, path), profile.LabName));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or SchemaVersionException or InvalidOperationException
+                                           or System.Security.Cryptography.CryptographicException)
+            {
+                _log.LogWarning(ex, "The device request for lab {LabId} could not be written", profile.LabId);
+                results.Add(new ImportFileResult(path, false, ex.Message, profile.LabName));
+            }
+        }
+
+        return results;
+    }
+
     // ------------------------------------------------------------------ grant
 
     /// <summary>Imports a grant (D-56 item 4): the pending identity becomes this device's instance and the snapshot refreshes the lab.</summary>

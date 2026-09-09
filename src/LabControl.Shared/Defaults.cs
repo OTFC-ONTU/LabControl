@@ -68,6 +68,16 @@ public static class Defaults
     /// <summary>Minimum spacing between dial attempts, so a beacon flood costs nothing.</summary>
     public static readonly TimeSpan MinDialInterval = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// A gap in this lab's own verified beacons after which the next one means "the room is
+    /// being served again" (M5 portion 8): the agent's exponential dial backoff is stepped
+    /// over once, so a PC that spent a whole lesson being refused links within the 15-second
+    /// target instead of waiting out <see cref="ReconnectDelayMax"/>. Two beacon intervals is
+    /// long enough that a console beaconing without a pause never produces one — which is what
+    /// keeps a console that is up but cannot be linked from being dialled every two seconds.
+    /// </summary>
+    public static readonly TimeSpan BeaconResumeGap = BeaconInterval + BeaconInterval;
+
     public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(5);
 
     /// <summary>No heartbeat for this long and the console marks the machine offline.</summary>

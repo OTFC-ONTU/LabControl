@@ -261,7 +261,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
             try { File.Delete(temporary); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                Link.Report(Event.Types.Severity.Warning, "files.cleanup_failed", ex.Message);
+                Link.ReportForJob(job.Id, Event.Types.Severity.Warning, "files.cleanup_failed", ex.Message);
             }
         }
     }

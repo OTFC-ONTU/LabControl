@@ -69,7 +69,7 @@ public sealed partial class AgentLink : IAsyncDisposable
     private readonly CancellationTokenSource _stopping = new();
     private readonly Lock _gateLock = new();
 
-    private readonly Queue<Event> _pendingEvents = new();
+    private readonly Queue<PendingEvent> _pendingEvents = new();
     private readonly List<JobLedgerEntry> _pendingResults = [];
     private ChannelWriter<AgentMessage>? _outgoing;
     private AgentService.AgentServiceClient? _client;
@@ -135,6 +135,17 @@ public sealed partial class AgentLink : IAsyncDisposable
     /// </summary>
     private string? _boundInstanceId;
 
+    /// <summary>The bound instance id, read under the link's own lock; <c>null</c> while unlinked.</summary>
+    private string? BoundInstanceId
+    {
+        get
+        {
+            lock (_gateLock)
+            {
+                return _boundInstanceId;
+            }
+        }
+    }
 
     /// <summary>Console clock minus PC clock, learned from <c>Welcome</c>; deadlines are corrected by it.</summary>
     public TimeSpan ClockSkew { get; private set; }
@@ -204,12 +215,28 @@ public sealed partial class AgentLink : IAsyncDisposable
     }
 
     /// <summary>
+    /// An event waiting for a link, and the console it belongs to (M5 portion 8). <c>null</c>
+    /// is the common case — a machine event about this PC, which whoever is in the room may
+    /// see. A non-null instance id is a console's own business: the outcome of a job it
+    /// delivered, and nobody else's.
+    /// </summary>
+    private sealed record PendingEvent(Event Event, string? InstanceId);
+
+    /// <summary>
     /// Sends an event the teacher should see — a failed Win32 call, a helper that died, an
     /// ACL that is wrong. Sent at once while linked; otherwise kept (the last
     /// <see cref="MaxPendingEvents"/>) and delivered right after the next <c>Welcome</c>, so a
     /// failure during a reconnect is not lost.
+    /// <para>
+    /// <paramref name="forInstance"/> binds the event to one console the way a
+    /// <c>JobResult</c> is bound (D-57 item 4): an event about a job — the reason it was
+    /// refused, the way it ended — reaches the console that delivered that job and no other,
+    /// because the next teacher in the room must not be handed the previous one's output.
+    /// Machine events carry no instance and go to whoever links, which is the point of
+    /// reporting a dead helper or a broken ACL at all.
+    /// </para>
     /// </summary>
-    public void Report(Event.Types.Severity severity, string code, string message)
+    public void Report(Event.Types.Severity severity, string code, string message, string? forInstance = null)
     {
         var report = new Event
         {
@@ -221,18 +248,29 @@ public sealed partial class AgentLink : IAsyncDisposable
 
         lock (_gateLock)
         {
-            if (_outgoing is { } outgoing && outgoing.TryWrite(new AgentMessage { Event = report }))
+            if (forInstance is null || JobLedger.SameInstance(_boundInstanceId, forInstance))
             {
-                return;
+                if (_outgoing is { } outgoing && outgoing.TryWrite(new AgentMessage { Event = report }))
+                {
+                    return;
+                }
             }
 
-            _pendingEvents.Enqueue(report);
+            _pendingEvents.Enqueue(new PendingEvent(report, forInstance));
             while (_pendingEvents.Count > MaxPendingEvents)
             {
                 _pendingEvents.Dequeue();
             }
         }
     }
+
+    /// <summary>
+    /// Reports an event about one job to the console that delivered it (M5 portion 8): the
+    /// ledger names that console, and an event about a job nothing remembers is a machine
+    /// event like any other.
+    /// </summary>
+    public void ReportForJob(string jobId, Event.Types.Severity severity, string code, string message) =>
+        Report(severity, code, message, _ledger.DeliveringInstanceOf(jobId));
 
     /// <summary>Events kept for the next link while there is none; older ones are dropped.</summary>
     public const int MaxPendingEvents = 100;
@@ -634,9 +672,25 @@ public sealed partial class AgentLink : IAsyncDisposable
                     outgoing.Writer.TryWrite(new AgentMessage { SessionState = sessionState });
                 }
 
+                // Events wait like results do (M5 portion 8): one bound to a console goes only
+                // to that console, and stays queued for it otherwise. An unbound event is
+                // about the machine and goes to whoever linked.
+                var keptEvents = new List<PendingEvent>();
                 while (_pendingEvents.TryDequeue(out var pending))
                 {
-                    outgoing.Writer.TryWrite(new AgentMessage { Event = pending });
+                    if (pending.InstanceId is null || JobLedger.SameInstance(pending.InstanceId, boundInstanceId))
+                    {
+                        outgoing.Writer.TryWrite(new AgentMessage { Event = pending.Event });
+                    }
+                    else
+                    {
+                        keptEvents.Add(pending);
+                    }
+                }
+
+                foreach (var kept2 in keptEvents)
+                {
+                    _pendingEvents.Enqueue(kept2);
                 }
 
                 // Results of jobs that finished while there was no link (D-32): the console
@@ -990,7 +1044,7 @@ public sealed partial class AgentLink : IAsyncDisposable
                 ? "refused: this console has teacher access"
                 : "refused: this console's certificate carries no known access level";
             _log.LogWarning("{Pc}: job {Job} ({Kind}) refused — {Reason}", Name, job.Id, job.Kind, refusal);
-            Report(Event.Types.Severity.Warning, "job.refused_by_role", $"{job.Kind} job {job.Id} {refusal}; only an administrator console can send it.");
+            Report(Event.Types.Severity.Warning, "job.refused_by_role", $"{job.Kind} job {job.Id} {refusal}; only an administrator console can send it.", BoundInstanceId);
             await outgoing.WriteAsync(new AgentMessage { JobResult = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = refusal } }, token);
             return;
         }
@@ -1017,7 +1071,7 @@ public sealed partial class AgentLink : IAsyncDisposable
             // silently swallowed either, so this console's row closes with the reason.
             const string refusal = "refused: this job was delivered by another console; its result is kept for that console";
             _log.LogWarning("{Pc}: job {Job} was delivered by instance {Other}, not {This}; refused", Name, job.Id, admission.OtherInstanceId, instanceId);
-            Report(Event.Types.Severity.Warning, "job.other_instance", $"Job {job.Id} was delivered by another console; its result is kept for that console.");
+            Report(Event.Types.Severity.Warning, "job.other_instance", $"Job {job.Id} was delivered by another console; its result is kept for that console.", instanceId);
             await outgoing.WriteAsync(new AgentMessage { JobResult = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = refusal } }, token);
             return;
         }
@@ -1113,6 +1167,10 @@ public sealed partial class AgentLink : IAsyncDisposable
         if (evicted > 0)
         {
             _log.LogWarning("{Pc}: {Count} oldest job result(s) were dropped; {Max} results are kept for consoles that have not returned", Name, evicted, _options.MaxPendingResults);
+
+            // Deliberately bound to no console (M5 portion 8): the dropped results belonged to
+            // consoles that are not here, and this line says nothing about anyone's output —
+            // it is the PC saying it ran out of room, which whoever is in the room should see.
             Report(Event.Types.Severity.Warning, "job.result_dropped",
                 $"This PC keeps at most {_options.MaxPendingResults} finished job results for consoles that have not come back; {evicted} of the oldest were dropped and cannot be shown any more.");
         }

@@ -75,7 +75,7 @@ internal sealed class HandoutRunner(AgentLink link)
             {
                 try { File.Delete(staged); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                { link.Report(Event.Types.Severity.Warning, "files.cleanup_failed", "A private staged handout could not be removed."); }
+                { link.ReportForJob(job.Id, Event.Types.Severity.Warning, "files.cleanup_failed", "A private staged handout could not be removed."); }
             }
         }
     }

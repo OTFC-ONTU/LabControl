@@ -7,12 +7,14 @@ using Grpc.Core;
 using LabControl.Console.Services;
 using LabControl.Shared;
 using LabControl.Shared.Discovery;
+using LabControl.Shared.Control;
 using LabControl.Shared.Files;
 using LabControl.Shared.Lab;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protection;
 using LabControl.Shared.Protocol;
+using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -371,13 +373,18 @@ public sealed class LabSwitchTests
 
         // Back to A and let the PCs settle: A's 30 link, the other 60 are refused and retrying.
         // Every lab here shares one endpoint, so a PC refused for sixty switches sits at the
-        // reconnect ceiling for that endpoint and its own lab's beacon does not shorten it: the
-        // settle budget is the ceiling plus jitter, not the 15 s target of a PC refused briefly.
+        // reconnect ceiling for that endpoint. Since portion 8 the first verified beacon of a
+        // PC's own lab after a gap steps over that wait once, so the settle is expected to be
+        // fast; the budget stays the ceiling plus jitter, because 90 PCs redialling one loopback
+        // port under a busy build machine is not what the 15 s target is measured on. What the
+        // step-over is worth is asserted deterministically in BeaconGateTests, and measured here.
         Assert.True((await rig.Controller.ActivateAsync(rig.Labs[0].LabId, Ct)).Ok);
         var finalSession = rig.Controller.Active!;
+        var settling = Stopwatch.StartNew();
         var settle = Defaults.ReconnectDelayMax * 1.25 + TimeSpan.FromSeconds(10);
         Assert.True(await Wait.UntilAsync(() => finalSession.Linked.Count == Defaults.MaxStudentPcs, settle),
             $"{finalSession.Linked.Count} of {Defaults.MaxStudentPcs} linked at the end");
+        rig.Log($"SETTLE after sixty switches: {Defaults.MaxStudentPcs} PCs relinked in {settling.ElapsedMilliseconds} ms (budget {settle.TotalSeconds:0} s)");
         await Task.Delay(1000, Ct);
 
         var started = rig.Sessions.Count - startedBefore;
@@ -770,6 +777,222 @@ public sealed class LabSwitchTests
             gate.Wait();
             base.Write(buffer, offset, count);
         }
+    }
+
+    /// <summary>
+    /// The acceptance criterion "switching during capture/control": a screen stream and remote
+    /// input are actually running in lab A when the teacher moves to lab B. Nothing of A's
+    /// video may arrive after the departure, no keystroke may land in the wrong room, and A's
+    /// frame buffers must be gone rather than kept for a lab that is not on screen (M5 portion
+    /// 8; the drill the audit found uncovered).
+    /// </summary>
+    [Fact]
+    public async Task Switching_while_a_screen_is_streaming_and_a_pc_is_controlled_leaves_no_frame_no_buffer_and_no_keystroke_behind()
+    {
+        await using var rig = new Rig("Lab A", "Lab B");
+        var a = rig.Labs[0];
+        var b = rig.Labs[1];
+        var agentsA = rig.AddAgents(a, 2, pinHost: true);
+        var agentsB = rig.AddAgents(b, 1, pinHost: true);
+        a.RecordMachines(agentsA);
+        b.RecordMachines(agentsB);
+        rig.Start();
+
+        var watched = agentsA[0];
+        var otherA = agentsA[1];
+        var pcB = agentsB[0];
+        var inputToWatched = 0;
+        var inputToOtherA = 0;
+        var inputToB = 0;
+        watched.Link.InputReceived += _ => Interlocked.Increment(ref inputToWatched);
+        otherA.Link.InputReceived += _ => Interlocked.Increment(ref inputToOtherA);
+        pcB.Link.InputReceived += _ => Interlocked.Increment(ref inputToB);
+
+        Assert.True((await rig.Controller.ActivateAsync(a.LabId, Ct)).Ok);
+        var sessionA = Assert.IsType<LabSession>(rig.Controller.Active);
+        Assert.True(await Wait.UntilAsync(() => sessionA.Linked.Count == 2, TimeSpan.FromSeconds(15)));
+
+        // A full-size view of one PC, really streaming, and the teacher typing into it.
+        sessionA.SetScreenMode(watched.AgentId, VideoMode.Full);
+        Assert.True(await Wait.UntilAsync(() => watched.Link.VideoControl is { Mode: VideoMode.Full, Active: true }));
+        var screenA = sessionA.Screens.Get(watched.AgentId);
+        Assert.True(await Wait.UntilAsync(() => watched.Link.TryPushVideo(Keyframe())));
+        Assert.True(await Wait.UntilAsync(() => screenA.Full.HasFrame));
+        var framesBefore = screenA.FramesReceived;
+
+        Assert.True(sessionA.SendInput(watched.AgentId, InputMessages.Text("hello")));
+        Assert.True(await Wait.UntilAsync(() => Volatile.Read(ref inputToWatched) == 1));
+
+        // A -> B while all of that is live.
+        var toB = await rig.Controller.ActivateAsync(b.LabId, Ct);
+        Assert.True(toB.Ok, toB.Error);
+        var sessionB = Assert.IsType<LabSession>(rig.Controller.Active);
+        Assert.True(await Wait.UntilAsync(() => sessionB.Linked.Count == 1, TimeSpan.FromSeconds(15)));
+
+        // The producer on the PC was told to stop, and a frame offered anyway is not taken.
+        Assert.True(await Wait.UntilAsync(() => watched.Link.VideoControl is null));
+        Assert.False(watched.Link.TryPushVideo(Keyframe()));
+
+        // A's frame buffers are gone with its session; the store refuses anything more.
+        Assert.True(sessionA.Screens.IsDisposed);
+        Assert.Null(screenA.Full.Snapshot());
+        Assert.Null(screenA.Thumbnail.Snapshot());
+        Assert.Equal(0, screenA.Full.Width);
+        Assert.Equal(framesBefore, screenA.FramesReceived);
+        Assert.Empty(sessionA.Screens.All);
+
+        // B's store never heard of lab A's PC, and B cannot be made to type into it.
+        Assert.Null(sessionB.Screens.Find(watched.AgentId));
+        Assert.False(sessionB.SendInput(watched.AgentId, InputMessages.Text("wrong room")));
+        Assert.False(sessionA.SendInput(watched.AgentId, InputMessages.Text("gone")));
+        Assert.False(sessionA.SendInput(otherA.AgentId, InputMessages.Text("gone")));
+
+        // The one PC B really holds does take input — the check above is about the room, not
+        // about input being broken.
+        Assert.True(sessionB.SendInput(pcB.AgentId, InputMessages.Text("right room")));
+        Assert.True(await Wait.UntilAsync(() => Volatile.Read(ref inputToB) == 1));
+
+        // Five seconds of lab-A PCs redialling the port B holds: no further keystroke, no
+        // further frame, no lab-A video anywhere.
+        await Task.Delay(TimeSpan.FromSeconds(5), Ct);
+        Assert.Equal(1, Volatile.Read(ref inputToWatched));
+        Assert.Equal(0, Volatile.Read(ref inputToOtherA));
+        Assert.Equal(1, Volatile.Read(ref inputToB));
+        Assert.Equal(framesBefore, screenA.FramesReceived);
+        Assert.DoesNotContain(sessionB.Screens.All, screen => agentsA.Any(pc => pc.AgentId == screen.AgentId));
+
+        // Back to A: a new session, a new store, and the old picture is not resurrected.
+        Assert.True((await rig.Controller.ActivateAsync(a.LabId, Ct)).Ok);
+        var sessionA2 = Assert.IsType<LabSession>(rig.Controller.Active);
+        Assert.NotSame(sessionA, sessionA2);
+        Assert.NotSame(sessionA.Screens, sessionA2.Screens);
+        Assert.True(await Wait.UntilAsync(() => sessionA2.Linked.Count == 2, TimeSpan.FromSeconds(20)));
+        Assert.Null(sessionA2.Screens.Get(watched.AgentId).Full.Snapshot());
+    }
+
+    /// <summary>
+    /// The departure orchestration itself (M5, D-57 item 3), which had no automated coverage:
+    /// an empty report leaves without asking, <i>Stay</i> aborts the departure and the session
+    /// keeps running, and <i>Wait for N jobs</i> waits and then leaves. The same
+    /// <see cref="DepartureFlow"/> answers <i>Disconnect</i>, the main window's close button
+    /// and — since portion 8 — quitting the application.
+    /// </summary>
+    [Fact]
+    public async Task The_departure_flow_leaves_at_once_when_nothing_runs_stays_when_asked_and_waits_when_asked()
+    {
+        await using var rig = new Rig("Lab A", "Lab B");
+        var a = rig.Labs[0];
+        var agents = rig.AddAgents(a, 1, pinHost: true);
+        a.RecordMachines(agents);
+        rig.Start();
+
+        Assert.True((await rig.Controller.ActivateAsync(a.LabId, Ct)).Ok);
+        var session = Assert.IsType<LabSession>(rig.Controller.Active);
+        Assert.True(await Wait.UntilAsync(() => session.Linked.Count == 1, TimeSpan.FromSeconds(15)));
+
+        var prompt = new ScriptedDeparture();
+        var flow = new DepartureFlow(rig.Controller, prompt);
+
+        // Nothing runs: no question is asked at all.
+        Assert.True(session.DescribeDeparture().IsEmpty);
+        Assert.True(await flow.MayLeaveAsync(session));
+        Assert.True(await flow.MayQuitAsync());
+        Assert.Equal(0, prompt.Asked);
+
+        // A script that will not finish by itself.
+        var finish = new TaskCompletionSource<JobResult>();
+        agents[0].Behaviour.OnJob = _ => finish.Task;
+        var script = new ScriptRecord { Id = "s", Name = "wait", Text = "Start-Sleep 60\n", TimeoutSeconds = 300 };
+        Assert.True(session.Scripts.TrySave(script, out var error), error);
+        var job = Assert.Single(session.RunScript([agents[0].AgentId], script));
+        Assert.True(await Wait.UntilAsync(() => agents[0].Behaviour.JobsRun.Count == 1));
+        Assert.True(await Wait.UntilAsync(() => !session.DescribeDeparture().IsEmpty));
+
+        // Stay: the question was asked, the answer is no, and the lab is untouched.
+        prompt.Choice = DepartureChoice.Stay;
+        Assert.False(await flow.MayLeaveAsync(session));
+        Assert.False(await flow.MayQuitAsync());
+        Assert.Equal(2, prompt.Asked);
+        Assert.Same(session, rig.Controller.Active);
+        Assert.False(session.IsDisposed);
+        Assert.Equal(ActivationState.Active, rig.Controller.Status.State);
+        Assert.True(await Wait.UntilAsync(() => session.IsLinked(agents[0].AgentId)));
+
+        // Wait for the running job: the wait is entered, and the answer comes only after it.
+        prompt.Choice = DepartureChoice.Wait;
+        prompt.OnWait = waited =>
+        {
+            finish.SetResult(new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = "finished before leaving" });
+            return Wait.UntilAsync(() => waited.DescribeDeparture().RunningJobCount == 0, TimeSpan.FromSeconds(20));
+        };
+
+        Assert.True(await flow.MayLeaveAsync(session));
+        Assert.Equal(1, prompt.Waited);
+        Assert.Equal(0, session.DescribeDeparture().RunningJobCount);
+        Assert.Equal(JobState.Succeeded, session.Jobs.All().Single(j => j.Id == job.Id).State);
+
+        // A cancelled wait is a refusal to leave, like Stay.
+        prompt.OnWait = _ => Task.FromResult(false);
+        agents[0].Behaviour.OnJob = _ => new TaskCompletionSource<JobResult>().Task;
+        session.RunScript([agents[0].AgentId], script);
+        Assert.True(await Wait.UntilAsync(() => session.DescribeDeparture().RunningJobCount == 1));
+        Assert.False(await flow.MayLeaveAsync(session));
+        Assert.Same(session, rig.Controller.Active);
+
+        // And Leave anyway releases the room when the caller acts on the answer.
+        prompt.Choice = DepartureChoice.Leave;
+        Assert.True(await flow.MayQuitAsync());
+        await rig.Controller.DeactivateAsync(DepartureReason);
+        Assert.Null(rig.Controller.Active);
+        Assert.True(session.IsDisposed);
+
+        // With nothing active, quitting asks nothing.
+        Assert.True(await flow.MayQuitAsync());
+    }
+
+    /// <summary><see cref="IDeparturePrompt"/> with the answers written down in advance.</summary>
+    private sealed class ScriptedDeparture : IDeparturePrompt
+    {
+        public DepartureChoice Choice { get; set; } = DepartureChoice.Stay;
+
+        public Func<LabSession, Task<bool>>? OnWait { get; set; }
+
+        public int Asked { get; private set; }
+
+        public int Waited { get; private set; }
+
+        public Task<DepartureChoice> AskAsync(string labName, DepartureReport report)
+        {
+            Asked++;
+            Assert.False(report.IsEmpty);
+            return Task.FromResult(Choice);
+        }
+
+        public Task<bool> WaitForJobsAsync(LabSession session)
+        {
+            Waited++;
+            return OnWait is null ? Task.FromResult(true) : OnWait(session);
+        }
+    }
+
+    /// <summary>A full-mode keyframe, the cheapest picture a PC can push.</summary>
+    private static VideoFrame Keyframe()
+    {
+        const int width = 640;
+        const int height = 384;
+        using var picture = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(width, height, JpegCodec.PixelFormat, SkiaSharp.SKAlphaType.Premul));
+        picture.Erase(SkiaSharp.SKColors.CornflowerBlue);
+        var frame = new VideoFrame
+        {
+            Mode = VideoMode.Full,
+            Width = width,
+            Height = height,
+            Keyframe = true,
+            Codec = Defaults.VideoCodecJpeg,
+            Jpeg = Google.Protobuf.ByteString.CopyFrom(JpegCodec.Encode(picture, Defaults.FullJpegQuality)),
+        };
+        frame.Dirty.Add(VideoGeometry.Whole(width, height));
+        return frame;
     }
 
     [Fact]

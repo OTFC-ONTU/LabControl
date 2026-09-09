@@ -184,6 +184,11 @@
   <data name="Banner.BackupMissing" xml:space="preserve"><value>No backup yet. Without one, losing this computer means reinstalling every PC.</value></data>
   <data name="Banner.BackupStale" xml:space="preserve"><value>The lab key or the enrollment codes changed since the last backup. Export a new one.</value></data>
   <data name="Banner.ExportBackup" xml:space="preserve"><value>Export backup…</value></data>
+  <data name="Network.Blocked" xml:space="preserve"><value>LAN access is not allowed yet — Windows is blocking the student PCs from reaching this console.</value></data>
+  <data name="Network.Allow" xml:space="preserve"><value>Allow…</value></data>
+  <data name="Network.Recheck" xml:space="preserve"><value>Check again</value></data>
+  <data name="Network.Denied" xml:space="preserve"><value>LAN access is still blocked. Run these two lines in an elevated Command Prompt, then check again: {0}</value></data>
+  <data name="Network.Failed" xml:space="preserve"><value>LAN access could not be set up on this computer. Run these two lines in an elevated Command Prompt, then check again: {0}</value></data>
   <data name="Enroll.UnusedFormat" xml:space="preserve"><value>{0} unused enrollment code(s).</value></data>
   <data name="Enroll.PcCount" xml:space="preserve"><value>PCs on this stick:</value></data>
   <data name="Enroll.WritePayload" xml:space="preserve"><value>Write USB payload…</value></data>

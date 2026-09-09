@@ -369,6 +369,62 @@ public static class Defaults
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LabControl")
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".labcontrol");
 
+    // ---------------------------------------------------------------- teacher console packaging (D-59)
+
+    /// <summary>What the teacher sees everywhere the desktop names the app: Start menu, Installed apps, Finder, .desktop.</summary>
+    public const string ConsoleProductName = "LabControl Console";
+
+    /// <summary>The <c>Publisher</c> of the Installed apps entry. The binaries are unsigned (D-15); this is a name, not a claim.</summary>
+    public const string ConsolePublisher = "LabControl";
+
+    /// <summary>The macOS bundle identifier and the reverse-DNS stem of the exported UTIs (D-59 item 3).</summary>
+    public const string ConsoleBundleIdentifier = "org.ontfk.labcontrol.console";
+
+    /// <summary>The published console executable, without the <c>.exe</c> Windows adds.</summary>
+    public const string ConsoleExecutableBaseName = "LabControl.Console";
+
+    public const string ConsoleExecutableName = ConsoleExecutableBaseName + ".exe";
+
+    /// <summary>The per-user installer, which also lives beside the installed console as its uninstaller.</summary>
+    public const string ConsoleSetupExecutableName = "LabControl.ConsoleSetup.exe";
+
+    public const string ShortcutFileExtension = ".lnk";
+
+    /// <summary>
+    /// Written into the install directory: one relative path per line, the files this
+    /// installer owns. An upgrade removes the ones a new payload no longer contains and
+    /// uninstall removes exactly this list — never whatever else the directory holds.
+    /// </summary>
+    public const string ConsoleInstallManifestFileName = "installed-files.txt";
+
+    /// <summary>The installer's append-only log under <c>%LOCALAPPDATA%\LabControl\</c>. No lab data ever reaches it.</summary>
+    public const string ConsoleSetupLogFileName = "console-setup.log";
+
+    public const string ConsoleSetupUninstallSwitch = "--uninstall";
+    public const string ConsoleSetupRemoveDataSwitch = "--remove-data";
+    public const string ConsoleSetupFirewallSwitch = "--firewall";
+    public const string ConsoleSetupDesktopShortcutSwitch = "--desktop-shortcut";
+    public const string ConsoleSetupDryRunSwitch = "--dry-run";
+
+    /// <summary>Re-entry marker: an unelevated <c>--firewall</c> relaunches itself once, and never twice.</summary>
+    public const string ConsoleSetupElevatedSwitch = "--elevated";
+
+    /// <summary>Per user, never machine-wide: the console updates without elevation (D-59 item 1).</summary>
+    public const string ConsoleUninstallRegistryKey =
+        @"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + ConsoleProductName;
+
+    /// <summary>The ProgId of <c>.lclab</c> under <c>HKCU\Software\Classes</c>.</summary>
+    public const string ConsoleLabFileProgId = "LabControl.LabFile";
+
+    /// <summary>The ProgId of <c>.lcbak</c> under <c>HKCU\Software\Classes</c>.</summary>
+    public const string ConsoleBackupProgId = "LabControl.Backup";
+
+    /// <summary>The firewall group of the console's own rules; separate from the agent's <see cref="SetupFirewallGroup"/>.</summary>
+    public const string ConsoleFirewallGroup = ConsoleProductName;
+
+    public const string ConsoleControlFirewallRule = ConsoleProductName + " (control)";
+    public const string ConsoleDiscoveryFirewallRule = ConsoleProductName + " (discovery)";
+
     // ---------------------------------------------------------------- agent files
 
     public const string ServiceName = "LabControl";

@@ -36,6 +36,14 @@ public sealed class ConsoleInstance : IDisposable
 
     public string CertificateSerial => LabCertificates.SerialOf(Certificate);
 
+    /// <summary>
+    /// What this console's own leaf says it may do (M5, D-56 item 5), read off the same
+    /// subject OU an agent reads after validating the handshake. This is what
+    /// <c>Welcome.console_access</c> announces, so the informational field can never say
+    /// something the certificate does not (D-58).
+    /// </summary>
+    public ConsoleAccess Access => LabName.AccessOf(Certificate);
+
     public DateTimeOffset ExpiresAt => new(Certificate.NotAfter.ToUniversalTime(), TimeSpan.Zero);
 
     /// <summary>True once the leaf has less than the renewal lead time left (D-25).</summary>

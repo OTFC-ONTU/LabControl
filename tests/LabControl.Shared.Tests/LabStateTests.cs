@@ -243,8 +243,10 @@ public sealed class LabStateTests
         Assert.Equal(otherInstance, other.InstanceId);
         Assert.False(other.IsThisMachine);
 
-        // And now that it is linked here, nobody else holds it.
-        Assert.Empty(registry.HeldElsewhere(thisInstance, []));
+        // And now that it is linked here, the observation names this console, so nobody
+        // else is credited with the PC (M5 §4.6, D-58).
+        Assert.Empty(registry.ObservedElsewhere(otherInstance, now));
+        Assert.Single(registry.ObservedElsewhere(thisInstance, now));
     }
 
     [Fact]
@@ -280,29 +282,44 @@ public sealed class LabStateTests
     }
 
     [Fact]
-    public void The_banner_knows_which_pcs_the_other_teacher_machine_holds()
+    public void The_banner_counts_only_the_pcs_the_other_teacher_machine_was_seen_taking()
     {
+        var now = DateTimeOffset.UtcNow;
         using var lab = TestLab.Create();
         var thisInstance = Guid.NewGuid().ToString("d");
         var otherInstance = Guid.NewGuid().ToString("d");
+        var observed = now.AddMinutes(-1).ToUnixTimeSeconds();
 
         var document = new LabDocument
         {
             LabId = lab.LabId,
             Machines =
             [
-                new MachineRecord { AgentId = "a", Number = 1, LastInstanceId = thisInstance },
-                new MachineRecord { AgentId = "b", Number = 2, LastInstanceId = otherInstance },
-                new MachineRecord { AgentId = "c", Number = 3, LastInstanceId = otherInstance },
+                new MachineRecord { AgentId = "a", Number = 1, LastInstanceId = thisInstance, LastInstanceObservedUnix = observed },
+                new MachineRecord { AgentId = "b", Number = 2, LastInstanceId = otherInstance, LastInstanceObservedUnix = observed },
+                new MachineRecord { AgentId = "c", Number = 3, LastInstanceId = otherInstance, LastInstanceObservedUnix = observed },
+                // Never observed with anybody: a PC that is simply switched off (M5 §4.6).
+                new MachineRecord { AgentId = "d", Number = 4 },
+                // Observed with the other console, but hours ago: too old to still be shown.
+                new MachineRecord
+                {
+                    AgentId = "e",
+                    Number = 5,
+                    LastInstanceId = otherInstance,
+                    LastInstanceObservedUnix = now.Add(-Defaults.OwnershipObservationLifetime).AddMinutes(-1).ToUnixTimeSeconds(),
+                },
             ],
         };
 
         var registry = new LabRegistry(document, LabTrustTests.PublicOnly(lab.Authority));
 
-        // "b" has since arrived here, so only "c" is still held by the other console.
-        var held = registry.HeldElsewhere(thisInstance, ["a", "b"]);
+        Assert.Equal([2, 3], registry.ObservedElsewhere(otherInstance, now).Select(m => m.Number));
+        Assert.Equal([1], registry.ObservedElsewhere(thisInstance, now).Select(m => m.Number));
 
-        Assert.Equal(3, Assert.Single(held).Number);
+        // "b" says Hello here: the strongest observation there is, and it supersedes the
+        // other console's claim on it without anything having to be cleared by hand.
+        registry.RecordHello(new Hello { AgentId = "b", Number = 2 }, "0A", thisInstance, now, out _);
+        Assert.Equal([3], registry.ObservedElsewhere(otherInstance, now).Select(m => m.Number));
     }
 
     [Fact]

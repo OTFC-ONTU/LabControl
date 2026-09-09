@@ -24,6 +24,12 @@ public sealed record BeaconVerdict(BeaconAction Action, string Reason, Beacon? B
 /// beacon flood cost nothing lives here: verify against the pinned CA, ignore beacons
 /// while linked, honour <c>take</c> exactly once per value, and never dial the same
 /// endpoint more often than <see cref="Defaults.MinDialInterval"/>.
+/// <para>
+/// The take-over rule compares only this PC's clock with itself (D-58): a beacon that
+/// arrived after the link came up, whose <c>take</c> belongs to that same beacon, moves the
+/// room. Nothing here reads the taker's clock as if it were ours, so a teacher machine
+/// half a minute out of step can still take its own room back.
+/// </para>
 /// </summary>
 public sealed class BeaconGate
 {
@@ -35,7 +41,13 @@ public sealed class BeaconGate
     private readonly Lock _gate = new();
 
     private string? _linkedInstanceId;
-    private long _linkedAtUnix;
+
+    /// <summary>
+    /// When the current link came up, read from <b>this PC's own clock</b> (D-58). It is
+    /// only ever compared with the arrival time of a later beacon, read from the same
+    /// clock; the taker's timestamps are never measured against it.
+    /// </summary>
+    private DateTimeOffset _linkedAt;
 
     public BeaconGate(X509Certificate2 authority, string labId)
     {
@@ -77,10 +89,31 @@ public sealed class BeaconGate
                 }
 
                 // The one exception to "ignore while connected": another teacher machine
-                // pressed Take over the lab after this link was established (§3.7.2).
-                if (beacon.TakeAtUnix <= _linkedAtUnix)
+                // pressed Take over the lab (§3.7.2). Three conditions decide it, and none
+                // of them puts the taker's clock against this PC's (D-58) — a teacher
+                // machine minutes out of step still moves the room.
+                if (beacon.TakeAtUnix == 0)
                 {
                     return new BeaconVerdict(BeaconAction.Ignore, "linked to another console of this lab", beacon);
+                }
+
+                // (b) Arrival order, on this PC's own clock alone. A datagram already in
+                // flight when the link came up answered a question that has since been
+                // answered by the link itself, so it is not a reason to leave.
+                if (now < _linkedAt)
+                {
+                    return new BeaconVerdict(BeaconAction.Ignore, "the take-over was already in flight when this link was established", beacon);
+                }
+
+                // (c) The press must belong to the beacon carrying it. `ts` was already
+                // checked against this PC's clock (±BeaconMaxSkew) by TryVerify, so bounding
+                // `take` against `ts` bounds how old a press may be without ever comparing
+                // the taker's clock with ours.
+                var pressed = DateTimeOffset.FromUnixTimeSeconds(beacon.TakeAtUnix);
+                var sent = DateTimeOffset.FromUnixTimeSeconds(beacon.SentAtUnix);
+                if ((sent - pressed).Duration() > Defaults.TakeOverWindow + Defaults.BeaconMaxSkew)
+                {
+                    return new BeaconVerdict(BeaconAction.Ignore, "the take-over does not belong to this beacon", beacon);
                 }
 
                 var token = $"{beacon.InstanceId}/{beacon.TakeAtUnix}";
@@ -104,13 +137,17 @@ public sealed class BeaconGate
         }
     }
 
-    /// <summary>Called once the link is up, so further beacons are ignored.</summary>
+    /// <summary>
+    /// Called once the link is up, so further beacons are ignored. <paramref name="at"/> must
+    /// come from the same clock the host passes to <see cref="Consider(Beacon, DateTimeOffset)"/>
+    /// — the take-over rule compares the two and nothing else (D-58).
+    /// </summary>
     public void Linked(string instanceId, string endpoint, DateTimeOffset at)
     {
         lock (_gate)
         {
             _linkedInstanceId = instanceId;
-            _linkedAtUnix = at.ToUnixTimeSeconds();
+            _linkedAt = at;
             _nextDial.Remove(endpoint);
             _backoff.Remove(endpoint);
         }
@@ -122,7 +159,7 @@ public sealed class BeaconGate
         lock (_gate)
         {
             _linkedInstanceId = null;
-            _linkedAtUnix = 0;
+            _linkedAt = default;
         }
     }
 

@@ -19,8 +19,48 @@ using Microsoft.Extensions.Logging;
 
 namespace LabControl.Console.Services;
 
-/// <summary>Another teacher machine heard beaconing (ARCHITECTURE §3.7.2).</summary>
-public sealed record OtherConsole(string InstanceId, string Name, string Endpoint, DateTimeOffset LastSeen, DateTimeOffset? TookOverAt);
+/// <summary>
+/// Another teacher machine heard beaconing (ARCHITECTURE §3.7.2). <paramref name="TookOverAt"/>
+/// is the taker's own timestamp and is only ever shown; <paramref name="TookOverSeenAt"/> is
+/// when this console received that press, on its own clock, which is what decides whether a
+/// take-over is still live (M5, D-58).
+/// </summary>
+public sealed record OtherConsole(
+    string InstanceId,
+    string Name,
+    string Endpoint,
+    DateTimeOffset LastSeen,
+    DateTimeOffset? TookOverAt,
+    DateTimeOffset? TookOverSeenAt = null);
+
+/// <summary>How sure this console is about who holds a PC (M5 §4.6, D-58).</summary>
+public enum OwnershipKind
+{
+    /// <summary>Linked to this console right now.</summary>
+    LinkedHere = 0,
+
+    /// <summary>Positively observed with another teacher machine that is still on the network.</summary>
+    ObservedElsewhere = 1,
+
+    /// <summary>Nothing links it, nothing was observed and no other console is live: the PC is off or away.</summary>
+    Offline = 2,
+
+    /// <summary>Another console is live and this one simply does not know — the honest answer, not a guess.</summary>
+    Unknown = 3,
+}
+
+/// <summary>
+/// Who holds one PC, as far as this console actually knows. <see cref="Holder"/> is set
+/// only for <see cref="OwnershipKind.ObservedElsewhere"/>; <see cref="At"/> is when that was
+/// learned, and <see cref="LastSeen"/> the PC's own last contact with this console.
+/// </summary>
+public sealed record MachineOwnership(OwnershipKind Kind, OtherConsole? Holder = null, DateTimeOffset? At = null, DateTimeOffset? LastSeen = null)
+{
+    public bool IsObserved => Kind == OwnershipKind.ObservedElsewhere;
+
+    /// <summary>The holder's display name, or empty when there is no positively known holder.</summary>
+    public string HolderName => Holder?.Name ?? string.Empty;
+}
 
 /// <summary>A Wake-on-LAN in progress: the packets went out, the PC has until <see cref="Deadline"/> to link.</summary>
 public sealed record PendingWake(string AgentId, int Number, DateTimeOffset StartedAt, DateTimeOffset Deadline);
@@ -438,15 +478,49 @@ public sealed class LabSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// The PCs this console knows but does not hold while another console is live: the
-    /// number the §3.7.2 banner shows. Another console cannot tell us its list, so every
-    /// known PC that is not linked here is presumed to be with it.
+    /// Who holds one PC, as far as this console has actually learned (M5 §4.6, D-58). It is
+    /// linked here, or positively observed with a teacher machine that is still beaconing,
+    /// or — when nothing was observed — offline if no other console is live and
+    /// <see cref="OwnershipKind.Unknown"/> if one is. Not being linked here is never by
+    /// itself a reason to say another console has it.
     /// </summary>
-    public IReadOnlyList<MachineRecord> HeldElsewhere()
+    public MachineOwnership Ownership(MachineRecord machine)
     {
+        var now = _clock();
+        var lastSeen = machine.LastSeenUnix == 0 ? (DateTimeOffset?)null : DateTimeOffset.FromUnixTimeSeconds(machine.LastSeenUnix);
+
         lock (_gate)
         {
-            return Registry.Document.Machines.Where(m => !_linked.ContainsKey(m.AgentId)).OrderBy(m => m.Number).ToArray();
+            if (_linked.ContainsKey(machine.AgentId))
+            {
+                return new MachineOwnership(OwnershipKind.LinkedHere, LastSeen: now);
+            }
+
+            var live = _others.Values.Where(o => now - o.LastSeen <= Defaults.OtherConsoleTimeout).ToArray();
+            var holder = live.FirstOrDefault(o => LabRegistry.IsObservedWith(machine, o.InstanceId, now));
+            if (holder is not null)
+            {
+                return new MachineOwnership(OwnershipKind.ObservedElsewhere, holder,
+                    DateTimeOffset.FromUnixTimeSeconds(machine.LastInstanceObservedUnix), lastSeen);
+            }
+
+            return new MachineOwnership(live.Length > 0 ? OwnershipKind.Unknown : OwnershipKind.Offline, LastSeen: lastSeen);
+        }
+    }
+
+    /// <summary>
+    /// The PCs this console positively knows <paramref name="instanceId"/> holds: observed
+    /// leaving for it during its own signed take-over, still within the observation
+    /// lifetime, and not linked here since. The §3.7.2 banner counts these and says
+    /// <i>at least</i>, because the PCs it knows nothing about may be anywhere.
+    /// </summary>
+    public IReadOnlyList<MachineRecord> ObservedElsewhere(string instanceId)
+    {
+        var now = _clock();
+        var observed = Registry.ObservedElsewhere(instanceId, now);
+        lock (_gate)
+        {
+            return observed.Where(m => !_linked.ContainsKey(m.AgentId)).ToArray();
         }
     }
 
@@ -485,10 +559,16 @@ public sealed class LabSession : IAsyncDisposable
         {
             var previous = _others.GetValueOrDefault(beacon.InstanceId);
             DateTimeOffset? tookOver = previous?.TookOverAt;
+            var tookOverSeen = previous?.TookOverSeenAt;
 
             if (beacon.TakeAtUnix > 0)
             {
+                // A console only carries `take` for TakeOverWindow after the press, so any
+                // beacon that has it describes a press that is happening now. When it was
+                // received is this console's own clock and is what decides, later, whether
+                // a PC leaving is that take-over (D-58); the taker's timestamp is only shown.
                 var at = DateTimeOffset.FromUnixTimeSeconds(beacon.TakeAtUnix);
+                tookOverSeen = now;
                 if (tookOver is null || at > tookOver)
                 {
                     tookOver = at;
@@ -504,7 +584,7 @@ public sealed class LabSession : IAsyncDisposable
                 changed = true;
             }
 
-            _others[beacon.InstanceId] = new OtherConsole(beacon.InstanceId, beacon.InstanceName, beacon.Endpoint, now, tookOver);
+            _others[beacon.InstanceId] = new OtherConsole(beacon.InstanceId, beacon.InstanceName, beacon.Endpoint, now, tookOver, tookOverSeen);
         }
 
         if (changed)
@@ -738,6 +818,7 @@ public sealed class LabSession : IAsyncDisposable
         var machine = Registry.RecordHello(hello, serial, Instance.InstanceId, now, out var isNew);
         machine.CertificateNotAfterUnix = new DateTimeOffset(peer!.NotAfter.ToUniversalTime()).ToUnixTimeSeconds();
         machine.LastIp = from.ToString();
+        NoteArrival(hello, who, now);
 
         var connection = new AgentConnection(hello, machine, serial, from, now, abort);
 
@@ -775,6 +856,11 @@ public sealed class LabSession : IAsyncDisposable
             ServerTimeUnix = now.ToUnixTimeSeconds(),
             InstanceId = Instance.InstanceId,
             InstanceName = Instance.InstanceName,
+
+            // Informational only (M5, D-58): it is read off this console's own leaf, the very
+            // certificate the agent has just validated, so it can never claim more than the
+            // OU does — and the agent refuses jobs from the certificate, not from this field.
+            ConsoleAccess = AnnouncedAccess(Instance.Access),
         };
         welcome.RevokedSerials.AddRange(Registry.Revocations.Serials);
         BeforeWelcome?.Invoke(welcome);
@@ -834,7 +920,10 @@ public sealed class LabSession : IAsyncDisposable
 
             if (wasCurrent)
             {
-                var dropped = Jobs.AgentWentOffline(hello.AgentId, _clock());
+                var wentOffline = _clock();
+                NoteDeparture(connection.Machine, who, wentOffline);
+
+                var dropped = Jobs.AgentWentOffline(hello.AgentId, wentOffline);
                 foreach (var job in dropped)
                 {
                     Events.Info("job.not_delivered", $"{who}: {job.Kind} was not delivered — the PC went offline first.", hello.AgentId, hello.Number);
@@ -845,6 +934,79 @@ public sealed class LabSession : IAsyncDisposable
             AgentUnlinked?.Invoke(connection, endedBy);
             MachinesChanged?.Invoke();
         }
+    }
+
+    /// <summary>This console's own leaf access in the <c>Welcome</c> field's terms (M5, D-58).</summary>
+    private static Welcome.Types.ConsoleAccess AnnouncedAccess(ConsoleAccess access) => access switch
+    {
+        ConsoleAccess.Administrator => Welcome.Types.ConsoleAccess.Administrator,
+        ConsoleAccess.Teacher => Welcome.Types.ConsoleAccess.Teacher,
+        _ => Welcome.Types.ConsoleAccess.Unspecified,
+    };
+
+    /// <summary>
+    /// The other half of what a console can positively learn (M5 §4.6, D-58): a PC's
+    /// <c>Hello</c> naming the console it has just left, while that machine is beaconing
+    /// here too. It is a fact about the past — this console holds the PC as of this
+    /// <c>Hello</c>, which is why it supersedes any earlier ownership rather than becoming
+    /// one — so it is recorded where it belongs, in the log the teacher reads.
+    /// </summary>
+    private void NoteArrival(Hello hello, string who, DateTimeOffset now)
+    {
+        if (hello.PreviousInstanceId.Length == 0 ||
+            string.Equals(hello.PreviousInstanceId, Instance.InstanceId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        OtherConsole? previous;
+        lock (_gate)
+        {
+            previous = _others.GetValueOrDefault(hello.PreviousInstanceId);
+            if (previous is not null && now - previous.LastSeen > Defaults.OtherConsoleTimeout)
+            {
+                previous = null;
+            }
+        }
+
+        if (previous is not null)
+        {
+            Events.Info("link.arrived_from", $"{who} came to this console from {previous.Name}.", hello.AgentId, hello.Number);
+        }
+    }
+
+    /// <summary>
+    /// The only way this console learns that another teacher machine holds a PC (M5 §4.6,
+    /// D-58): the PC left while a take-over by that machine was live here — its signed
+    /// <c>take</c> beacon arrived within the window, measured on this console's own clock.
+    /// A PC that leaves for any other reason leaves no observation behind, and its tile then
+    /// says offline or "not seen", never "held by".
+    /// </summary>
+    private void NoteDeparture(MachineRecord machine, string who, DateTimeOffset now)
+    {
+        OtherConsole? taker = null;
+        lock (_gate)
+        {
+            foreach (var other in _others.Values)
+            {
+                if (other.TookOverSeenAt is not { } seen || now - seen > Defaults.TakeOverWindow)
+                {
+                    continue;
+                }
+
+                if (taker is null || seen > taker.TookOverSeenAt)
+                {
+                    taker = other;
+                }
+            }
+        }
+
+        if (taker is null || Registry.RecordObservedElsewhere(machine.AgentId, taker.InstanceId, now) is null)
+        {
+            return;
+        }
+
+        Events.Info("link.left_for_taker", $"{who} left this console for {taker.Name}, which is taking over the lab.", machine.AgentId, machine.Number);
     }
 
     private void HandleIncoming(AgentConnection connection, AgentMessage message)

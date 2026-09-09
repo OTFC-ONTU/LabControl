@@ -54,16 +54,20 @@ internal sealed class TestConsole : IAsyncDisposable
 
     public X509Certificate2 Authority => Session.Authority;
 
-    /// <summary>Creates a fresh lab, mints an instance and starts serving. The key starts unlocked.</summary>
-    public static async Task<TestConsole> CreateLabAsync(string instanceName = "Test console", TimeSpan? agentCertificateLifetime = null, int port = 0)
+    /// <summary>
+    /// Creates a fresh lab, mints an instance and starts serving. The key starts unlocked.
+    /// <paramref name="clock"/> makes this console's clock wrong on purpose (M5, D-58): its
+    /// beacons, and the <c>take</c> in them, then carry timestamps the agents disagree with.
+    /// </summary>
+    public static async Task<TestConsole> CreateLabAsync(string instanceName = "Test console", TimeSpan? agentCertificateLifetime = null, int port = 0, Func<DateTimeOffset>? clock = null)
     {
         var directory = TempDirectory();
         var lab = LabKey.Create("Test lab", HolderName, Passphrase, out var recoveryCode, iterations: Iterations);
-        return new TestConsole(directory, await OpenAsync(directory, lab, instanceName, agentCertificateLifetime, port), recoveryCode);
+        return new TestConsole(directory, await OpenAsync(directory, lab, instanceName, agentCertificateLifetime, port, clock), recoveryCode);
     }
 
     /// <summary>A second (or later) console for the same lab, as another teacher machine would be after importing the backup.</summary>
-    public static async Task<TestConsole> JoinLabAsync(TestConsole existing, string instanceName, LabDocument? labDocument = null, int port = 0)
+    public static async Task<TestConsole> JoinLabAsync(TestConsole existing, string instanceName, LabDocument? labDocument = null, int port = 0, Func<DateTimeOffset>? clock = null)
     {
         var directory = TempDirectory();
         var document = JsonStore.Parse<LabKeyDocument>(
@@ -78,7 +82,7 @@ internal sealed class TestConsole : IAsyncDisposable
             store.SaveLab(labDocument);
         }
 
-        return new TestConsole(directory, await OpenAsync(directory, lab, instanceName, null, port), null);
+        return new TestConsole(directory, await OpenAsync(directory, lab, instanceName, null, port, clock), null);
     }
 
     /// <summary>
@@ -127,7 +131,7 @@ internal sealed class TestConsole : IAsyncDisposable
     /// <summary>A bootstrap over this console's data directory, with the file keystore tests use.</summary>
     public ConsoleBootstrap Bootstrap => new(Session.Options, TestLogging.Factory, () => new FileSecretProtector());
 
-    private static async Task<LabSession> OpenAsync(string dataDirectory, LabKey lab, string instanceName, TimeSpan? agentCertificateLifetime, int port)
+    private static async Task<LabSession> OpenAsync(string dataDirectory, LabKey lab, string instanceName, TimeSpan? agentCertificateLifetime, int port, Func<DateTimeOffset>? clock = null)
     {
         // The M5 layout: the lab under labs/<lab_id>/ and an administrator entry in profiles.json,
         // so a ConsoleBootstrap built over the same options finds the lab.
@@ -168,7 +172,7 @@ internal sealed class TestConsole : IAsyncDisposable
             DevelopmentAgentCertificateLifetime = agentCertificateLifetime,
         };
 
-        var session = new LabSession(options, store, vault, instance, instance.Document, TestLogging.Factory);
+        var session = new LabSession(options, store, vault, instance, instance.Document, TestLogging.Factory, clock);
         await session.StartAsync();
         return session;
     }

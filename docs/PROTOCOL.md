@@ -75,13 +75,17 @@ Consequences:
 - Forged beacons cost a rejected TLS handshake. Agents ignore beacons while connected,
   and rate-limit dial attempts (≥ 2 s apart, exponential backoff per endpoint).
 - The one exception to "ignore while connected" is `take`: a linked agent that receives a
-  fully verified beacon from a **different** instance whose `take` is newer than the
-  moment its current link was established closes that link and dials the taker. Each
-  `take` value is honoured once, so a console rebroadcasting the same value for 30 s does
-  not cause a re-dial loop, and two consoles pressing the button alternately simply move
-  the room back and forth — never split a PC between them.
-  This "newer than the link" comparison sets the taker's clock against the agent's; M5
-  replaces it with an arrival-order rule on the agent's clock alone (`D-58`, *M5 additions*).
+  fully verified beacon from a **different** instance carrying a non-zero `take` closes
+  that link and dials the taker, provided all three hold — (a) that `(inst, take)` token
+  has not been honoured before, (b) the beacon **arrived** after the link was established,
+  timed on the agent's own clock, and (c) `take` is within `TakeOverWindow + BeaconMaxSkew`
+  of the beacon's own `ts`, which the agent has already checked against its clock. The
+  taker's timestamp is never compared with the agent's link time, so a teacher machine
+  whose clock is out of step still takes its room (`D-58`). Each `take` value is honoured
+  once, so a console rebroadcasting the same value for 30 s does not cause a re-dial loop,
+  and two consoles pressing the button alternately simply move the room back and forth —
+  never split a PC between them. A press made moments before the PC linked elsewhere still
+  moves it, as long as its beacon arrives after that link and inside the window.
 - Consoles listen on the beacon port too. A verified beacon from another instance of the
   same lab is recorded in `lab.json` `instances[]` and drives the *other teacher machine*
   banner; a beacon that fails verification is dropped exactly as an agent would drop it.
@@ -185,7 +189,8 @@ agent holds — sent right after `Hello`, so a console that was not running when
 teacher machine revoked something learns of it from the first agent that connects).
 
 `ConsoleMessage` (oneof): `Welcome` (server time, instance id and name, the serials the
-console holds revoked), `Ping`, `Job` (see below), `VideoControl` (start/stop, mode
+console holds revoked, and `console_access` — informational, see *M5 additions*),
+`Ping`, `Job` (see below), `VideoControl` (start/stop, mode
 `thumbnail|full`, fps, quality), `Input` (mouse move/button/wheel, key down/up, unicode
 text), `Overlay` (lock / unlock / broadcast start / broadcast stop, message text),
 `ExamMode` (see below), `InternetPolicy` (see below), `Revocation` (signed revocation entries — the console sends the
@@ -711,14 +716,20 @@ records an event naming both agent ids and the old certificate serial.
 
 Recorded from the design on 2026-09-08; the portion that lands each item is in ROADMAP
 M5, and the `.proto` change below must be reflected here again in the commit that makes it.
-**Status (2026-09-09, after portion 4):** items 2, 3, 4 and 7 are implemented; items 1, 5
-and 6 remain for portion 5.
+**Status (2026-09-09, after portion 5):** items 1, 2, 3, 4, 5 and 7 are implemented;
+item 6 — the versioning wording — is untouched by this portion.
 
-1. **`Welcome.console_access = 6`** *(not yet made — portion 5)* — `enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0;
-   ADMINISTRATOR = 1; TEACHER = 2; }`. Additive and informational: the authoritative role
-   is the subject OU of the console leaf the agent already validated; the field lets an
-   agent name the access level in events without re-parsing the certificate. Agents that
-   do not know the field ignore it.
+1. **`Welcome.console_access = 6`** *(implemented, portion 5)* — a nested
+   `enum ConsoleAccess { CONSOLE_ACCESS_UNSPECIFIED = 0; ADMINISTRATOR = 1; TEACHER = 2; }`
+   on `Welcome`; field 6 was free (4 is reserved from `D-21`) and the frozen subset does not
+   contain `Welcome`. The console fills it from **its own leaf** — the same certificate the
+   agent's handshake validated — so it can never claim more than the subject OU does. It is
+   additive and informational: the authoritative role stays the OU of that leaf
+   (`AgentLink.LinkedConsoleAccess`), every refusal is decided from it, and the announced
+   value is kept apart in `AgentLink.AnnouncedConsoleAccess` purely so an agent can name the
+   access level without re-parsing the certificate. A disagreement between the two is logged
+   and changes nothing. Agents that do not know the field ignore it; a console that does not
+   send it leaves the announced value unspecified.
 2. **Role in the certificate table** (above) *(implemented, portion 3)*: `OU=LabControl
    Console` versus `OU=LabControl Teacher` with an unchanged SAN. `LabName.Access` reads
    exactly one single-valued OU — `Administrator`, `Teacher`, otherwise `Unknown` — from
@@ -755,10 +766,13 @@ and 6 remain for portion 5.
    dropped with the event `job.result_dropped`; nothing survives an agent restart, and
    progress produced while the delivering console is away is dropped rather than buffered.
    No field change; the frozen subset is untouched.
-5. **Beacon `take`** *(pending, portion 5)*: honoured when the `(inst, take)` token is unhonoured, the beacon
+5. **Beacon `take`** *(implemented, portion 5)*: honoured when the `(inst, take)` token is unhonoured, the beacon
    arrived after the link was established on the agent's own clock, and `take` is within
    `TakeOverWindow + BeaconMaxSkew` of the beacon's own `ts`. The taker's timestamp is
-   never compared with the agent's link time. No field change.
+   never compared with the agent's link time. No field change. The console side of the same
+   decision changed too, without touching the wire: a console credits another teacher
+   machine with a PC only when it watched that PC leave while that machine's signed `take`
+   beacon was arriving here, and its banner therefore says *holds at least N* (`D-58`).
 6. **Versioning** *(pending, portions 4–5)*: an M5 console accepts every older agent as before and shows the
    *update available* badge; the two behaviours it cannot get from an older agent —
    role-based refusal of `self_update`/`rekey` and result binding to the delivering

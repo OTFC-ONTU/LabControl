@@ -168,7 +168,8 @@ public sealed class Beacon
         }
 
         if (InstanceId.Length == 0 || Host.Length == 0 || Port is <= 0 or > 65535 ||
-            PublicKey.Length != P256.CompressedLength || Endorsement.Length == 0 || Signature.Length == 0)
+            PublicKey.Length != P256.CompressedLength || Endorsement.Length == 0 || Signature.Length == 0 ||
+            !IsRepresentable(SentAtUnix) || !IsRepresentable(TakeAtUnix))
         {
             failure = BeaconFailure.Malformed;
             return false;
@@ -223,6 +224,14 @@ public sealed class Beacon
         failure = BeaconFailure.None;
         return true;
     }
+
+    /// <summary>
+    /// A timestamp the rest of this class may do arithmetic on. A forged datagram can carry
+    /// any 64-bit number, and <see cref="DateTimeOffset.FromUnixTimeSeconds"/> throws outside
+    /// its range — a beacon must always be rejected, never raise out of the receive loop.
+    /// </summary>
+    private static bool IsRepresentable(long unixSeconds) =>
+        unixSeconds >= 0 && unixSeconds <= DateTimeOffset.MaxValue.ToUnixTimeSeconds();
 
     public string Endpoint => $"{Host}:{Port.ToString(CultureInfo.InvariantCulture)}";
 

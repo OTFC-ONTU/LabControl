@@ -90,9 +90,10 @@
   <data name="Tile.Waking" xml:space="preserve"><value>waking…</value></data>
   <data name="Tile.Outdated" xml:space="preserve"><value>online — outdated agent, update it</value></data>
   <data name="Tile.HeldBy" xml:space="preserve"><value>held by {0}</value></data>
-  <data name="Tile.AnotherConsole" xml:space="preserve"><value>another console</value></data>
   <data name="Tile.Now" xml:space="preserve"><value>now</value></data>
   <data name="Tile.Never" xml:space="preserve"><value>never</value></data>
+  <data name="Tile.NotSeenSince" xml:space="preserve"><value>not seen since {0}</value></data>
+  <data name="Tile.NotSeenYet" xml:space="preserve"><value>not seen yet</value></data>
   <data name="Tile.RenewalDue" xml:space="preserve"><value>certificate needs renewing</value></data>
   <data name="Tile.UserLocked" xml:space="preserve"><value>{0} (locked)</value></data>
   <data name="Tile.NobodyLoggedOn" xml:space="preserve"><value>nobody logged on</value></data>
@@ -176,8 +177,10 @@
   <data name="Backup.Missing" xml:space="preserve"><value>No backup has been exported from this console yet.</value></data>
   <data name="Backup.Exported" xml:space="preserve"><value>Backup exported to {0}.</value></data>
   <data name="Backup.Hint" xml:space="preserve"><value>The backup is the one file that moves the lab to another computer. It opens with any holder's passphrase or the recovery code and is useless without them.</value></data>
-  <data name="Banner.OtherConsole" xml:space="preserve"><value>{0} is also running this lab and holds {1} of {2} PCs ({3}).</value></data>
-  <data name="Banner.TookOver" xml:space="preserve"><value>{0} took over the lab at {1} and holds {2} of {3} PCs ({4}).</value></data>
+  <data name="Banner.OtherConsole" xml:space="preserve"><value>{0} is also running this lab and holds at least {1} of {2} PCs ({3}).</value></data>
+  <data name="Banner.OtherConsoleUnknown" xml:space="preserve"><value>{0} is also running this lab. This console does not know which PCs it holds.</value></data>
+  <data name="Banner.TookOver" xml:space="preserve"><value>{0} took over the lab at {1} and holds at least {2} of {3} PCs ({4}).</value></data>
+  <data name="Banner.TookOverUnknown" xml:space="preserve"><value>{0} took over the lab at {1}. No PC has been seen leaving this console for it.</value></data>
   <data name="Banner.TakeOver" xml:space="preserve"><value>Take over the lab</value></data>
   <data name="Banner.Renewal" xml:space="preserve"><value>{0} certificate(s) need renewing — unlock the lab key and the PCs will renew by themselves.</value></data>
   <data name="Banner.UnlockKey" xml:space="preserve"><value>Unlock the lab key…</value></data>

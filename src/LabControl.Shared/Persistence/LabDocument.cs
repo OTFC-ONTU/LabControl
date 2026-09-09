@@ -42,12 +42,17 @@ public sealed class MachineRecord
 
     public string? LoggedOnUser { get; set; }
 
-    /// <summary>Which console instance this PC was last linked to; drives the "held by" banner.</summary>
+    /// <summary>
+    /// The console instance this PC was last <b>positively observed</b> with — this console
+    /// while it held the PC, or another teacher machine that took it over. It is never
+    /// written from the absence of a link, so it can say "not with us" only when this
+    /// console actually learned that (M5 §4.6, D-58).
+    /// </summary>
     public string? LastInstanceId { get; set; }
 
     /// <summary>
-    /// When <see cref="LastInstanceId"/> was positively learned — a take-over reason or a
-    /// <c>Hello.previous_instance_id</c> — rather than presumed (M5 §4.6). 0 = never.
+    /// When <see cref="LastInstanceId"/> was learned. 0 = never; anything older than
+    /// <see cref="Defaults.OwnershipObservationLifetime"/> stops being shown as ownership.
     /// </summary>
     public long LastInstanceObservedUnix { get; set; }
 

@@ -2500,7 +2500,7 @@ Decisions:
 Rejected: a clock-sync step between consoles (no server, no channel between them, `D-21`);
 correcting the taker's `take` by the `Welcome.server_time_unix` skew the agent knows (the
 agent knows the skew of the console it is linked to, not of the taker); treating every PC
-not linked here as held elsewhere (the current behaviour; false on an idle lab).
+not linked here as held elsewhere (the pre-M5 behaviour; false on an idle lab).
 
 Validation (built on the Mac, 2026-09-09): `BeaconGateTests` drive the gate with the
 taker's clock wrong in both directions, the honour-once rule, the window bound, a take that

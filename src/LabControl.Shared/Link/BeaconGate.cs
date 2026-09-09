@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using LabControl.Shared.Discovery;
+using LabControl.Shared.Identity;
 
 namespace LabControl.Shared.Link;
 
@@ -21,23 +22,34 @@ public sealed record BeaconVerdict(BeaconAction Action, string Reason, Beacon? B
 
 /// <summary>
 /// The agent's beacon policy (PROTOCOL, "Discovery beacon"). Everything that makes a
-/// beacon flood cost nothing lives here: verify against the pinned CA, ignore beacons
-/// while linked, honour <c>take</c> exactly once per value, and never dial the same
-/// endpoint more often than <see cref="Defaults.MinDialInterval"/>.
+/// beacon flood cost nothing lives here: verify against the pinned CA, refuse a console
+/// whose access has been withdrawn, ignore beacons while linked, honour <c>take</c> exactly
+/// once per value, and never dial the same endpoint more often than
+/// <see cref="Defaults.MinDialInterval"/>.
+/// <para>
+/// Withdrawal is decided here and not only by the TLS handshake (D-56 item 6): a beacon is
+/// what makes a linked PC <i>leave</i> its console, and by the time the handshake could
+/// refuse the taker the room has already been given up. A console whose
+/// <c>instance:&lt;id&gt;</c> entry this PC holds therefore cannot move it and cannot be
+/// dialled at all — which is the whole point of withdrawing a stolen machine.
+/// </para>
 /// <para>
 /// The take-over rule compares only this PC's clock with itself (D-58): a beacon that
 /// arrived after the link came up, whose <c>take</c> belongs to that same beacon, moves the
 /// room. Nothing here reads the taker's clock as if it were ours, so a teacher machine
-/// half a minute out of step can still take its own room back.
+/// whose clock is out of step — within the ±<see cref="Defaults.BeaconMaxSkew"/> a beacon
+/// must be inside to be heard at all — still takes its own room back.
 /// </para>
 /// </summary>
 public sealed class BeaconGate
 {
     private readonly X509Certificate2 _authority;
     private readonly string _labId;
+    private readonly RevocationSet _revocations;
     private readonly Dictionary<string, DateTimeOffset> _nextDial = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ReconnectBackoff> _backoff = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _honouredTakes = new(StringComparer.Ordinal);
+    /// <summary>Honoured <c>take</c> tokens and the moment each press was made, so they can be pruned.</summary>
+    private readonly Dictionary<string, DateTimeOffset> _honouredTakes = new(StringComparer.Ordinal);
 
     /// <summary>When a verified beacon of this lab last arrived from an endpoint (M5 portion 8).</summary>
     private readonly Dictionary<string, DateTimeOffset> _lastBeacon = new(StringComparer.Ordinal);
@@ -55,10 +67,16 @@ public sealed class BeaconGate
     /// </summary>
     private DateTimeOffset _linkedAt;
 
-    public BeaconGate(X509Certificate2 authority, string labId)
+    /// <param name="revocations">
+    /// The agent's live revocation set — the same object the link merges into, so an
+    /// <c>instance:</c> entry that arrives during a lesson is in force for the very next
+    /// beacon (D-56 item 6).
+    /// </param>
+    public BeaconGate(X509Certificate2 authority, string labId, RevocationSet revocations)
     {
         _authority = authority;
         _labId = labId;
+        _revocations = revocations;
     }
 
     /// <summary>The console instance this agent is linked to, if any.</summary>
@@ -83,6 +101,15 @@ public sealed class BeaconGate
         if (!beacon.TryVerify(_authority, _labId, now, out var failure))
         {
             return new BeaconVerdict(BeaconAction.Ignore, Describe(failure));
+        }
+
+        // Before anything else a beacon could make this PC do (D-56 item 6). The CA
+        // endorsement in the beacon says the instance once existed; only the revocation set
+        // says whether it still may drive this room. A withdrawn console is neither followed
+        // nor left for — the check comes before the take branch as well as the dial branch.
+        if (_revocations.IsRevoked(LabCertificates.InstanceSerial(beacon.InstanceId)))
+        {
+            return new BeaconVerdict(BeaconAction.Ignore, "this console's access to the lab was withdrawn", beacon);
         }
 
         lock (_gate)
@@ -110,7 +137,8 @@ public sealed class BeaconGate
                 // The one exception to "ignore while connected": another teacher machine
                 // pressed Take over the lab (§3.7.2). Three conditions decide it, and none
                 // of them puts the taker's clock against this PC's (D-58) — a teacher
-                // machine minutes out of step still moves the room.
+                // machine whose clock is out by anything the beacon check tolerates still
+                // moves the room.
                 if (beacon.TakeAtUnix == 0)
                 {
                     return new BeaconVerdict(BeaconAction.Ignore, "linked to another console of this lab", beacon);
@@ -135,8 +163,9 @@ public sealed class BeaconGate
                     return new BeaconVerdict(BeaconAction.Ignore, "the take-over does not belong to this beacon", beacon);
                 }
 
+                PruneHonouredTakes(now);
                 var token = $"{beacon.InstanceId}/{beacon.TakeAtUnix}";
-                if (!_honouredTakes.Add(token))
+                if (!_honouredTakes.TryAdd(token, pressed))
                 {
                     // The taker rebroadcasts the same value for 30 s; honouring it once is
                     // what stops that from becoming a re-dial loop.
@@ -165,6 +194,43 @@ public sealed class BeaconGate
             _resumed.Add(beacon.Endpoint);
             _nextDial[beacon.Endpoint] = now + Defaults.MinDialInterval;
             return new BeaconVerdict(BeaconAction.Dial, $"dialling {beacon.Endpoint}", beacon);
+        }
+    }
+
+    /// <summary>
+    /// Forgets the tokens of presses that can never be honoured again, so a lab left running
+    /// for a term does not accumulate one entry per press for ever. A press is only ever
+    /// considered inside <see cref="Defaults.TakeOverWindow"/> + <see cref="Defaults.BeaconMaxSkew"/>
+    /// of its own beacon's <c>ts</c>, and that <c>ts</c> must itself be within
+    /// <see cref="Defaults.BeaconMaxSkew"/> of now — so anything older than the sum of the
+    /// three is unreachable whatever arrives next.
+    /// </summary>
+    private void PruneHonouredTakes(DateTimeOffset now)
+    {
+        var oldest = now - (Defaults.TakeOverWindow + Defaults.BeaconMaxSkew + Defaults.BeaconMaxSkew);
+        if (_honouredTakes.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var (token, pressed) in _honouredTakes.ToArray())
+        {
+            if (pressed < oldest)
+            {
+                _honouredTakes.Remove(token);
+            }
+        }
+    }
+
+    /// <summary>Honoured take-over tokens still worth remembering; for the tests of the pruning rule.</summary>
+    public int HonouredTakeCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _honouredTakes.Count;
+            }
         }
     }
 

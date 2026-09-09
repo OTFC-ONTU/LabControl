@@ -353,6 +353,7 @@ exit 0
   <data name="Readiness.NoWarnings" xml:space="preserve"><value>Setup reports no installation warnings. This is not a network or Wake-on-LAN test.</value></data>
   <data name="Readiness.InvalidReport" xml:space="preserve"><value>The PC sent an unreadable installation readiness report. Previous warnings were retained.</value></data>
   <data name="Update.RollbackReported" xml:space="preserve"><value>The previous agent version was restored.</value></data>
+  <data name="Event.TakenOver" xml:space="preserve"><value>left this console because {0} took over the lab.</value></data>
   <data name="Chooser.Title" xml:space="preserve"><value>My labs · LabControl</value></data>
   <data name="Chooser.Heading" xml:space="preserve"><value>My labs</value></data>
   <data name="Chooser.Hint" xml:space="preserve"><value>Open a lab to drive its room. One lab is open at a time; the others keep their saved settings and connect to nothing until you open them.</value></data>

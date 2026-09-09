@@ -27,7 +27,7 @@ public sealed class BeaconTests
             for (var n = 1; n <= 3; n++)
             {
                 var agent = TestAgent.Install(a, n, codes[n - 1], pinHost: false);
-                listener.Received += (datagram, _) => agent.Link.OfferBeacon(datagram);
+                listener.Received += (datagram, _, receivedAt) => agent.Link.OfferBeacon(datagram, receivedAt);
                 agents.Add(agent.Start());
             }
 
@@ -94,7 +94,7 @@ public sealed class BeaconTests
         var heard = new System.Collections.Concurrent.ConcurrentDictionary<string, int>();
         var failures = new System.Collections.Concurrent.ConcurrentQueue<string>();
         listener.Failed += failures.Enqueue;
-        listener.Received += (datagram, _) =>
+        listener.Received += (datagram, _, _) =>
         {
             // Count what the gate would do with each datagram before handing it over.
             if (Beacon.TryParse(datagram.Span, out var beacon))
@@ -104,7 +104,7 @@ public sealed class BeaconTests
 
             if (beacon is not null && beacon.InstanceName == "Theirs")
             {
-                var gate = new BeaconGate(agent.Store.Authority, agent.Store.Config.LabId);
+                var gate = new BeaconGate(agent.Store.Authority, agent.Store.Config.LabId, new LabControl.Shared.Identity.RevocationSet());
                 if (gate.Consider(beacon, DateTimeOffset.UtcNow).Action == BeaconAction.Dial)
                 {
                     Interlocked.Increment(ref dials);

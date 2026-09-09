@@ -79,4 +79,31 @@ public class ProtocolTests
 
         Assert.All(documented, name => Assert.Contains(name, declared));
     }
+
+    [Fact]
+    public void A_departure_notice_carries_the_taker_and_nothing_a_pc_could_make_up()
+    {
+        // The report a PC sends on its way out when another teacher machine took it over
+        // (D-58). It is an ordinary event, so nothing on the wire changes; the message is a
+        // machine-readable payload the console checks rather than believes, because a PC
+        // naming a holder is still only a claim.
+        var now = DateTimeOffset.UtcNow;
+        var taker = Guid.NewGuid().ToString("d");
+
+        var notice = LabControl.Shared.Link.DepartureNotice.Create(taker, now);
+        Assert.Equal("link.taken_over", notice.Code);
+        Assert.Equal(Event.Types.Severity.Info, notice.Severity);
+        Assert.Equal(taker, LabControl.Shared.Link.DepartureNotice.TakerOf(notice));
+
+        // Round trip: the console reads it off the wire, not out of the object it built.
+        var decoded = AgentMessage.Parser.ParseFrom(new AgentMessage { Event = notice }.ToByteArray());
+        Assert.Equal(taker, LabControl.Shared.Link.DepartureNotice.TakerOf(decoded.Event));
+
+        // Anything else is not a departure notice: another code, an empty payload, a
+        // sentence, or a megabyte of it.
+        Assert.Null(LabControl.Shared.Link.DepartureNotice.TakerOf(new Event { Code = "session.logon", Message = taker }));
+        Assert.Null(LabControl.Shared.Link.DepartureNotice.TakerOf(new Event { Code = "link.taken_over", Message = "" }));
+        Assert.Null(LabControl.Shared.Link.DepartureNotice.TakerOf(new Event { Code = "link.taken_over", Message = "Lab PC took over" }));
+        Assert.Null(LabControl.Shared.Link.DepartureNotice.TakerOf(new Event { Code = "link.taken_over", Message = new string('a', 65) }));
+    }
 }

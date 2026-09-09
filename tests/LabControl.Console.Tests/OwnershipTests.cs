@@ -34,7 +34,7 @@ public sealed class OwnershipTests
             for (var n = 1; n <= 3; n++)
             {
                 var agent = TestAgent.Install(macBook, n, codes[n - 1], pinHost: false);
-                listener.Received += (datagram, _) => agent.Link.OfferBeacon(datagram);
+                listener.Received += (datagram, _, receivedAt) => agent.Link.OfferBeacon(datagram, receivedAt);
                 agents.Add(agent.Start());
             }
 
@@ -121,7 +121,7 @@ public sealed class OwnershipTests
             for (var n = 1; n <= 2; n++)
             {
                 var agent = TestAgent.Install(macBook, n, codes[n - 1], pinHost: false);
-                listener.Received += (datagram, _) => agent.Link.OfferBeacon(datagram);
+                listener.Received += (datagram, _, receivedAt) => agent.Link.OfferBeacon(datagram, receivedAt);
                 agents.Add(agent.Start());
             }
 
@@ -175,6 +175,259 @@ public sealed class OwnershipTests
                 await agent.DisposeAsync();
             }
         }
+    }
+
+    [Fact]
+    public async Task A_pc_that_only_died_during_the_take_over_window_is_credited_to_nobody()
+    {
+        // The PC here cannot follow anybody: it has no beacon listener at all and is pinned
+        // to this console. Switching it off while another machine's press is live used to be
+        // read as "it went there" — a presumption dressed up as an observation, which is
+        // exactly what D-58 exists to delete. Only the PC's own report counts now.
+        await using var macBook = await TestConsole.CreateLabAsync("MacBook-2026");
+        var code = macBook.IssueCodes(1)[0];
+
+        var agent = TestAgent.Install(macBook, 5, code);
+        agent.Start();
+        Assert.True(await Wait.UntilAsync(() => macBook.Session.Linked.Count == 1, TimeSpan.FromSeconds(15)));
+        var machine = Assert.Single(macBook.Session.Registry.Document.Machines);
+
+        await using var deskPc = await TestConsole.JoinLabAsync(macBook, "Lab PC");
+        var deskInstance = deskPc.Session.Instance.InstanceId;
+        Assert.True(await Wait.UntilAsync(() => macBook.Session.OtherConsoles.Any(o => o.Name == "Lab PC"), TimeSpan.FromSeconds(10)));
+
+        deskPc.Session.TakeOver();
+        Assert.True(await Wait.UntilAsync(
+            () => macBook.Session.OtherConsoles.Any(o => o.InstanceId == deskInstance && o.TookOverAt is not null),
+            TimeSpan.FromSeconds(10)), "the MacBook never saw the press it is supposed to attribute on");
+
+        // Inside the window, the PC simply dies — a student's power button, a pulled cable.
+        await agent.DisposeAsync();
+        Assert.True(await Wait.UntilAsync(() => macBook.Session.Linked.Count == 0, TimeSpan.FromSeconds(15)));
+
+        var ownership = macBook.Session.Ownership(machine);
+        Assert.Equal(OwnershipKind.Unknown, ownership.Kind);
+        Assert.Equal(string.Empty, ownership.HolderName);
+        Assert.Empty(macBook.Session.ObservedElsewhere(deskInstance));
+        Assert.DoesNotContain(macBook.Session.Events.Recent, e => e.Code == "link.left_for_taker");
+
+        var tile = new MachineTileViewModel(machine, macBook.Session.Screens.Get(machine.AgentId));
+        tile.Refresh(machine, null, ownership, macBook.Session.Now);
+        Assert.Equal(TileStatus.NotSeen, tile.Status);
+        Assert.DoesNotContain("Lab PC", tile.StatusText, StringComparison.Ordinal);
+
+        var banner = await BannerAsync(macBook, "other:" + deskInstance);
+        Assert.Contains("No PC has been seen leaving this console for it", banner, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_withdrawn_teacher_machine_is_gone_from_the_list_and_cannot_take_the_room()
+    {
+        // The stolen laptop (D-56 item 6). Its beacons still carry a CA endorsement nobody can
+        // take back, so withdrawal has to be enforced where the beacon is judged — on the
+        // agent, before it leaves, and on this console, before it lists the machine at all.
+        await using var macBook = await TestConsole.CreateLabAsync("MacBook-2026");
+        var codes = macBook.IssueCodes(2);
+
+        using var listener = new BeaconListener(TestConsole.BeaconPort);
+        var agents = new List<TestAgent>();
+        try
+        {
+            for (var n = 1; n <= 2; n++)
+            {
+                var agent = TestAgent.Install(macBook, n, codes[n - 1], pinHost: false);
+                listener.Received += (datagram, _, receivedAt) => agent.Link.OfferBeacon(datagram, receivedAt);
+                agents.Add(agent.Start());
+            }
+
+            listener.Start();
+            Assert.True(await Wait.UntilAsync(() => macBook.Session.Linked.Count == 2, TimeSpan.FromSeconds(15)),
+                $"{macBook.Session.Linked.Count} of 2 linked");
+
+            await using var deskPc = await TestConsole.JoinLabAsync(macBook, "Lab PC");
+            var deskInstance = deskPc.Session.Instance.InstanceId;
+            Assert.True(await Wait.UntilAsync(() => macBook.Session.OtherConsoles.Any(o => o.InstanceId == deskInstance), TimeSpan.FromSeconds(10)));
+
+            Assert.True(macBook.Session.TryWithdrawDevice(deskInstance, "the laptop was stolen", out var message), message);
+
+            // Gone from this console at once: no entry, so no banner and no Take over button
+            // of its own, however long it keeps beaconing.
+            Assert.DoesNotContain(macBook.Session.OtherConsoles, o => o.InstanceId == deskInstance);
+
+            var entry = LabCertificates.InstanceSerial(deskInstance);
+            Assert.True(await Wait.UntilAsync(
+                () => agents.All(a => a.Store.Config.Revocations.Any(r => string.Equals(r.Serial, entry, StringComparison.Ordinal))),
+                TimeSpan.FromSeconds(10)), "the PCs never got the withdrawal");
+
+            // Now it presses Take over, again and again: every press is a new value, so
+            // honouring a press once is no defence — the withdrawal is.
+            for (var i = 0; i < 3; i++)
+            {
+                deskPc.Session.TakeOver();
+                await Task.Delay(Defaults.BeaconInterval * 2, TestContext.Current.CancellationToken);
+            }
+
+            Assert.Empty(deskPc.Session.Linked);
+            Assert.Equal(2, macBook.Session.Linked.Count);
+            Assert.All(agents, a => Assert.Equal(macBook.Session.Instance.InstanceId, a.Link.LinkedInstanceId));
+
+            // And it is still not one of the other teacher machines, nor anybody's holder.
+            Assert.DoesNotContain(macBook.Session.OtherConsoles, o => o.InstanceId == deskInstance);
+            Assert.Empty(macBook.Session.ObservedElsewhere(deskInstance));
+            Assert.All(macBook.Session.Registry.Document.Machines,
+                m => Assert.Equal(OwnershipKind.LinkedHere, macBook.Session.Ownership(m).Kind));
+        }
+        finally
+        {
+            foreach (var agent in agents)
+            {
+                await agent.DisposeAsync();
+            }
+        }
+    }
+
+    [Fact]
+    public async Task An_observation_that_is_too_old_stops_being_shown_while_the_other_console_still_runs()
+    {
+        await using var macBook = await TestConsole.CreateLabAsync("MacBook-2026");
+        var code = macBook.IssueCodes(1)[0];
+
+        using var listener = new BeaconListener(TestConsole.BeaconPort);
+        var agent = TestAgent.Install(macBook, 6, code, pinHost: false);
+        listener.Received += (datagram, _, receivedAt) => agent.Link.OfferBeacon(datagram, receivedAt);
+        await using var running = agent;
+
+        try
+        {
+            listener.Start();
+            agent.Start();
+            Assert.True(await Wait.UntilAsync(() => macBook.Session.Linked.Count == 1, TimeSpan.FromSeconds(15)));
+
+            await using var deskPc = await TestConsole.JoinLabAsync(macBook, "Lab PC");
+            var deskInstance = deskPc.Session.Instance.InstanceId;
+            Assert.True(await Wait.UntilAsync(() => macBook.Session.OtherConsoles.Any(o => o.InstanceId == deskInstance), TimeSpan.FromSeconds(10)));
+
+            deskPc.Session.TakeOver();
+            Assert.True(await Wait.UntilAsync(() => deskPc.Session.Linked.Count == 1, TimeSpan.FromSeconds(15)));
+
+            var machine = Assert.Single(macBook.Session.Registry.Document.Machines);
+            Assert.True(await Wait.UntilAsync(
+                () => macBook.Session.Ownership(machine).Kind == OwnershipKind.ObservedElsewhere, TimeSpan.FromSeconds(10)),
+                "the PC was never credited to the machine that took it over");
+            // The PC said where it was going, and the log says it in words rather than in an
+            // instance id (D-58).
+            var said = Assert.Single(macBook.Session.Events.Recent, e => e.Code == "link.taken_over");
+            Assert.Contains("Lab PC", said.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(deskInstance, said.Message, StringComparison.Ordinal);
+            Assert.Contains(macBook.Session.Events.Recent, e => e.Code == "link.left_for_taker");
+
+            // Nothing ever confirms an observation afterwards, so it expires even though the
+            // other machine is still beaconing and still holds the PC: the tile stops saying
+            // "held by Lab PC" and says when the PC was last seen here instead (D-58 item 3).
+            macBook.Session.Registry.Persist(_ =>
+                machine.LastInstanceObservedUnix -= (long)Defaults.OwnershipObservationLifetime.TotalSeconds + 60);
+
+            Assert.Contains(macBook.Session.OtherConsoles, o => o.InstanceId == deskInstance);
+            var stale = macBook.Session.Ownership(machine);
+            Assert.Equal(OwnershipKind.Unknown, stale.Kind);
+            Assert.Equal(string.Empty, stale.HolderName);
+            Assert.Empty(macBook.Session.ObservedElsewhere(deskInstance));
+
+            var tile = new MachineTileViewModel(machine, macBook.Session.Screens.Get(machine.AgentId));
+            tile.Refresh(machine, null, stale, macBook.Session.Now);
+            Assert.Equal(TileStatus.NotSeen, tile.Status);
+            Assert.Contains("not seen", tile.StatusText, StringComparison.Ordinal);
+
+            // Taking the lab back clears the other machine's press outright: this console must
+            // not go on saying it lost the room it is holding.
+            macBook.Session.TakeOver();
+            var other = Assert.Single(macBook.Session.OtherConsoles, o => o.InstanceId == deskInstance);
+            Assert.Null(other.TookOverAt);
+            Assert.Null(other.TookOverSeenAt);
+
+            var banner = await BannerAsync(macBook, "other:" + deskInstance);
+            Assert.DoesNotContain("took over", banner, StringComparison.Ordinal);
+            Assert.Contains("does not know which PCs it holds", banner, StringComparison.Ordinal);
+        }
+        finally
+        {
+            listener.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task A_holder_that_has_stopped_beaconing_holds_nothing_here_any_more()
+    {
+        await using var macBook = await TestConsole.CreateLabAsync("MacBook-2026");
+        var code = macBook.IssueCodes(1)[0];
+
+        using var listener = new BeaconListener(TestConsole.BeaconPort);
+        await using var agent = TestAgent.Install(macBook, 8, code, pinHost: false);
+        listener.Received += (datagram, _, receivedAt) => agent.Link.OfferBeacon(datagram, receivedAt);
+        listener.Start();
+        agent.Start();
+        Assert.True(await Wait.UntilAsync(() => macBook.Session.Linked.Count == 1, TimeSpan.FromSeconds(15)));
+
+        var machine = Assert.Single(macBook.Session.Registry.Document.Machines);
+        string deskInstance;
+
+        await using (var deskPc = await TestConsole.JoinLabAsync(macBook, "Lab PC"))
+        {
+            deskInstance = deskPc.Session.Instance.InstanceId;
+            Assert.True(await Wait.UntilAsync(() => macBook.Session.OtherConsoles.Any(o => o.InstanceId == deskInstance), TimeSpan.FromSeconds(10)));
+
+            deskPc.Session.TakeOver();
+            Assert.True(await Wait.UntilAsync(() => deskPc.Session.Linked.Count == 1, TimeSpan.FromSeconds(15)));
+            Assert.True(await Wait.UntilAsync(
+                () => macBook.Session.Ownership(machine).Kind == OwnershipKind.ObservedElsewhere, TimeSpan.FromSeconds(10)));
+
+            // The lesson ends: the PC is switched off first, so it cannot simply come back
+            // here when the other console closes and answer the question by itself.
+            await agent.DisposeAsync();
+            Assert.True(await Wait.UntilAsync(() => deskPc.Session.Linked.Count == 0, TimeSpan.FromSeconds(15)));
+        }
+
+        // The other teacher machine is closed — the teacher went home with it. The
+        // observation is still on file, but nobody who could be holding the PC is on the
+        // network, so the honest answer is that the PC is not here rather than a name.
+        Assert.True(await Wait.UntilAsync(() => macBook.Session.OtherConsoles.Count == 0, TimeSpan.FromSeconds(30)),
+            "the closed console is still listed as beaconing");
+
+        var ownership = macBook.Session.Ownership(machine);
+        Assert.Equal(OwnershipKind.Offline, ownership.Kind);
+        Assert.Equal(string.Empty, ownership.HolderName);
+
+        var tile = new MachineTileViewModel(machine, macBook.Session.Screens.Get(machine.AgentId));
+        tile.Refresh(machine, null, ownership, macBook.Session.Now);
+        Assert.Equal(TileStatus.Offline, tile.Status);
+        Assert.DoesNotContain("Lab PC", tile.StatusText, StringComparison.Ordinal);
+
+        // A PC that is being woken says so instead of reading as somebody else's.
+        tile.Refresh(machine, null, ownership, macBook.Session.Now, waking: true);
+        Assert.Contains("aking", tile.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_banner_stops_saying_took_over_once_the_press_is_old_news()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var other = new OtherConsole("i1", "Lab PC", "192.168.1.40:47800", now, now.AddMinutes(-1), now.AddMinutes(-1));
+
+        // While the press explains what this console sees, it is named with its time.
+        var fresh = MainViewModel.OtherConsoleText(other, observed: 2, total: 14, "PC-01, PC-02", now);
+        Assert.Contains("took over the lab at", fresh, StringComparison.Ordinal);
+        Assert.Contains("at least 2 of 14", fresh, StringComparison.Ordinal);
+
+        // Past the lifetime of the observations it produced it is history, and the banner goes
+        // back to the plain statement that the other machine is running this lab (D-58).
+        var later = now + Defaults.OwnershipObservationLifetime + TimeSpan.FromMinutes(1);
+        var stale = MainViewModel.OtherConsoleText(other with { LastSeen = later }, observed: 0, total: 14, string.Empty, later);
+        Assert.DoesNotContain("took over", stale, StringComparison.Ordinal);
+        Assert.Contains("does not know which PCs it holds", stale, StringComparison.Ordinal);
+
+        // A machine that never pressed the button is never described as having taken anything.
+        var never = new OtherConsole("i2", "Windows desk", "192.168.1.41:47800", now, null);
+        Assert.DoesNotContain("took over", MainViewModel.OtherConsoleText(never, 1, 14, "PC-03", now), StringComparison.Ordinal);
     }
 
     [Fact]

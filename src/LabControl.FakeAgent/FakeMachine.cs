@@ -141,11 +141,11 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     }
 
     /// <summary>Hands the PC a beacon; a switched-off PC hears nothing.</summary>
-    public void OfferBeacon(ReadOnlyMemory<byte> datagram)
+    public void OfferBeacon(ReadOnlyMemory<byte> datagram, DateTimeOffset? receivedAt = null)
     {
         if (PoweredOn)
         {
-            Link.OfferBeacon(datagram);
+            Link.OfferBeacon(datagram, receivedAt);
         }
     }
 

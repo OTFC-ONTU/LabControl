@@ -323,6 +323,77 @@ public sealed class LabStateTests
     }
 
     [Fact]
+    public void A_lab_file_written_before_this_feature_credits_its_pcs_to_nobody()
+    {
+        // Every lab.json written before M5 portion 5 has no observation at all: the pre-M5
+        // console showed every PC not linked here as held elsewhere and stored nothing (D-58).
+        // Reading one back must produce no claim for anybody, not a claim with a zero date.
+        var now = DateTimeOffset.UtcNow;
+        using var lab = TestLab.Create();
+        var otherInstance = Guid.NewGuid().ToString("d");
+
+        var document = new LabDocument
+        {
+            LabId = lab.LabId,
+            Machines =
+            [
+                new MachineRecord { AgentId = "a", Number = 1, LastSeenUnix = now.AddDays(-1).ToUnixTimeSeconds() },
+                new MachineRecord { AgentId = "b", Number = 2 },
+            ],
+        };
+
+        var registry = new LabRegistry(document, LabTrustTests.PublicOnly(lab.Authority));
+
+        Assert.Empty(registry.ObservedElsewhere(otherInstance, now));
+        Assert.All(document.Machines, m => Assert.False(registry.IsObservedWith(m, otherInstance, now)));
+    }
+
+    [Fact]
+    public void An_observation_from_a_clock_that_was_ahead_does_not_stay_fresh_for_ever()
+    {
+        // A lab file written while this machine's clock was hours ahead used to read as fresh
+        // for a whole lifetime *after* the file's own timestamp — twice the intended fifteen
+        // minutes. The future side is now only the skew a beacon is allowed anyway (D-58).
+        var now = DateTimeOffset.UtcNow;
+        using var lab = TestLab.Create();
+        var otherInstance = Guid.NewGuid().ToString("d");
+
+        var document = new LabDocument
+        {
+            LabId = lab.LabId,
+            Machines =
+            [
+                new MachineRecord
+                {
+                    AgentId = "a",
+                    Number = 1,
+                    LastInstanceId = otherInstance,
+                    LastInstanceObservedUnix = now.AddHours(3).ToUnixTimeSeconds(),
+                },
+                new MachineRecord
+                {
+                    AgentId = "b",
+                    Number = 2,
+                    LastInstanceId = otherInstance,
+                    LastInstanceObservedUnix = now.AddMinutes(10).ToUnixTimeSeconds(),
+                },
+                // A second or two ahead is ordinary clock jitter between two machines.
+                new MachineRecord
+                {
+                    AgentId = "c",
+                    Number = 3,
+                    LastInstanceId = otherInstance,
+                    LastInstanceObservedUnix = now.AddSeconds(5).ToUnixTimeSeconds(),
+                },
+            ],
+        };
+
+        var registry = new LabRegistry(document, LabTrustTests.PublicOnly(lab.Authority));
+
+        Assert.Equal([3], registry.ObservedElsewhere(otherInstance, now).Select(m => m.Number));
+    }
+
+    [Fact]
     public void A_console_that_has_never_arranged_the_room_still_looks_right()
     {
         using var lab = TestLab.Create();

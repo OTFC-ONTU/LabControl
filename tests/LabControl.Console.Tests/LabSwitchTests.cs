@@ -1182,7 +1182,7 @@ public sealed class LabSwitchTests
             };
             Controller.SessionStarted += _sessions.Enqueue;
 
-            _listener.Received += (datagram, _) =>
+            _listener.Received += (datagram, _, _) =>
             {
                 if (Beacon.TryParse(datagram.Span, out var beacon))
                 {

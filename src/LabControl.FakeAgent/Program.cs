@@ -58,11 +58,11 @@ internal static class Program
             }
 
             using var listener = new BeaconListener();
-            listener.Received += (datagram, _) =>
+            listener.Received += (datagram, _, receivedAt) =>
             {
                 foreach (var machine in machines)
                 {
-                    machine.OfferBeacon(datagram);
+                    machine.OfferBeacon(datagram, receivedAt);
                 }
             };
             listener.Failed += message => log.LogWarning("{Message}", message);

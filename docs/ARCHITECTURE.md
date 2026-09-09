@@ -182,7 +182,10 @@ behavior. M5 extends it with saved lab profiles and separate ordinary teacher ac
 designs in `D-56`/`D-57`/`D-58` (instance revocation, result ownership, the agent-clock-only
 take-over rule and observed-only ownership states) and enrollment-code copies by `D-60`;
 until ROADMAP M5 records them as built and verified, the text below describes the current
-behaviour and they remain M5 acceptance work, not verified guarantees.
+behaviour and they remain M5 acceptance work, not verified guarantees. `D-58`'s
+agent-clock-only take-over and its four ownership states are built (M5 portion 5,
+2026-09-09) and are what §3.7.2 now describes; they have not been run on Windows with two
+consoles and skewed clocks, so that part is built, not yet verified.
 
 Replacement is the disaster case. The everyday case is **alternation**: the owner drives
 the lab from a MacBook on some days, a colleague drives it from the Windows PC at the
@@ -230,21 +233,29 @@ The behaviour is defined and dull:
   linked (§3.4). Two live consoles therefore hold **disjoint** sets of PCs — whichever
   each PC happened to connect to first. No PC ever takes commands from two consoles.
 - Each console sees the other's beacon and shows a **persistent, informational** banner:
-  *"Lab PC (instance `…`) is also running this lab and holds 6 of 14 PCs."* The count is
-  known because agents report their previous console in `Hello`, and the banner lists the
-  missing PCs by number. This banner has **no revoke button**; revocation is a security
-  action for a stolen machine, not a way to win an argument about who is teaching.
+  *"Lab PC (instance `…`) is also running this lab and holds at least 6 of 14 PCs."* The
+  count is what this console watched leave during the other machine's signed take-over —
+  not what agents report in `Hello` — and the banner lists exactly those PCs by number; it
+  says *at least* because the PCs it knows nothing about may be anywhere, and when it has
+  seen none leave it says so plainly instead of guessing (`D-58`). This banner has **no
+  revoke button**; revocation is a security action for a stolen machine, not a way to win
+  an argument about who is teaching.
 - The banner offers **Take over the lab**. For the next 30 s the console adds a `take`
-  timestamp to its beacon. An agent linked to *another* instance that receives an endorsed
-  beacon with a `take` newer than its current connection disconnects and dials the taker.
+  timestamp to its beacon. An agent linked to *another* instance disconnects and dials the
+  taker when an endorsed beacon carrying a `take` **arrives after the link was made** — the
+  order is judged on the agent's own clock alone, the press must belong to the beacon that
+  carries it, and each press is honoured once (`D-58`), so a console whose clock is out of
+  step still takes its own room back.
   The other console watches its PCs leave and shows *"MacBook-2026 took over the lab at
   10:32."* No arbitration, no locking, no shared state between consoles: the last person
   to press the button has the room, and every PC always answers to exactly one console.
   The `take` field only works for endorsed beacons, so it is no more forgeable than the
   beacon itself.
 - Anything a console does to a PC it does not hold — lock, broadcast, exam mode — simply
-  is not delivered; the tile shows *held by Lab PC* and the job stays pending. It is
-  delivered if the PC later arrives, which is why *Take over* exists.
+  is not delivered; the tile shows *held by Lab PC* and the job stays pending. A PC the
+  console has learned nothing about is not claimed for anybody: its tile reads *offline*,
+  or *not seen since …* while another console is live. The job is delivered if the PC later
+  arrives, which is why *Take over* exists.
 
 What is **not** built: a shared view of the room, two consoles both controlling one PC,
 merging job queues, or any console-to-console channel. That is the "genuinely simultaneous

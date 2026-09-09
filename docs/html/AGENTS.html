@@ -175,7 +175,7 @@ files with the role in the subject OU and <code>instance:</code> revocation, one
 <code>ActiveLabController</code> with release-before-acquire and result ownership, take-over on
 the agent's clock, per-user console packaging with single-instance forwarding, dormant
 imported enrollment codes. Follow those entries and ROADMAP M5 <em>How it is being built</em>
-(eight portions; portions 1–4, 6 and 7 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
+(eight portions; portions 1–7 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
 store, resumable migration, <code>lab.json</code> schema 2, <code>console.lock</code>; portion 2:
 <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, the departure report and bulk
 <code>.lcbak</code> import; portion 3: the signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher
@@ -183,7 +183,13 @@ sessions without a vault, <code>instance:</code> withdrawal with confirmed deliv
 devices</em> panel and dormant imported codes, 753 tests — and portion 4 on 2026-09-09:
 results and progress bound to the console instance the agent's TLS handshake validated,
 <code>jobs-inflight.json</code> restoration with narrow re-send rules, 785 tests, verified with a
-real agent on the isolated Windows clone — and portion 6 on 2026-09-09: console documents
+real agent on the isolated Windows clone — and portion 5 on 2026-09-09: take-over decided
+on the agent's own clock (arrival order, the press bound to its own beacon, honoured
+once), the four ownership states a console can prove — linked here, observed elsewhere
+within <code>Defaults.OwnershipObservationLifetime</code>, unknown, offline — the banner's <em>holds at
+least N</em>, and the additive informational <code>Welcome.console_access</code> that never decides a
+refusal, 960 tests after the merge, not yet run on the Windows VM with two consoles and
+skewed clocks — and portion 6 on 2026-09-09: console documents
 on the command line, <code>--import-only</code>, a second launch forwarding its file paths over a
 per-data-directory named pipe or private-directory Unix socket instead of starting a
 second console, macOS file activation, 788 tests, checked by hand on the Mac, with the
@@ -195,10 +201,10 @@ reachable only when a rule opens it for this console and nothing blocks it, the
 ad-hoc-signed macOS <code>.app</code>/DMG, the per-user Linux tarball and <code>tools/package-*.sh</code> into
 <code>artifacts/package/</code>, 936 tests after the merge with portions 4 and 6, packages built and
 the Linux scripts round-tripped on the Mac, with the Windows installer itself, the banner
-against a real Windows Firewall and a real Linux desktop menu never run; portion 5 in
-progress, portion 8 not started); the
-<code>Welcome.console_access</code>
-<code>.proto</code> change belongs to portion 5 and must update <code>docs/PROTOCOL.md</code> in its commit.</li>
+against a real Windows Firewall and a real Linux desktop menu never run; portion 8 — the
+acceptance drills, the documentation close-out and the dial backoff a verified beacon for
+the agent's own lab should shorten — is in progress); the <code>Welcome.console_access</code>
+<code>.proto</code> change landed with portion 5 and <code>docs/PROTOCOL.md</code> was updated in that commit.</li>
 <li>The Windows student agent must survive reboots and must not let a failed Win32
 operation escape the service loop.</li>
 <li>Student PCs may have no internet. Do not introduce a cloud or per-PC runtime
@@ -311,7 +317,7 @@ Keep installer advisories bounded to the fixed readiness-code schema; translate 
 the console, retain valid cached warnings offline and never display arbitrary report JSON.</p>
 
 </article>
-<footer>Generated 2026-09-09 06:05 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 10:34 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

@@ -2449,27 +2449,70 @@ asked for both to be fixed.
 
 Decisions:
 
-1. **Only the agent's clock is compared with itself.** A linked agent honours a verified
-   beacon from a *different* instance with `take != 0` when (a) the `(inst, take)` token
-   has not been honoured before, (b) the beacon *arrived* after the link was established,
-   measured on the agent's own clock, and (c) `take` is within `TakeOverWindow +
-   BeaconMaxSkew` of the beacon's own `ts`. The taker's timestamp is never compared with
-   the agent's link time. No beacon field changes.
-2. **Ownership has four states, and only one of them claims another holder.**
-   `HeldElsewhere()` is replaced by `Ownership(machine)`: `LinkedHere`;
-   `ObservedElsewhere(instance, at)` only when positively learned — an `Unlinked` reason
-   naming a take-over, or `Hello.previous_instance_id` within a fresh sighting of that
-   instance's beacon — recorded as `MachineRecord.LastInstanceObservedUnix` (`D-55`);
-   `Offline(lastSeen)`; `Unknown`. The other-console banner counts only observed PCs —
-   *holds at least N* — and an offline PC is shown offline, not *held by …*.
+1. **Only the agent's clock is compared with itself.** As built, `BeaconGate` honours a
+   verified beacon from a *different* instance of its lab while linked when (a) the beacon
+   carries a `take` at all, (b) it *arrived* after the link was established, ordered purely
+   on the agent's own clock (`Linked(instance, endpoint, at)` against the arrival time
+   handed to `Consider`), (c) `take` is within `Defaults.TakeOverWindow +
+   Defaults.BeaconMaxSkew` of the beacon's *own* `ts` — which `Beacon.TryVerify` has
+   already checked against that same clock, so bounding `take` against `ts` bounds how old
+   a press may be without ever measuring the taker's clock against ours — and (d) the
+   honour-once `(instance, take)` token is free. The token is spent only when (a)–(c) pass,
+   so a beacon that was already in flight cannot consume the press, and a press made
+   moments before the PC linked elsewhere still moves it as long as its beacon arrives
+   after that link and inside the window. Beacon timestamps are bounded before any
+   arithmetic, so a forged datagram is rejected rather than raised out of the receive loop.
+   No beacon field changes.
+2. **The console stopped comparing clocks too.** Whether a departure belongs to a take-over
+   is decided by when this console *saw* the taker's signed beacon
+   (`OtherConsole.TookOverSeenAt`, read from this console's own clock), not by the
+   timestamp the taker wrote — `TookOverAt` is kept only to be shown to the teacher.
+3. **Ownership has four states, and only one of them claims another holder.**
+   `HeldElsewhere()` is replaced by `LabSession.Ownership(machine)` →
+   `MachineOwnership`/`OwnershipKind`: `LinkedHere`; `ObservedElsewhere(holder, at)` only
+   when another console has a fresh sighting *and* the machine record names that instance
+   within `Defaults.OwnershipObservationLifetime` (fifteen minutes), so an observation read
+   back from `lab.json` after a restart cannot become today's claim; `Unknown` when another
+   console is beaconing but nothing is known about this PC; `Offline(lastSeen)` otherwise.
+   The record is `MachineRecord.LastInstanceId`/`LastInstanceObservedUnix` (`D-55`) and
+   `LabRegistry.IsObservedWith` judges freshness in whole seconds, so a `lab.json`
+   corrupted into an impossible timestamp is answered *no* instead of throwing under the
+   lab view. It is written in exactly two places: `LabRegistry.RecordHello`, where the PC
+   is talking to us and any earlier claim is superseded, and `LabSession.NoteDeparture` →
+   `LabRegistry.RecordObservedElsewhere`, where the PC left while that machine's signed
+   take-over was live here. The other-console banner counts only observed PCs — *holds at
+   least N*, and plainly *does not know which PCs it holds* when it has seen none leave —
+   and a PC nothing is known about shows *offline* or *not seen since*, never *held by …*.
+4. **A `Hello` naming its previous instance cannot be the second positive source.** The
+   design expected `Hello.previous_instance_id`, within a fresh sighting of that instance's
+   beacon, to prove a PC is elsewhere. It cannot: the same `Hello` puts the PC on *our*
+   line as of now, so the previous instance is a fact about the past, not a current holder.
+   It is recorded where it belongs, as the event `link.arrived_from` in the log the teacher
+   reads (`LabSession.NoteArrival`).
+5. **`Welcome.console_access` is additive and informational.** Field 6 was free (4 is
+   reserved from `D-21`) and `Welcome` is not in the frozen update subset, so older agents
+   ignore the field and older consoles do not send it. The console fills it from its own
+   leaf's subject OU (`ConsoleInstance.Access`) and the agent keeps it in
+   `AgentLink.AnnouncedConsoleAccess`, apart from `LinkedConsoleAccess`; every refusal is
+   still decided from the certificate the TLS handshake validated, never from this field,
+   and a disagreement is only logged.
 
 Rejected: a clock-sync step between consoles (no server, no channel between them, `D-21`);
 correcting the taker's `take` by the `Welcome.server_time_unix` skew the agent knows (the
 agent knows the skew of the console it is linked to, not of the taker); treating every PC
 not linked here as held elsewhere (the current behaviour; false on an idle lab).
 
-Validation: Shared tests drive the gate with skewed clocks, the honour-once rule and the
-window; console tests run two consoles with ±30 s skew and show an offline PC as offline.
+Validation (built on the Mac, 2026-09-09): `BeaconGateTests` drive the gate with the
+taker's clock wrong in both directions, the honour-once rule, the window bound, a take that
+arrived before the link came up and a press made just before the PC linked elsewhere;
+`OwnershipTests` run two consoles with skewed clocks and check the room coming back, an
+offline PC against an unknown one, the named holder and the *holds at least N* count; a
+teacher console that announces administrator access in `Welcome` is still refused `rekey`.
+Main stands at 960 tests (744 Shared + 216 Console) after the merge, 13 macOS bundle tests
+skipping unless the package has been built. Not yet done: two consoles with skewed clocks
+against a real agent on the Windows VM; and a PC refused across many switches still returns
+on the reconnect ceiling rather than the 15 s target, because a verified beacon for the
+agent's own lab does not yet shorten its dial backoff — that belongs to portion 8.
 Implementation status is tracked in ROADMAP M5.
 
 ## D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted `.app`/`.dmg`, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)

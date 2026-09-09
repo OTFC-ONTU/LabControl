@@ -215,8 +215,8 @@ report and results bound to the delivering instance (`D-57`), take-over on the a
 clock and observed-only ownership (`D-58`), the C# per-user Windows installer, scripted
 `.app`/`.dmg`, Linux tarball, single instance and scoped firewall rules (`D-59`), and
 dormant imported enrollment codes (`D-60`). Eight portions (ROADMAP M5, *How it is being
-built*); portions 1–4, 6 and 7 built and reviewed, 1–3 on 2026-09-08 and portions 4, 6
-and 7 on 2026-09-09 (portion 1: profile store, resumable
+built*); portions 1–7 built and reviewed, 1–3 on 2026-09-08 and portions 4–7
+on 2026-09-09 (portion 1: profile store, resumable
 migration, `lab.json` schema 2, `console.lock`; migration tried on a copy of the owner's
 live data, the live directory migrates on the next M5 launch; portion 2:
 `ActiveLabController`, the *My labs* chooser, *Disconnect*, the departure report, bulk
@@ -226,7 +226,13 @@ withdrawal with confirmed delivery, the *Teacher devices* panel, dormant importe
 753 tests, smoke-tested on two copies of the data directory; portion 4: results and progress
 bound to the console instance the agent's TLS handshake validated, `jobs-inflight.json`
 restoration with narrow re-send rules, 785 tests, verified with a real agent on the isolated
-Windows clone — instance X's result waited for X while instance Y saw nothing; portion 6:
+Windows clone — instance X's result waited for X while instance Y saw nothing; portion 5:
+take-over decided on the agent's own clock (arrival order, the press bound to its own
+beacon, honoured once), the four ownership states a console can prove — linked here,
+observed elsewhere within `Defaults.OwnershipObservationLifetime`, unknown, offline — the
+banner's *holds at least N*, and the additive informational `Welcome.console_access` that
+never decides a refusal; 960 tests after the merge, not yet run on the Windows VM with two
+consoles and skewed clocks; portion 6:
 console documents on the command line, `--import-only`, a second launch forwarding its file
 paths over a per-data-directory named pipe or private-directory Unix socket instead of
 starting a second console, macOS file activation, 788 tests, checked by hand on the Mac —
@@ -239,9 +245,11 @@ macOS `.app`/DMG, the per-user Linux tarball and `tools/package-*.sh` into
 `artifacts/package/`, 936 tests after the merge with portions 4 and 6, packages built and
 the Linux scripts round-tripped on the Mac — the Windows installer itself, the banner
 against a real Windows Firewall and a real Linux desktop menu have never been run);
-portion 5 in progress, portion 8 not started. ARCHITECTURE §3.9/§4 and PROTOCOL
-(*Files exchanged offline*, *M5 additions*) describe the design; the `Welcome.console_access`
-`.proto` change lands with portion 5 and must update PROTOCOL again in that commit.
+portion 8 (the acceptance drills and the documentation close-out) is in progress, and it
+also owns the dial backoff a verified beacon for the agent's own lab should shorten.
+ARCHITECTURE §3.9/§4 and PROTOCOL (*Files exchanged offline*, *M5 additions*) describe the
+design; the `Welcome.console_access` `.proto` change landed with portion 5, and PROTOCOL
+was updated in that commit.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

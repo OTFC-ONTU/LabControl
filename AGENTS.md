@@ -42,7 +42,7 @@ the documents relevant to the task:
   `ActiveLabController` with release-before-acquire and result ownership, take-over on
   the agent's clock, per-user console packaging with single-instance forwarding, dormant
   imported enrollment codes. Follow those entries and ROADMAP M5 *How it is being built*
-  (eight portions; portions 1–4, 6 and 7 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
+  (eight portions; portions 1–7 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
   store, resumable migration, `lab.json` schema 2, `console.lock`; portion 2:
   `ActiveLabController`, the *My labs* chooser, *Disconnect*, the departure report and bulk
   `.lcbak` import; portion 3: the signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher
@@ -50,7 +50,13 @@ the documents relevant to the task:
   devices* panel and dormant imported codes, 753 tests — and portion 4 on 2026-09-09:
   results and progress bound to the console instance the agent's TLS handshake validated,
   `jobs-inflight.json` restoration with narrow re-send rules, 785 tests, verified with a
-  real agent on the isolated Windows clone — and portion 6 on 2026-09-09: console documents
+  real agent on the isolated Windows clone — and portion 5 on 2026-09-09: take-over decided
+  on the agent's own clock (arrival order, the press bound to its own beacon, honoured
+  once), the four ownership states a console can prove — linked here, observed elsewhere
+  within `Defaults.OwnershipObservationLifetime`, unknown, offline — the banner's *holds at
+  least N*, and the additive informational `Welcome.console_access` that never decides a
+  refusal, 960 tests after the merge, not yet run on the Windows VM with two consoles and
+  skewed clocks — and portion 6 on 2026-09-09: console documents
   on the command line, `--import-only`, a second launch forwarding its file paths over a
   per-data-directory named pipe or private-directory Unix socket instead of starting a
   second console, macOS file activation, 788 tests, checked by hand on the Mac, with the
@@ -62,10 +68,10 @@ the documents relevant to the task:
   ad-hoc-signed macOS `.app`/DMG, the per-user Linux tarball and `tools/package-*.sh` into
   `artifacts/package/`, 936 tests after the merge with portions 4 and 6, packages built and
   the Linux scripts round-tripped on the Mac, with the Windows installer itself, the banner
-  against a real Windows Firewall and a real Linux desktop menu never run; portion 5 in
-  progress, portion 8 not started); the
-  `Welcome.console_access`
-  `.proto` change belongs to portion 5 and must update `docs/PROTOCOL.md` in its commit.
+  against a real Windows Firewall and a real Linux desktop menu never run; portion 8 — the
+  acceptance drills, the documentation close-out and the dial backoff a verified beacon for
+  the agent's own lab should shorten — is in progress); the `Welcome.console_access`
+  `.proto` change landed with portion 5 and `docs/PROTOCOL.md` was updated in that commit.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Student PCs may have no internet. Do not introduce a cloud or per-PC runtime

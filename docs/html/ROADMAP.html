@@ -187,7 +187,7 @@ implement.</p>
 <tr>
 <td><strong>M5</strong></td>
 <td>Lab files, teacher access and fast switching between rooms</td>
-<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–4, 6 and 7 built and reviewed (1–3 on 2026-09-08 — profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation; portion 7 on 2026-09-09: the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6 and 7 checked by hand on the owner's Mac; portion 5 in progress and portion 8 (the acceptance drills and the documentation close-out) not started; real-Mac switch timing under investigation; the Windows pipe and the Linux <code>SO_PEERCRED</code> path of the single instance, the Windows installer itself, the LAN banner against a real Windows Firewall and a real Linux desktop menu are not yet run on those systems</strong></td>
+<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–7 built and reviewed (1–3 on 2026-09-08 — profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 5 on 2026-09-09: the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational <code>Welcome.console_access</code>; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation; portion 7 on 2026-09-09: the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6 and 7 checked by hand on the owner's Mac; portion 5 has not been run on the Windows VM, where two consoles with skewed clocks must move a real agent, and portion 8 (the acceptance drills and the documentation close-out) is in progress; real-Mac switch timing under investigation; the Windows pipe and the Linux <code>SO_PEERCRED</code> path of the single instance, the Windows installer itself, the LAN banner against a real Windows Firewall and a real Linux desktop menu are not yet run on those systems</strong></td>
 <td>M4</td>
 </tr>
 <tr>
@@ -1552,7 +1552,9 @@ contract, then desktop integration (<code>D-54</code> item 6).</p>
 <p><strong>Progress.</strong></p>
 <ul>
 <li><em>Design recorded 2026-09-08</em> (<code>D-55</code>…<code>D-60</code>; ARCHITECTURE §3.9/§4, PROTOCOL <em>Files
-exchanged offline</em> and <em>M5 additions</em>). The <code>.proto</code> addition of portion 5 is not made.</li>
+exchanged offline</em> and <em>M5 additions</em>). The <code>.proto</code> addition of portion 5 —
+<code>Welcome.console_access</code> — was made with that portion and PROTOCOL was updated in the
+same commit.</li>
 <li><em>Portion 1 (built and reviewed 2026-09-08, on the Mac).</em> The profile store and the
 migration (<code>D-55</code>): <code>ProfilesDocument</code> (<code>profiles.json</code>, schema 1), <code>ProfileStore</code>,
 <code>ProfileMigration</code>, <code>ConsoleLock</code> (<code>console.lock</code> opened with <code>FileShare.None</code>, one
@@ -1621,7 +1623,8 @@ port): departure 12–30 ms, server up 156–965 ms, all 30 PCs linked in 1.0–
 lab-A beacons in the 5 s after departure; 20 × A → B → C → A with bounded threads and
 no leaked session. Two limits: under sustained refusal load a departure can spend
 Kestrel's 2 s stop budget, and a PC refused for a long stretch returns within the 30 s
-reconnect cap rather than the 15 s target — a <code>BeaconGate</code> follow-up for portion 5.
+reconnect cap rather than the 15 s target — a <code>BeaconGate</code> follow-up that portion 5 did
+not make and that is now portion 8's.
 Tests: 728 (603 Shared + 125 Console; the Console run twice, <code>LabSwitchTests</code> a
 non-parallel collection). <em>On the owner's Mac</em> (Debug build, ad-hoc signed) the server
 was up 4–6 s after <em>Open</em> and after a re-open; the Keychain prompt per rebuilt ad-hoc
@@ -1741,6 +1744,54 @@ outcome unknown and the agent's pending-result flush then delivered the true res
 replaced it — a library script would have been re-offered and re-sent instead. Hand-over
 took 15–20 s. Not done on the VM: the network push of this build from an administrator
 console, and <code>run_as: user</code> (the clone has no interactive user). Portion 5 is next.</li>
+<li><em>Portion 5 (built and reviewed 2026-09-09, on the Mac).</em> Take-over on the agent's own
+clock, the ownership states a console can prove and <code>Welcome.console_access</code> (<code>D-58</code>).
+<strong>The take-over no longer compares two machines' clocks.</strong> While an agent is linked and a
+verified beacon arrives from a <em>different</em> instance of its lab, <code>BeaconGate</code> ignores a
+beacon with no <code>take</code>; ignores one that arrived before the current link was established,
+ordered purely by the agent's own clock (<code>Linked(instance, endpoint, at)</code> against the
+arrival time handed to <code>Consider</code>); accepts the press only when its timestamp lies within
+<code>Defaults.TakeOverWindow</code> + <code>Defaults.BeaconMaxSkew</code> of the beacon's <em>own</em> <code>ts</code>, which
+<code>Beacon.TryVerify</code> has already checked against that same clock; and spends the
+honour-once <code>(instance, take)</code> token only when all of that passes, so a beacon that was
+already in flight cannot consume the press. A press made just before the PC linked
+elsewhere still moves it, as long as it is inside the window. The console side stopped
+comparing clocks too: whether a departure belongs to a take-over is decided by when this
+console <em>saw</em> the taker's signed beacon (<code>OtherConsole.TookOverSeenAt</code>), not by the
+timestamp the taker wrote. <strong>Ownership is four states the console can prove</strong>
+(<code>LabSession.Ownership</code> → <code>MachineOwnership</code>/<code>OwnershipKind</code>): <code>LinkedHere</code>;
+<code>ObservedElsewhere</code> only when another console has a fresh sighting <em>and</em> the machine
+record names that instance within the new <code>Defaults.OwnershipObservationLifetime</code>
+(fifteen minutes) — <code>MachineRecord.LastInstanceId</code>/<code>LastInstanceObservedUnix</code>,
+<code>LabRegistry.IsObservedWith</code> — so an observation read back from <code>lab.json</code> after a
+restart cannot become today's claim; <code>Unknown</code> when another console is beaconing but
+nothing is known about this PC; <code>Offline</code> with a last-seen time otherwise. The
+observation is written in exactly two places: <code>LabRegistry.RecordHello</code> puts the PC on
+this console's own line, superseding any earlier claim, and <code>LabSession.NoteDeparture</code>
+records the taker when a PC leaves during another machine's signed take-over
+(<code>RecordObservedElsewhere</code>). The tile (<code>TileStatus.HeldElsewhere</code> / <code>NotSeen</code>) and the
+banner count only observed PCs and say <em>holds at least N</em>; a PC nothing is known about
+reads <em>offline</em> or <em>not seen since</em>, never <em>held by</em>. One design detail worth recording:
+the second positive source the design imagined — a <code>Hello</code> naming its previous
+instance — cannot produce an observed-elsewhere state, because the same <code>Hello</code> puts the
+PC on our own line, so it is recorded as the event <code>link.arrived_from</code> (<code>NoteArrival</code>)
+instead. <strong><code>Welcome</code> gained the additive, informational <code>console_access = 6</code></strong> (field 6
+was free and not reserved; <code>Welcome</code> is not in the frozen update subset, so older agents ignore it
+and older consoles do not send it). The console fills it from its own leaf's subject OU
+(<code>ConsoleInstance.Access</code>) and the agent keeps it in <code>AgentLink.AnnouncedConsoleAccess</code>,
+apart from <code>LinkedConsoleAccess</code>; every refusal still reads the validated certificate,
+never this field, and a test makes a teacher console announce administrator access and
+still get <code>rekey</code> refused. PROTOCOL was updated in the same commit. Tests: the branch
+added skew cases in both directions, honour-once, the window bound, a take that arrived
+before the link and a press made just before linking, plus ownership tests for a skewed
+take-over both ways, offline versus unknown, the named holder and the banner count;
+<strong>after the merge main stands at 960 (744 Shared + 216 Console)</strong>, 13 of them macOS
+bundle tests that skip unless <code>tools/package-mac.sh</code> has been run. Open items: this
+portion has <strong>not been run on the Windows VM</strong>, and the design calls for two consoles
+with skewed clocks against a real agent; and a PC refused across many switches still
+returns on the reconnect ceiling rather than the 15 s target, because a verified beacon
+for the agent's own lab does not yet shorten its dial backoff — that is portion 8's, and
+portion 8 is in progress.</li>
 <li><em>Portion 6 (built, reviewed and fixed 2026-09-09, on the Mac).</em> Command-line documents,
 the single instance and macOS file activation (<code>D-59</code> item 5); the review's blocker and
 should-fix items were all fixed before the merge. <code>ConsoleOptions.TryParse</code> takes
@@ -2138,7 +2189,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-09 06:05 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 10:34 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

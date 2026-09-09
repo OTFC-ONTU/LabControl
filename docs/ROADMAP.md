@@ -19,7 +19,7 @@ implement.
 | **M2** | Windows agent: service, helper, power, scripts | **built; verified on the VM (2026-09-05…07); `PC-00` enrolled as `PC-10` and verified (2026-09-07); Wake-on-LAN deferred to M4** |
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
-| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–4, 6 and 7 built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation; portion 7 on 2026-09-09: the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6 and 7 checked by hand on the owner's Mac; portion 5 in progress and portion 8 (the acceptance drills and the documentation close-out) not started; real-Mac switch timing under investigation; the Windows pipe and the Linux `SO_PEERCRED` path of the single instance, the Windows installer itself, the LAN banner against a real Windows Firewall and a real Linux desktop menu are not yet run on those systems** | M4 |
+| **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`); portions 1–7 built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 5 on 2026-09-09: the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation; portion 7 on 2026-09-09: the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6 and 7 checked by hand on the owner's Mac; portion 5 has not been run on the Windows VM, where two consoles with skewed clocks must move a real agent, and portion 8 (the acceptance drills and the documentation close-out) is in progress; real-Mac switch timing under investigation; the Windows pipe and the Linux `SO_PEERCRED` path of the single instance, the Windows installer itself, the LAN banner against a real Windows Firewall and a real Linux desktop menu are not yet run on those systems** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
@@ -1366,7 +1366,9 @@ contract, then desktop integration (`D-54` item 6).
 **Progress.**
 
 - *Design recorded 2026-09-08* (`D-55`…`D-60`; ARCHITECTURE §3.9/§4, PROTOCOL *Files
-  exchanged offline* and *M5 additions*). The `.proto` addition of portion 5 is not made.
+  exchanged offline* and *M5 additions*). The `.proto` addition of portion 5 —
+  `Welcome.console_access` — was made with that portion and PROTOCOL was updated in the
+  same commit.
 - *Portion 1 (built and reviewed 2026-09-08, on the Mac).* The profile store and the
   migration (`D-55`): `ProfilesDocument` (`profiles.json`, schema 1), `ProfileStore`,
   `ProfileMigration`, `ConsoleLock` (`console.lock` opened with `FileShare.None`, one
@@ -1435,7 +1437,8 @@ contract, then desktop integration (`D-54` item 6).
   lab-A beacons in the 5 s after departure; 20 × A → B → C → A with bounded threads and
   no leaked session. Two limits: under sustained refusal load a departure can spend
   Kestrel's 2 s stop budget, and a PC refused for a long stretch returns within the 30 s
-  reconnect cap rather than the 15 s target — a `BeaconGate` follow-up for portion 5.
+  reconnect cap rather than the 15 s target — a `BeaconGate` follow-up that portion 5 did
+  not make and that is now portion 8's.
   Tests: 728 (603 Shared + 125 Console; the Console run twice, `LabSwitchTests` a
   non-parallel collection). *On the owner's Mac* (Debug build, ad-hoc signed) the server
   was up 4–6 s after *Open* and after a re-open; the Keychain prompt per rebuilt ad-hoc
@@ -1555,6 +1558,54 @@ contract, then desktop integration (`D-54` item 6).
   replaced it — a library script would have been re-offered and re-sent instead. Hand-over
   took 15–20 s. Not done on the VM: the network push of this build from an administrator
   console, and `run_as: user` (the clone has no interactive user). Portion 5 is next.
+- *Portion 5 (built and reviewed 2026-09-09, on the Mac).* Take-over on the agent's own
+  clock, the ownership states a console can prove and `Welcome.console_access` (`D-58`).
+  **The take-over no longer compares two machines' clocks.** While an agent is linked and a
+  verified beacon arrives from a *different* instance of its lab, `BeaconGate` ignores a
+  beacon with no `take`; ignores one that arrived before the current link was established,
+  ordered purely by the agent's own clock (`Linked(instance, endpoint, at)` against the
+  arrival time handed to `Consider`); accepts the press only when its timestamp lies within
+  `Defaults.TakeOverWindow` + `Defaults.BeaconMaxSkew` of the beacon's *own* `ts`, which
+  `Beacon.TryVerify` has already checked against that same clock; and spends the
+  honour-once `(instance, take)` token only when all of that passes, so a beacon that was
+  already in flight cannot consume the press. A press made just before the PC linked
+  elsewhere still moves it, as long as it is inside the window. The console side stopped
+  comparing clocks too: whether a departure belongs to a take-over is decided by when this
+  console *saw* the taker's signed beacon (`OtherConsole.TookOverSeenAt`), not by the
+  timestamp the taker wrote. **Ownership is four states the console can prove**
+  (`LabSession.Ownership` → `MachineOwnership`/`OwnershipKind`): `LinkedHere`;
+  `ObservedElsewhere` only when another console has a fresh sighting *and* the machine
+  record names that instance within the new `Defaults.OwnershipObservationLifetime`
+  (fifteen minutes) — `MachineRecord.LastInstanceId`/`LastInstanceObservedUnix`,
+  `LabRegistry.IsObservedWith` — so an observation read back from `lab.json` after a
+  restart cannot become today's claim; `Unknown` when another console is beaconing but
+  nothing is known about this PC; `Offline` with a last-seen time otherwise. The
+  observation is written in exactly two places: `LabRegistry.RecordHello` puts the PC on
+  this console's own line, superseding any earlier claim, and `LabSession.NoteDeparture`
+  records the taker when a PC leaves during another machine's signed take-over
+  (`RecordObservedElsewhere`). The tile (`TileStatus.HeldElsewhere` / `NotSeen`) and the
+  banner count only observed PCs and say *holds at least N*; a PC nothing is known about
+  reads *offline* or *not seen since*, never *held by*. One design detail worth recording:
+  the second positive source the design imagined — a `Hello` naming its previous
+  instance — cannot produce an observed-elsewhere state, because the same `Hello` puts the
+  PC on our own line, so it is recorded as the event `link.arrived_from` (`NoteArrival`)
+  instead. **`Welcome` gained the additive, informational `console_access = 6`** (field 6
+  was free and not reserved; `Welcome` is not in the frozen update subset, so older agents ignore it
+  and older consoles do not send it). The console fills it from its own leaf's subject OU
+  (`ConsoleInstance.Access`) and the agent keeps it in `AgentLink.AnnouncedConsoleAccess`,
+  apart from `LinkedConsoleAccess`; every refusal still reads the validated certificate,
+  never this field, and a test makes a teacher console announce administrator access and
+  still get `rekey` refused. PROTOCOL was updated in the same commit. Tests: the branch
+  added skew cases in both directions, honour-once, the window bound, a take that arrived
+  before the link and a press made just before linking, plus ownership tests for a skewed
+  take-over both ways, offline versus unknown, the named holder and the banner count;
+  **after the merge main stands at 960 (744 Shared + 216 Console)**, 13 of them macOS
+  bundle tests that skip unless `tools/package-mac.sh` has been run. Open items: this
+  portion has **not been run on the Windows VM**, and the design calls for two consoles
+  with skewed clocks against a real agent; and a PC refused across many switches still
+  returns on the reconnect ceiling rather than the 15 s target, because a verified beacon
+  for the agent's own lab does not yet shorten its dial backoff — that is portion 8's, and
+  portion 8 is in progress.
 - *Portion 6 (built, reviewed and fixed 2026-09-09, on the Mac).* Command-line documents,
   the single instance and macOS file activation (`D-59` item 5); the review's blocker and
   should-fix items were all fixed before the merge. `ConsoleOptions.TryParse` takes

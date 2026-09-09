@@ -48,6 +48,7 @@ public partial class App : Application
     private MainViewModel? _mainViewModel;
     private bool _stopping;
     private bool _stopped;
+    private bool _quitting;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -61,13 +62,15 @@ public partial class App : Application
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             desktop.ShutdownRequested += (_, e) =>
             {
-                // The first request is held: the lab is released asynchronously (an activation
-                // in flight is cancelled, its prompt closed) and the UI thread stays free.
-                // Once everything is down, Shutdown() is called again and this lets it pass.
+                // The first request is held: the departure report is asked first (M5 portion 8
+                // — quitting must not be a way past it), then the lab is released
+                // asynchronously (an activation in flight is cancelled, its prompt closed) and
+                // the UI thread stays free. Once everything is down, Shutdown() is called
+                // again and this lets it pass.
                 if (!_stopped)
                 {
                     e.Cancel = true;
-                    _ = StopAsync();
+                    _ = QuitAsync();
                 }
             };
             _ = StartAsync(desktop);
@@ -606,26 +609,9 @@ public partial class App : Application
         }
 
         // A window still connecting has nothing running to report; leaving it is a plain release.
-        var report = ReferenceEquals(_controller.Active, session) ? session.DescribeDeparture() : DepartureReport.Empty;
-        if (!report.IsEmpty)
+        if (!await Departure(main).MayLeaveAsync(session))
         {
-            var dialog = new DepartureDialog(session.LabName, report);
-            await dialog.ShowDialog(main);
-            var choice = await dialog.Completion ?? DepartureChoice.Stay;
-            if (choice == DepartureChoice.Stay)
-            {
-                return;
-            }
-
-            if (choice == DepartureChoice.Wait)
-            {
-                var waiting = new WaitForJobsDialog(session);
-                await waiting.ShowDialog(main);
-                if (await waiting.Completion != true)
-                {
-                    return;
-                }
-            }
+            return;
         }
 
         // The main window goes first and the chooser shows "Leaving …" while the room is
@@ -633,6 +619,100 @@ public partial class App : Application
         CloseMain();
         ShowChooser();
         await _controller.DeactivateAsync(Strings.Get("Departure.Reason"));
+    }
+
+    /// <summary>
+    /// Quitting the application (M5 portion 8): the same departure question as
+    /// <i>Disconnect</i>, asked over whichever window is up, and only then the shutdown.
+    /// <i>Stay</i> keeps the console running with the lab still active — the shutdown request
+    /// was already cancelled, so there is nothing to undo.
+    /// </summary>
+    private async Task QuitAsync()
+    {
+        // A second ⌘Q while the report is up must not open a second report.
+        if (_stopping || _stopped || _quitting)
+        {
+            return;
+        }
+
+        _quitting = true;
+        try
+        {
+            if (!await MayQuitAsync())
+            {
+                return;
+            }
+        }
+        finally
+        {
+            _quitting = false;
+        }
+
+        await StopAsync();
+    }
+
+    /// <summary>The departure question for the quit path; <c>true</c> when the console may go.</summary>
+    private async Task<bool> MayQuitAsync()
+    {
+        if (_controller is { } controller)
+        {
+            try
+            {
+                if (!await Departure((Window?)_main ?? _chooser).MayQuitAsync())
+                {
+                    _log?.LogInformation("Quit cancelled: the teacher chose to stay in lab '{Lab}'", controller.Active?.LabName);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                // The report is a courtesy; a dialog that cannot be shown may not trap the
+                // teacher in an application that will not quit.
+                _log?.LogWarning(ex, "The departure report could not be shown before quitting");
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The departure question, asked with the console's own dialogs over <paramref name="owner"/>.</summary>
+    private DepartureFlow Departure(Window? owner) => new(_controller!, new WindowDeparturePrompt(owner, _desktop));
+
+    /// <summary>
+    /// <see cref="IDeparturePrompt"/> in windows: the report dialog and the wait, shown over
+    /// the window that asked, or on their own when there is none left.
+    /// </summary>
+    private sealed class WindowDeparturePrompt(Window? owner, IClassicDesktopStyleApplicationLifetime? desktop) : IDeparturePrompt
+    {
+        public async Task<DepartureChoice> AskAsync(string labName, DepartureReport report)
+        {
+            var dialog = new DepartureDialog(labName, report);
+            await ShowAsync(dialog);
+            return await dialog.Completion ?? DepartureChoice.Stay;
+        }
+
+        public async Task<bool> WaitForJobsAsync(LabSession session)
+        {
+            var waiting = new WaitForJobsDialog(session);
+            await ShowAsync(waiting);
+            return await waiting.Completion == true;
+        }
+
+        private async Task ShowAsync(Window dialog)
+        {
+            if (owner is { IsVisible: true } visible)
+            {
+                await dialog.ShowDialog(visible);
+                return;
+            }
+
+            if (desktop is not null)
+            {
+                desktop.MainWindow = dialog;
+            }
+
+            dialog.Show();
+        }
     }
 
     /// <summary>Files dropped on the main window are added as saved labs; the active lab stays.</summary>

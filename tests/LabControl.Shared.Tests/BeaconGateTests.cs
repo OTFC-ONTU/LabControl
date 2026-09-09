@@ -254,9 +254,14 @@ public sealed class BeaconGateTests
         Assert.True(third > second);
         Assert.True(third <= Defaults.ReconnectDelayMax * 1.25);
 
-        // While backed off, a beacon from that endpoint is not dialled again.
-        Assert.Equal(BeaconAction.Ignore,
+        // The first verified beacon of this lab after those failures is new information — the
+        // room is being served — so it steps over the wait once (M5 portion 8); the next one
+        // of the same uninterrupted stream does not.
+        Assert.Equal(BeaconAction.Dial,
             gate.Consider(console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, now), now).Action);
+        var soon = now + TimeSpan.FromSeconds(1);
+        Assert.Equal(BeaconAction.Ignore,
+            gate.Consider(console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, soon), soon).Action);
 
         gate.Linked(console.InstanceId, endpoint, now);
         gate.Unlinked();
@@ -287,4 +292,116 @@ public sealed class BeaconGateTests
     /// exact skew limit must not lose a fraction of a second in the truncation.
     /// </summary>
     private static DateTimeOffset Whole(DateTimeOffset instant) => DateTimeOffset.FromUnixTimeSeconds(instant.ToUnixTimeSeconds());
+
+    /// <summary>
+    /// M5 portion 8, finding E: a PC whose lab was not the active one spends a whole lesson
+    /// being refused, so its dial backoff sits at the 30-second ceiling. When its own room is
+    /// served again, the first verified beacon of that lab must get it back inside the
+    /// 15-second target instead of making it wait out the ceiling — and must not turn into a
+    /// dial every two seconds while a console that is up simply cannot be linked.
+    /// </summary>
+    [Fact]
+    public void A_beacon_after_a_gap_steps_over_a_grown_backoff_once_and_a_steady_stream_never_does()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var lab = TestLab.Create();
+        using var console = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), now);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        const string endpoint = "192.168.1.23:47800";
+
+        // The lesson in the other room: this PC hears its own lab's beacon once, links, and
+        // is then refused over and over while the console serves the other lab.
+        Assert.Equal(BeaconAction.Dial, gate.Consider(console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, now), now).Action);
+        gate.Linked(console.InstanceId, endpoint, now);
+        gate.Unlinked();
+
+        var refusing = now;
+        TimeSpan wait = default;
+        for (var i = 0; i < 12; i++)
+        {
+            wait = gate.DialFailed(endpoint, refusing);
+            refusing += wait;
+        }
+
+        Assert.True(wait >= Defaults.ReconnectDelayMax * 0.75, $"the backoff reached only {wait}");
+
+        // One last refusal, so the endpoint is sitting on the full ceiling when the room
+        // comes back two seconds later — the case the 15-second target is about.
+        gate.DialFailed(endpoint, refusing);
+
+        // The room is served again. The gap in this lab's own beacons is the whole lesson.
+        var back = refusing + TimeSpan.FromSeconds(2);
+        var verdict = gate.Consider(console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, back), back);
+        Assert.Equal(BeaconAction.Dial, verdict.Action);
+        Assert.Contains("served again", verdict.Reason, StringComparison.Ordinal);
+
+        // That dial fails too, and the console keeps beaconing without a pause — a console
+        // that is up but cannot link this PC. The escalation carries on from where it was
+        // rather than restarting at the floor, and no further beacon shortens it, so five
+        // minutes of beacons cost dials at the ceiling's pace, not at the beacon's.
+        var next = gate.DialFailed(endpoint, back);
+        Assert.True(next >= Defaults.ReconnectDelayMax * 0.75, $"the escalation restarted at {next}");
+
+        var beacons = (int)(TimeSpan.FromMinutes(5) / Defaults.BeaconInterval);
+        var dials = 0;
+        for (var i = 1; i <= beacons; i++)
+        {
+            var at = back + Defaults.BeaconInterval * i;
+            if (gate.Consider(console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, at), at).Action == BeaconAction.Dial)
+            {
+                dials++;
+                gate.DialFailed(endpoint, at);
+            }
+        }
+
+        var ceiling = (int)(TimeSpan.FromMinutes(5) / (Defaults.ReconnectDelayMax * 0.75)) + 1;
+        Assert.InRange(dials, 0, ceiling);
+        Assert.True(dials < beacons / 4, $"{dials} dials for {beacons} beacons");
+    }
+
+    /// <summary>The step-over is armed again by every serving gap, so switching back and forth stays fast.</summary>
+    [Fact]
+    public void Every_serving_gap_arms_the_step_over_again()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var lab = TestLab.Create();
+        using var console = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), now);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId);
+        const string endpoint = "192.168.1.23:47800";
+
+        var at = now;
+        for (var round = 0; round < 5; round++)
+        {
+            // Refused for a while: the wait grows past the beacon interval.
+            for (var i = 0; i < 6; i++)
+            {
+                at += gate.DialFailed(endpoint, at);
+            }
+
+            // The room comes back after a lesson elsewhere.
+            at += TimeSpan.FromMinutes(10);
+            Assert.Equal(BeaconAction.Dial, gate.Consider(console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, at), at).Action);
+        }
+    }
+
+    /// <summary>A beacon of another lab is not evidence of anything, backoff included.</summary>
+    [Fact]
+    public void A_beacon_of_another_lab_never_shortens_the_backoff()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var ours = TestLab.Create();
+        using var theirs = TestLab.Create();
+        using var stranger = ConsoleInstance.Mint(theirs, "Other room", new FileSecretProtector(), now);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(ours.Authority), ours.LabId);
+        const string endpoint = "192.168.1.23:47800";
+
+        for (var i = 0; i < 12; i++)
+        {
+            gate.DialFailed(endpoint, now);
+        }
+
+        var later = now + TimeSpan.FromMinutes(10);
+        Assert.Equal(BeaconAction.Ignore, gate.Consider(stranger.CreateBeacon("192.168.1.23", Defaults.ConsolePort, later), later).Action);
+    }
+
 }

@@ -143,7 +143,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             if (failure is not null)
             {
                 _log.LogError("{Pc}: {What} failed: {Failure}", Link.Name, what, failure);
-                Link.Report(Event.Types.Severity.Error, "power.failed", $"The {what} did not happen: {failure}");
+                Link.ReportForJob(job.Id, Event.Types.Severity.Error, "power.failed", $"The {what} did not happen: {failure}");
             }
         });
 

@@ -393,14 +393,6 @@ public sealed class ImportResultsDialog : DialogWindow<bool?>
     }
 }
 
-/// <summary>What the teacher chose in the departure dialog (M5, D-57 item 3).</summary>
-public enum DepartureChoice
-{
-    Stay = 0,
-    Leave = 1,
-    Wait = 2,
-}
-
 /// <summary>
 /// <i>Leave {lab}?</i> — the <see cref="DepartureReport"/> in words: every running job with
 /// its fate, queued jobs, uploads, probations and wakes; then <i>Stay</i>, <i>Wait for N

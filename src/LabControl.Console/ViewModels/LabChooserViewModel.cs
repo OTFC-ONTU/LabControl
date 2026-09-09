@@ -168,7 +168,7 @@ public sealed partial class LabChooserViewModel : ObservableObject
     /// <summary>An activation is under way: buttons wait, the list stays.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsBusy))]
-    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand), nameof(AddLabsCommand), nameof(CreateLabCommand), nameof(AuthorizeCommand), nameof(RenewCertificateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand), nameof(AddLabsCommand), nameof(CreateLabCommand), nameof(AuthorizeCommand), nameof(AuthorizeAllCommand), nameof(RenewCertificateCommand))]
     public partial bool IsActivating { get; set; }
 
     /// <summary>
@@ -179,7 +179,7 @@ public sealed partial class LabChooserViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsBusy))]
-    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand), nameof(AddLabsCommand), nameof(CreateLabCommand), nameof(AuthorizeCommand), nameof(RenewCertificateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCommand), nameof(RemoveCommand), nameof(AddLabsCommand), nameof(CreateLabCommand), nameof(AuthorizeCommand), nameof(AuthorizeAllCommand), nameof(RenewCertificateCommand))]
     public partial bool IsBusyWithFiles { get; set; }
 
     /// <summary>The chooser is working: an activation, an import batch or the create wizard.</summary>
@@ -214,6 +214,20 @@ public sealed partial class LabChooserViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool HasLabs { get; set; }
+
+    /// <summary>
+    /// How many saved labs still need this device authorized (or renewed): what
+    /// <i>Authorize all…</i> would write requests for in one gesture (M5, "one batched
+    /// onboarding workflow"). Zero hides the button.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingAuthorizations), nameof(AuthorizeAllLabel))]
+    [NotifyCanExecuteChangedFor(nameof(AuthorizeAllCommand))]
+    public partial int PendingAuthorizations { get; set; }
+
+    public bool HasPendingAuthorizations => PendingAuthorizations > 0;
+
+    public string AuthorizeAllLabel => Strings.Format("Chooser.AuthorizeAll", PendingAuthorizations);
 
     /// <summary>The lab whose last activation failed: <i>Retry</i> opens it again, whatever row is selected.</summary>
     [ObservableProperty]
@@ -252,6 +266,7 @@ public sealed partial class LabChooserViewModel : ObservableObject
         }
 
         HasLabs = Labs.Count > 0;
+        PendingAuthorizations = Imports.Devices.NeedingAuthorization(now).Count;
         Selected = Labs.FirstOrDefault(l => string.Equals(l.LabId, selectedId, StringComparison.OrdinalIgnoreCase))
                    ?? Labs.FirstOrDefault(l => l.IsHighlighted)
                    ?? Labs.FirstOrDefault();
@@ -329,6 +344,8 @@ public sealed partial class LabChooserViewModel : ObservableObject
     private bool CanAuthorize => !IsBusy && Selected is { CanAuthorize: true };
 
     private bool CanRenewCertificate => !IsBusy && Selected is { CanRenewCertificate: true };
+
+    private bool CanAuthorizeAll => !IsBusy && PendingAuthorizations > 0;
 
     /// <summary>Open (button, double-click, Enter): the selected lab becomes the active one; the app shows the main window on <see cref="ActivationState.Active"/>.</summary>
     [RelayCommand(CanExecute = nameof(CanOpen))]
@@ -415,6 +432,46 @@ public sealed partial class LabChooserViewModel : ObservableObject
         }
 
         Refresh();
+    }
+
+    /// <summary>
+    /// <i>Authorize all…</i> (M5, the batched onboarding of the acceptance criteria): one
+    /// folder, one gesture, one request file per lab that still needs authorization or
+    /// renewal. A lab that needs neither is skipped; a lab whose request cannot be written
+    /// fails alone and is named in the results.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAuthorizeAll))]
+    private async Task AuthorizeAllAsync()
+    {
+        if (IsBusy || PendingAuthorizations == 0)
+        {
+            return;
+        }
+
+        EnterFileFlow();
+        try
+        {
+            var folder = await _dialogs.PickFolderAsync(Strings.Get("Chooser.AuthorizeAllTitle"));
+            if (folder is null)
+            {
+                return;
+            }
+
+            var results = await Task.Run(() => Imports.Devices.WriteRequests(folder, DateTimeOffset.UtcNow));
+            Error = string.Empty;
+            Status = results.Count == 0
+                ? Strings.Get("Chooser.AuthorizeAllNone")
+                : Strings.Format("Chooser.AuthorizeAllWritten", results.Count(r => r.Ok), folder);
+            Refresh();
+            if (results.Count > 0)
+            {
+                await _dialogs.ShowImportResultsAsync(results);
+            }
+        }
+        finally
+        {
+            LeaveFileFlow();
+        }
     }
 
     /// <summary>

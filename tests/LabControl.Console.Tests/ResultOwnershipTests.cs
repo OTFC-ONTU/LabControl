@@ -140,6 +140,84 @@ public sealed class ResultOwnershipTests
         }
     }
 
+    /// <summary>
+    /// M5 portion 8, finding F: events were the one thing a PC still handed to whoever linked
+    /// next. An event about a job now waits for the console that delivered that job, exactly
+    /// as its result does, so the next teacher in the room is never shown the previous
+    /// teacher's output — while a machine event, which is about the PC and not about anyone's
+    /// lesson, still reaches whoever is there to act on it.
+    /// </summary>
+    [Fact]
+    public async Task An_event_about_a_job_waits_for_the_console_that_delivered_it_while_a_machine_event_does_not()
+    {
+        const string lessonText = "the MacBook's job said this";
+        const string machineText = "the helper died on this PC";
+
+        var first = await TestConsole.CreateLabAsync("MacBook", port: 0);
+        var port = first.Port;
+        var firstInstance = first.Session.Instance.InstanceId;
+        var firstDirectory = first.Directory;
+        TestAgent? pc = null;
+        TestConsole? second = null;
+
+        try
+        {
+            pc = TestAgent.Install(first, 7, first.IssueCodes(1)[0]).Start();
+            Assert.True(await Wait.UntilAsync(() => pc.Link.State == LinkState.Linked));
+
+            var report = new TaskCompletionSource();
+            pc.Behaviour.OnJob = async job =>
+            {
+                await report.Task.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+                pc!.Link.ReportForJob(job.Id, Event.Types.Severity.Warning, "power.failed", lessonText);
+                pc.Link.Report(Event.Types.Severity.Error, "session.helper_exited", machineText);
+                return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = "done" };
+            };
+
+            var script = SaveScript(first, "long", "Start-Sleep 60\n");
+            var job = first.Session.RunScript([pc.AgentId], script).Single();
+            Assert.True(await Wait.UntilAsync(() => pc.Behaviour.JobsRun.Count == 1));
+            Assert.Equal(firstInstance, pc.Link.DeliveringInstanceOf(job.Id));
+
+            // The MacBook leaves and the other teacher machine of the same lab takes the room.
+            await first.Session.DisposeAsync();
+            Assert.True(await Wait.UntilAsync(() => pc.Link.State != LinkState.Linked));
+            second = await TestConsole.JoinLabAsync(first, "Lab PC", port: port);
+            Assert.True(await Wait.UntilAsync(() => second!.Session.IsLinked(pc.AgentId), TimeSpan.FromSeconds(20)));
+            Assert.NotEqual(firstInstance, second.Session.Instance.InstanceId);
+
+            // Both events are produced now, under the second teacher's link.
+            report.SetResult();
+            Assert.True(await Wait.UntilAsync(() => second!.Session.Events.Recent.Any(e => e.Message.Contains(machineText, StringComparison.Ordinal)), TimeSpan.FromSeconds(15)));
+            await Task.Delay(500, Ct);
+            Assert.DoesNotContain(second.Session.Events.Recent, e => e.Message.Contains(lessonText, StringComparison.Ordinal));
+            Assert.DoesNotContain(second.Session.Events.Recent, e => e.Code == "power.failed");
+
+            // The MacBook comes back on the same port and is handed what was kept for it.
+            await second.Session.DisposeAsync();
+            Assert.True(await Wait.UntilAsync(() => pc.Link.State != LinkState.Linked));
+
+            await using var again = Reopen(firstDirectory, port);
+            await again.StartAsync();
+            Assert.True(await Wait.UntilAsync(() => again.Events.Recent.Any(e => e.Message.Contains(lessonText, StringComparison.Ordinal)), TimeSpan.FromSeconds(20)));
+            Assert.DoesNotContain(again.Events.Recent, e => e.Message.Contains(machineText, StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (pc is not null)
+            {
+                await pc.DisposeAsync();
+            }
+
+            if (second is not null)
+            {
+                await second.DisposeAsync();
+            }
+
+            await first.DisposeAsync();
+        }
+    }
+
     [Fact]
     public async Task A_restored_script_pulls_its_payload_from_the_new_session_and_completes()
     {

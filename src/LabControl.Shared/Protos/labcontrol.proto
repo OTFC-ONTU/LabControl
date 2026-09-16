@@ -84,6 +84,7 @@ message AgentMessage {
     ExamState    exam_state    = 9;
     RevocationState revocation_state = 10;  // sent right after Hello (D-21)
     InternetState   internet_state   = 11;  // on every policy change and service start (D-22)
+    OverlayState    overlay_state    = 12;  // what the PC shows, re-sent after Welcome (M6, D-70)
   }
 }
 
@@ -309,8 +310,27 @@ message Overlay {
     BROADCAST_START  = 3;
     BROADCAST_STOP   = 4;
   }
-  Kind   kind    = 1;
-  string message = 2;
+  Kind   kind            = 1;
+  string message         = 2;
+  string session_id      = 3;  // M6: one per lock, so a re-sent LOCK is the same lock
+  int64  until_unix      = 4;  // M6: 0 = until lifted; the agent lifts it here on its own clock
+  int64  hard_limit_unix = 5;  // M6: a proposal; the agent clamps it to LockHardLimit and reports what it holds
+}
+
+// Agent -> console (and helper -> service): what the PC is actually showing, sent on every
+// change, after every Welcome, and as the answer to a refused Overlay (M6, D-70). `kind` is
+// what is on the screen now -- LOCK, BROADCAST_START, or KIND_UNSPECIFIED for nothing -- and
+// never echoes a request that was not applied.
+message OverlayState {
+  Overlay.Kind kind         = 1;
+  string session_id         = 2;
+  int64  since_unix         = 3;
+  int64  until_unix         = 4;
+  int64  hard_limit_unix    = 5;  // the limit the agent holds, after its own clamp
+  bool   input_blocked      = 6;  // the low-level hooks are in place (or BlockInput, see reason)
+  string reason             = 7;  // why input is not blocked, or which fallback is in use; empty when all is well
+  string set_by_instance    = 8;  // the console instance whose Overlay this is
+  string problem            = 9;  // why an Overlay was refused or could not be applied; empty otherwise
 }
 
 // ---------------------------------------------------------------------------
@@ -466,7 +486,7 @@ message ServiceMessage {
     Ping         ping          = 1;  // the helper answers with a HelperStatus
     VideoControl video_control = 2;  // M3
     Input        input         = 3;  // M3
-    Overlay      overlay       = 4;  // M5
+    Overlay      overlay       = 4;  // M6: LOCK / UNLOCK; re-asserted to every fresh helper
   }
 }
 
@@ -477,6 +497,7 @@ message HelperMessage {
     HelperStatus status       = 2;  // every HelperStatusInterval and on every Ping
     VideoFrame   video_frame  = 3;  // M3
     Event        event        = 4;  // relayed to the console as-is
+    OverlayState overlay_state = 5;  // M6: what the helper shows and whether its hooks hold
   }
 }
 

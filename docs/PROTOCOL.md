@@ -555,6 +555,59 @@ The console shows the reason under the picture. An agent from before portion 3 l
 message and ignores it; the console greys *Control* out for an outdated agent, a PC with no
 interactive session and a PC whose helper is down.
 
+## Overlay (lock screen; M6 portion 1, `D-69`, `D-70`)
+
+```
+Overlay { kind: LOCK | UNLOCK | BROADCAST_START | BROADCAST_STOP, message,
+          session_id, until_unix, hard_limit_unix }                  console → agent
+OverlayState { kind, session_id, since_unix, until_unix, hard_limit_unix,
+               input_blocked, reason, set_by_instance, problem }     agent → console
+```
+
+`Overlay` is on the `Link` stream like `Input`. `LOCK` shows the message full screen on
+the PC and blocks the student's input; `UNLOCK` lifts it. `session_id` is stable per lock,
+so a re-sent `LOCK` re-states the same lock rather than starting a second one;
+`until_unix` is when the console wants it to end (0 = until lifted); `hard_limit_unix` is
+a **proposal** — the agent clamps it to `min(proposed, now + Defaults.LockHardLimit)`
+(1 h, owner decision) on its own clock, 0 meaning "none given" and yielding the ceiling,
+and reports what it actually holds. `BROADCAST_START` / `BROADCAST_STOP` belong to
+portion 2 (`D-71`) and are answered with a `problem` until it lands.
+
+**What the PC answers.** `OverlayState`, on every change, after every `Welcome` (the
+latest one, re-sent like `SessionState`), and as the answer to a refused or failed
+`Overlay`. `kind` is what is **on the screen now** — `LOCK`, `BROADCAST_START`, or
+`KIND_UNSPECIFIED` for nothing — never an echo of a request that was not applied;
+`hard_limit_unix` is the clamped limit the agent holds; `input_blocked` says whether the
+helper's low-level hooks are in place; `reason` names the gap when they are not (no
+helper in the session yet, `BlockInput` fallback in use); `set_by_instance` is the
+validated instance id of the console that set it; `problem` is why an `Overlay` was
+refused or could not be applied, empty otherwise.
+
+**Who may send it.** The ownership gate (`D-69`) is judged in the agent's read loop —
+the same loop that merges `RevocationState` — *before* the enforcer sees the message: the
+link must be bound to a validated console instance (it fails closed when there is none),
+and that console's leaf serial and `instance:` id must not be revoked. A refusal answers
+`OverlayState { kind: KIND_UNSPECIFIED, problem }` and does not touch the enforcer's
+latest state. Any console of the same lab may `UNLOCK` a lock it can see, including one
+that took the PC over (owner decision 4); the console shows whose lock it is from
+`set_by_instance`. A `teacher`-access console (`D-56`) may lock and unlock: only
+`self_update` and `rekey` are role-gated.
+
+**How it ends.** On the PC's own clock (`D-16`): at `until_unix`, at the clamped hard
+limit, or on `UNLOCK` — never on lab departure (a lock has its own limit and the teacher
+who set it may be back in a minute). The agent reports `overlay.expired` when it lifts a
+lock itself. The lock is persisted in `policy.json` (`D-69`): after a reboot the agent
+restores the machine first, then re-applies the lock only if it is still within its
+limits, re-clamping the stored hard limit against `LockHardLimit` again. Ctrl+Alt+Del
+cannot be blocked by design; the picture says so.
+
+**Events.** `policy.reapplied` (a lock came back after a restart), `policy.apply_failed`
+(the machine could not show it: no interactive session, no helper), `policy.restore_failed`
+(a lift failed; the lock is kept and retried), `policy.unreadable` (the saved policy file
+was torn, foreign or newer; nothing re-applied), `policy.busy` (another restore or apply
+held the policy mutex), `overlay.expired`. An agent from before M6 logs the message and
+ignores it; the console greys *Lock* out for an outdated agent.
+
 ## Broadcast (teacher → students)
 
 Console captures its own screen into the same `VideoFrame` format and sends it in
@@ -580,8 +633,8 @@ one implementation both sides use.
 **Envelopes.**
 
 ```
-ServiceMessage { oneof: Ping | VideoControl | Input | Overlay }          service → helper
-HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event } helper → service
+ServiceMessage { oneof: Ping | VideoControl | Input | Overlay }                        service → helper
+HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
 HelperHello  { session_id, process_id, version }         first message after connecting
 HelperStatus { input_desktop, screen_width, screen_height, uptime_ms }
@@ -597,7 +650,21 @@ helper from a previous service instance, or an impostor). The service answers wi
 prompt. A helper silent for `HelperSilenceTimeout` (10 s) is killed and restarted; an
 `Event` from the helper is relayed to the console unchanged. When the pipe closes the helper
 exits at once; when the helper exits the service respawns it (D-30). `Overlay` is answered
-with a `session.not_in_this_build` warning until M6.
+with a `session.not_in_this_build` warning until the M6 helper overlay lands.
+
+**Overlay over the pipe (M6 portion 1, `D-70`).** The service is the policy owner: it
+judges the ownership gate, keeps the lock in `policy.json`, clamps its hard limit and ends
+it on its own clock; the helper only shows it. Every `Overlay` the journal applied is
+written down the pipe as it is, and the service **re-asserts the current lock to every
+freshly connected helper** right after the `Ping` — `D-30` restarts the helper at logon and
+logoff, so a lock would otherwise vanish at the logon screen — the same way it re-sends
+the current `VideoControl`. The helper answers with `HelperMessage.overlay_state`: `kind`
+(what it shows), `input_blocked` (its `WH_KEYBOARD_LL` / `WH_MOUSE_LL` hooks are in
+place) and `reason` (`BlockInput` fallback, no input desktop, …); the service merges
+those two fields into the `OverlayState` it sends the console and treats a helper that
+shows nothing while a lock is held as its cue to re-assert. Injected input
+(`LLKHF_INJECTED` / `LLMHF_INJECTED`) passes the hooks, so the teacher's remote control
+works under a lock.
 
 **Input over the pipe (M3 portion 3, `D-36`).** Every `Input` from the console except
 `CTRL_ALT_DEL` is written down the pipe as it is (fire-and-forget, like the controls); the

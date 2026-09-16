@@ -8,6 +8,7 @@ using Grpc.Core;
 using LabControl.Shared.Discovery;
 using LabControl.Shared.Identity;
 using LabControl.Shared.Persistence;
+using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
@@ -75,6 +76,7 @@ public sealed partial class AgentLink : IAsyncDisposable
     private ChannelWriter<AgentMessage>? _outgoing;
     private AgentService.AgentServiceClient? _client;
     private SessionState? _latestSessionState;
+    private OverlayState? _latestOverlayState;
     private VideoUplink? _video;
     private VideoControl? _videoControl;
 
@@ -392,6 +394,46 @@ public sealed partial class AgentLink : IAsyncDisposable
             lock (_gateLock)
             {
                 return _latestSessionState;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ overlay (M6 portion 1)
+
+    /// <summary>
+    /// Raised with every <c>Overlay</c> the ownership gate let through (PROTOCOL "Overlay",
+    /// D-69), on the link's read thread, with the validated instance id of the console that
+    /// sent it — the id every session records as <c>set_by_instance</c>. Like
+    /// <see cref="InputReceived"/>: hand it on without waiting; the enforcer answers with
+    /// <see cref="PublishOverlayState"/> when it knows what the PC shows.
+    /// </summary>
+    public event Action<Overlay, string>? OverlayReceived;
+
+    /// <summary>
+    /// Tells the console what the PC actually shows (M6, D-70). Sent at once while linked;
+    /// the latest state is re-sent right after every <c>Welcome</c>, like the session state,
+    /// so a console that (re)connects sees a lock that is up without waiting for a change.
+    /// This is the enforcer's truth: a refusal at the gate answers on the wire but never
+    /// overwrites it.
+    /// </summary>
+    public void PublishOverlayState(OverlayState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        lock (_gateLock)
+        {
+            _latestOverlayState = state;
+            _outgoing?.TryWrite(new AgentMessage { OverlayState = state });
+        }
+    }
+
+    /// <summary>The last state given to <see cref="PublishOverlayState"/>; <c>null</c> until the enforcer said anything.</summary>
+    public OverlayState? LatestOverlayState
+    {
+        get
+        {
+            lock (_gateLock)
+            {
+                return _latestOverlayState;
             }
         }
     }
@@ -766,6 +808,11 @@ public sealed partial class AgentLink : IAsyncDisposable
                     outgoing.Writer.TryWrite(new AgentMessage { SessionState = sessionState });
                 }
 
+                if (_latestOverlayState is { } overlayState)
+                {
+                    outgoing.Writer.TryWrite(new AgentMessage { OverlayState = overlayState });
+                }
+
                 // Events wait like results do (M5 portion 8): one bound to a console goes only
                 // to that console, and stays queued for it otherwise. An unbound event is
                 // about the machine and goes to whoever linked.
@@ -1012,6 +1059,10 @@ public sealed partial class AgentLink : IAsyncDisposable
                 DeliverInput(message.Input);
                 break;
 
+            case ConsoleMessage.PayloadOneofCase.Overlay:
+                await DeliverOverlayAsync(message.Overlay, outgoing, token);
+                break;
+
             default:
                 // A message this build does not know is logged and ignored, never fatal
                 // (PROTOCOL, "Versioning").
@@ -1069,6 +1120,48 @@ public sealed partial class AgentLink : IAsyncDisposable
         catch (Exception ex)
         {
             _log.LogWarning(ex, "{Pc}: the input handler failed on {Kind}: {Message}", Name, input.Kind, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// The ownership gate (M6, D-69): judged here, on the read loop that merges
+    /// <c>RevocationState</c>, <b>before</b> the enforcer sees the message. It fails closed
+    /// when the link is not bound to a validated console — unlike
+    /// <see cref="LeaveIfConsoleRevoked"/>, which does nothing then, because leaving a link
+    /// that is already gone is harmless and locking a screen for nobody is not. A refusal
+    /// answers <c>OverlayState</c> with <c>problem</c> set and <c>kind</c> unspecified — the
+    /// link does not know what the PC shows and must not echo a kind that is not showing —
+    /// and never touches the enforcer's latest state. The handler is fire-and-forget, like
+    /// input: its failure is logged, never the link's problem.
+    /// </summary>
+    private async Task DeliverOverlayAsync(Overlay overlay, ChannelWriter<AgentMessage> outgoing, CancellationToken token)
+    {
+        var instanceId = LinkedInstanceId;
+        var refusal = OwnershipGate.Refusal(instanceId, BoundInstanceId, _linkedConsoleSerial, _revocations);
+        if (refusal is not null || instanceId is null)
+        {
+            _log.LogWarning("{Pc}: overlay {Kind} refused — {Reason}", Name, overlay.Kind, refusal ?? PolicyEvents.RefusedUnbound);
+            await outgoing.WriteAsync(new AgentMessage
+            {
+                OverlayState = new OverlayState { Kind = Overlay.Types.Kind.Unspecified, Problem = refusal ?? PolicyEvents.RefusedUnbound },
+            }, token);
+            return;
+        }
+
+        var handler = OverlayReceived;
+        if (handler is null)
+        {
+            _log.LogDebug("{Pc}: overlay {Kind} arrived but nothing here shows overlays", Name, overlay.Kind);
+            return;
+        }
+
+        try
+        {
+            handler(overlay, instanceId);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "{Pc}: the overlay handler failed on {Kind}: {Message}", Name, overlay.Kind, ex.Message);
         }
     }
 

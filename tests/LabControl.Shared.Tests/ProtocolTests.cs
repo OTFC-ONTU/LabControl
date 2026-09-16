@@ -67,6 +67,39 @@ public class ProtocolTests
     }
 
     [Fact]
+    public void An_overlay_and_its_state_round_trip_and_an_old_overlay_still_parses()
+    {
+        // M6 portion 1 (D-70): Overlay gained session_id / until_unix / hard_limit_unix, and
+        // OverlayState is what the PC answers — on the link and up the helper's pipe.
+        var overlay = new Overlay { Kind = Overlay.Types.Kind.Lock, Message = "Дивіться на дошку", SessionId = "lock-1", UntilUnix = 1_800_000_600, HardLimitUnix = 1_800_003_600 };
+        var onTheLink = ConsoleMessage.Parser.ParseFrom(new ConsoleMessage { Overlay = overlay }.ToByteArray());
+        var onThePipe = ServiceMessage.Parser.ParseFrom(new ServiceMessage { Overlay = overlay }.ToByteArray());
+        Assert.Equal(overlay, onTheLink.Overlay);
+        Assert.Equal(overlay, onThePipe.Overlay);
+
+        var state = new OverlayState
+        {
+            Kind = Overlay.Types.Kind.Lock, SessionId = "lock-1", SinceUnix = 1_800_000_000, UntilUnix = 1_800_000_600, HardLimitUnix = 1_800_003_600,
+            InputBlocked = true, Reason = string.Empty, SetByInstance = "console-a", Problem = string.Empty,
+        };
+        var fromAgent = AgentMessage.Parser.ParseFrom(new AgentMessage { OverlayState = state }.ToByteArray());
+        var fromHelper = HelperMessage.Parser.ParseFrom(new HelperMessage { OverlayState = state }.ToByteArray());
+        Assert.Equal(AgentMessage.PayloadOneofCase.OverlayState, fromAgent.PayloadCase);
+        Assert.Equal(state, fromAgent.OverlayState);
+        Assert.Equal(state, fromHelper.OverlayState);
+
+        // An Overlay written before M6 — kind and message only, field numbers 1 and 2 — is
+        // read by this build with the new fields at their defaults.
+        var old = new Overlay { Kind = Overlay.Types.Kind.Lock, Message = "old" }.ToByteArray();
+        var parsed = Overlay.Parser.ParseFrom(old);
+        Assert.Equal(string.Empty, parsed.SessionId);
+        Assert.Equal(0, parsed.UntilUnix);
+        Assert.Equal(0, parsed.HardLimitUnix);
+        Assert.Equal(7, old.Length);                   // tag+varint for kind, tag+length+"old" for message: nothing else on the wire
+        Assert.Equal(old, parsed.ToByteArray());       // and this build writes the same bytes back while the new fields are unset
+    }
+
+    [Fact]
     public void Every_job_kind_in_the_documentation_exists_in_the_contract()
     {
         string[] documented =

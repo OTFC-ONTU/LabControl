@@ -2972,6 +2972,205 @@ desktop lifetime; a manual quit check on each desktop remains open, alongside th
 of M5's unverified Windows and Linux matrix. Implementation status is tracked in ROADMAP
 M5.
 
+## D-69 — One policy journal on the agent: restore first, unconditionally and without the document; the document only decides what is re-applied; a named mutex; `OnStop` restores; a watchdog task (M6 portion 1)
+
+Context (2026-09-16): M6 puts four things on a student PC that must never outlive the
+lesson — a lock, an exam, an internet policy, the exam's own internet policy — each with
+a hard limit past which the PC restores itself (`D-16`, `D-22`). The first M6 plan and its
+adversarial review settled how the agent keeps and recovers that state; this entry records
+the corrected result. The failure being designed against is a PC that comes back from a
+crash, a power cut or a service restart with the firewall still blocking, because whoever
+was going to restore it needed a file that was torn, foreign, from another build or
+half-written — and then refused to start.
+
+Decisions:
+
+1. **One journal, `policy.json`, schema 1, in the agent's data directory** (`Persistence/
+   PolicyDocument`, `Policy/ClassroomPolicy`). At most one of each: overlay session, exam
+   session, standalone internet session, exam internet session; plus the original machine
+   state each displaced — per-profile `DefaultOutboundAction`, per-interface DNS with its
+   DHCP-or-static origin, the owned firewall rules. Every session carries `since`, `until`
+   (0 = until lifted), the **clamped** `hard_limit`, and `set_by_instance` — the id in the
+   console leaf the TLS handshake validated (`D-57` item 4), never a claim. Displaced
+   settings are marked applied only after native read-back (the `D-47` discipline).
+   `lab_id`, `policy` and `displaced` are nullable in the document type on purpose: a
+   hand-edited or half-written file must be *refused*, not thrown at the service loop.
+
+2. **Restore first, unconditionally, before the document is opened.** Service start,
+   `agent.exe --restore-policy` and `OnStop` all run the same pass (`Policy/PolicyJournal`):
+   (0) read `FirewallEnabled` per profile — a disabled profile is "cannot enforce", never
+   "enforcing"; (1) put Windows defaults back without reading anything: every profile's
+   default outbound action to *Allow* first (a stale allow is harmless, a stale block is a
+   brick), then delete the owned rule group with the `agent.exe` exemption rule **last**,
+   DNS on any loopback-pointed interface back to DHCP, stop the resolver, delete the
+   watchdog task — every value written is the Windows default, so no journal is needed to
+   know it is right; the overlay needs no restore, it lives in a helper that has already
+   been restarted. (2) Only now read `policy.json`. The reader is a **delegate**, so a disk
+   error takes exactly the path a corrupt file takes: unreadable, newer schema, foreign lab,
+   any null member → `policy.unreadable`, nothing re-applied, **never a reason to refuse to
+   start**. (3) Refine the restore from the document — a static DNS list back exactly, a
+   profile that was genuinely block-all before the policy. **A failed refine keeps
+   `DisplacedSettings`** until a later restore confirms; the teacher's original values are
+   never discarded on failure. (4) Confirm by read-back; a failure is `policy.restore_failed`
+   with the machine left as open as possible, and `MachineOpen` is **false** if anything
+   failed — it is never reported true on a failed lift. (5) Only now the clock: re-apply
+   each session iff `now < until` (or `until == 0`) and `now < hard_limit`, **re-clamping
+   the stored hard limit against the agent's ceiling on every re-apply** — a hand-edited
+   limit thirty days out, or a document written before the RTC went back to 2001, comes
+   back at one hour from now, never at a far-future limit. A session the machine cannot
+   apply is dropped with `policy.apply_failed` (the document must not claim what is not
+   enforced); a lift that fails keeps the session so the next pass retries. (6) Save the
+   document, whatever happened. The brief unrestricted window between steps 1 and 5 is
+   deliberate: the PC comes back unrestricted before anything is re-applied.
+
+3. **Hard limits are the agent's, never the console's**: `min(proposed, now + ceiling)`,
+   a proposal of 0 or less meaning "none given" and yielding the ceiling, with no overflow
+   near `long.MaxValue`; the agent reports what it holds. Exam 4 h
+   (`Defaults.ExamHardLimit`), standalone internet 8 h (`InternetPolicyHardLimit`), the
+   exam's internet `min(ExamHardLimit, the exam's own)`, **lock 1 h** (`LockHardLimit`,
+   `D-70`), broadcast 30 min (`BroadcastHardLimit`, and it dies with its stream, `D-71`).
+
+4. **Every pass holds the kernel mutex `Global\LabControl.Policy`** (`Policy/PolicyMutex`,
+   `Defaults.PolicyMutexName`): the service and the watchdog task both start at boot, and
+   `JsonStore` protects the bytes of the file, not the decision one of them is making from
+   it. The wait is bounded (`PolicyMutexWait`, 30 s); the loser reports `policy.busy` and
+   does nothing rather than two passes restoring and re-applying over each other. An
+   abandoned mutex is taken over: the next pass restores first anyway, so nothing half-done
+   needs to be trusted.
+
+5. **`OnStop` is also a restore, and does not clear the document.** `sc failure` recovery
+   fires on abnormal exit only; a graceful `sc stop` would otherwise leave a whitelist in
+   force for hours. The document stays, so the next start re-applies whatever is still
+   within its limits.
+
+6. **A watchdog task while — and only while — a firewall or DNS policy is applied**: the
+   scheduled task `LabControl Policy Restore` (`Defaults.PolicyRestoreTaskName`) runs
+   `agent.exe --restore-policy` as SYSTEM at startup and once at `hard_limit + 5 min`
+   (`PolicyRestoreTaskGrace`); same mutex, same pass; deleted after a clean restore — the
+   `UpdateRecovery.Arm` pattern. It does not survive deletion of the binary, so the README
+   documents the two `netsh` lines rather than implying coverage. **`self_update` is
+   refused while a policy is applied**: the `agent.exe` allow rule is pinned to
+   `app\<version>\`, and a replaced binary would be the one program the firewall blocks.
+
+7. **The ownership gate** (`Policy/OwnershipGate`) for `Overlay`, `ExamMode` and
+   `InternetPolicy` is judged **before** the enforcer sees the message, on the same read
+   loop that merges `RevocationState`: the link must be bound to a validated console
+   instance and that console's leaf serial and `instance:` id must not be revoked. It
+   **fails closed** when `LinkedInstanceId` is null — unlike `LeaveIfConsoleRevoked`, whose
+   behaviour does not change, because leaving a link that is already gone is harmless and
+   locking a screen for nobody is not. A refusal answers `OverlayState` with `problem` set
+   and `kind` unspecified — the link does not know what the PC shows and must not echo a
+   kind that is not showing — and never overwrites the enforcer's latest state. Any
+   console of the same lab may end a policy it can see, including one that took the PC
+   over (owner decision 4, 2026-09-09), so the gate never compares the sender with
+   `set_by_instance`. When `LeaveIfConsoleRevoked` drops the link, an applied policy keeps
+   its own hard limit — never silently orphaned, never silently lifted.
+
+8. **The journal is pure over its collaborators** — an `IMachineState`, a reader delegate
+   and a writer delegate — so the whole of the state machine runs on the Mac against a
+   fake machine, and the Windows service, the simulator and the watchdog task drive one
+   implementation. Nothing in it throws: every machine call, read and write is wrapped and
+   becomes a `PolicyEvent` with a stable code (`Policy/PolicyEvents`); every message the
+   teacher reads is a resource in `PolicyStrings.resx`.
+
+Rejected: reading the document first and restoring from what it says (the failure mode is
+the one the milestone exists to prevent); a tolerant partial read of a damaged document (a
+half-read displaced-settings block would restore half the originals and lose the rest;
+`D-20` refuses the file and the unconditional restore has already made the loss harmless);
+discarding `DisplacedSettings` when the refine fails (Windows defaults are in place, but a
+teacher's static DNS would be gone for good); trusting the stored hard limit on re-apply
+(a moved clock or a hand edit yields a far-future limit and an unrestorable PC); a file
+lock instead of a kernel mutex (the service and the task are two processes and the lock
+must outlive a crash correctly, which a named mutex with abandonment semantics does and a
+file does not); making `self_update` wait out the policy instead of refusing (the refusal
+is one line in the console; a blocked `agent.exe` is a walk to the desk); ending a lock on
+lab departure (it has its own limit, and the teacher may be back in a minute).
+
+Validation (built on the Mac, 2026-09-16, M6 portion 1): `PolicyJournalTests` drive the
+pass against a recording fake — a reader that throws, one that returns garbage and one
+that returns nulls all restore first and report `policy.unreadable`; foreign lab, newer
+schema and `"displaced": null` re-apply nothing; expired sessions drop, valid ones return,
+`until == 0` and each of the two limits in turn end a session; a stored limit thirty days
+out and a clock moved back to 2001 both come back at one hour from now; a failed refine
+keeps the displaced settings, a failed lift keeps the session with `MachineOpen == false`;
+a machine that throws on one call and not another fails that call only; the document is
+saved after every pass. `ClassroomPolicyTests` cover the clamp including the overflow
+edge; `OwnershipGateTests` the four refusals. Not yet run anywhere but the Mac: the
+Windows `IMachineState`, the mutex against a real second process, and the watchdog task —
+those arrive with the rest of portion 1 (ROADMAP M6).
+
+## D-70 — The lock overlay: a raw Win32 window in the helper painted from one SkiaSharp bitmap; a lock has its own 1 h hard limit; the hooks run on a thread that does nothing else (M6 portion 1)
+
+Context (2026-09-16): the lock screen is the first visible M6 feature and the first thing
+the helper (`D-06`, `D-30`) draws rather than captures. It has to cover every monitor,
+block the student's keyboard and mouse without blocking the teacher's remote control, show
+Cyrillic, and never leave a PC locked because a laptop lid was closed.
+
+Decisions:
+
+1. **A lock is a session with its own hard limit of one hour** (`Defaults.LockHardLimit`,
+   owner decision 2026-09-09): a lock is "look at me" for minutes, not a lesson mode, so a
+   short ceiling means fast self-recovery. The agent clamps every `Overlay.hard_limit_unix`
+   to it (`D-69` item 3), re-clamps on every restart, ends the lock on its own clock at
+   `until` or the limit (`overlay.expired`), and **does not end it on lab departure** — the
+   teacher who set it may be back in a minute, and a lock that ended with every `Disconnect`
+   would be the only M6 policy that did. `LabCloseStep` therefore gains only a `Broadcast`
+   step in portion 2, not a lock step.
+
+2. **The picture is one BGRA bitmap the helper blits.** `Policy/OverlayText.Compose`
+   (SkiaSharp, already on every side for video) draws the title, the teacher's message,
+   the countdown, the PC's name and the one honest line — *Ctrl+Alt+Del still works* —
+   at the virtual desktop's size, so one window covers every monitor. Every string is a
+   resource in `OverlayStrings.resx`; the typeface is looked up per character through the
+   font manager, so Cyrillic renders wherever the default face lacks it. The helper
+   creates the window with `RegisterClassExW` / `CreateWindowExW(WS_EX_TOPMOST |
+   WS_EX_TOOLWINDOW, WS_POPUP)` on its own thread after `SetThreadDesktop` on the input
+   desktop (`D-35` item 3), and paints it with one `StretchDIBits` every
+   `Defaults.OverlayRepaintInterval` (1 s, the countdown's resolution).
+
+3. **The hooks run on a dedicated thread that does nothing but the hook.**
+   `WH_KEYBOARD_LL` and `WH_MOUSE_LL` swallow Alt+Tab, Alt+Esc, Ctrl+Esc, LWin/RWin, Alt+F4
+   and every mouse event, but pass anything flagged `LLKHF_INJECTED` / `LLMHF_INJECTED`, so
+   the teacher's `SendInput` remote control works under a lock. Windows silently unhooks a
+   low-level hook whose callback exceeds `LowLevelHooksTimeout` (300 ms by default), and
+   a JPEG decode or a blit on the same thread would do exactly that — one slow frame and
+   the lock is a picture the student can click through. So composing, decoding and painting
+   never share the hook thread. `BlockInput` is the **fallback only**, used when a hook
+   cannot be installed, and reported in `OverlayState.reason` so the console can show that
+   the lock is weaker than usual. Ctrl+Alt+Del is unblockable by design, and the picture
+   says so rather than pretending.
+
+4. **The service re-asserts the current lock to every freshly connected helper.** `D-30`
+   restarts the helper at logon and logoff, so the lock would vanish at the logon screen;
+   the service sends the current `Overlay` right after the `Ping`, as it re-sends the
+   current `VideoControl`, and a helper that reports `overlay_state` with nothing showing
+   while a lock is held is re-asserted. `OverlayState.reason` names the gap in between.
+
+5. **The wire is additive and outside the frozen subset** (PROTOCOL *Overlay*): `Overlay`
+   gains `session_id = 3`, `until_unix = 4`, `hard_limit_unix = 5`; the new `OverlayState`
+   is `AgentMessage.overlay_state = 12` and `HelperMessage.overlay_state = 5`; `Hello`,
+   `Heartbeat`, `Job{self_update}` and `JobResult` are untouched, and an `Overlay` written
+   before M6 parses with the new fields at their defaults. `AgentLink` raises
+   `OverlayReceived` in the shape of `InputReceived` — fire-and-forget on the read loop,
+   with the validated instance id — and re-sends the latest `OverlayState` after every
+   `Welcome`, like the session state.
+
+Rejected: an Avalonia or WPF window in the helper (a UI framework in a SYSTEM process on
+the input desktop, for one rectangle of text); a layered or DirectComposition window (more
+surface, no benefit for a static picture); ending the lock when the console leaves the lab
+(item 1); a longer ceiling (the owner's call); hooks on the window's own thread (item 3);
+`BlockInput` as the primary mechanism (it blocks the teacher's injected input too, and any
+process on the desktop can call it back off); `SetWindowsHookEx` from the service (a hook
+must live in a process on the desktop it hooks).
+
+Validation (built on the Mac, 2026-09-16): `OverlayTextTests` prove the picture is the
+screen's size in BGRA, that Cyrillic renders as something other than the background, and
+that the countdown text — and the picture — change at a second boundary;
+`ProtocolTests` round-trip `Overlay` and `OverlayState` on the link and the pipe and read
+a pre-M6 `Overlay` byte for byte; `PolicyJournalTests` cover the clamp to one hour and the
+re-assert. The Win32 window, the hooks and the injected-input pass-through are not yet
+written and can only be verified on a PC; they are the rest of portion 1 (ROADMAP M6).
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

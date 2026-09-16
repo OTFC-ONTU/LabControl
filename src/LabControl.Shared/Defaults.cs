@@ -886,6 +886,57 @@ public static class Defaults
     /// <summary>A screen that has delivered no first picture for this long after opening is reported once.</summary>
     public static readonly TimeSpan CaptureFirstFrameWarning = TimeSpan.FromSeconds(5);
 
+    // ---------------------------------------------------------------- classroom policy (M6)
+
+    /// <summary>
+    /// A lock screen may never outlive this, whatever the console asked for (owner decision,
+    /// D-70): a lock is "look at me" for minutes, not a lesson mode, so a console that vanishes
+    /// mid-lock leaves the PC usable again within the hour. The agent clamps every lock to it.
+    /// </summary>
+    public static readonly TimeSpan LockHardLimit = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// A broadcast may never outlive this either, and it dies with its stream (D-71, M6
+    /// portion 2); the ceiling only matters when the stream somehow stays up.
+    /// </summary>
+    public static readonly TimeSpan BroadcastHardLimit = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// <c>policy.json</c> beside <c>agent.json</c> (D-69): the sessions the agent enforces —
+    /// at most one overlay, one exam, one standalone internet policy, one exam internet
+    /// policy — and the original machine settings each displaced. Read only <i>after</i> the
+    /// machine has been restored to Windows defaults; it decides what is re-applied, never
+    /// what is restored.
+    /// </summary>
+    public const string PolicyFileName = "policy.json";
+
+    public const int PolicySchemaVersion = 1;
+
+    /// <summary>
+    /// The scheduled task that runs <see cref="PolicyRestoreSwitch"/> as SYSTEM at boot and
+    /// once at the policy's hard limit plus <see cref="PolicyRestoreTaskGrace"/>, armed only
+    /// while a firewall or DNS policy is applied and deleted after a clean restore (D-69).
+    /// </summary>
+    public const string PolicyRestoreTaskName = "LabControl Policy Restore";
+
+    /// <summary><c>agent.exe --restore-policy</c>: the same restore the service runs at start, from the watchdog task.</summary>
+    public const string PolicyRestoreSwitch = "--restore-policy";
+
+    public static readonly TimeSpan PolicyRestoreTaskGrace = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The kernel mutex the service, the watchdog task and <c>OnStop</c> all hold while they
+    /// restore or apply a policy: both the service and the task start at boot, and
+    /// <c>JsonStore</c> protects bytes, not decisions (D-69).
+    /// </summary>
+    public const string PolicyMutexName = @"Global\LabControl.Policy";
+
+    /// <summary>How long a holder waits for <see cref="PolicyMutexName"/> before it reports <c>policy.busy</c> and gives up.</summary>
+    public static readonly TimeSpan PolicyMutexWait = TimeSpan.FromSeconds(30);
+
+    /// <summary>The helper repaints the lock or countdown overlay this often; a countdown changes once a second.</summary>
+    public static readonly TimeSpan OverlayRepaintInterval = TimeSpan.FromSeconds(1);
+
     // ---------------------------------------------------------------- exam mode
 
     /// <summary>

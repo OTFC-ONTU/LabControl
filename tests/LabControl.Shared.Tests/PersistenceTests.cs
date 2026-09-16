@@ -194,6 +194,7 @@ public sealed class PersistenceTests
             LabFileDocument.Migrations,
             DeviceRequestDocument.Migrations,
             DeviceGrantDocument.Migrations,
+            PolicyDocument.Migrations,
         ];
 
         Assert.All(chains, chain => Assert.Equal(1, chain.CurrentVersion));
@@ -210,6 +211,56 @@ public sealed class PersistenceTests
         var enrollment = (JsonObject)JsonNode.Parse($"{{\"{Defaults.SchemaVersionFieldName}\":1,\"lab_id\":\"x\",\"codes\":[]}}")!;
         var enrollmentUpgraded = EnrollmentDocument.Migrations.Upgrade(Defaults.EnrollmentFileName, enrollment);
         Assert.Equal(2, enrollmentUpgraded[Defaults.SchemaVersionFieldName]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void The_policy_document_writes_its_version_first_and_round_trips_every_session_kind()
+    {
+        // M6, D-69: policy.json is read after the machine has been restored, by a build that
+        // may be older or newer than the one that wrote it, so it follows D-20 like the rest.
+        var document = new PolicyDocument
+        {
+            LabId = "lab",
+            SavedAtUnix = 1_800_000_000,
+            Policy = new LabControl.Shared.Policy.ClassroomPolicy
+            {
+                Overlay = new LabControl.Shared.Policy.OverlaySession { SessionId = "o", SetByInstance = "i", SinceUnix = 1, UntilUnix = 0, HardLimitUnix = 3_600, Message = "Дивіться" },
+                Exam = new LabControl.Shared.Policy.ExamSession { SessionId = "e", HardLimitUnix = 7_200, AllowedPrograms = { "idea64.exe" }, CollectFolder = "Work" },
+                Internet = new LabControl.Shared.Policy.InternetSession { SessionId = "i", Mode = LabControl.Shared.Protocol.InternetPolicy.Types.Mode.Whitelist, AllowedHosts = { "*.jetbrains.com" }, HardLimitUnix = 28_800 },
+                Displaced = new LabControl.Shared.Policy.DisplacedSettings
+                {
+                    ProfileDefaultOutbound = { ["private"] = "allow" },
+                    Dns = { new LabControl.Shared.Policy.DisplacedDns { Interface = "Ethernet", Dhcp = false, Servers = { "10.0.0.1" } } },
+                    OwnedRules = { "LabControl Internet (agent)" },
+                    Applied = true,
+                },
+            },
+        };
+
+        var json = JsonStore.Serialize(document, PolicyDocument.Migrations);
+
+        Assert.StartsWith($"{{\n  \"{Defaults.SchemaVersionFieldName}\": {Defaults.PolicySchemaVersion}", json.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("\"set_by_instance\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"hard_limit_unix\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"kind\": \"lock\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"mode\": \"whitelist\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("is_empty", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("deadline", json, StringComparison.Ordinal);
+
+        var back = JsonStore.Parse<PolicyDocument>(json, Defaults.PolicyFileName, PolicyDocument.Migrations);
+        Assert.Equal("Дивіться", back.Policy!.Overlay!.Message);
+        Assert.Equal("idea64.exe", back.Policy.Exam!.AllowedPrograms[0]);
+        Assert.Equal("*.jetbrains.com", back.Policy.Internet!.AllowedHosts[0]);
+        Assert.Equal("10.0.0.1", back.Policy.Displaced!.Dns[0].Servers[0]);
+        Assert.True(back.Policy.Displaced.Applied);
+        Assert.Null(back.Policy.ExamInternet);
+
+        // The members the journal checks for null really are nullable: none of these throws.
+        var nulls = JsonStore.Parse<PolicyDocument>("{\"schema_version\":1,\"lab_id\":null,\"policy\":null}", Defaults.PolicyFileName, PolicyDocument.Migrations);
+        Assert.Null(nulls.LabId);
+        Assert.Null(nulls.Policy);
+        var displaced = JsonStore.Parse<PolicyDocument>("{\"schema_version\":1,\"lab_id\":\"lab\",\"policy\":{\"displaced\":null}}", Defaults.PolicyFileName, PolicyDocument.Migrations);
+        Assert.Null(displaced.Policy!.Displaced);
     }
 
     [Fact]

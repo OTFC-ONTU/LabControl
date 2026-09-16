@@ -506,6 +506,13 @@ exit 0
   <data name="Lock.ByThisConsole" xml:space="preserve"><value>this console</value></data>
   <data name="Lock.ByUnknown" xml:space="preserve"><value>another console</value></data>
   <data name="Lock.InputNotBlocked" xml:space="preserve"><value>the helper's input hooks are not in place</value></data>
+  <data name="Overlay.helper_down" xml:space="preserve"><value>no session helper is connected on the PC</value></data>
+  <data name="Overlay.no_session" xml:space="preserve"><value>nobody is logged on to the PC</value></data>
+  <data name="Overlay.not_shown_yet" xml:space="preserve"><value>the PC has not shown the lock yet</value></data>
+  <data name="Overlay.window_failed" xml:space="preserve"><value>the lock picture could not be shown on the PC</value></data>
+  <data name="Overlay.hook_refused" xml:space="preserve"><value>the input hooks could not be installed</value></data>
+  <data name="Overlay.blockinput_fallback" xml:space="preserve"><value>BlockInput is in use instead, which also blocks remote control</value></data>
+  <data name="Overlay.input_open" xml:space="preserve"><value>the student's input is NOT blocked</value></data>
   <data name="Lock.Title" xml:space="preserve"><value>Lock screens</value></data>
   <data name="Lock.Targets" xml:space="preserve"><value>Lock the screens of {0} PC(s)</value></data>
   <data name="Lock.MessageLabel" xml:space="preserve"><value>Message shown on the student screens</value></data>

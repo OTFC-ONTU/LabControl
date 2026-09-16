@@ -310,11 +310,11 @@ message Overlay {
     BROADCAST_START  = 3;
     BROADCAST_STOP   = 4;
   }
-  Kind   kind            = 1;
-  string message         = 2;
-  string session_id      = 3;  // M6: one per lock, so a re-sent LOCK is the same lock
-  int64  until_unix      = 4;  // M6: 0 = until lifted; the agent lifts it here on its own clock
-  int64  hard_limit_unix = 5;  // M6: a proposal; the agent clamps it to LockHardLimit and reports what it holds
+  Kind   kind               = 1;
+  string message            = 2;
+  string session_id         = 3;  // M6: one per lock, so a re-sent LOCK is the same lock
+  int64  until_seconds      = 4;  // M6: how long from arrival, a duration -- the agent stamps it on ITS clock (no NTP in the lab); 0 = until lifted; negative = refused
+  int64  hard_limit_seconds = 5;  // M6: a proposed duration; the agent clamps it to LockHardLimit on its own clock and reports what it holds; <= 0 = the ceiling
 }
 
 // Agent -> console (and helper -> service): what the PC is actually showing, sent on every
@@ -324,13 +324,14 @@ message Overlay {
 message OverlayState {
   Overlay.Kind kind         = 1;
   string session_id         = 2;
-  int64  since_unix         = 3;
-  int64  until_unix         = 4;
+  int64  since_unix         = 3;  // the PC's own clock, as are the two below
+  int64  until_unix         = 4;  // 0 = until lifted
   int64  hard_limit_unix    = 5;  // the limit the agent holds, after its own clamp
-  bool   input_blocked      = 6;  // the low-level hooks are in place (or BlockInput, see reason)
-  string reason             = 7;  // why input is not blocked, or which fallback is in use; empty when all is well
+  bool   input_blocked      = 6;  // the hooks were installed by the most recent re-arm (never BlockInput, see reason)
+  string reason             = 7;  // stable codes (overlay.helper_down, overlay.hook_refused, ...), space-separated; empty when all is well
   string set_by_instance    = 8;  // the console instance whose Overlay this is
   string problem            = 9;  // why an Overlay was refused or could not be applied; empty otherwise
+  int64  remaining_seconds  = 10; // seconds until the PC lifts it by itself, as of sending; the console's countdown never reads the PC's clock
 }
 
 // ---------------------------------------------------------------------------

@@ -37,7 +37,8 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     private string? _previousVersion;
 
-    public FakeMachine(DirectoryAgentStore store, FailureSpec? failure, ILogger log)
+    /// <param name="policyMutexWait">How long a policy pass waits for this PC's mutex; the product default when <c>null</c> — a test that holds the mutex on purpose passes a short one.</param>
+    public FakeMachine(DirectoryAgentStore store, FailureSpec? failure, ILogger log, TimeSpan? policyMutexWait = null)
     {
         _store = store;
         _failure = failure;
@@ -69,7 +70,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         // per PC so thirty of them in one process never queue behind one another.
         _machineState = new FakeMachineState(() => _desktop);
         _policy = new PolicyEnforcer(Link, _machineState, store.Directory, store.Config.LabId, log,
-            mutexName: Defaults.PolicyMutexName + "." + store.Config.AgentId.Replace("-", string.Empty, StringComparison.Ordinal));
+            mutexName: PolicyMutexName(store.Config.AgentId), mutexWait: policyMutexWait);
 
         // A real PC's supervisor publishes this at start and on every change (M2); the
         // simulator pretends the helper is up and the student is at the desk.
@@ -80,6 +81,9 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     /// <summary>The policy enforcer over this PC's <c>policy.json</c> (M6), for the status line and the tests.</summary>
     public PolicyEnforcer Policy => _policy;
+
+    /// <summary>The name of this PC's own policy mutex (per PC, so thirty in one process never queue behind one another); a test may hold it to make a pass report busy.</summary>
+    public static string PolicyMutexName(string agentId) => Defaults.PolicyMutexName + "." + agentId.Replace("-", string.Empty, StringComparison.Ordinal);
 
     /// <summary>The lock this PC holds right now, from its own journal; <c>null</c> when none.</summary>
     public OverlaySession? Lock => _machineState.Overlay;

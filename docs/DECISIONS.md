@@ -3218,29 +3218,91 @@ Decisions:
    while a lock is held is re-asserted. `OverlayState.reason` names the gap in between.
 
 5. **The wire is additive and outside the frozen subset** (PROTOCOL *Overlay*): `Overlay`
-   gains `session_id = 3`, `until_unix = 4`, `hard_limit_unix = 5`; the new `OverlayState`
-   is `AgentMessage.overlay_state = 12` and `HelperMessage.overlay_state = 5`; `Hello`,
-   `Heartbeat`, `Job{self_update}` and `JobResult` are untouched, and an `Overlay` written
-   before M6 parses with the new fields at their defaults. `AgentLink` raises
-   `OverlayReceived` in the shape of `InputReceived` — fire-and-forget on the read loop,
-   with the validated instance id — and re-sends the latest `OverlayState` after every
-   `Welcome`, like the session state.
+   gains `session_id = 3`, `until_seconds = 4`, `hard_limit_seconds = 5`; the new
+   `OverlayState` (fields 1–10, `remaining_seconds = 10`) is `AgentMessage.overlay_state = 12`
+   and `HelperMessage.overlay_state = 5`; `Hello`, `Heartbeat`, `Job{self_update}` and
+   `JobResult` are untouched, and an `Overlay` written before M6 parses with the new fields
+   at their defaults. `AgentLink` raises `OverlayReceived` in the shape of `InputReceived` —
+   fire-and-forget on the read loop, with the validated instance id — and re-sends the
+   latest `OverlayState` after every `Welcome`, like the session state.
+
+6. **The limits travel as durations; every absolute moment is minted on the PC's clock.**
+   The lab has no NTP (CLAUDE.md, hard requirement 9): a PC ten minutes ahead of the
+   console would refuse every "for 5 minutes" lock sent as an absolute `until`, and a PC
+   behind would hold it up to the hour. So `Overlay.until_seconds` (0 = until lifted,
+   negative = refused as already ended) and `Overlay.hard_limit_seconds` (≤ 0 = the
+   ceiling) are what the console sends, the agent stamps them onto its own clock at arrival
+   (`ClassroomPolicy.Add`, saturating) and clamps there, and `OverlayState` carries the
+   agent's stamps plus `remaining_seconds` so the console's badge and countdown never read
+   the PC's clock. The same durations go down the helper pipe (the service sends what is
+   left, the helper stamps it onto the same clock). This is `D-58`'s rule — time decisions
+   are the agent's — applied to the one message that had carried a console-clock stamp.
+
+7. **The window is purely visual; blocking is the hooks' job alone.** An opaque
+   `WS_POPUP` that takes the foreground would receive every injected mouse event
+   (hit-testing stops at the topmost opaque window) and every injected keystroke (they go
+   to the focus), so passing the injected flags through the hooks would be necessary and
+   not sufficient. The window is therefore created with `WS_EX_LAYERED | WS_EX_TRANSPARENT
+   | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW`, made opaque with
+   `SetLayeredWindowAttributes(alpha 255)`, shown with `SW_SHOWNOACTIVATE`, never given
+   `SetForegroundWindow`, answers `WM_MOUSEACTIVATE` with `MA_NOACTIVATE`, and is
+   re-asserted topmost every second with `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE |
+   SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)`. Hit-testing passes through it to the
+   student's desktop, so the teacher's injected input lands where it would without the
+   picture (DXGI still captures the composed desktop, so control under a lock is blind on
+   the console side — accepted: the teacher sees the lock picture and the pointer). The
+   student's physical input is swallowed by the hooks; the window blocks nothing and must
+   not. The rejection of "a layered window" below was about painting; hit-test
+   transparency on a top-level window is what `WS_EX_LAYERED | WS_EX_TRANSPARENT` is for.
+   `OverlayState.reason` is stable codes (`OverlayReasons`: `overlay.helper_down`,
+   `overlay.no_session`, `overlay.not_shown_yet`, `overlay.window_failed`,
+   `overlay.hook_refused`, `overlay.blockinput_fallback`, `overlay.input_open`), which the
+   console maps to words from `Strings.resx` the way `CaptureReasonText` does; the agent
+   side never puts teacher-facing text on the wire.
+
+8. **A hook is re-armed every second while blocking; `input_blocked` reports the last
+   install, never a handle.** Windows 7+ removes a low-level hook whose callback stalls past
+   `LowLevelHooksTimeout` (300 ms) *without telling the installer*, and the handle it
+   returned stays non-null — so a non-null handle proves nothing, and a hook that lived
+   from the first lock to the end of the session (through video encoding, GC pauses, a
+   debugger) would sooner or later be a hook that is gone while the tile still says
+   "blocked". The hooks now go up on `LOCK` and come down on `UNLOCK`, and while blocking a
+   thread timer on the hook thread (`Defaults.OverlayRepaintInterval`) installs a fresh
+   pair first and unhooks the old pair second, so no physical event slips through the swap;
+   an old hook that fails to unhook is the detection and is logged as such.
+   `HooksInPlace` is the outcome of the most recent install.
+
+9. **Nothing in `PolicyEnforcer` throws, and the service dials the link whatever it did.**
+   Every public entry point (`Start`, `Apply`, `ReassertOverlay`, `NoteEnforcement`, the
+   tick, `DisposeAsync`) runs inside one outer net that logs, reports `policy.failed` and
+   returns; a pass that throws under the mutex answers the console with a `problem` (like a
+   busy mutex) through `AgentLink.AnswerOverlayProblem`, which never replaces the latest
+   state; `AgentService` builds and starts the enforcer inside its own guard (`StartPolicy`),
+   so a corrupt `policy.json` — or a bug — costs a warning on the console, never an offline
+   PC; `agent.exe --restore-policy` exits 1 with the reason logged rather than with an
+   unhandled exception. The helper's `OverlayController.State()` is lock-free (a snapshot
+   of volatile fields) so the status loop and every `Ping` answer while `Apply` waits on
+   the window and hook threads, and the supervisor never ends a helper as silent for
+   showing a lock.
 
 Rejected: an Avalonia or WPF window in the helper (a UI framework in a SYSTEM process on
-the input desktop, for one rectangle of text); a layered or DirectComposition window (more
-surface, no benefit for a static picture); ending the lock when the console leaves the lab
+the input desktop, for one rectangle of text); a DirectComposition window (more surface,
+no benefit for a static picture — a *layered* window was rejected here for painting and is
+now used for hit-test transparency, item 7); ending the lock when the console leaves the lab
 (item 1); a longer ceiling (the owner's call); hooks on the window's own thread (item 3);
 `BlockInput` as the primary mechanism (it blocks the teacher's injected input too, and any
 process on the desktop can call it back off); `SetWindowsHookEx` from the service (a hook
-must live in a process on the desktop it hooks).
+must live in a process on the desktop it hooks); subtracting `AgentLink.ClockSkew` from a
+console-clock `until` (a measured offset drifts and needs `Welcome`; a duration needs
+nothing, item 6); hooks installed once and kept between locks (item 8).
 
 Validation (built on the Mac, 2026-09-16): `OverlayTextTests` prove the picture is the
 screen's size in BGRA, that Cyrillic renders as something other than the background, and
 that the countdown text — and the picture — change at a second boundary;
 `ProtocolTests` round-trip `Overlay` and `OverlayState` on the link and the pipe and read
-a pre-M6 `Overlay` byte for byte; `PolicyJournalTests` cover the clamp to one hour and the
-re-assert. The Win32 window, the hooks and the injected-input pass-through are not yet
-written and can only be verified on a PC; they are the rest of portion 1 (ROADMAP M6).
+a pre-M6 `Overlay` byte for byte; `PolicyJournalTests` cover the clamp to one hour, the
+re-assert and the stamping of durations on a shifted clock. The Win32 window, the hooks
+and the injected-input pass-through can only be verified on a PC (ROADMAP M6).
 
 Built, the rest of portion 1 (2026-09-16), with three departures from the text above.
 (1) The hooks swallow **every** physical keyboard event, not only the five combinations
@@ -3265,6 +3327,28 @@ PC's revocation set directly, because on the wire it makes the PC leave first �
 covers the window in between). Cross-compiled on the Mac (`dotnet publish -r win-x64` of
 the helper and the agent); **not yet run on Windows** — the window, the hooks and the
 injected-input pass-through wait for the VM.
+
+Reviewed again the same day (the second-half review) and fixed, items 6–9 above: the
+opaque foreground window that would have swallowed the teacher's remote control (a
+blocker; the window is now click-through and never activated), the silently lost hook
+reported as blocked (re-armed every second, reported from the last install), the
+console-clock `until` judged on a PC with no time source (durations on the wire), the
+enforcer's `Start` evaluating the journal outside every guard so a corrupt `policy.json`
+could take the PC offline until a service restart (nothing throws; the link dials
+regardless), the helper's `State()` sharing the lock `Apply` holds for up to ten seconds
+(lock-free snapshot; the supervisor would otherwise have ended the helper as silent), and
+English literals in `OverlayState.reason` (stable codes, words on the console). Also from
+the review's minor list: `WindowsMachineState.CurrentOverlay` (dead) removed, the badge's
+weakness line now refreshes on an `input_blocked`/`reason` change, `PeekMessage` creates
+the hook thread's queue before anything is posted to it. Tests after the fixes: 796 Shared
+and 241 Console — a lock that outlives the console's departure and ends at its own limit,
+a second console of the lab seeing whose lock it is and ending it (and the first seeing
+the second's), a torn `policy.json` and a machine whose every call throws still linking
+with `policy.unreadable` / `policy.restore_failed` on the console, `policy.busy` answered
+on the wire, and the skipped path for an unlinked or outdated PC. Left for later, noted:
+the stale-lock re-lift in the supervisor does not compare session ids (a one-status
+flicker at worst), a modifier held at `Block()` stays down in the OS until tapped, the
+window is recreated on every 3 s re-assert while creation keeps failing.
 
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 

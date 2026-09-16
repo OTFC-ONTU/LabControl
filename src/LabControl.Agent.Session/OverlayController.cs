@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using LabControl.Shared;
+using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 
@@ -8,11 +10,20 @@ namespace LabControl.Agent.Session;
 /// The helper's side of the lock (M6 portion 1, PROTOCOL "Overlay over the pipe"): owns the
 /// <see cref="OverlayWindow"/> and the <see cref="InputBlock"/>, applies every <c>Overlay</c>
 /// the service relays, and answers <c>HelperMessage.overlay_state</c> — what is on the
-/// screen now, whether the hooks hold, and the reason when something is weaker than it
-/// should be — on every change and with every status. The service is the policy owner: it
-/// decides what is shown and for how long; this only shows it. Requests are queued for a
-/// thread of their own, like input (D-36): creating the window and the hooks waits on their
-/// threads, and the pipe's read loop never waits on Windows. Nothing here throws out.
+/// screen now, whether the hooks hold, and the reason (stable <see cref="OverlayReasons"/>
+/// codes) when something is weaker than it should be — on every change and with every
+/// status. The service is the policy owner: it decides what is shown and for how long; this
+/// only shows it. Requests are queued for a thread of its own, like input (D-36): creating
+/// the window and the hooks waits on their threads, and the pipe's read loop never waits on
+/// Windows. Nothing here throws out.
+/// <para>
+/// The limits arrive as <b>durations</b> and are stamped onto this clock at arrival (D-70
+/// item 6) — the service is on the same machine, so the countdown here agrees with the
+/// journal's to the second. <see cref="State"/> is <b>lock-free</b>: the status loop and
+/// every <c>Ping</c> read it while <see cref="Apply"/> may be waiting up to ten seconds on
+/// the window and hook threads, and a status that waited that long would make the
+/// supervisor end the helper as silent (<see cref="Defaults.HelperSilenceTimeout"/>).
+/// </para>
 /// </summary>
 internal sealed class OverlayController : IDisposable
 {
@@ -22,10 +33,16 @@ internal sealed class OverlayController : IDisposable
     private readonly Lock _lock = new();
     private readonly BlockingCollection<Overlay> _queue = new(64);
     private readonly Thread _thread;
-    private OverlayWindow? _window;
-    private InputBlock? _block;
-    private Overlay? _current;
+
+    // Read by State() on any thread without the lock; written on the controller thread only.
+    // _current is assigned last in Show, so a state read mid-apply describes what was showing
+    // before, which is still the truth of the screen at that moment.
+    private volatile OverlayWindow? _window;
+    private volatile InputBlock? _block;
+    private volatile Overlay? _current;
     private long _sinceUnix;
+    private long _untilUnix;
+    private long _hardLimitUnix;
     private bool _disposed;
 
     /// <param name="report">Sends an <c>overlay_state</c> up the pipe, fire-and-forget.</param>
@@ -74,7 +91,7 @@ internal sealed class OverlayController : IDisposable
         }
     }
 
-    /// <summary>On the controller's own thread: shows or lifts, then reports.</summary>
+    /// <summary>On the controller's own thread: shows or lifts, then reports. The lock here is against <see cref="Dispose"/> only; <see cref="State"/> never takes it.</summary>
     internal void Apply(Overlay overlay)
     {
         lock (_lock)
@@ -111,38 +128,43 @@ internal sealed class OverlayController : IDisposable
         Report();
     }
 
-    /// <summary>The state as it stands, for the status loop and every Ping.</summary>
+    /// <summary>The state as it stands, for the status loop and every Ping — a snapshot of volatile fields, no lock, never waits.</summary>
     public OverlayState State()
     {
-        lock (_lock)
+        var current = _current;
+        if (current is null)
         {
-            if (_current is null)
-            {
-                return new OverlayState { Kind = Overlay.Types.Kind.Unspecified };
-            }
-
-            var reasons = new List<string>();
-            if (_window is { IsShowing: false })
-            {
-                reasons.Add(_window.Problem ?? "the overlay window is not up");
-            }
-
-            if (_block is { HooksInPlace: false })
-            {
-                reasons.Add(_block.Reason.Length > 0 ? _block.Reason : "the input hooks are not in place");
-            }
-
-            return new OverlayState
-            {
-                Kind = _window is { IsShowing: true } ? Overlay.Types.Kind.Lock : Overlay.Types.Kind.Unspecified,
-                SessionId = _current.SessionId,
-                SinceUnix = _sinceUnix,
-                UntilUnix = _current.UntilUnix,
-                HardLimitUnix = _current.HardLimitUnix,
-                InputBlocked = _block is { HooksInPlace: true },
-                Reason = string.Join("; ", reasons),
-            };
+            return new OverlayState { Kind = Overlay.Types.Kind.Unspecified };
         }
+
+        var window = _window;
+        var block = _block;
+        var showing = window is { IsShowing: true };
+        var hooks = block is { HooksInPlace: true };
+        var reasons = new List<string>(3);
+        if (!showing)
+        {
+            reasons.Add(OverlayReasons.WindowFailed);
+        }
+
+        if (!hooks)
+        {
+            reasons.AddRange(block is { Reason.Length: > 0 } ? OverlayReasons.Split(block.Reason) : [OverlayReasons.HookRefused]);
+        }
+
+        var until = Volatile.Read(ref _untilUnix);
+        var hardLimit = Volatile.Read(ref _hardLimitUnix);
+        return new OverlayState
+        {
+            Kind = showing ? Overlay.Types.Kind.Lock : Overlay.Types.Kind.Unspecified,
+            SessionId = current.SessionId,
+            SinceUnix = Volatile.Read(ref _sinceUnix),
+            UntilUnix = until,
+            HardLimitUnix = hardLimit,
+            RemainingSeconds = OverlayText.Remaining(until, hardLimit, DateTimeOffset.UtcNow.ToUnixTimeSeconds()) ?? 0,
+            InputBlocked = hooks,
+            Reason = OverlayReasons.Join(reasons),
+        };
     }
 
     public void Report()
@@ -159,31 +181,42 @@ internal sealed class OverlayController : IDisposable
 
     private void Show(Overlay overlay)
     {
-        var restated = _current is not null && _current.SessionId == overlay.SessionId;
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var restated = _current is { } current && current.SessionId == overlay.SessionId;
+
+        // Durations onto this clock. The service has already clamped the hard limit; the
+        // ceiling here is only a guard against a malformed message, since the service is
+        // what lifts the lock and this only counts down.
+        var ceiling = (long)Defaults.LockHardLimit.TotalSeconds;
+        var until = overlay.UntilSeconds > 0 ? now + overlay.UntilSeconds : 0;
+        var hardLimit = now + (overlay.HardLimitSeconds > 0 ? Math.Min(overlay.HardLimitSeconds, ceiling) : ceiling);
         if (!restated)
         {
-            _sinceUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            Volatile.Write(ref _sinceUnix, now);
         }
 
-        _current = overlay;
+        Volatile.Write(ref _untilUnix, until);
+        Volatile.Write(ref _hardLimitUnix, hardLimit);
 
         // The hooks first, so no click lands between the request and the picture.
-        _block ??= new InputBlock(_log);
-        _block.Block();
+        var block = _block ??= new InputBlock(_log);
+        block.Block();
 
-        if (_window is { IsShowing: true })
+        var window = _window;
+        if (window is { IsShowing: true })
         {
-            _window.Update(overlay.Message, overlay.UntilUnix, overlay.HardLimitUnix);
+            window.Update(overlay.Message, until, hardLimit);
         }
         else
         {
-            _window?.Dispose();
-            _window = new OverlayWindow(_log, overlay.Message, _pcName, overlay.UntilUnix, overlay.HardLimitUnix);
+            window?.Dispose();
+            _window = new OverlayWindow(_log, overlay.Message, _pcName, until, hardLimit);
         }
 
-        _log.LogInformation("lock {Session} {What}: until {Until}, hard limit {Limit}, hooks {Hooks}",
-            overlay.SessionId, restated ? "re-stated" : "shown", overlay.UntilUnix == 0 ? "lifted" : overlay.UntilUnix, overlay.HardLimitUnix,
-            _block.HooksInPlace ? "in place" : "NOT in place");
+        _current = overlay;
+        _log.LogInformation("lock {Session} {What}: until {Until}, hard limit {Limit}, hooks {Hooks}{Detail}",
+            overlay.SessionId, restated ? "re-stated" : "shown", until == 0 ? "lifted" : until, hardLimit,
+            block.HooksInPlace ? "in place" : "NOT in place", block.Detail.Length > 0 ? $" ({block.Detail})" : string.Empty);
     }
 
     private void Lift()
@@ -193,10 +226,10 @@ internal sealed class OverlayController : IDisposable
             return;
         }
 
+        _current = null;
         _block?.Unblock();
         _window?.Dispose();
         _window = null;
-        _current = null;
         _log.LogInformation("lock lifted");
     }
 

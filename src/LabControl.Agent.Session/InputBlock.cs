@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using LabControl.Shared;
+using LabControl.Shared.Policy;
 using Microsoft.Extensions.Logging;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -11,16 +13,23 @@ namespace LabControl.Agent.Session;
 /// The student's keyboard and mouse, switched off under a lock (M6 portion 1, D-70 item 3):
 /// a <c>WH_KEYBOARD_LL</c> and a <c>WH_MOUSE_LL</c> hook on a <b>dedicated thread that does
 /// nothing but pump them</b>. Windows silently unhooks a low-level hook whose callback
-/// exceeds <c>LowLevelHooksTimeout</c> (300 ms by default), and a JPEG decode or a blit on
-/// the same thread would do exactly that — so the callbacks here read one flag, test one
-/// bit and return. Every physical event is swallowed while blocking is on; anything flagged
-/// <c>LLKHF_INJECTED</c> / <c>LLMHF_INJECTED</c> passes, so the teacher's <c>SendInput</c>
-/// remote control still works under the lock. Ctrl+Alt+Del is unblockable by design and
-/// is not attempted.
+/// exceeds <c>LowLevelHooksTimeout</c> (300 ms by default) — without telling the installer,
+/// and the handle it returned stays non-null — so the callbacks here read one flag, test
+/// one bit and return, and the hooks are <b>re-armed on a timer</b> while blocking (every
+/// <see cref="Defaults.OverlayRepaintInterval"/>, D-70 item 8): a fresh pair is installed
+/// first and the old pair unhooked second, so no event passes in between, and
+/// <see cref="HooksInPlace"/> reports the outcome of the <i>most recent</i> install rather
+/// than the handles. The hooks go up on <see cref="Block"/> and come down on
+/// <see cref="Unblock"/>; between locks the helper's hook procedure is not in the student's
+/// input path at all. Every physical event is swallowed while blocking is on; anything
+/// flagged <c>LLKHF_INJECTED</c> / <c>LLMHF_INJECTED</c> passes, so the teacher's
+/// <c>SendInput</c> remote control still works under the lock. Ctrl+Alt+Del is unblockable
+/// by design and is not attempted.
 /// <para>
 /// <see cref="BlockInput"/> is the fallback only, when a hook cannot be installed: it blocks
 /// the teacher's injected input too, and any process on the desktop can call it back off, so
-/// the console is told in <see cref="Reason"/> that the lock is weaker than usual.
+/// the console is told in <see cref="Reason"/> (stable <see cref="OverlayReasons"/> codes)
+/// that the lock is weaker than usual; the Win32 detail goes to the log.
 /// </para>
 /// </summary>
 internal sealed class InputBlock : IDisposable
@@ -30,14 +39,25 @@ internal sealed class InputBlock : IDisposable
     private static readonly HOOKPROC MouseProc = OnMouse;
     private static volatile bool s_blocking;
 
+    private static readonly uint WmInstall = PInvoke.WM_USER + 11;
+    private static readonly uint WmUninstall = PInvoke.WM_USER + 12;
+
     private readonly ILogger _log;
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _ready = new(false);
+    private readonly ManualResetEventSlim _applied = new(false);
     private uint _threadId;
+
+    // Hook-thread state: only ever touched on the hook thread.
     private HHOOK _keyboard;
     private HHOOK _mouse;
-    private bool _blockInputFallback;
-    private string _reason = string.Empty;
+    private nuint _rearmTimer;
+
+    // What the rest of the helper reads, written by whichever thread decided it.
+    private volatile bool _hooksInstalled;
+    private volatile bool _blockInputFallback;
+    private volatile string _reason = string.Empty;
+    private volatile string _hookFailure = string.Empty;
     private bool _disposed;
 
     public InputBlock(ILogger log)
@@ -48,16 +68,23 @@ internal sealed class InputBlock : IDisposable
         _ready.Wait(TimeSpan.FromSeconds(5));
     }
 
-    /// <summary>True while every physical keyboard and mouse event is swallowed by the hooks (not the fallback).</summary>
-    public bool HooksInPlace => !_keyboard.IsNull && !_mouse.IsNull && s_blocking;
+    /// <summary>True while blocking and the most recent install put both hooks up — never inferred from a handle.</summary>
+    public bool HooksInPlace => s_blocking && _hooksInstalled;
 
     /// <summary>Input is blocked one way or the other: the hooks, or <c>BlockInput</c>.</summary>
-    public bool Blocking => s_blocking && (HooksInPlace || _blockInputFallback);
+    public bool Blocking => s_blocking && (_hooksInstalled || _blockInputFallback);
 
-    /// <summary>Why the block is weaker than the hooks would make it, for <c>OverlayState.reason</c>; empty when the hooks hold.</summary>
+    /// <summary><see cref="OverlayReasons"/> codes for <c>OverlayState.reason</c>, space-separated; empty when the hooks hold.</summary>
     public string Reason => _reason;
 
-    /// <summary>Starts swallowing physical input; installs the fallback if a hook is missing.</summary>
+    /// <summary>The Win32 words behind <see cref="Reason"/>, for the log; empty when the hooks hold.</summary>
+    public string Detail => _hookFailure;
+
+    /// <summary>
+    /// Starts swallowing physical input: installs the hooks on the hook thread and waits for
+    /// the outcome; installs the fallback if a hook is missing. Safe to call again for a
+    /// re-stated lock — the hooks are simply re-armed.
+    /// </summary>
     public void Block()
     {
         if (_disposed)
@@ -66,7 +93,13 @@ internal sealed class InputBlock : IDisposable
         }
 
         s_blocking = true;
-        if (!_keyboard.IsNull && !_mouse.IsNull)
+        if (!Request(WmInstall))
+        {
+            _hooksInstalled = false;
+            _hookFailure = "the hook thread did not answer";
+        }
+
+        if (_hooksInstalled)
         {
             if (_blockInputFallback)
             {
@@ -79,21 +112,19 @@ internal sealed class InputBlock : IDisposable
             return;
         }
 
-        var missing = _keyboard.IsNull && _mouse.IsNull ? "the keyboard and mouse hooks" : _keyboard.IsNull ? "the keyboard hook" : "the mouse hook";
-        if (TryBlockInput(true))
+        if (!_blockInputFallback && TryBlockInput(true))
         {
             _blockInputFallback = true;
-            _reason = $"{missing} could not be installed ({_hookFailure}); BlockInput is in use instead, which also blocks the teacher's remote control";
-        }
-        else
-        {
-            _reason = $"{missing} could not be installed ({_hookFailure}) and BlockInput failed too; the student's input is NOT blocked";
         }
 
-        _log.LogWarning("input block: {Reason}", _reason);
+        _reason = _blockInputFallback
+            ? OverlayReasons.Join([OverlayReasons.HookRefused, OverlayReasons.BlockInputFallback])
+            : OverlayReasons.Join([OverlayReasons.HookRefused, OverlayReasons.InputOpen]);
+        _log.LogWarning("input block: {Reason} ({Detail}); {Fallback}", _reason, _hookFailure,
+            _blockInputFallback ? "BlockInput is in use instead, which also blocks the teacher's remote control" : "BlockInput failed too; the student's input is NOT blocked");
     }
 
-    /// <summary>Lets input through again; the hooks stay installed for the next lock.</summary>
+    /// <summary>Lets input through again: the fallback is undone and the hooks come down; nothing of this stays in the input path.</summary>
     public void Unblock()
     {
         s_blocking = false;
@@ -103,35 +134,43 @@ internal sealed class InputBlock : IDisposable
             _blockInputFallback = false;
         }
 
+        Request(WmUninstall);
         _reason = string.Empty;
     }
 
-    private string _hookFailure = string.Empty;
+    /// <summary>Posts a request to the hook thread and waits for it to have been handled.</summary>
+    private bool Request(uint message)
+    {
+        if (_threadId == 0 || !_thread.IsAlive)
+        {
+            return false;
+        }
+
+        _applied.Reset();
+        if (!PInvoke.PostThreadMessage(_threadId, message, default, default))
+        {
+            _log.LogWarning("could not post to the hook thread: {Message}", new Win32Exception(Marshal.GetLastWin32Error()).Message);
+            return false;
+        }
+
+        return _applied.Wait(TimeSpan.FromSeconds(2));
+    }
+
+    // ------------------------------------------------------------------ the hook thread
 
     private void Run()
     {
         try
         {
             _threadId = PInvoke.GetCurrentThreadId();
-            var module = PInvoke.GetModuleHandle(default(PCWSTR));
-            _keyboard = PInvoke.SetWindowsHookEx(WINDOWS_HOOK_ID.WH_KEYBOARD_LL, KeyboardProc, module, 0);
-            if (_keyboard.IsNull)
-            {
-                _hookFailure = new Win32Exception(Marshal.GetLastWin32Error()).Message;
-                _log.LogWarning("WH_KEYBOARD_LL could not be installed: {Message}", _hookFailure);
-            }
-
-            _mouse = PInvoke.SetWindowsHookEx(WINDOWS_HOOK_ID.WH_MOUSE_LL, MouseProc, module, 0);
-            if (_mouse.IsNull)
-            {
-                _hookFailure = new Win32Exception(Marshal.GetLastWin32Error()).Message;
-                _log.LogWarning("WH_MOUSE_LL could not be installed: {Message}", _hookFailure);
-            }
+            // A thread has no message queue until it asks for one; PostThreadMessage to a
+            // thread without a queue fails with ERROR_INVALID_THREAD_ID.
+            PInvoke.PeekMessage(out _, HWND.Null, PInvoke.WM_USER, PInvoke.WM_USER, PEEK_MESSAGE_REMOVE_TYPE.PM_NOREMOVE);
         }
         catch (Exception ex)
         {
             _hookFailure = ex.Message;
-            _log.LogWarning(ex, "installing the input hooks failed: {Message}", ex.Message);
+            _log.LogWarning(ex, "the hook thread could not start: {Message}", ex.Message);
         }
         finally
         {
@@ -143,6 +182,33 @@ internal sealed class InputBlock : IDisposable
         {
             while (PInvoke.GetMessage(out var message, HWND.Null, 0, 0))
             {
+                if (message.hwnd.IsNull)
+                {
+                    if (message.message == WmInstall)
+                    {
+                        Install();
+                        _applied.Set();
+                        continue;
+                    }
+
+                    if (message.message == WmUninstall)
+                    {
+                        Uninstall();
+                        _applied.Set();
+                        continue;
+                    }
+
+                    if (message.message == PInvoke.WM_TIMER)
+                    {
+                        if (s_blocking)
+                        {
+                            Install();
+                        }
+
+                        continue;
+                    }
+                }
+
                 PInvoke.TranslateMessage(message);
                 PInvoke.DispatchMessage(message);
             }
@@ -155,8 +221,77 @@ internal sealed class InputBlock : IDisposable
         Uninstall();
     }
 
+    /// <summary>
+    /// On the hook thread: a fresh pair of hooks, the old pair unhooked only afterwards, so
+    /// no physical event slips through the swap. An old hook that Windows had already
+    /// removed fails to unhook — that is the detection, and it is logged as such.
+    /// </summary>
+    private void Install()
+    {
+        var module = PInvoke.GetModuleHandle(default(PCWSTR));
+        var failure = string.Empty;
+
+        var keyboard = PInvoke.SetWindowsHookEx(WINDOWS_HOOK_ID.WH_KEYBOARD_LL, KeyboardProc, module, 0);
+        if (keyboard.IsNull)
+        {
+            failure = new Win32Exception(Marshal.GetLastWin32Error()).Message;
+            _log.LogWarning("WH_KEYBOARD_LL could not be installed: {Message}", failure);
+        }
+        else
+        {
+            Replace(ref _keyboard, keyboard, "keyboard");
+        }
+
+        var mouse = PInvoke.SetWindowsHookEx(WINDOWS_HOOK_ID.WH_MOUSE_LL, MouseProc, module, 0);
+        if (mouse.IsNull)
+        {
+            failure = new Win32Exception(Marshal.GetLastWin32Error()).Message;
+            _log.LogWarning("WH_MOUSE_LL could not be installed: {Message}", failure);
+        }
+        else
+        {
+            Replace(ref _mouse, mouse, "mouse");
+        }
+
+        _hooksInstalled = !keyboard.IsNull && !mouse.IsNull;
+        _hookFailure = failure;
+
+        if (_rearmTimer == 0)
+        {
+            _rearmTimer = PInvoke.SetTimer(HWND.Null, 0, (uint)Defaults.OverlayRepaintInterval.TotalMilliseconds, null);
+            if (_rearmTimer == 0)
+            {
+                _log.LogWarning("the hook re-arm timer could not be started: {Message}", new Win32Exception(Marshal.GetLastWin32Error()).Message);
+            }
+        }
+    }
+
+    private void Replace(ref HHOOK slot, HHOOK fresh, string which)
+    {
+        var old = slot;
+        slot = fresh;
+        if (old.IsNull)
+        {
+            return;
+        }
+
+        if (!PInvoke.UnhookWindowsHookEx(old))
+        {
+            // Windows had already removed it — silently, after a callback that stalled — and
+            // the student's input was passing until this re-arm.
+            _log.LogWarning("the previous {Which} hook was no longer installed (Windows removed it: {Message}); re-armed", which, new Win32Exception(Marshal.GetLastWin32Error()).Message);
+        }
+    }
+
     private void Uninstall()
     {
+        _hooksInstalled = false;
+        if (_rearmTimer != 0)
+        {
+            PInvoke.KillTimer(HWND.Null, _rearmTimer);
+            _rearmTimer = 0;
+        }
+
         if (!_keyboard.IsNull)
         {
             PInvoke.UnhookWindowsHookEx(_keyboard);
@@ -242,5 +377,6 @@ internal sealed class InputBlock : IDisposable
         }
 
         _ready.Dispose();
+        _applied.Dispose();
     }
 }

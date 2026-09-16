@@ -291,19 +291,28 @@ wiring, `OverlayState` publishing) is driven by the Windows service (`WindowsMac
 freshly connected helper and merges the helper's `overlay_state` back), by the simulator
 (`FakeMachineState`, the lock drawn on `FakeScreen` so the mosaic shows it) and by
 `agent.exe --restore-policy`. The helper shows the lock with a raw topmost Win32 window
-(`OverlayWindow`, one `StretchDIBits` of the SkiaSharp bitmap, repainted every second) and
+(`OverlayWindow`, one `StretchDIBits` of the SkiaSharp bitmap, repainted every second;
+layered, click-through and never activated, so it is purely visual — `D-70` item 7) and
 `WH_KEYBOARD_LL`/`WH_MOUSE_LL` hooks on a thread that does nothing else (`InputBlock`,
-every physical event swallowed, injected input passed, `BlockInput` the fallback only),
-queued through `OverlayController`. The console has `LabSession.Lock`/`Unlock`, the *Lock
+every physical event swallowed, injected input passed, installed on lock and re-armed every
+second because Windows drops a stalled hook silently, `BlockInput` the fallback only),
+queued through `OverlayController` whose `State()` is lock-free. The two limits travel as
+**durations** (`until_seconds`, `hard_limit_seconds`) and every absolute moment is minted
+on the PC's clock; `OverlayState.reason` is stable codes (`OverlayReasons`) the console
+puts into words. Nothing in `PolicyEnforcer` throws, and `AgentService` dials the link
+whatever the enforcer did. The console has `LabSession.Lock`/`Unlock`, the *Lock
 screens* dialog (message, *until I unlock* or *N minutes*, the 60-minute ceiling and the
 Ctrl+Alt+Del line stated), *Lock all…*/*Unlock all*, and a tile badge fed by the PC's
-`OverlayState` alone, naming the console that set it. Tests: 795 Shared + 236 Console after the foundation review's fixes (782 + 232 when built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full run and passed alone) (`LockTests`,
-`PolicyEnforcerTests`, the UI renders). `dotnet publish -r win-x64` of the helper and the
-agent succeed. **Not yet run on Windows**: the window, the hooks, the injected-input
-pass-through, the re-assert after logoff and `--restore-policy` wait for the VM (the drill
-is in ROADMAP M6). The ownership gate for `Overlay` fails closed when the link is unbound
-and answers a refusal with `problem` and no `kind`; the console never lets such an answer
-clear a lock the PC still shows.
+`OverlayState` alone, naming the console that set it. Tests: 796 Shared + 241 Console after
+the second-half review's fixes (795 + 236 after the foundation review's, 782 + 232 when
+built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full
+run and passed alone) (`LockTests`, `OverlayLinkTests`, `PolicyEnforcerTests`, the UI
+renders). `dotnet publish -r win-x64` and `-r win-arm64` of the helper and the agent
+succeed. **Not yet run on Windows**: the window, the hooks and their re-arm, the
+injected-input pass-through under the click-through window, the re-assert after logoff and
+`--restore-policy` wait for the VM (the drill is in ROADMAP M6). The ownership gate for
+`Overlay` fails closed when the link is unbound and answers a refusal with `problem` and
+no `kind`; the console never lets such an answer clear a lock the PC still shows.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

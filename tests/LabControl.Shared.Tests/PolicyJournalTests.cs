@@ -229,7 +229,7 @@ public sealed class PolicyJournalTests
         // And the state for the Welcome re-send is built without a throw.
         Assert.Equal(Overlay.Types.Kind.Unspecified, rig.Journal.OverlayStateOf(Now).Kind);
         Assert.Equal(Overlay.Types.Kind.Unspecified, rig.Journal.ReassertOverlay(Now).Kind);
-        Assert.Equal(string.Empty, rig.Journal.NoteEnforcement(true, null!).Reason);
+        Assert.Equal(string.Empty, rig.Journal.NoteEnforcement(true, null!, Now).Reason);
     }
 
     [Fact]
@@ -508,13 +508,15 @@ public sealed class PolicyJournalTests
         var rig = new Rig();
         rig.Journal.Start(Now);
 
+        // Durations on the wire (D-70 item 6): thirty days of each, stamped onto this clock
+        // at arrival; the hard limit comes back at the ceiling, `until` as asked.
         var state = rig.Journal.SetOverlay(new Overlay
         {
             Kind = Overlay.Types.Kind.Lock,
             SessionId = "lock-9",
             Message = "Дивіться на дошку",
-            UntilUnix = Now + 30 * 24 * 3600,
-            HardLimitUnix = Now + 30 * 24 * 3600,
+            UntilSeconds = 30 * 24 * 3600,
+            HardLimitSeconds = 30 * 24 * 3600,
         }, Instance, Now);
 
         Assert.Equal(Overlay.Types.Kind.Lock, state.Kind);
@@ -523,15 +525,26 @@ public sealed class PolicyJournalTests
         Assert.Equal(Now, state.SinceUnix);
         Assert.Equal(Now + 30 * 24 * 3600, state.UntilUnix);
         Assert.Equal(Now + Hour, state.HardLimitUnix);
+        Assert.Equal(Hour, state.RemainingSeconds);
         Assert.Equal(string.Empty, state.Problem);
         Assert.Equal("Дивіться на дошку", rig.Machine.Shown!.Message);
         Assert.Equal(Now + Hour, rig.Journal.NextDeadline);
         Assert.Equal("lock-9", rig.Saved!.Policy!.Overlay!.SessionId);
 
-        // No hard limit proposed at all: the ceiling.
+        // No hard limit proposed at all: the ceiling. Until lifted: remaining counts to the ceiling.
         var none = rig.Journal.SetOverlay(new Overlay { Kind = Overlay.Types.Kind.Lock, SessionId = "lock-10" }, Instance, Now + 5);
         Assert.Equal(Now + 5 + Hour, none.HardLimitUnix);
         Assert.Equal(0, none.UntilUnix);
+        Assert.Equal(Hour, none.RemainingSeconds);
+
+        // The PC's clock is what the stamps come from: the same request on a clock a day
+        // ahead yields limits a day ahead — the console's clock never entered into it.
+        var ahead = new Rig();
+        ahead.Journal.Start(Now + 86_400);
+        var shifted = ahead.Journal.SetOverlay(new Overlay { Kind = Overlay.Types.Kind.Lock, SessionId = "lock-11", UntilSeconds = 300 }, Instance, Now + 86_400);
+        Assert.Equal(Now + 86_400 + 300, shifted.UntilUnix);
+        Assert.Equal(300, shifted.RemainingSeconds);
+        Assert.Equal(Now + 86_400 + Hour, shifted.HardLimitUnix);
     }
 
     [Fact]
@@ -540,7 +553,8 @@ public sealed class PolicyJournalTests
         var rig = new Rig();
         rig.Journal.Start(Now);
 
-        var state = rig.Journal.SetOverlay(new Overlay { Kind = Overlay.Types.Kind.Lock, SessionId = "old", UntilUnix = Now - 1 }, Instance, Now);
+        // A negative duration is a lock that ended before it arrived.
+        var state = rig.Journal.SetOverlay(new Overlay { Kind = Overlay.Types.Kind.Lock, SessionId = "old", UntilSeconds = -1 }, Instance, Now);
 
         Assert.Equal(Overlay.Types.Kind.Unspecified, state.Kind);
         Assert.Equal(PolicyEvents.RefusedAlreadyEnded, state.Problem);
@@ -600,12 +614,13 @@ public sealed class PolicyJournalTests
     {
         var rig = new Rig();
         rig.Journal.Start(Now);
-        rig.Journal.SetOverlay(new Overlay { Kind = Overlay.Types.Kind.Lock, SessionId = "l", UntilUnix = Now + 100 }, Instance, Now);
+        rig.Journal.SetOverlay(new Overlay { Kind = Overlay.Types.Kind.Lock, SessionId = "l", UntilSeconds = 100 }, Instance, Now);
         rig.Machine.Calls.Clear();
 
-        var noted = rig.Journal.NoteEnforcement(inputBlocked: false, "BlockInput fallback");
+        var noted = rig.Journal.NoteEnforcement(inputBlocked: false, OverlayReasons.BlockInputFallback, Now + 40);
         Assert.False(noted.InputBlocked);
-        Assert.Equal("BlockInput fallback", noted.Reason);
+        Assert.Equal(OverlayReasons.BlockInputFallback, noted.Reason);
+        Assert.Equal(60, noted.RemainingSeconds);
         Assert.Equal(Overlay.Types.Kind.Lock, noted.Kind);
 
         // A helper restarted at logon shows nothing: the service re-asserts.

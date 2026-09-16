@@ -12,14 +12,24 @@ namespace LabControl.Agent.Session;
 
 /// <summary>
 /// The lock picture on the student's screen (M6 portion 1, D-70 item 2): a raw Win32
-/// popup — <c>RegisterClassExW</c> + <c>CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
-/// WS_POPUP)</c> — covering the whole virtual desktop, on a thread of its own that joins the
-/// input desktop first (<c>SetThreadDesktop</c>, D-35 item 3) and then runs its own message
-/// loop. It is painted by one <c>StretchDIBits</c> of the BGRA bitmap
-/// <see cref="OverlayText.Compose"/> produces, recomposed on a timer every
-/// <see cref="Defaults.OverlayRepaintInterval"/> when the countdown text changes, and
-/// re-asserted topmost on the same timer — Windows lets other topmost windows above it.
-/// Composing and painting happen here, never on the hook thread (D-70 item 3).
+/// popup — <c>RegisterClassExW</c> + <c>CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT |
+/// WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, WS_POPUP)</c> — covering the whole
+/// virtual desktop, on a thread of its own that joins the input desktop first
+/// (<c>SetThreadDesktop</c>, D-35 item 3) and then runs its own message loop. It is painted
+/// by one <c>StretchDIBits</c> of the BGRA bitmap <see cref="OverlayText.Compose"/>
+/// produces, recomposed on a timer every <see cref="Defaults.OverlayRepaintInterval"/> when
+/// the countdown text changes, and re-asserted topmost on the same timer — Windows lets
+/// other topmost windows above it. Composing and painting happen here, never on the hook
+/// thread (D-70 item 3).
+/// <para>
+/// <b>The window is purely visual (D-70 item 7).</b> It is click-through
+/// (<c>WS_EX_TRANSPARENT</c>: hit-testing passes to whatever is underneath), never
+/// activated (<c>WS_EX_NOACTIVATE</c>, <c>SWP_NOACTIVATE</c>, no <c>SetForegroundWindow</c>,
+/// <c>MA_NOACTIVATE</c>) and fully opaque through <c>SetLayeredWindowAttributes</c> with
+/// alpha 255. So the teacher's injected input — which the hooks pass — lands on the
+/// student's desktop as if the picture were not there, and the student's physical input is
+/// swallowed by the hooks alone: the window blocks nothing, and must not.
+/// </para>
 /// <para>
 /// Nothing here throws out: a window that cannot be created is reported through
 /// <see cref="Problem"/> and the controller says so in <c>OverlayState.reason</c>.
@@ -136,7 +146,8 @@ internal sealed class OverlayWindow : IDisposable
             fixed (char* title = "LabControl")
             {
                 _hwnd = PInvoke.CreateWindowEx(
-                    WINDOW_EX_STYLE.WS_EX_TOPMOST | WINDOW_EX_STYLE.WS_EX_TOOLWINDOW,
+                    WINDOW_EX_STYLE.WS_EX_LAYERED | WINDOW_EX_STYLE.WS_EX_TRANSPARENT | WINDOW_EX_STYLE.WS_EX_NOACTIVATE
+                    | WINDOW_EX_STYLE.WS_EX_TOPMOST | WINDOW_EX_STYLE.WS_EX_TOOLWINDOW,
                     (PCWSTR)className,
                     (PCWSTR)title,
                     WINDOW_STYLE.WS_POPUP,
@@ -150,14 +161,21 @@ internal sealed class OverlayWindow : IDisposable
                 return;
             }
 
+            // A layered window is not drawn until its attributes are set: full alpha, opaque.
+            if (!PInvoke.SetLayeredWindowAttributes(_hwnd, default, 255, LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_ALPHA))
+            {
+                _log.LogWarning("SetLayeredWindowAttributes failed: {Message}", new Win32Exception(Marshal.GetLastWin32Error()).Message);
+            }
+
             Recompose(force: true);
-            PInvoke.ShowWindow(_hwnd, SHOW_WINDOW_CMD.SW_SHOW);
-            PInvoke.SetWindowPos(_hwnd, TopMost, _x, _y, _width, _height, SET_WINDOW_POS_FLAGS.SWP_SHOWWINDOW);
-            PInvoke.SetForegroundWindow(_hwnd);
+            PInvoke.ShowWindow(_hwnd, SHOW_WINDOW_CMD.SW_SHOWNOACTIVATE);
+            PInvoke.SetWindowPos(_hwnd, TopMost, _x, _y, _width, _height,
+                SET_WINDOW_POS_FLAGS.SWP_SHOWWINDOW | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
             PInvoke.SetTimer(_hwnd, RepaintTimerId, (uint)Defaults.OverlayRepaintInterval.TotalMilliseconds, null);
             _log.LogInformation("overlay window up on desktop {Desktop}: {Width}x{Height} at ({X},{Y})", desktop, _width, _height, _x, _y);
             _shown.Set();
 
+            // GetMessage returns -1 (truthy as a BOOL) on an invalid window; the null filter here never is.
             while (PInvoke.GetMessage(out var message, HWND.Null, 0, 0))
             {
                 PInvoke.TranslateMessage(message);
@@ -303,9 +321,19 @@ internal sealed class OverlayWindow : IDisposable
         var resized = (x, y, width, height) != (_x, _y, _width, _height);
         Recompose(force: resized);
 
-        // Other topmost windows may have been raised above this one since the last tick.
-        PInvoke.SetWindowPos(_hwnd, TopMost, _x, _y, _width, _height,
-            SET_WINDOW_POS_FLAGS.SWP_SHOWWINDOW | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
+        // Other topmost windows may have been raised above this one since the last tick:
+        // back on top, without taking activation from whatever the student (or the teacher's
+        // remote control) is working in underneath.
+        if (resized)
+        {
+            PInvoke.SetWindowPos(_hwnd, TopMost, _x, _y, _width, _height,
+                SET_WINDOW_POS_FLAGS.SWP_SHOWWINDOW | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
+        }
+        else
+        {
+            PInvoke.SetWindowPos(_hwnd, TopMost, 0, 0, 0, 0,
+                SET_WINDOW_POS_FLAGS.SWP_SHOWWINDOW | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE | SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE);
+        }
     }
 
     private static LRESULT OnMessage(HWND hwnd, uint message, WPARAM wParam, LPARAM lParam)
@@ -342,6 +370,12 @@ internal sealed class OverlayWindow : IDisposable
                 {
                     PInvoke.DestroyWindow(hwnd);
                     return (LRESULT)0;
+                }
+
+                if (message == PInvoke.WM_MOUSEACTIVATE)
+                {
+                    // Never activated by a click, even should one reach it: the desktop underneath keeps the focus.
+                    return (LRESULT)(nint)PInvoke.MA_NOACTIVATE;
                 }
 
                 if (message == PInvoke.WM_CLOSE)

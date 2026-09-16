@@ -35,6 +35,9 @@ public static class PolicyEvents
     /// <summary>The document could not be written; the next restart comes back unrestricted.</summary>
     public const string SaveFailed = "policy.save_failed";
 
+    /// <summary>The enforcer itself threw where nothing may throw (a bug, a disposed handle); logged, reported, and the pass abandoned — never the service loop.</summary>
+    public const string EnforcerFailed = "policy.failed";
+
     private static readonly ResourceManager Resources = new("LabControl.Shared.Policy.PolicyStrings", typeof(PolicyEvents).Assembly);
 
     /// <summary>A resource string, formatted with the invariant culture; the name itself if the resource is missing, never an exception.</summary>
@@ -79,3 +82,46 @@ public static class PolicyEvents
 
 /// <summary>One thing the journal wants the teacher to see; the service hands it to <c>AgentLink.Report</c>.</summary>
 public sealed record PolicyEvent(Event.Types.Severity Severity, string Code, string Message);
+
+/// <summary>
+/// The stable codes <c>OverlayState.reason</c> carries (M6 portion 1, D-70 item 7): why a
+/// lock is weaker than the hooks would make it, or why it is not showing yet. The helper
+/// and the service put codes on the wire — zero or more, space-separated — and the console
+/// maps each to words from its resources, the way it does for capture reasons; nothing
+/// teacher-facing is ever a literal on the agent side. The detail behind a code (the Win32
+/// error text) goes to the helper's log.
+/// </summary>
+public static class OverlayReasons
+{
+    /// <summary>No session helper is connected to the service: nothing can be shown until one is.</summary>
+    public const string HelperDown = "overlay.helper_down";
+
+    /// <summary>Nobody is logged on: there is no interactive session to show the lock in.</summary>
+    public const string NoSession = "overlay.no_session";
+
+    /// <summary>The helper is connected but has not applied the lock yet; the service re-asserts it.</summary>
+    public const string NotShownYet = "overlay.not_shown_yet";
+
+    /// <summary>The helper could not create the lock window on the input desktop.</summary>
+    public const string WindowFailed = "overlay.window_failed";
+
+    /// <summary>A low-level hook could not be installed, or the last re-arm failed; the student's input may pass.</summary>
+    public const string HookRefused = "overlay.hook_refused";
+
+    /// <summary><c>BlockInput</c> is in use instead of the hooks: it blocks the teacher's remote control too, and any process on the desktop can undo it.</summary>
+    public const string BlockInputFallback = "overlay.blockinput_fallback";
+
+    /// <summary>The hooks and <c>BlockInput</c> both failed: the student's input is NOT blocked.</summary>
+    public const string InputOpen = "overlay.input_open";
+
+    private static readonly string[] Known = [HelperDown, NoSession, NotShownYet, WindowFailed, HookRefused, BlockInputFallback, InputOpen];
+
+    public static bool IsKnown(string code) => Array.IndexOf(Known, code) >= 0;
+
+    /// <summary>The codes in a <c>reason</c> field, in order, blanks dropped.</summary>
+    public static string[] Split(string? reason) =>
+        string.IsNullOrWhiteSpace(reason) ? [] : reason.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>Codes as one <c>reason</c> field.</summary>
+    public static string Join(IEnumerable<string> codes) => string.Join(' ', codes.Where(c => !string.IsNullOrWhiteSpace(c)));
+}

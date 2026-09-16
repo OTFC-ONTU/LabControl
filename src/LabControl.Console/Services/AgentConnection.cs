@@ -124,6 +124,8 @@ public sealed class AgentConnection
         var problemBefore = OverlayProblem;
         var setByBefore = OverlayState?.SetByInstance;
         var sessionBefore = OverlayState?.SessionId;
+        var blockedBefore = OverlayState?.InputBlocked;
+        var reasonBefore = OverlayState?.Reason;
         if (state.Problem.Length > 0 && state.Kind == Overlay.Types.Kind.Unspecified && OverlayState is not null)
         {
             OverlayProblem = state.Problem;
@@ -134,8 +136,10 @@ public sealed class AgentConnection
             OverlayProblem = state.Problem.Length > 0 ? state.Problem : null;
         }
 
+        // The weakness line on the badge follows input_blocked and reason too, not only the lock itself.
         return lockedBefore != OverlayLocked || problemBefore != OverlayProblem
-            || setByBefore != OverlayState?.SetByInstance || sessionBefore != OverlayState?.SessionId;
+            || setByBefore != OverlayState?.SetByInstance || sessionBefore != OverlayState?.SessionId
+            || blockedBefore != OverlayState?.InputBlocked || !string.Equals(reasonBefore, OverlayState?.Reason, StringComparison.Ordinal);
     }
 
     /// <summary>

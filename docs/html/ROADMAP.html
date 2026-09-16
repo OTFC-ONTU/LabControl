@@ -2180,17 +2180,43 @@ throw) are fixed — one validation pass over the document, a mutex owned by its
 thread with a no-throw lease, originals kept until a restore confirms, and
 <code>OverlayLinkTests</code> (Console) over the real link — plus the composer's size and message
 clamps. Tests after the fixes: 795 Shared and 236 Console.
-<strong>Not yet run on Windows:</strong> the window, the hooks, the injected-input pass-through, the
-re-assert after logoff and <code>--restore-policy</code> wait for the VM. <em>The VM drill:</em> push (or
-<code>scripts/dev-install.ps1</code>) the <code>win-x64</code> agent and helper; lock the PC from the console
-with a Ukrainian message and <em>for 2 minutes</em>; on the PC try Alt+Tab, Win, Alt+F4,
-Ctrl+Esc, a click and typing (nothing must happen), then Ctrl+Alt+Del (the secure screen
-must open, and the lock must be back on it and after <em>Cancel</em>); with <em>Control</em> on in the
-single-PC window, move the mouse and type — the teacher's input must reach the desktop
-under the lock; log the student off and on again — the lock must be back within the
-helper's restart; let the two minutes pass — the PC must unlock itself with the console
-silent and <code>overlay.expired</code> in the events; lock again <em>until I unlock</em>, <code>sc stop</code>/<code>sc start</code> the service — the lock must be back, then <code>agent.exe --restore-policy</code> from an
-elevated prompt must exit 0 and leave the lock on (still within its limit); finally check
+<em>Reviewed a second time the same day</em> (the agent/helper/console half; <code>D-70</code> items 6–9):
+the opaque foreground window that would have swallowed the teacher's remote control (now
+layered, click-through, never activated), the silently lost hook reported as blocked
+(installed on lock, re-armed every second, reported from the last install), the
+console-clock <code>until</code> judged on a PC with no time source (durations on the wire, stamped
+on the PC's clock; <code>OverlayState.remaining_seconds</code> for the console), the enforcer able
+to throw before the link dialled (nothing throws; <code>AgentService.StartPolicy</code> guards the
+rest; <code>--restore-policy</code> exits 1 with the reason), the helper's <code>State()</code> stalling behind
+<code>Apply</code> past the silence timeout (lock-free), and English literals in <code>reason</code> (stable
+<code>OverlayReasons</code> codes, words from <code>Strings.resx</code>). Tests after those fixes: 796 Shared
+and 241 Console — the lock outliving the console's departure and ending at its own
+limit, a second console of the lab seeing whose lock it is and ending it, a torn
+<code>policy.json</code> and a machine whose every call throws still linking with the reason on the
+console, <code>policy.busy</code> on the wire, and the skipped path for an unlinked or outdated PC.
+<code>dotnet publish -r win-arm64</code> of the helper and the agent succeed too.
+<strong>Not yet run on Windows:</strong> the window, the hooks and their re-arm, the injected-input
+pass-through, the re-assert after logoff and <code>--restore-policy</code> wait for the VM. <em>The VM
+drill</em> (ARM64 VM: publish <code>win-arm64</code>; the lab PCs need <code>win-x64</code>): push (or
+<code>scripts/dev-install.ps1</code>) the agent and helper; <strong>set the VM's clock ten minutes ahead of
+the console's</strong> — the lock must still take, and the badge's countdown must agree with
+the picture's (durations, not stamps); lock the PC from the console with a Ukrainian
+message and <em>for 2 minutes</em>; on the PC try Alt+Tab, Win, Alt+F4, Ctrl+Esc, a click and
+typing (nothing must happen), then Ctrl+Alt+Del (the secure screen must open, and the
+lock must be back on it and after <em>Cancel</em>); with <em>Control</em> on in the single-PC window,
+move the mouse and type into Notepad opened before the lock — the teacher's input must
+reach the desktop under the lock (blind: the console shows the picture) and the text must
+be there after the unlock; <strong>while streaming <em>full</em> mode, scroll a browser for a minute
+under the lock, then type physically</strong> — nothing must pass, and the helper log must show
+no &quot;no longer installed&quot; lines (or, if it does, a re-arm right after); watch the service
+log for <code>session.exe has been silent</code> during lock/unlock — there must be none; log the
+student off and on again — the lock must be back within the helper's restart, with
+<code>overlay.helper_down</code> on the badge in between; let the two minutes pass — the PC must
+unlock itself with the console silent and <code>overlay.expired</code> in the events; lock again
+<em>until I unlock</em>, <code>sc stop</code>/<code>sc start</code> the service — the lock must be back, then
+<code>agent.exe --restore-policy</code> from an elevated prompt must exit 0 and leave the lock on
+(still within its limit); corrupt <code>policy.json</code> by hand (truncate it) and restart the
+service — the PC must link and the console must show <code>policy.unreadable</code>; finally check
 <code>policy.json</code> and the tile badge after each step.</li>
 </ul>
 <hr />
@@ -2386,7 +2412,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-16 18:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-16 18:25 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

@@ -720,17 +720,19 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         {
             helper.Connected = false;
             // Whatever the helper showed went with it; a lock that is held is shown again by
-            // the next helper, and the console sees the gap until then.
-            Policy?.NoteEnforcement(false, "no session helper is connected");
+            // the next helper, and the console sees the gap until then — as a code the
+            // console puts into words (D-70 item 7): no helper, or nobody logged on at all.
+            Policy?.NoteEnforcement(false, _snapshot.SessionId is null ? OverlayReasons.NoSession : OverlayReasons.HelperDown);
             Wake();
         }
     }
 
     /// <summary>
     /// The helper's word on what it shows (PROTOCOL "Overlay over the pipe"): its hook state
-    /// and reason go into the enforcer's next <c>OverlayState</c>; a helper that shows
+    /// and reason codes go into the enforcer's next <c>OverlayState</c>; a helper that shows
     /// nothing while a lock is held is re-asserted, at most every few seconds so a helper
-    /// that cannot show the lock does not get one <c>Overlay</c> per status.
+    /// that cannot show the lock does not get one <c>Overlay</c> per status. Runs on the pipe
+    /// read loop and never throws out of it.
     /// </summary>
     private void RelayOverlayState(OverlayState reported)
     {
@@ -740,23 +742,30 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             return;
         }
 
-        var held = policy.Journal.Snapshot().Overlay;
-        if (held is not null && reported.Kind != Overlay.Types.Kind.Lock)
+        try
         {
-            policy.NoteEnforcement(false, reported.Reason.Length > 0 ? reported.Reason : "the session helper is not showing the lock yet");
-            ReassertOverlay("the helper shows no lock while one is held");
-            return;
-        }
+            var held = policy.Journal.Snapshot().Overlay;
+            if (held is not null && reported.Kind != Overlay.Types.Kind.Lock)
+            {
+                policy.NoteEnforcement(false, reported.Reason.Length > 0 ? reported.Reason : OverlayReasons.NotShownYet);
+                ReassertOverlay("the helper shows no lock while one is held");
+                return;
+            }
 
-        if (held is null && reported.Kind == Overlay.Types.Kind.Lock)
+            if (held is null && reported.Kind == Overlay.Types.Kind.Lock)
+            {
+                // A lock the helper still shows after the journal lifted it (a lift that raced a
+                // restart): the enforcer's truth wins, so tell the helper again.
+                _log.LogInformation("the helper still shows lock {Session}; lifting it again", reported.SessionId);
+                SendToHelper(new ServiceMessage { Overlay = new Overlay { Kind = Overlay.Types.Kind.Unlock } });
+            }
+
+            policy.NoteEnforcement(reported.InputBlocked, reported.Reason);
+        }
+        catch (Exception ex)
         {
-            // A lock the helper still shows after the journal lifted it (a lift that raced a
-            // restart): the enforcer's truth wins, so tell the helper again.
-            _log.LogInformation("the helper still shows lock {Session}; lifting it again", reported.SessionId);
-            SendToHelper(new ServiceMessage { Overlay = new Overlay { Kind = Overlay.Types.Kind.Unlock } });
+            _log.LogWarning(ex, "relaying the helper's overlay state failed: {Message}", ex.Message);
         }
-
-        policy.NoteEnforcement(reported.InputBlocked, reported.Reason);
     }
 
     private void ReassertOverlay(string why, bool force = false)

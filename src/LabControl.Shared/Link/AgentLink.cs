@@ -426,6 +426,21 @@ public sealed partial class AgentLink : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Answers one <c>Overlay</c> with a problem — a busy mutex, a pass that failed — without
+    /// touching the latest state: the console hears why nothing happened, and what the PC
+    /// last said it shows is still what is re-sent after the next <c>Welcome</c>. Dropped when
+    /// not linked; there is nobody to answer.
+    /// </summary>
+    public void AnswerOverlayProblem(OverlayState problem)
+    {
+        ArgumentNullException.ThrowIfNull(problem);
+        lock (_gateLock)
+        {
+            _outgoing?.TryWrite(new AgentMessage { OverlayState = problem });
+        }
+    }
+
     /// <summary>The last state given to <see cref="PublishOverlayState"/>; <c>null</c> until the enforcer said anything.</summary>
     public OverlayState? LatestOverlayState
     {

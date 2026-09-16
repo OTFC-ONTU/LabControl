@@ -202,7 +202,7 @@ public sealed class FakeScreen : IScreenSource
         {
             // The lock covers everything: the desktop underneath neither draws nor matters,
             // and it is redrawn from scratch once the lock lifts. The teacher's pointer still
-            // shows on top — remote control works under a lock on a real PC too (D-70).
+            // shows on top — remote control works under a lock on a real PC too, where the window is click-through (D-70 item 7).
             _drawn = false;
             var remaining = OverlayText.Remaining(overlay.UntilUnix, overlay.HardLimitUnix, now.ToUnixTimeSeconds());
             var countdown = OverlayText.CountdownText(remaining);

@@ -24,6 +24,7 @@
   <data name="RefusedRevoked" xml:space="preserve"><value>refused: the console's certificate is revoked</value></data>
   <data name="RefusedWithdrawn" xml:space="preserve"><value>refused: the console's access to this lab was withdrawn</value></data>
   <data name="RefusedAlreadyEnded" xml:space="preserve"><value>refused: the requested end time is already past</value></data>
+  <data name="EnforcerFailed" xml:space="preserve"><value>The policy enforcer failed unexpectedly during {0}: {1}. The PC keeps running; the next pass tries again.</value></data>
   <data name="RefusedUnknownKind" xml:space="preserve"><value>refused: this agent build does not know that overlay kind</value></data>
   <data name="RefusedStopped" xml:space="preserve"><value>refused: the agent service is stopping</value></data>
   <data name="KindLock" xml:space="preserve"><value>Lock</value></data>

@@ -52,10 +52,9 @@ internal sealed class AgentService : BackgroundService
             // first helper is told. Declared after the supervisor, so it is disposed before it:
             // OnStop's restore pass runs first, then the supervisor ends the helper and the
             // overlay dies with it (the overlay needs no restore of its own, D-69 item 2).
-            var machine = new WindowsMachineState(supervisor.SendToHelper, _loggers.CreateLogger("policy"));
-            await using var policy = new PolicyEnforcer(link, machine, Defaults.AgentDataDirectory, store.Config.LabId, _loggers.CreateLogger("policy"));
-            supervisor.Policy = policy;
-            policy.Start();
+            // Guarded on its own: whatever the enforcer does or fails to do, the link dials —
+            // a corrupt policy.json is a warning on the console, never an offline PC.
+            await using var policy = StartPolicy(link, supervisor, store.Config.LabId);
 
             behaviour.Start();
 
@@ -108,6 +107,31 @@ internal sealed class AgentService : BackgroundService
             catch (OperationCanceledException)
             {
             }
+        }
+    }
+
+    /// <summary>
+    /// Builds and starts the enforcer, or returns <c>null</c> and reports when that fails.
+    /// <see cref="PolicyEnforcer.Start"/> itself never throws (D-69); this is the net under
+    /// the constructor and the wiring, so the service loop around it cannot be taken down by
+    /// the policy code whatever it does.
+    /// </summary>
+    private PolicyEnforcer? StartPolicy(AgentLink link, SessionSupervisor supervisor, string labId)
+    {
+        try
+        {
+            var machine = new WindowsMachineState(supervisor.SendToHelper, _loggers.CreateLogger("policy"));
+            var policy = new PolicyEnforcer(link, machine, Defaults.AgentDataDirectory, labId, _loggers.CreateLogger("policy"));
+            supervisor.Policy = policy;
+            policy.Start();
+            return policy;
+        }
+        catch (Exception ex)
+        {
+            var message = PolicyEvents.Text("EnforcerFailed", "start", ex.Message);
+            _log.LogError(ex, "{Message}", message);
+            link.Report(Event.Types.Severity.Error, PolicyEvents.EnforcerFailed, message);
+            return null;
         }
     }
 

@@ -3253,29 +3253,89 @@ current <code>VideoControl</code>, and a helper that reports <code>overlay_state
 while a lock is held is re-asserted. <code>OverlayState.reason</code> names the gap in between.</p>
 </li>
 <li><p><strong>The wire is additive and outside the frozen subset</strong> (PROTOCOL <em>Overlay</em>): <code>Overlay</code>
-gains <code>session_id = 3</code>, <code>until_unix = 4</code>, <code>hard_limit_unix = 5</code>; the new <code>OverlayState</code>
-is <code>AgentMessage.overlay_state = 12</code> and <code>HelperMessage.overlay_state = 5</code>; <code>Hello</code>,
-<code>Heartbeat</code>, <code>Job{self_update}</code> and <code>JobResult</code> are untouched, and an <code>Overlay</code> written
-before M6 parses with the new fields at their defaults. <code>AgentLink</code> raises
-<code>OverlayReceived</code> in the shape of <code>InputReceived</code> — fire-and-forget on the read loop,
-with the validated instance id — and re-sends the latest <code>OverlayState</code> after every
-<code>Welcome</code>, like the session state.</p>
+gains <code>session_id = 3</code>, <code>until_seconds = 4</code>, <code>hard_limit_seconds = 5</code>; the new
+<code>OverlayState</code> (fields 1–10, <code>remaining_seconds = 10</code>) is <code>AgentMessage.overlay_state = 12</code>
+and <code>HelperMessage.overlay_state = 5</code>; <code>Hello</code>, <code>Heartbeat</code>, <code>Job{self_update}</code> and
+<code>JobResult</code> are untouched, and an <code>Overlay</code> written before M6 parses with the new fields
+at their defaults. <code>AgentLink</code> raises <code>OverlayReceived</code> in the shape of <code>InputReceived</code> —
+fire-and-forget on the read loop, with the validated instance id — and re-sends the
+latest <code>OverlayState</code> after every <code>Welcome</code>, like the session state.</p>
+</li>
+<li><p><strong>The limits travel as durations; every absolute moment is minted on the PC's clock.</strong>
+The lab has no NTP (CLAUDE.md, hard requirement 9): a PC ten minutes ahead of the
+console would refuse every &quot;for 5 minutes&quot; lock sent as an absolute <code>until</code>, and a PC
+behind would hold it up to the hour. So <code>Overlay.until_seconds</code> (0 = until lifted,
+negative = refused as already ended) and <code>Overlay.hard_limit_seconds</code> (≤ 0 = the
+ceiling) are what the console sends, the agent stamps them onto its own clock at arrival
+(<code>ClassroomPolicy.Add</code>, saturating) and clamps there, and <code>OverlayState</code> carries the
+agent's stamps plus <code>remaining_seconds</code> so the console's badge and countdown never read
+the PC's clock. The same durations go down the helper pipe (the service sends what is
+left, the helper stamps it onto the same clock). This is <code>D-58</code>'s rule — time decisions
+are the agent's — applied to the one message that had carried a console-clock stamp.</p>
+</li>
+<li><p><strong>The window is purely visual; blocking is the hooks' job alone.</strong> An opaque
+<code>WS_POPUP</code> that takes the foreground would receive every injected mouse event
+(hit-testing stops at the topmost opaque window) and every injected keystroke (they go
+to the focus), so passing the injected flags through the hooks would be necessary and
+not sufficient. The window is therefore created with <code>WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW</code>, made opaque with
+<code>SetLayeredWindowAttributes(alpha 255)</code>, shown with <code>SW_SHOWNOACTIVATE</code>, never given
+<code>SetForegroundWindow</code>, answers <code>WM_MOUSEACTIVATE</code> with <code>MA_NOACTIVATE</code>, and is
+re-asserted topmost every second with <code>SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)</code>. Hit-testing passes through it to the
+student's desktop, so the teacher's injected input lands where it would without the
+picture (DXGI still captures the composed desktop, so control under a lock is blind on
+the console side — accepted: the teacher sees the lock picture and the pointer). The
+student's physical input is swallowed by the hooks; the window blocks nothing and must
+not. The rejection of &quot;a layered window&quot; below was about painting; hit-test
+transparency on a top-level window is what <code>WS_EX_LAYERED | WS_EX_TRANSPARENT</code> is for.
+<code>OverlayState.reason</code> is stable codes (<code>OverlayReasons</code>: <code>overlay.helper_down</code>,
+<code>overlay.no_session</code>, <code>overlay.not_shown_yet</code>, <code>overlay.window_failed</code>,
+<code>overlay.hook_refused</code>, <code>overlay.blockinput_fallback</code>, <code>overlay.input_open</code>), which the
+console maps to words from <code>Strings.resx</code> the way <code>CaptureReasonText</code> does; the agent
+side never puts teacher-facing text on the wire.</p>
+</li>
+<li><p><strong>A hook is re-armed every second while blocking; <code>input_blocked</code> reports the last
+install, never a handle.</strong> Windows 7+ removes a low-level hook whose callback stalls past
+<code>LowLevelHooksTimeout</code> (300 ms) <em>without telling the installer</em>, and the handle it
+returned stays non-null — so a non-null handle proves nothing, and a hook that lived
+from the first lock to the end of the session (through video encoding, GC pauses, a
+debugger) would sooner or later be a hook that is gone while the tile still says
+&quot;blocked&quot;. The hooks now go up on <code>LOCK</code> and come down on <code>UNLOCK</code>, and while blocking a
+thread timer on the hook thread (<code>Defaults.OverlayRepaintInterval</code>) installs a fresh
+pair first and unhooks the old pair second, so no physical event slips through the swap;
+an old hook that fails to unhook is the detection and is logged as such.
+<code>HooksInPlace</code> is the outcome of the most recent install.</p>
+</li>
+<li><p><strong>Nothing in <code>PolicyEnforcer</code> throws, and the service dials the link whatever it did.</strong>
+Every public entry point (<code>Start</code>, <code>Apply</code>, <code>ReassertOverlay</code>, <code>NoteEnforcement</code>, the
+tick, <code>DisposeAsync</code>) runs inside one outer net that logs, reports <code>policy.failed</code> and
+returns; a pass that throws under the mutex answers the console with a <code>problem</code> (like a
+busy mutex) through <code>AgentLink.AnswerOverlayProblem</code>, which never replaces the latest
+state; <code>AgentService</code> builds and starts the enforcer inside its own guard (<code>StartPolicy</code>),
+so a corrupt <code>policy.json</code> — or a bug — costs a warning on the console, never an offline
+PC; <code>agent.exe --restore-policy</code> exits 1 with the reason logged rather than with an
+unhandled exception. The helper's <code>OverlayController.State()</code> is lock-free (a snapshot
+of volatile fields) so the status loop and every <code>Ping</code> answer while <code>Apply</code> waits on
+the window and hook threads, and the supervisor never ends a helper as silent for
+showing a lock.</p>
 </li>
 </ol>
 <p>Rejected: an Avalonia or WPF window in the helper (a UI framework in a SYSTEM process on
-the input desktop, for one rectangle of text); a layered or DirectComposition window (more
-surface, no benefit for a static picture); ending the lock when the console leaves the lab
+the input desktop, for one rectangle of text); a DirectComposition window (more surface,
+no benefit for a static picture — a <em>layered</em> window was rejected here for painting and is
+now used for hit-test transparency, item 7); ending the lock when the console leaves the lab
 (item 1); a longer ceiling (the owner's call); hooks on the window's own thread (item 3);
 <code>BlockInput</code> as the primary mechanism (it blocks the teacher's injected input too, and any
 process on the desktop can call it back off); <code>SetWindowsHookEx</code> from the service (a hook
-must live in a process on the desktop it hooks).</p>
+must live in a process on the desktop it hooks); subtracting <code>AgentLink.ClockSkew</code> from a
+console-clock <code>until</code> (a measured offset drifts and needs <code>Welcome</code>; a duration needs
+nothing, item 6); hooks installed once and kept between locks (item 8).</p>
 <p>Validation (built on the Mac, 2026-09-16): <code>OverlayTextTests</code> prove the picture is the
 screen's size in BGRA, that Cyrillic renders as something other than the background, and
 that the countdown text — and the picture — change at a second boundary;
 <code>ProtocolTests</code> round-trip <code>Overlay</code> and <code>OverlayState</code> on the link and the pipe and read
-a pre-M6 <code>Overlay</code> byte for byte; <code>PolicyJournalTests</code> cover the clamp to one hour and the
-re-assert. The Win32 window, the hooks and the injected-input pass-through are not yet
-written and can only be verified on a PC; they are the rest of portion 1 (ROADMAP M6).</p>
+a pre-M6 <code>Overlay</code> byte for byte; <code>PolicyJournalTests</code> cover the clamp to one hour, the
+re-assert and the stamping of durations on a shifted clock. The Win32 window, the hooks
+and the injected-input pass-through can only be verified on a PC (ROADMAP M6).</p>
 <p>Built, the rest of portion 1 (2026-09-16), with three departures from the text above.
 (1) The hooks swallow <strong>every</strong> physical keyboard event, not only the five combinations
 named in item 3 — a superset that costs nothing (the topmost window would receive the
@@ -3299,6 +3359,27 @@ PC's revocation set directly, because on the wire it makes the PC leave first �
 covers the window in between). Cross-compiled on the Mac (<code>dotnet publish -r win-x64</code> of
 the helper and the agent); <strong>not yet run on Windows</strong> — the window, the hooks and the
 injected-input pass-through wait for the VM.</p>
+<p>Reviewed again the same day (the second-half review) and fixed, items 6–9 above: the
+opaque foreground window that would have swallowed the teacher's remote control (a
+blocker; the window is now click-through and never activated), the silently lost hook
+reported as blocked (re-armed every second, reported from the last install), the
+console-clock <code>until</code> judged on a PC with no time source (durations on the wire), the
+enforcer's <code>Start</code> evaluating the journal outside every guard so a corrupt <code>policy.json</code>
+could take the PC offline until a service restart (nothing throws; the link dials
+regardless), the helper's <code>State()</code> sharing the lock <code>Apply</code> holds for up to ten seconds
+(lock-free snapshot; the supervisor would otherwise have ended the helper as silent), and
+English literals in <code>OverlayState.reason</code> (stable codes, words on the console). Also from
+the review's minor list: <code>WindowsMachineState.CurrentOverlay</code> (dead) removed, the badge's
+weakness line now refreshes on an <code>input_blocked</code>/<code>reason</code> change, <code>PeekMessage</code> creates
+the hook thread's queue before anything is posted to it. Tests after the fixes: 796 Shared
+and 241 Console — a lock that outlives the console's departure and ends at its own limit,
+a second console of the lab seeing whose lock it is and ending it (and the first seeing
+the second's), a torn <code>policy.json</code> and a machine whose every call throws still linking
+with <code>policy.unreadable</code> / <code>policy.restore_failed</code> on the console, <code>policy.busy</code> answered
+on the wire, and the skipped path for an unlinked or outdated PC. Left for later, noted:
+the stale-lock re-lift in the supervisor does not compare session ids (a one-status
+flicker at worst), a modifier held at <code>Block()</code> stays down in the OS until tapped, the
+window is recreated on every 3 s re-assert while creation keeps failing.</p>
 <h2 id="d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated<a class="anchor" href="#d-12-documentation-markdown-is-the-source-html-is-generated" aria-label="Link to this section">#</a></h2>
 <p>Context: the owner wants every document available as a readable <code>.html</code> next to the
 <code>.md</code>. Maintaining two hand-written copies guarantees they drift apart, and a drifted
@@ -3505,7 +3586,7 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-16 18:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-16 18:25 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-34-the-screen-stream-one-jpeg-per-frame-latest-wins-the-console-asks-m3-portion-1">D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)</a></li><li class="lvl2"><a href="#d-35-real-capture-one-producer-for-the-helper-and-the-simulator-dxgi-with-a-gdi-fallback-the-service-relays-m3-portion-2">D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)</a></li><li class="lvl2"><a href="#d-36-remote-control-text-as-text-shortcuts-by-position-the-service-raises-ctrlaltdel-m3-portion-3">D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)</a></li><li class="lvl2"><a href="#d-37-full-mode-quality-auto-by-default-three-manual-steps-the-frame-says-what-it-used-m3-portion-3">D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)</a></li><li class="lvl2"><a href="#d-38-m4-in-four-portions-and-the-script-library-as-the-first-m4-portion-1">D-38 — M4 in four portions, and the script library as the first (M4 portion 1)</a></li><li class="lvl2"><a href="#d-39-script-editor-quick-launch-and-desktop-application-templates">D-39 — Script editor, quick launch and desktop application templates</a></li><li class="lvl2"><a href="#d-40-optional-student-provisioning-and-standalone-removal-for-home-pc-testing">D-40 — Optional student provisioning and standalone removal for home-PC testing</a></li><li class="lvl2"><a href="#d-41-resume-a-running-file-pull-at-completed-chunk-boundaries-m4-portion-2">D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)</a></li><li class="lvl2"><a href="#d-42-explicit-upload-grants-and-a-committed-offset-query-m4-portion-2">D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)</a></li><li class="lvl2"><a href="#d-43-per-pc-result-bundles-from-the-existing-job-stream-m4-portion-2">D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)</a></li><li class="lvl2"><a href="#d-44-handout-dispatch-and-simulator-delivery-before-managed-windows-profiles">D-44 — Handout dispatch and simulator delivery before managed Windows profiles</a></li><li class="lvl2"><a href="#d-45-persist-account-mode-and-creation-evidence-before-windows-setup-integration">D-45 — Persist account mode and creation evidence before Windows Setup integration</a></li><li class="lvl2"><a href="#d-46-windows-account-preparation-under-private-storage-and-an-exclusive-lock">D-46 — Windows account preparation under private storage and an exclusive lock</a></li><li class="lvl2"><a href="#d-47-encrypt-the-settings-journal-and-restore-only-confirmed-unchanged-values">D-47 — Encrypt the settings journal and restore only confirmed, unchanged values</a></li><li class="lvl2"><a href="#d-48-start-native-settings-integration-with-two-fixed-dword-policies">D-48 — Start native settings integration with two fixed DWORD policies</a></li><li class="lvl2"><a href="#d-49-bind-ac-power-timeouts-to-a-scheme-and-confirm-native-activation">D-49 — Bind AC power timeouts to a scheme and confirm native activation</a></li><li class="lvl2"><a href="#d-50-journal-the-windows-update-active-hours-tuple-as-one-policy">D-50 — Journal the Windows Update active-hours tuple as one policy</a></li><li class="lvl2"><a href="#d-51-gate-the-lsa-autologon-secret-on-recorded-student-ownership">D-51 — Gate the LSA autologon secret on recorded student ownership</a></li><li class="lvl2"><a href="#d-52-integrate-m4-with-guarded-native-ownership-and-external-recovery">D-52 — Integrate M4 with guarded native ownership and external recovery</a></li><li class="lvl2"><a href="#d-53-lab-files-and-one-active-room-per-teacher-console-planned-m5">D-53 — Lab files and one active room per teacher console (planned M5)</a></li><li class="lvl2"><a href="#d-54-administrator-backup-onboarding-and-lightweight-console-installation-planned-m5">D-54 — Administrator backup onboarding and lightweight console installation (planned M5)</a></li><li class="lvl2"><a href="#d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1">D-55 — The profile store: profiles.json, labs/&lt;lab_id&gt;/, and a resumable migration (M5 portion 1)</a></li><li class="lvl2"><a href="#d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3">D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, instance: revocation (M5 portion 3)</a></li><li class="lvl2"><a href="#d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4">D-57 — One active session: ActiveLabController, release before acquire, the departure report, result ownership (M5 portions 2 and 4)</a></li><li class="lvl2"><a href="#d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5">D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)</a></li><li class="lvl2"><a href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted .app/.dmg, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)</a></li><li class="lvl2"><a href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)</a></li><li class="lvl2"><a href="#d-68-the-m5-acceptance-drills-and-the-gaps-they-found-a-combined-picker-filter-batched-authorization-one-departure-flow-a-beacon-that-shortens-a-stale-backoff-events-bound-to-their-console-m5-portion-8">D-68 — The M5 acceptance drills and the gaps they found: a combined picker filter, batched authorization, one departure flow, a beacon that shortens a stale backoff, events bound to their console (M5 portion 8)</a></li><li class="lvl2"><a href="#d-69-one-policy-journal-on-the-agent-restore-first-unconditionally-and-without-the-document-the-document-only-decides-what-is-re-applied-a-named-mutex-onstop-restores-a-watchdog-task-m6-portion-1">D-69 — One policy journal on the agent: restore first, unconditionally and without the document; the document only decides what is re-applied; a named mutex; OnStop restores; a watchdog task (M6 portion 1)</a></li><li class="lvl2"><a href="#d-70-the-lock-overlay-a-raw-win32-window-in-the-helper-painted-from-one-skiasharp-bitmap-a-lock-has-its-own-1-h-hard-limit-the-hooks-run-on-a-thread-that-does-nothing-else-m6-portion-1">D-70 — The lock overlay: a raw Win32 window in the helper painted from one SkiaSharp bitmap; a lock has its own 1 h hard limit; the hooks run on a thread that does nothing else (M6 portion 1)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>

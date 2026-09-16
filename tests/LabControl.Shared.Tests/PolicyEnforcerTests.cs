@@ -99,7 +99,7 @@ public sealed class PolicyEnforcerTests
         // What the link hands over after the gate: the enforcer answers by publishing.
         var lifted = new List<PolicySession>();
         rig.Enforcer.Lifted += sessions => lifted.AddRange(sessions);
-        rig.Enforcer.Apply(new Overlay { Kind = Overlay.Types.Kind.Lock, Message = "look up", SessionId = "s1", HardLimitUnix = rig.Now + 1 }, "console-a");
+        rig.Enforcer.Apply(new Overlay { Kind = Overlay.Types.Kind.Lock, Message = "look up", SessionId = "s1", HardLimitSeconds = 1 }, "console-a");
         var state = rig.Link.LatestOverlayState!;
         Assert.Equal(Overlay.Types.Kind.Lock, state.Kind);
         Assert.Equal("console-a", state.SetByInstance);
@@ -109,9 +109,9 @@ public sealed class PolicyEnforcerTests
         // The helper says its hooks hold: merged into the published state.
         rig.Enforcer.NoteEnforcement(true, string.Empty);
         Assert.True(rig.Link.LatestOverlayState!.InputBlocked);
-        rig.Enforcer.NoteEnforcement(false, "no session helper is connected");
+        rig.Enforcer.NoteEnforcement(false, OverlayReasons.HelperDown);
         Assert.False(rig.Link.LatestOverlayState!.InputBlocked);
-        Assert.Equal("no session helper is connected", rig.Link.LatestOverlayState!.Reason);
+        Assert.Equal(OverlayReasons.HelperDown, rig.Link.LatestOverlayState!.Reason);
 
         // A machine that lost the lock (a restarted helper) is told again.
         rig.Machine.Calls.Clear();
@@ -225,6 +225,46 @@ public sealed class PolicyEnforcerTests
         Assert.Equal(Overlay.Types.Kind.Lock, rig.Link.LatestOverlayState!.Kind);
         Assert.True(rig.Link.LatestOverlayState!.InputBlocked);
         Assert.Equal(string.Empty, rig.Link.LatestOverlayState!.Reason);
+    }
+
+    [Fact]
+    public async Task A_machine_that_throws_on_every_call_costs_events_never_the_enforcer()
+    {
+        // The rule (D-69, M3 of the second-half review): nothing in the enforcer throws, ever —
+        // the service dials the link right after Start, and a machine that falls over must
+        // cost a warning on the console, not an offline PC.
+        await using var rig = new Rig(MutexPrefix + Guid.NewGuid().ToString("n"));
+        foreach (var call in new[] { nameof(IMachineState.RestoreDefaults), nameof(IMachineState.RefineRestore), nameof(IMachineState.Confirm),
+                     nameof(IMachineState.ApplyOverlay), nameof(IMachineState.LiftOverlay), nameof(IMachineState.ApplyInternet),
+                     nameof(IMachineState.LiftInternet), nameof(IMachineState.ApplyExam), nameof(IMachineState.LiftExam) })
+        {
+            rig.Machine.Answers[call] = () => throw new InvalidOperationException($"{call} fell over");
+        }
+
+        var reported = new List<PolicyEvent>();
+        rig.Enforcer.Journal.Reported += reported.Add;
+
+        // A corrupt document on top: torn JSON, read only after the (failed) restore.
+        File.WriteAllText(rig.Enforcer.DocumentPath, "{ \"schema\": 1, \"lab_id\": ");
+
+        var outcome = rig.Enforcer.Start();
+        Assert.NotNull(outcome);
+        Assert.False(outcome!.MachineOpen);
+        Assert.Contains(reported, e => e.Code == PolicyEvents.RestoreFailed && e.Message.Contains("fell over", StringComparison.Ordinal));
+        Assert.Contains(reported, e => e.Code == PolicyEvents.Unreadable);
+        Assert.NotNull(rig.Link.LatestOverlayState);
+        Assert.Equal(Overlay.Types.Kind.Unspecified, rig.Link.LatestOverlayState!.Kind);
+
+        // Every other entry point, with the machine still throwing: answered, never thrown.
+        rig.Enforcer.Apply(new Overlay { Kind = Overlay.Types.Kind.Lock, SessionId = "doomed", Message = "x" }, "console-a");
+        Assert.Equal(Overlay.Types.Kind.Unspecified, rig.Link.LatestOverlayState!.Kind);
+        Assert.Contains("fell over", rig.Link.LatestOverlayState!.Problem, StringComparison.Ordinal);
+        Assert.Contains(reported, e => e.Code == PolicyEvents.ApplyFailed);
+        rig.Enforcer.Apply(null!, "console-a");
+        rig.Enforcer.ReassertOverlay();
+        rig.Enforcer.NoteEnforcement(false, OverlayReasons.HelperDown);
+        await rig.Enforcer.DisposeAsync();
+        Assert.False(rig.Enforcer.Journal.MachineOpen);
     }
 
     private static async Task<bool> WaitAsync(Func<bool> condition, TimeSpan timeout)

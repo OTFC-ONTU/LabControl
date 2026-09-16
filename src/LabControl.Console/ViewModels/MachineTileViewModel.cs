@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using LabControl.Console.Localization;
 using LabControl.Console.Services;
 using LabControl.Shared;
+using LabControl.Shared.Policy;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Video;
 
@@ -246,7 +247,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
             : state.SetByInstance.Length == 0
                 ? Strings.Get("Lock.ByUnknown")
                 : nameOfInstance?.Invoke(state.SetByInstance) ?? state.SetByInstance;
-        LockReason = state.InputBlocked ? string.Empty : state.Reason.Length > 0 ? state.Reason : Strings.Get("Lock.InputNotBlocked");
+        LockReason = state.InputBlocked ? string.Empty : state.Reason.Length > 0 ? OverlayReasonText(state.Reason) : Strings.Get("Lock.InputNotBlocked");
     }
 
     /// <summary>A known capture reason in words; an unknown one as the code itself, so a new reason is never hidden.</summary>
@@ -254,6 +255,17 @@ public sealed partial class MachineTileViewModel : ObservableObject
         reason is "no_desktop" or "access_lost" or "no_duplication" or "gdi_failed" or "open_failed" or "failed"
             ? Strings.Get("Capture." + reason)
             : reason.Replace('_', ' ');
+
+    /// <summary>
+    /// The PC's <c>OverlayState.reason</c> — stable <see cref="OverlayReasons"/> codes,
+    /// space-separated (D-70 item 7) — in words from the resources, joined with "; "; an
+    /// unknown code is shown as itself (without its <c>overlay.</c> prefix), never hidden.
+    /// </summary>
+    public static string OverlayReasonText(string reason) =>
+        string.Join("; ", OverlayReasons.Split(reason).Select(code =>
+            OverlayReasons.IsKnown(code)
+                ? Strings.Get("Overlay." + code[(code.IndexOf('.') + 1)..])
+                : code.StartsWith("overlay.", StringComparison.Ordinal) ? code[8..].Replace('_', ' ') : code.Replace('_', ' ')));
 
     /// <param name="ownership">
     /// What the session actually knows about this PC (M5 §4.6, D-58). <c>null</c> means

@@ -1751,26 +1751,27 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>
     /// Locks the screens of the given PCs (PROTOCOL <i>Overlay</i>, D-70): one <c>Overlay</c>
-    /// per linked PC with one fresh <c>session_id</c> for the whole action, <c>until_unix</c>
-    /// from <paramref name="duration"/> (<c>null</c> = until lifted) and a proposed hard
-    /// limit of <see cref="Defaults.LockHardLimit"/> from now, which the agent clamps on its
-    /// own clock. A PC that is not linked, or too old to know the message, is skipped — a
-    /// lock is a link message like <c>Input</c>, not a job, and is never queued for later.
-    /// Returns how many PCs were asked; what each one <i>shows</i> arrives as
-    /// <c>OverlayState</c> and is what the tile follows.
+    /// per linked PC with one fresh <c>session_id</c> for the whole action,
+    /// <c>until_seconds</c> from <paramref name="duration"/> (<c>null</c> = until lifted) and
+    /// a proposed hard limit of <see cref="Defaults.LockHardLimit"/> — both <b>durations</b>,
+    /// never this console's clock: the lab has no time source, so each PC stamps them onto
+    /// its own clock at arrival and clamps the limit there (D-70 item 6). A PC that is not
+    /// linked, or too old to know the message, is skipped — a lock is a link message like
+    /// <c>Input</c>, not a job, and is never queued for later. Returns how many PCs were
+    /// asked; what each one <i>shows</i> arrives as <c>OverlayState</c> and is what the tile
+    /// follows.
     /// </summary>
     public int Lock(IEnumerable<string> agentIds, string message, TimeSpan? duration)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
         ArgumentNullException.ThrowIfNull(message);
-        var now = _clock();
         var overlay = new Overlay
         {
             Kind = Overlay.Types.Kind.Lock,
             Message = message,
             SessionId = Guid.NewGuid().ToString("n"),
-            UntilUnix = duration is { } d && d > TimeSpan.Zero ? now.Add(d).ToUnixTimeSeconds() : 0,
-            HardLimitUnix = now.Add(Defaults.LockHardLimit).ToUnixTimeSeconds(),
+            UntilSeconds = duration is { } d && d > TimeSpan.Zero ? (long)Math.Ceiling(d.TotalSeconds) : 0,
+            HardLimitSeconds = (long)Defaults.LockHardLimit.TotalSeconds,
         };
 
         var (sent, skipped) = SendOverlay(agentIds, overlay);

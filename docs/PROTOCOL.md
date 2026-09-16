@@ -559,29 +559,43 @@ interactive session and a PC whose helper is down.
 
 ```
 Overlay { kind: LOCK | UNLOCK | BROADCAST_START | BROADCAST_STOP, message,
-          session_id, until_unix, hard_limit_unix }                  console → agent
+          session_id, until_seconds, hard_limit_seconds }            console → agent
 OverlayState { kind, session_id, since_unix, until_unix, hard_limit_unix,
-               input_blocked, reason, set_by_instance, problem }     agent → console
+               input_blocked, reason, set_by_instance, problem,
+               remaining_seconds }                                   agent → console
 ```
 
 `Overlay` is on the `Link` stream like `Input`. `LOCK` shows the message full screen on
 the PC and blocks the student's input; `UNLOCK` lifts it. `session_id` is stable per lock,
-so a re-sent `LOCK` re-states the same lock rather than starting a second one;
-`until_unix` is when the console wants it to end (0 = until lifted); `hard_limit_unix` is
-a **proposal** — the agent clamps it to `min(proposed, now + Defaults.LockHardLimit)`
-(1 h, owner decision) on its own clock, 0 meaning "none given" and yielding the ceiling,
-and reports what it actually holds. `BROADCAST_START` / `BROADCAST_STOP` belong to
-portion 2 (`D-71`) and are answered with a `problem` until it lands.
+so a re-sent `LOCK` re-states the same lock rather than starting a second one. **The two
+limits are durations, never console-clock stamps** (`D-70` item 6, following `D-58`'s
+rule that time decisions are the agent's): the lab has no NTP, so a PC ten minutes ahead
+would refuse every "for 5 minutes" lock sent as an absolute time and a PC behind would
+hold it past the hour. `until_seconds` is how long from arrival the console wants it to
+last (0 = until lifted; a negative value is refused as already ended); `hard_limit_seconds`
+is a **proposal** — the agent stamps both onto **its own clock at arrival** and clamps
+the limit to `min(now + proposed, now + Defaults.LockHardLimit)` (1 h, owner decision),
+0 or less meaning "none given" and yielding the ceiling, and reports what it actually
+holds. `BROADCAST_START` / `BROADCAST_STOP` belong to portion 2 (`D-71`) and are answered
+with a `problem` until it lands.
 
 **What the PC answers.** `OverlayState`, on every change, after every `Welcome` (the
 latest one, re-sent like `SessionState`), and as the answer to a refused or failed
 `Overlay`. `kind` is what is **on the screen now** — `LOCK`, `BROADCAST_START`, or
 `KIND_UNSPECIFIED` for nothing — never an echo of a request that was not applied;
-`hard_limit_unix` is the clamped limit the agent holds; `input_blocked` says whether the
-helper's low-level hooks are in place; `reason` names the gap when they are not (no
-helper in the session yet, `BlockInput` fallback in use); `set_by_instance` is the
-validated instance id of the console that set it; `problem` is why an `Overlay` was
-refused or could not be applied, empty otherwise.
+`since_unix`, `until_unix` and `hard_limit_unix` are the stamps the agent minted on its
+own clock (the limit after its clamp), and `remaining_seconds` is how long is left as of
+sending, so the console's badge and countdown never read the PC's clock; `input_blocked`
+says whether the helper's low-level hooks were installed by the most recent re-arm (never
+`BlockInput`); `reason` is zero or more **stable codes**, space-separated, that the
+console puts into words from its resources like the capture reasons — `overlay.helper_down`
+(no helper connected), `overlay.no_session` (nobody logged on), `overlay.not_shown_yet`
+(the helper has the lock but has not applied it yet), `overlay.window_failed`,
+`overlay.hook_refused`, `overlay.blockinput_fallback`, `overlay.input_open` (hooks and
+`BlockInput` both failed) — never free text; `set_by_instance` is the validated instance
+id of the console that set it; `problem` is why an `Overlay` was refused or could not be
+applied, empty otherwise. A `problem` answer for a busy mutex or a pass that failed does
+not replace the latest state the PC re-sends after `Welcome`.
 
 **Who may send it.** The ownership gate (`D-69`) is judged in the agent's read loop —
 the same loop that merges `RevocationState` — *before* the enforcer sees the message: the
@@ -605,8 +619,10 @@ cannot be blocked by design; the picture says so.
 (the machine could not show it: no interactive session, no helper), `policy.restore_failed`
 (a lift failed; the lock is kept and retried), `policy.unreadable` (the saved policy file
 was torn, foreign or newer; nothing re-applied), `policy.busy` (another restore or apply
-held the policy mutex), `overlay.expired`. An agent from before M6 logs the message and
-ignores it; the console greys *Lock* out for an outdated agent.
+held the policy mutex), `policy.failed` (the enforcer itself threw where nothing may
+throw; logged, reported, the pass abandoned — the link dials and stays up regardless),
+`overlay.expired`. An agent from before M6 logs the message and ignores it; the console
+greys *Lock* out for an outdated agent.
 
 ## Broadcast (teacher → students)
 
@@ -662,18 +678,29 @@ queued for a thread of its own — like input, so the pipe's read loop never wai
 Windows — and applied in order: `LOCK` puts the `WH_KEYBOARD_LL` / `WH_MOUSE_LL` hooks up
 first (`InputBlock`, on a thread that does nothing else) and then the topmost popup
 (`OverlayWindow`, on a thread that joined the input desktop), or re-states an existing
-window's text and limits when the `session_id` is the same; `UNLOCK` lifts both. The helper
-answers with `HelperMessage.overlay_state` on every change, with every `HelperStatus` and
-on every `Ping`: `kind` (`LOCK` while the window is up, `KIND_UNSPECIFIED` otherwise),
-`session_id`, `since_unix` and the limits it was given, `input_blocked` (both hooks are in
-place) and `reason` (the window could not be created, a hook could not be installed and
-`BlockInput` is in use, …). The service merges `input_blocked` and `reason` into the
-`OverlayState` it sends the console, treats a helper that shows nothing while a lock is
-held as its cue to re-assert (at most once every few seconds), tells a helper that still
-shows a lock the journal has lifted to lift it again, and reports *no session helper is
-connected* as the reason the moment the pipe ends. Injected input (`LLKHF_INJECTED` /
-`LLMHF_INJECTED`) passes the hooks, so the teacher's remote control works under a lock;
-every physical keyboard and mouse event is swallowed — Alt+Tab, Alt+Esc, Ctrl+Esc, the
+window's text and limits when the `session_id` is the same; `UNLOCK` lifts both. The
+`Overlay` on the pipe carries the same **durations** as the link (`until_seconds`,
+`hard_limit_seconds`): the service sends what is left of the session on its clock, the
+helper stamps it onto the same clock — so the picture's countdown and the journal's
+deadline agree to the second. The helper answers with `HelperMessage.overlay_state` on
+every change, with every `HelperStatus` and on every `Ping` — read from a lock-free
+snapshot, so a status never waits behind the window or the hooks being created: `kind`
+(`LOCK` while the window is up, `KIND_UNSPECIFIED` otherwise), `session_id`, `since_unix`,
+the stamps and `remaining_seconds`, `input_blocked` (the most recent hook install put both
+hooks up) and `reason` (the codes above: `overlay.window_failed`, `overlay.hook_refused`,
+`overlay.blockinput_fallback`, `overlay.input_open`). The service merges `input_blocked`
+and `reason` into the `OverlayState` it sends the console, treats a helper that shows
+nothing while a lock is held as its cue to re-assert (at most once every few seconds,
+`overlay.not_shown_yet` in between), tells a helper that still shows a lock the journal
+has lifted to lift it again, and reports `overlay.helper_down` — or `overlay.no_session`
+when nobody is logged on — as the reason the moment the pipe ends. The hooks are
+installed on `LOCK`, uninstalled on `UNLOCK`, and **re-armed every second while blocking**
+(a fresh pair first, the old pair unhooked second): Windows removes a low-level hook that
+stalls past `LowLevelHooksTimeout` without telling anyone, and the handle stays non-null,
+so `input_blocked` reports the most recent install, never a handle. Injected input
+(`LLKHF_INJECTED` / `LLMHF_INJECTED`) passes the hooks and the window is click-through and
+never activated, so the teacher's remote control works under a lock; every physical
+keyboard and mouse event is swallowed by the hooks alone — Alt+Tab, Alt+Esc, Ctrl+Esc, the
 Windows keys and Alt+F4 among them. Ctrl+Alt+Del never reaches a hook.
 
 **Input over the pipe (M3 portion 3, `D-36`).** Every `Input` from the console except

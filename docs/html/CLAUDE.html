@@ -410,19 +410,28 @@ wiring, <code>OverlayState</code> publishing) is driven by the Windows service (
 freshly connected helper and merges the helper's <code>overlay_state</code> back), by the simulator
 (<code>FakeMachineState</code>, the lock drawn on <code>FakeScreen</code> so the mosaic shows it) and by
 <code>agent.exe --restore-policy</code>. The helper shows the lock with a raw topmost Win32 window
-(<code>OverlayWindow</code>, one <code>StretchDIBits</code> of the SkiaSharp bitmap, repainted every second) and
+(<code>OverlayWindow</code>, one <code>StretchDIBits</code> of the SkiaSharp bitmap, repainted every second;
+layered, click-through and never activated, so it is purely visual — <code>D-70</code> item 7) and
 <code>WH_KEYBOARD_LL</code>/<code>WH_MOUSE_LL</code> hooks on a thread that does nothing else (<code>InputBlock</code>,
-every physical event swallowed, injected input passed, <code>BlockInput</code> the fallback only),
-queued through <code>OverlayController</code>. The console has <code>LabSession.Lock</code>/<code>Unlock</code>, the <em>Lock
+every physical event swallowed, injected input passed, installed on lock and re-armed every
+second because Windows drops a stalled hook silently, <code>BlockInput</code> the fallback only),
+queued through <code>OverlayController</code> whose <code>State()</code> is lock-free. The two limits travel as
+<strong>durations</strong> (<code>until_seconds</code>, <code>hard_limit_seconds</code>) and every absolute moment is minted
+on the PC's clock; <code>OverlayState.reason</code> is stable codes (<code>OverlayReasons</code>) the console
+puts into words. Nothing in <code>PolicyEnforcer</code> throws, and <code>AgentService</code> dials the link
+whatever the enforcer did. The console has <code>LabSession.Lock</code>/<code>Unlock</code>, the <em>Lock
 screens</em> dialog (message, <em>until I unlock</em> or <em>N minutes</em>, the 60-minute ceiling and the
 Ctrl+Alt+Del line stated), <em>Lock all…</em>/<em>Unlock all</em>, and a tile badge fed by the PC's
-<code>OverlayState</code> alone, naming the console that set it. Tests: 795 Shared + 236 Console after the foundation review's fixes (782 + 232 when built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full run and passed alone) (<code>LockTests</code>,
-<code>PolicyEnforcerTests</code>, the UI renders). <code>dotnet publish -r win-x64</code> of the helper and the
-agent succeed. <strong>Not yet run on Windows</strong>: the window, the hooks, the injected-input
-pass-through, the re-assert after logoff and <code>--restore-policy</code> wait for the VM (the drill
-is in ROADMAP M6). The ownership gate for <code>Overlay</code> fails closed when the link is unbound
-and answers a refusal with <code>problem</code> and no <code>kind</code>; the console never lets such an answer
-clear a lock the PC still shows.</p>
+<code>OverlayState</code> alone, naming the console that set it. Tests: 796 Shared + 241 Console after
+the second-half review's fixes (795 + 236 after the foundation review's, 782 + 232 when
+built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full
+run and passed alone) (<code>LockTests</code>, <code>OverlayLinkTests</code>, <code>PolicyEnforcerTests</code>, the UI
+renders). <code>dotnet publish -r win-x64</code> and <code>-r win-arm64</code> of the helper and the agent
+succeed. <strong>Not yet run on Windows</strong>: the window, the hooks and their re-arm, the
+injected-input pass-through under the click-through window, the re-assert after logoff and
+<code>--restore-policy</code> wait for the VM (the drill is in ROADMAP M6). The ownership gate for
+<code>Overlay</code> fails closed when the link is unbound and answers a refusal with <code>problem</code> and
+no <code>kind</code>; the console never lets such an answer clear a lock the PC still shows.</p>
 <p><strong>M0 is done (2026-09-04). M1 is done (2026-09-05)</strong>: the trust model, beacon discovery,
 mutual TLS, enrolment, the <code>Link</code> stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, <code>FakeAgent</code> and the console UI — see the M1 <em>Progress</em> and
@@ -609,7 +618,7 @@ snapshot, refresh after repair and remain visible while the PC is offline. Physi
 is informational until tested; unsupported configuration and antivirus issues need attention.</p>
 
 </article>
-<footer>Generated 2026-09-16 18:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-16 18:25 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

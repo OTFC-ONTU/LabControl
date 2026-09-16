@@ -30,16 +30,12 @@ internal sealed class WindowsMachineState : IMachineState
         _log = log;
     }
 
-    /// <summary>The lock last handed to the helper, or <c>null</c> after a lift — what a freshly connected helper is told (D-70 item 4).</summary>
-    public OverlaySession? CurrentOverlay { get; private set; }
-
     public MachineResult RestoreDefaults()
     {
         // Portion 3 (D-69 item 2, D-73): every profile's default outbound action to Allow,
         // the owned rule group with the agent.exe exemption last, loopback DNS back to DHCP,
         // the resolver stopped, the watchdog task deleted. In portion 1 nothing on the machine
         // outlives the helper, so there is nothing to put back.
-        CurrentOverlay = null;
         return MachineResult.Done;
     }
 
@@ -57,16 +53,19 @@ internal sealed class WindowsMachineState : IMachineState
 
     public MachineResult ApplyOverlay(OverlaySession session)
     {
+        // The pipe carries durations like the link does (D-70 item 6): what is left of the
+        // session on this clock, at least a second so a lock that is still valid is never
+        // handed over as already ended. The helper stamps them onto the same clock.
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var overlay = new Overlay
         {
             Kind = session.Kind,
             Message = session.Message,
             SessionId = session.SessionId,
-            UntilUnix = session.UntilUnix,
-            HardLimitUnix = session.HardLimitUnix,
+            UntilSeconds = session.UntilUnix > 0 ? Math.Max(1, session.UntilUnix - now) : 0,
+            HardLimitSeconds = Math.Max(1, session.HardLimitUnix - now),
         };
 
-        CurrentOverlay = session;
         if (!_sendToHelper(new ServiceMessage { Overlay = overlay }))
         {
             // Not a failure: the supervisor tells the helper when it connects, and the console
@@ -79,7 +78,6 @@ internal sealed class WindowsMachineState : IMachineState
 
     public MachineResult LiftOverlay()
     {
-        CurrentOverlay = null;
         _sendToHelper(new ServiceMessage { Overlay = new Overlay { Kind = Overlay.Types.Kind.Unlock } });
         return MachineResult.Done;
     }

@@ -11,6 +11,7 @@ using LabControl.Console.Views;
 using LabControl.Shared;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
+using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 
 namespace LabControl.Console.Tests;
@@ -245,7 +246,7 @@ public sealed class UiTests
                 // The lock badge follows OverlayState — the PC's word, never the request: PC-04
                 // reports a lock this console set, PC-06 one another console set with the hooks missing.
                 agents[3].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Lock, SessionId = "s4", SetByInstance = console.Session.Instance.InstanceId, InputBlocked = true });
-                agents[5].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Lock, SessionId = "s6", SetByInstance = "other-console", InputBlocked = false, Reason = "BlockInput fallback" });
+                agents[5].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Lock, SessionId = "s6", SetByInstance = "other-console", InputBlocked = false, Reason = OverlayReasons.Join([OverlayReasons.HookRefused, OverlayReasons.BlockInputFallback]) });
                 Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[3].AgentId)?.OverlayLocked == true && console.Session.FindLinked(agents[5].AgentId)?.OverlayLocked == true));
                 await Render(window, "main-lab-locked");
                 var locked4 = vm.Machines.Single(m => m.Number == 4);
@@ -253,7 +254,8 @@ public sealed class UiTests
                 Assert.Equal("locked by this console", locked4.LockText);
                 var locked6 = vm.Machines.Single(m => m.Number == 6);
                 Assert.True(locked6.IsLocked);
-                Assert.Equal("locked by other-console — input not fully blocked: BlockInput fallback", locked6.LockText);
+                // Reason codes on the wire, words on the tile (D-70 item 7).
+                Assert.Equal("locked by other-console — input not fully blocked: the input hooks could not be installed; BlockInput is in use instead, which also blocks remote control", locked6.LockText);
                 Assert.False(vm.Machines.Single(m => m.Number == 1).IsLocked);
                 Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "LOCKED" && t.IsVisible);
                 agents[3].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Unspecified });

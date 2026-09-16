@@ -183,8 +183,9 @@ internal static class Program
     /// <c>agent.exe --restore-policy</c>: D-69 steps 0–6 against a <see cref="WindowsMachineState"/>
     /// with no helper (a lock that is still valid is recorded and shown by the service's next
     /// helper), under <see cref="PolicyMutex"/>. Returns 0 when the machine is proven open,
-    /// 1 when a restore step failed, 2 when the PC is not provisioned, 3 when the mutex was
-    /// held elsewhere for the whole wait.
+    /// 1 when a restore step failed or the restore itself threw (the reason is logged; never
+    /// an unhandled exception — the watchdog task reads the exit code), 2 when the PC is not
+    /// provisioned, 3 when the mutex was held elsewhere for the whole wait.
     /// </summary>
     private static int RestorePolicy(Microsoft.Extensions.Logging.ILogger log)
     {
@@ -200,34 +201,42 @@ internal static class Program
             return 2;
         }
 
-        using var lease = PolicyMutex.TryAcquire();
-        if (lease.Outcome == PolicyMutexOutcome.Busy)
+        try
         {
-            log.LogWarning("{Message}", PolicyEvents.Text("Busy", (long)Defaults.PolicyMutexWait.TotalSeconds));
-            return 3;
+            using var lease = PolicyMutex.TryAcquire();
+            if (lease.Outcome == PolicyMutexOutcome.Busy)
+            {
+                log.LogWarning("{Message}", PolicyEvents.Text("Busy", (long)Defaults.PolicyMutexWait.TotalSeconds));
+                return 3;
+            }
+
+            if (lease.Outcome == PolicyMutexOutcome.Unavailable)
+            {
+                // Cannot be serialized against the service (a DACL, an unelevated operator): the
+                // restore runs anyway — an unserialized restore beats a PC that never restores.
+                log.LogWarning("the policy mutex is unavailable ({Problem}); restoring without it", lease.Problem);
+            }
+
+            var path = Path.Combine(Defaults.AgentDataDirectory, Defaults.PolicyFileName);
+            var machine = new WindowsMachineState(_ => false, log);
+            var journal = new PolicyJournal(machine, labId, PolicyJournal.FileReader(path), PolicyJournal.FileWriter(path));
+            journal.Reported += reported => log.Log(reported.Severity switch
+            {
+                Shared.Protocol.Event.Types.Severity.Error => LogLevel.Error,
+                Shared.Protocol.Event.Types.Severity.Warning => LogLevel.Warning,
+                _ => LogLevel.Information,
+            }, "{Code}: {Message}", reported.Code, reported.Message);
+
+            var outcome = journal.Start(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            log.LogInformation("policy restore: machine {Open}, {Reapplied} session(s) re-applied, {Dropped} dropped",
+                outcome.MachineOpen ? "open" : "NOT proven open", outcome.Reapplied.Count, outcome.Dropped.Count);
+            return outcome.MachineOpen ? 0 : 1;
         }
-
-        if (lease.Outcome == PolicyMutexOutcome.Unavailable)
+        catch (Exception ex)
         {
-            // Cannot be serialized against the service (a DACL, an unelevated operator): the
-            // restore runs anyway — an unserialized restore beats a PC that never restores.
-            log.LogWarning("the policy mutex is unavailable ({Problem}); restoring without it", lease.Problem);
+            log.LogError(ex, "{Code}: {Message}", PolicyEvents.EnforcerFailed, PolicyEvents.Text("EnforcerFailed", "restore", ex.Message));
+            return 1;
         }
-
-        var path = Path.Combine(Defaults.AgentDataDirectory, Defaults.PolicyFileName);
-        var machine = new WindowsMachineState(_ => false, log);
-        var journal = new PolicyJournal(machine, labId, PolicyJournal.FileReader(path), PolicyJournal.FileWriter(path));
-        journal.Reported += reported => log.Log(reported.Severity switch
-        {
-            Shared.Protocol.Event.Types.Severity.Error => LogLevel.Error,
-            Shared.Protocol.Event.Types.Severity.Warning => LogLevel.Warning,
-            _ => LogLevel.Information,
-        }, "{Code}: {Message}", reported.Code, reported.Message);
-
-        var outcome = journal.Start(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-        log.LogInformation("policy restore: machine {Open}, {Reapplied} session(s) re-applied, {Dropped} dropped",
-            outcome.MachineOpen ? "open" : "NOT proven open", outcome.Reapplied.Count, outcome.Dropped.Count);
-        return outcome.MachineOpen ? 0 : 1;
     }
 
     /// <summary>

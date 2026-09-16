@@ -242,13 +242,23 @@ departure. One platform-neutral <code>PolicyEnforcer</code> is driven by the Win
 (<code>WindowsMachineState</code>, the overlay relayed by <code>SessionSupervisor</code> and re-asserted to
 every fresh helper), by the simulator (<code>FakeMachineState</code>, the lock drawn on the fake
 desktop) and by <code>agent.exe --restore-policy</code>. The helper shows the lock with a raw
-topmost Win32 window painted from the <code>OverlayText.Compose</code> bitmap and low-level
-keyboard/mouse hooks on a dedicated thread that pass injected input; <code>BlockInput</code> is
-the fallback only. The console has <code>LabSession.Lock</code>/<code>Unlock</code>, the <em>Lock screens</em>
+topmost Win32 window painted from the <code>OverlayText.Compose</code> bitmap — layered,
+click-through and never activated, purely visual (<code>D-70</code> item 7) — and low-level
+keyboard/mouse hooks on a dedicated thread that pass injected input, installed on lock
+and re-armed every second (<code>D-70</code> item 8); <code>BlockInput</code> is the fallback only. The
+limits on the wire are <strong>durations</strong> stamped onto the PC's clock at arrival (<code>D-70</code>
+item 6); <code>OverlayState.reason</code> is stable <code>OverlayReasons</code> codes the console puts into
+words; nothing in <code>PolicyEnforcer</code> throws and the service dials the link regardless
+(<code>D-70</code> item 9). The console has <code>LabSession.Lock</code>/<code>Unlock</code>, the <em>Lock screens</em>
 dialog (ceiling and Ctrl+Alt+Del stated), <em>Lock all…</em>/<em>Unlock all</em> and a tile badge fed
-by the PC's <code>OverlayState</code>, never by the request. Tests: 795 Shared + 236 Console after the foundation review's fixes (782 + 232 when built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full run and passed alone). <code>dotnet publish -r win-x64</code> of the helper and the agent succeed; the VM drill is in ROADMAP M6. When
-touching <code>Overlay</code>/<code>OverlayState</code>, the ownership gate in <code>AgentLink</code> is judged before the
-enforcer sees the message and fails closed; keep <code>LeaveIfConsoleRevoked</code> as it is.</li>
+by the PC's <code>OverlayState</code>, never by the request. Tests: 796 Shared + 241 Console after
+the second-half review's fixes (795 + 236 after the foundation review's, 782 + 232 when
+built, 778 + 228 before the portion; one load-sensitive beacon test failed under the
+full run and passed alone). <code>dotnet publish -r win-x64</code> and <code>-r win-arm64</code> of the helper
+and the agent succeed; the VM drill is in ROADMAP M6. When touching
+<code>Overlay</code>/<code>OverlayState</code>, the ownership gate in <code>AgentLink</code> is judged before the
+enforcer sees the message and fails closed; keep <code>LeaveIfConsoleRevoked</code> as it is, keep
+the limits as durations, and keep every teacher-facing reason a code.</li>
 <li>The Windows student agent must survive reboots and must not let a failed Win32
 operation escape the service loop.</li>
 <li>Student PCs may have no internet. Do not introduce a cloud or per-PC runtime
@@ -361,7 +371,7 @@ Keep installer advisories bounded to the fixed readiness-code schema; translate 
 the console, retain valid cached warnings offline and never display arbitrary report JSON.</p>
 
 </article>
-<footer>Generated 2026-09-16 18:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-16 18:25 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

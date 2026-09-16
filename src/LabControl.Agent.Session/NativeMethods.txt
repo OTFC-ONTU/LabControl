@@ -49,14 +49,16 @@ XBUTTON1
 XBUTTON2
 
 // The lock overlay (M6 portion 1, D-70): a raw topmost popup window on the input desktop,
-// painted from one BGRA bitmap, repainted on a timer for the countdown
+// painted from one BGRA bitmap, repainted on a timer for the countdown; layered,
+// click-through and never activated, so the teacher's injected input lands underneath
 RegisterClassExW
 UnregisterClassW
 CreateWindowExW
 DestroyWindow
 ShowWindow
 SetWindowPos
-SetForegroundWindow
+SetLayeredWindowAttributes
+LAYERED_WINDOW_ATTRIBUTES_FLAGS
 DefWindowProcW
 GetMessageW
 TranslateMessage
@@ -87,13 +89,18 @@ WM_KEYUP
 WM_SYSKEYDOWN
 WM_SYSKEYUP
 WM_SYSCOMMAND
+WM_MOUSEACTIVATE
+MA_NOACTIVATE
 
 // The input block under a lock: low-level keyboard and mouse hooks on a thread of their
-// own; BlockInput only as the fallback (D-70 item 3)
+// own, re-armed on a thread timer while blocking; BlockInput only as the fallback (D-70
+// item 3); PeekMessage creates the thread's queue before anything is posted to it
 SetWindowsHookExW
 UnhookWindowsHookEx
 CallNextHookEx
 BlockInput
+PeekMessageW
+PEEK_MESSAGE_REMOVE_TYPE
 KBDLLHOOKSTRUCT
 MSLLHOOKSTRUCT
 KBDLLHOOKSTRUCT_FLAGS

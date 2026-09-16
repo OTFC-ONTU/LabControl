@@ -287,8 +287,12 @@ public sealed class PolicyJournal
     /// <summary>
     /// A console's <c>Overlay</c>, already past the ownership gate: a <c>LOCK</c> starts or
     /// re-states a lock whose hard limit the agent clamps to <see cref="Defaults.LockHardLimit"/>,
-    /// an <c>UNLOCK</c> lifts it. Returns what the PC shows afterwards — the truth, never an
-    /// echo of the request — with <c>problem</c> set when the request was refused or failed.
+    /// an <c>UNLOCK</c> lifts it. The request carries <b>durations</b> (<c>until_seconds</c>,
+    /// <c>hard_limit_seconds</c>), never a console-clock stamp: the lab has no time source, so
+    /// every absolute moment is minted here, on this PC's clock, at arrival (D-58's rule that
+    /// time decisions are the agent's; D-70 item 6). Returns what the PC shows afterwards —
+    /// the truth, never an echo of the request — with <c>problem</c> set when the request was
+    /// refused or failed.
     /// </summary>
     /// <param name="setByInstance">The validated instance id of the console that sent it (D-57 item 4).</param>
     public OverlayState SetOverlay(Overlay request, string setByInstance, long nowUnix)
@@ -300,7 +304,7 @@ public sealed class PolicyJournal
         {
             if (_stopped)
             {
-                return OverlayStateLocked(PolicyEvents.RefusedStopped);
+                return OverlayStateLocked(PolicyEvents.RefusedStopped, nowUnix);
             }
 
             switch (request.Kind)
@@ -314,10 +318,10 @@ public sealed class PolicyJournal
                 case Overlay.Types.Kind.BroadcastStart:
                 case Overlay.Types.Kind.BroadcastStop:
                     // Portion 2 (D-71): a broadcast is not a session and never reaches the document.
-                    return OverlayStateLocked(PolicyEvents.Text("NotInThisBuild", PolicyEvents.Text("KindBroadcast")));
+                    return OverlayStateLocked(PolicyEvents.Text("NotInThisBuild", PolicyEvents.Text("KindBroadcast")), nowUnix);
 
                 default:
-                    return OverlayStateLocked(PolicyEvents.RefusedUnknownKind);
+                    return OverlayStateLocked(PolicyEvents.RefusedUnknownKind, nowUnix);
             }
         }
     }
@@ -333,33 +337,34 @@ public sealed class PolicyJournal
         {
             if (_policy.Overlay is not { } overlay)
             {
-                return OverlayStateLocked(null);
+                return OverlayStateLocked(null, nowUnix);
             }
 
             if (overlay.Ended(nowUnix))
             {
                 // The timer will lift it; do not show a lock that is already over.
-                return OverlayStateLocked(null);
+                return OverlayStateLocked(null, nowUnix);
             }
 
             var result = Guard(nameof(IMachineState.ApplyOverlay), () => _machine.ApplyOverlay(overlay));
-            return OverlayStateLocked(result.Succeeded ? null : Describe(result, PolicyEvents.KindName(overlay)));
+            return OverlayStateLocked(result.Succeeded ? null : Describe(result, PolicyEvents.KindName(overlay)), nowUnix);
         }
     }
 
     /// <summary>
     /// What the helper reports about its own enforcement (<c>HelperMessage.overlay_state</c>):
-    /// whether the low-level hooks hold, or which fallback and why. Kept for
-    /// <see cref="OverlayStateOf"/>; a helper that shows nothing while a lock is held is the
-    /// service's cue to <see cref="ReassertOverlay"/>.
+    /// whether the low-level hooks hold, or which fallback and why — as stable
+    /// <see cref="OverlayReasons"/> codes, never words. Kept for <see cref="OverlayStateOf"/>;
+    /// a helper that shows nothing while a lock is held is the service's cue to
+    /// <see cref="ReassertOverlay"/>.
     /// </summary>
-    public OverlayState NoteEnforcement(bool inputBlocked, string reason)
+    public OverlayState NoteEnforcement(bool inputBlocked, string reason, long nowUnix)
     {
         lock (_lock)
         {
             _inputBlocked = inputBlocked;
             _overlayReason = reason ?? string.Empty;
-            return OverlayStateLocked(null);
+            return OverlayStateLocked(null, nowUnix);
         }
     }
 
@@ -368,26 +373,34 @@ public sealed class PolicyJournal
     {
         lock (_lock)
         {
-            return OverlayStateLocked(null);
+            return OverlayStateLocked(null, nowUnix);
         }
     }
 
     private OverlayState ApplyLockLocked(Overlay request, string setByInstance, long nowUnix)
     {
+        // A negative duration is a request that ended before it arrived: refused, nothing shown.
+        if (request.UntilSeconds < 0)
+        {
+            return OverlayStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix);
+        }
+
+        // Durations become moments here, on this clock (D-70 item 6). A proposed hard limit of
+        // 0 or less means "none given" and yields the ceiling, as Clamp reads it.
         var session = new OverlaySession
         {
             Kind = Overlay.Types.Kind.Lock,
             SessionId = request.SessionId.Length > 0 ? request.SessionId : Guid.NewGuid().ToString("n"),
             SetByInstance = setByInstance,
             SinceUnix = _policy.Overlay is { } current && current.SessionId == request.SessionId ? current.SinceUnix : nowUnix,
-            UntilUnix = Math.Max(0, request.UntilUnix),
-            HardLimitUnix = ClassroomPolicy.Clamp(request.HardLimitUnix, Defaults.LockHardLimit, nowUnix),
+            UntilUnix = request.UntilSeconds > 0 ? ClassroomPolicy.Add(nowUnix, request.UntilSeconds) : 0,
+            HardLimitUnix = ClassroomPolicy.Clamp(request.HardLimitSeconds > 0 ? ClassroomPolicy.Add(nowUnix, request.HardLimitSeconds) : 0, Defaults.LockHardLimit, nowUnix),
             Message = OverlayText.ClampMessage(request.Message),
         };
 
         if (session.Ended(nowUnix))
         {
-            return OverlayStateLocked(PolicyEvents.RefusedAlreadyEnded);
+            return OverlayStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix);
         }
 
         var result = Guard(nameof(IMachineState.ApplyOverlay), () => _machine.ApplyOverlay(session));
@@ -395,19 +408,19 @@ public sealed class PolicyJournal
         {
             var problem = Describe(result, PolicyEvents.KindName(session));
             Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed, PolicyEvents.Text("ApplyFailed", PolicyEvents.KindName(session), session.SessionId, problem));
-            return OverlayStateLocked(problem);
+            return OverlayStateLocked(problem, nowUnix);
         }
 
         _policy.Overlay = session;
         Save(nowUnix);
-        return OverlayStateLocked(null);
+        return OverlayStateLocked(null, nowUnix);
     }
 
     private OverlayState LiftLockLocked(long nowUnix)
     {
         if (_policy.Overlay is not { } overlay)
         {
-            return OverlayStateLocked(null);
+            return OverlayStateLocked(null, nowUnix);
         }
 
         var result = Guard(nameof(IMachineState.LiftOverlay), _machine.LiftOverlay);
@@ -416,21 +429,22 @@ public sealed class PolicyJournal
             var problem = Describe(result, PolicyEvents.KindName(overlay));
             _machineOpen = false;
             Report(Event.Types.Severity.Warning, PolicyEvents.RestoreFailed, PolicyEvents.Text("LiftFailed", PolicyEvents.KindName(overlay), overlay.SessionId, problem));
-            return OverlayStateLocked(problem);
+            return OverlayStateLocked(problem, nowUnix);
         }
 
         _policy.Overlay = null;
         Save(nowUnix);
-        return OverlayStateLocked(null);
+        return OverlayStateLocked(null, nowUnix);
     }
 
     /// <summary>
-    /// The state as it stands. Null-safe on purpose: a protobuf string setter throws on
+    /// The state as it stands, with <c>remaining_seconds</c> counted on this clock so the
+    /// console never has to. Null-safe on purpose: a protobuf string setter throws on
     /// <c>null</c>, and this runs on the unattended paths (the re-send after <c>Welcome</c>,
     /// the helper re-assert), so nothing that reaches it may throw — even if a session ever
     /// carried a null the document validation did not see.
     /// </summary>
-    private OverlayState OverlayStateLocked(string? problem)
+    private OverlayState OverlayStateLocked(string? problem, long nowUnix)
     {
         var state = new OverlayState { Problem = problem ?? string.Empty };
         if (_policy.Overlay is { } overlay)
@@ -440,6 +454,7 @@ public sealed class PolicyJournal
             state.SinceUnix = overlay.SinceUnix;
             state.UntilUnix = overlay.UntilUnix;
             state.HardLimitUnix = overlay.HardLimitUnix;
+            state.RemainingSeconds = OverlayText.Remaining(overlay.UntilUnix, overlay.HardLimitUnix, nowUnix) ?? 0;
             state.SetByInstance = overlay.SetByInstance ?? string.Empty;
             state.InputBlocked = _inputBlocked;
             state.Reason = _overlayReason ?? string.Empty;

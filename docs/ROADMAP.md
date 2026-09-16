@@ -1997,18 +1997,43 @@ the corrupt `policy.json` one (`D-79`). Portions 2 and 3 could swap; 4 needs 3, 
   thread with a no-throw lease, originals kept until a restore confirms, and
   `OverlayLinkTests` (Console) over the real link — plus the composer's size and message
   clamps. Tests after the fixes: 795 Shared and 236 Console.
-  **Not yet run on Windows:** the window, the hooks, the injected-input pass-through, the
-  re-assert after logoff and `--restore-policy` wait for the VM. *The VM drill:* push (or
-  `scripts/dev-install.ps1`) the `win-x64` agent and helper; lock the PC from the console
-  with a Ukrainian message and *for 2 minutes*; on the PC try Alt+Tab, Win, Alt+F4,
-  Ctrl+Esc, a click and typing (nothing must happen), then Ctrl+Alt+Del (the secure screen
-  must open, and the lock must be back on it and after *Cancel*); with *Control* on in the
-  single-PC window, move the mouse and type — the teacher's input must reach the desktop
-  under the lock; log the student off and on again — the lock must be back within the
-  helper's restart; let the two minutes pass — the PC must unlock itself with the console
-  silent and `overlay.expired` in the events; lock again *until I unlock*, `sc stop`/`sc
-  start` the service — the lock must be back, then `agent.exe --restore-policy` from an
-  elevated prompt must exit 0 and leave the lock on (still within its limit); finally check
+  *Reviewed a second time the same day* (the agent/helper/console half; `D-70` items 6–9):
+  the opaque foreground window that would have swallowed the teacher's remote control (now
+  layered, click-through, never activated), the silently lost hook reported as blocked
+  (installed on lock, re-armed every second, reported from the last install), the
+  console-clock `until` judged on a PC with no time source (durations on the wire, stamped
+  on the PC's clock; `OverlayState.remaining_seconds` for the console), the enforcer able
+  to throw before the link dialled (nothing throws; `AgentService.StartPolicy` guards the
+  rest; `--restore-policy` exits 1 with the reason), the helper's `State()` stalling behind
+  `Apply` past the silence timeout (lock-free), and English literals in `reason` (stable
+  `OverlayReasons` codes, words from `Strings.resx`). Tests after those fixes: 796 Shared
+  and 241 Console — the lock outliving the console's departure and ending at its own
+  limit, a second console of the lab seeing whose lock it is and ending it, a torn
+  `policy.json` and a machine whose every call throws still linking with the reason on the
+  console, `policy.busy` on the wire, and the skipped path for an unlinked or outdated PC.
+  `dotnet publish -r win-arm64` of the helper and the agent succeed too.
+  **Not yet run on Windows:** the window, the hooks and their re-arm, the injected-input
+  pass-through, the re-assert after logoff and `--restore-policy` wait for the VM. *The VM
+  drill* (ARM64 VM: publish `win-arm64`; the lab PCs need `win-x64`): push (or
+  `scripts/dev-install.ps1`) the agent and helper; **set the VM's clock ten minutes ahead of
+  the console's** — the lock must still take, and the badge's countdown must agree with
+  the picture's (durations, not stamps); lock the PC from the console with a Ukrainian
+  message and *for 2 minutes*; on the PC try Alt+Tab, Win, Alt+F4, Ctrl+Esc, a click and
+  typing (nothing must happen), then Ctrl+Alt+Del (the secure screen must open, and the
+  lock must be back on it and after *Cancel*); with *Control* on in the single-PC window,
+  move the mouse and type into Notepad opened before the lock — the teacher's input must
+  reach the desktop under the lock (blind: the console shows the picture) and the text must
+  be there after the unlock; **while streaming *full* mode, scroll a browser for a minute
+  under the lock, then type physically** — nothing must pass, and the helper log must show
+  no "no longer installed" lines (or, if it does, a re-arm right after); watch the service
+  log for `session.exe has been silent` during lock/unlock — there must be none; log the
+  student off and on again — the lock must be back within the helper's restart, with
+  `overlay.helper_down` on the badge in between; let the two minutes pass — the PC must
+  unlock itself with the console silent and `overlay.expired` in the events; lock again
+  *until I unlock*, `sc stop`/`sc start` the service — the lock must be back, then
+  `agent.exe --restore-policy` from an elevated prompt must exit 0 and leave the lock on
+  (still within its limit); corrupt `policy.json` by hand (truncate it) and restart the
+  service — the PC must link and the console must show `policy.unreadable`; finally check
   `policy.json` and the tile badge after each step.
 
 ---

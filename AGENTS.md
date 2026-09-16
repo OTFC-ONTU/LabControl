@@ -109,14 +109,23 @@ the documents relevant to the task:
   (`WindowsMachineState`, the overlay relayed by `SessionSupervisor` and re-asserted to
   every fresh helper), by the simulator (`FakeMachineState`, the lock drawn on the fake
   desktop) and by `agent.exe --restore-policy`. The helper shows the lock with a raw
-  topmost Win32 window painted from the `OverlayText.Compose` bitmap and low-level
-  keyboard/mouse hooks on a dedicated thread that pass injected input; `BlockInput` is
-  the fallback only. The console has `LabSession.Lock`/`Unlock`, the *Lock screens*
+  topmost Win32 window painted from the `OverlayText.Compose` bitmap — layered,
+  click-through and never activated, purely visual (`D-70` item 7) — and low-level
+  keyboard/mouse hooks on a dedicated thread that pass injected input, installed on lock
+  and re-armed every second (`D-70` item 8); `BlockInput` is the fallback only. The
+  limits on the wire are **durations** stamped onto the PC's clock at arrival (`D-70`
+  item 6); `OverlayState.reason` is stable `OverlayReasons` codes the console puts into
+  words; nothing in `PolicyEnforcer` throws and the service dials the link regardless
+  (`D-70` item 9). The console has `LabSession.Lock`/`Unlock`, the *Lock screens*
   dialog (ceiling and Ctrl+Alt+Del stated), *Lock all…*/*Unlock all* and a tile badge fed
-  by the PC's `OverlayState`, never by the request. Tests: 795 Shared + 236 Console after the foundation review's fixes (782 + 232 when built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full run and passed alone). `dotnet publish -r
-  win-x64` of the helper and the agent succeed; the VM drill is in ROADMAP M6. When
-  touching `Overlay`/`OverlayState`, the ownership gate in `AgentLink` is judged before the
-  enforcer sees the message and fails closed; keep `LeaveIfConsoleRevoked` as it is.
+  by the PC's `OverlayState`, never by the request. Tests: 796 Shared + 241 Console after
+  the second-half review's fixes (795 + 236 after the foundation review's, 782 + 232 when
+  built, 778 + 228 before the portion; one load-sensitive beacon test failed under the
+  full run and passed alone). `dotnet publish -r win-x64` and `-r win-arm64` of the helper
+  and the agent succeed; the VM drill is in ROADMAP M6. When touching
+  `Overlay`/`OverlayState`, the ownership gate in `AgentLink` is judged before the
+  enforcer sees the message and fails closed; keep `LeaveIfConsoleRevoked` as it is, keep
+  the limits as durations, and keep every teacher-facing reason a code.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Student PCs may have no internet. Do not introduce a cloud or per-PC runtime

@@ -143,7 +143,22 @@ public sealed class ClassroomPolicy
     public static long Clamp(long proposedUnix, TimeSpan ceiling, long nowUnix)
     {
         var ceilingSeconds = Math.Max(0, (long)ceiling.TotalSeconds);
-        var ceilingUnix = nowUnix > long.MaxValue - ceilingSeconds ? long.MaxValue : nowUnix + ceilingSeconds;
+        var ceilingUnix = Add(nowUnix, ceilingSeconds);
         return proposedUnix <= 0 ? ceilingUnix : Math.Min(proposedUnix, ceilingUnix);
+    }
+
+    /// <summary>
+    /// A duration from the wire stamped onto this clock (D-70 item 6): <c>now + seconds</c>,
+    /// saturating at <c>long.MaxValue</c> rather than wrapping into the past. A negative
+    /// duration yields <c>now</c> — a session that has already ended.
+    /// </summary>
+    public static long Add(long nowUnix, long seconds)
+    {
+        if (seconds <= 0)
+        {
+            return nowUnix;
+        }
+
+        return nowUnix > long.MaxValue - seconds ? long.MaxValue : nowUnix + seconds;
     }
 }

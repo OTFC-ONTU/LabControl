@@ -13,10 +13,15 @@ namespace LabControl.Shared.Policy;
 /// drive this one class over their own <see cref="IMachineState"/>; only what the machine
 /// <i>does</i> with a session is platform code.
 /// <para>
-/// Nothing here throws out of a link callback or the timer: every pass is wrapped, a mutex
-/// that is held elsewhere for the whole wait is reported as <see cref="PolicyEvents.Busy"/>
-/// and the pass is skipped (the timer tries again shortly), and the link's read thread is
-/// never blocked — an <c>Overlay</c> is handed to a worker at once.
+/// <b>Nothing here throws, ever.</b> Every public entry point — <see cref="Start"/>,
+/// <see cref="Apply"/>, <see cref="ReassertOverlay"/>, <see cref="NoteEnforcement"/>, the
+/// timer tick and <see cref="DisposeAsync"/> — runs inside <see cref="Safe"/>: an exception
+/// anywhere in it is logged, reported as <see cref="PolicyEvents.EnforcerFailed"/> and the
+/// method returns, because the service dials the link right after <see cref="Start"/> and a
+/// corrupt <c>policy.json</c> must cost a warning, not an offline PC. A mutex that is held
+/// elsewhere for the whole wait is reported as <see cref="PolicyEvents.Busy"/> and the pass
+/// is skipped (the timer tries again shortly), and the link's read thread is never blocked —
+/// an <c>Overlay</c> is handed to a worker at once.
 /// </para>
 /// </summary>
 public sealed class PolicyEnforcer : IAsyncDisposable
@@ -79,7 +84,8 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     /// restart. Returns what the pass made of the machine, or <c>null</c> when the mutex was
     /// held elsewhere for the whole wait (reported as <see cref="PolicyEvents.Busy"/>; the
     /// enforcer still subscribes, and the next timer pass restores nothing — the document is
-    /// left to whoever holds the mutex).
+    /// left to whoever holds the mutex), when it was already started, or when the pass
+    /// itself failed (reported as <see cref="PolicyEvents.EnforcerFailed"/>). Never throws.
     /// </summary>
     public PolicyRestoreOutcome? Start()
     {
@@ -94,15 +100,20 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         }
 
         PolicyRestoreOutcome? outcome = null;
-        Guarded("start", () =>
+        Safe("start", () =>
         {
-            outcome = Journal.Start(_clock().ToUnixTimeSeconds());
-            _log.LogInformation("policy restore at start: machine {Open}, {Reapplied} re-applied, {Dropped} dropped",
-                outcome.MachineOpen ? "open" : "NOT proven open", outcome.Reapplied.Count, outcome.Dropped.Count);
+            Guarded("start", () =>
+            {
+                outcome = Journal.Start(_clock().ToUnixTimeSeconds());
+                _log.LogInformation("policy restore at start: machine {Open}, {Reapplied} re-applied, {Dropped} dropped",
+                    outcome.MachineOpen ? "open" : "NOT proven open", outcome.Reapplied.Count, outcome.Dropped.Count);
+            });
         });
 
-        _link.OverlayReceived += _onOverlay;
-        Publish(Journal.OverlayStateOf(_clock().ToUnixTimeSeconds()));
+        // Subscribed and published whatever the pass did: a link that never hears the enforcer
+        // would leave the console waiting on every Overlay.
+        Safe("start", () => _link.OverlayReceived += _onOverlay);
+        Safe("start", () => Publish(Journal.OverlayStateOf(_clock().ToUnixTimeSeconds())));
         Rearm();
         return outcome;
     }
@@ -110,11 +121,11 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     /// <summary>
     /// Re-asserts the current lock to a machine that lost it — a helper restarted at logon
     /// or logoff (D-30, D-70 item 4). A no-op without a lock; publishes the state either way
-    /// so the console sees the helper gap close.
+    /// so the console sees the helper gap close. Never throws.
     /// </summary>
     public void ReassertOverlay()
     {
-        Guarded("reassert", () => Publish(Journal.ReassertOverlay(_clock().ToUnixTimeSeconds())));
+        Safe("reassert", () => Guarded("reassert", () => Publish(Journal.ReassertOverlay(_clock().ToUnixTimeSeconds()))));
     }
 
     /// <summary>
@@ -124,34 +135,39 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     /// every two seconds is not news. The comparison is against the state last published,
     /// not a remembered pair, so whatever changed the published state in between is
     /// followed by the helper's next report, never by a stale one. The word itself is
-    /// reset where a helper's departure is known — the supervisor says "no session helper is
-    /// connected" when one leaves, and the next helper reports on every ping.
+    /// reset where a helper's departure is known — the supervisor says
+    /// <see cref="OverlayReasons.HelperDown"/> when one leaves, and the next helper reports on
+    /// every ping. <paramref name="reason"/> is <see cref="OverlayReasons"/> codes, not words.
+    /// Never throws.
     /// </summary>
     public void NoteEnforcement(bool inputBlocked, string reason)
     {
-        reason ??= string.Empty;
-        lock (_lock)
+        Safe("enforcement", () =>
         {
-            if (_stopped)
+            reason ??= string.Empty;
+            lock (_lock)
+            {
+                if (_stopped)
+                {
+                    return;
+                }
+            }
+
+            var state = Journal.NoteEnforcement(inputBlocked, reason, _clock().ToUnixTimeSeconds());
+            var last = _link.LatestOverlayState;
+            if (last is not null && last.Kind == state.Kind && last.InputBlocked == state.InputBlocked
+                && string.Equals(last.Reason, state.Reason, StringComparison.Ordinal) && last.Problem.Length == 0)
             {
                 return;
             }
-        }
 
-        var state = Journal.NoteEnforcement(inputBlocked, reason);
-        var last = _link.LatestOverlayState;
-        if (last is not null && last.Kind == state.Kind && last.InputBlocked == state.InputBlocked
-            && string.Equals(last.Reason, state.Reason, StringComparison.Ordinal) && last.Problem.Length == 0)
-        {
-            return;
-        }
-
-        Publish(state);
+            Publish(state);
+        });
     }
 
     /// <summary>
     /// The <c>OnStop</c> restore (D-69 item 5) under the mutex; the document is not cleared.
-    /// Safe to call twice.
+    /// Safe to call twice. Never throws.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
@@ -165,15 +181,23 @@ public sealed class PolicyEnforcer : IAsyncDisposable
             _stopped = true;
         }
 
-        _link.OverlayReceived -= _onOverlay;
-        await _timer.DisposeAsync();
+        Safe("stop", () => _link.OverlayReceived -= _onOverlay);
+        try
+        {
+            await _timer.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "disposing the policy timer failed: {Message}", ex.Message);
+        }
+
         if (_started)
         {
-            Guarded("stop", () =>
+            Safe("stop", () => Guarded("stop", () =>
             {
                 var outcome = Journal.Stop(_clock().ToUnixTimeSeconds());
                 _log.LogInformation("policy restore at stop: machine {Open}", outcome.MachineOpen ? "open" : "NOT proven open");
-            });
+            }));
         }
 
         Journal.Reported -= OnReported;
@@ -187,96 +211,111 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     /// <summary>
     /// An <c>Overlay</c> already past the ownership gate, applied under the mutex and answered
     /// with the state the PC shows afterwards; the deadline timer follows. Synchronous, for a
-    /// host that has its own worker (the link's handler runs it on the pool).
+    /// host that has its own worker (the link's handler runs it on the pool). Never throws:
+    /// a pass that fails, like one that finds the mutex busy, answers the console with a
+    /// <c>problem</c> rather than leaving it waiting for a state that never comes.
     /// </summary>
     public void Apply(Overlay overlay, string setByInstance)
     {
-        ArgumentNullException.ThrowIfNull(overlay);
-        ArgumentNullException.ThrowIfNull(setByInstance);
-        var now = _clock().ToUnixTimeSeconds();
-        var ran = Guarded("overlay", () => Publish(Journal.SetOverlay(overlay, setByInstance, now)));
-        if (!ran)
+        Safe("overlay", () =>
         {
-            // The mutex was busy: the console must hear that nothing happened rather than
-            // wait for a state that never comes. The enforcer's own latest state is untouched.
-            try
+            if (overlay is null || setByInstance is null)
             {
-                _link.PublishOverlayState(RefusedBusy());
+                _log.LogWarning("an overlay with no {What} was handed to the enforcer; ignored", overlay is null ? "message" : "instance");
+                return;
             }
-            catch (Exception ex)
-            {
-                _log.LogDebug(ex, "could not answer a busy overlay: {Message}", ex.Message);
-            }
-        }
 
-        Rearm();
+            var now = _clock().ToUnixTimeSeconds();
+            var outcome = Guarded("overlay", () => Publish(Journal.SetOverlay(overlay, setByInstance, now)));
+            if (outcome != PassOutcome.Ran)
+            {
+                // The console must hear that nothing happened rather than wait for a state
+                // that never comes. The enforcer's own latest state is untouched.
+                Publish(new OverlayState
+                {
+                    Kind = Overlay.Types.Kind.Unspecified,
+                    Problem = outcome == PassOutcome.Busy
+                        ? PolicyEvents.Text("Busy", (long)_mutexWait.TotalSeconds)
+                        : PolicyEvents.Text("EnforcerFailed", "overlay", _lastFailure),
+                }, remember: false);
+            }
+
+            Rearm();
+        });
     }
 
     private void Tick()
     {
-        IReadOnlyList<PolicySession> sessions = [];
-        var ran = Guarded("tick", () =>
+        Safe("tick", () =>
         {
-            var now = _clock().ToUnixTimeSeconds();
-            sessions = Journal.Tick(now);
+            IReadOnlyList<PolicySession> sessions = [];
+            Guarded("tick", () =>
+            {
+                var now = _clock().ToUnixTimeSeconds();
+                sessions = Journal.Tick(now);
+                if (sessions.Count > 0)
+                {
+                    Publish(Journal.OverlayStateOf(now));
+                }
+            });
+
             if (sessions.Count > 0)
             {
-                Publish(Journal.OverlayStateOf(now));
+                try
+                {
+                    Lifted?.Invoke(sessions);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogDebug(ex, "a lifted-session listener failed: {Message}", ex.Message);
+                }
             }
+
+            Rearm(retryIfNothingLifted: true);
         });
-
-        if (sessions.Count > 0)
-        {
-            try
-            {
-                Lifted?.Invoke(sessions);
-            }
-            catch (Exception ex)
-            {
-                _log.LogDebug(ex, "a lifted-session listener failed: {Message}", ex.Message);
-            }
-        }
-
-        Rearm(retryIfNothingLifted: true);
     }
 
     /// <summary>
     /// Arms the timer for the earliest deadline the journal holds, or stops it. A tick whose
     /// mutex was busy, or whose lift failed, is retried in a few seconds rather than never.
+    /// Never throws.
     /// </summary>
     private void Rearm(bool retryIfNothingLifted = false)
     {
-        lock (_lock)
+        Safe("rearm", () =>
         {
-            if (_stopped)
+            lock (_lock)
             {
-                return;
-            }
-
-            try
-            {
-                var deadline = Journal.NextDeadline;
-                if (deadline is null)
+                if (_stopped)
                 {
-                    _timer.Change(Timeout.Infinite, Timeout.Infinite);
                     return;
                 }
 
-                var now = _clock().ToUnixTimeSeconds();
-                var due = deadline.Value <= now
-                    ? (retryIfNothingLifted ? RetryDelay : TimeSpan.Zero)
-                    : TimeSpan.FromSeconds(Math.Min(deadline.Value - now, MaxTimerSeconds));
-                if (due < TimeSpan.Zero)
+                try
                 {
-                    due = TimeSpan.Zero;
-                }
+                    var deadline = Journal.NextDeadline;
+                    if (deadline is null)
+                    {
+                        _timer.Change(Timeout.Infinite, Timeout.Infinite);
+                        return;
+                    }
 
-                _timer.Change(due, Timeout.InfiniteTimeSpan);
+                    var now = _clock().ToUnixTimeSeconds();
+                    var due = deadline.Value <= now
+                        ? (retryIfNothingLifted ? RetryDelay : TimeSpan.Zero)
+                        : TimeSpan.FromSeconds(Math.Min(deadline.Value - now, MaxTimerSeconds));
+                    if (due < TimeSpan.Zero)
+                    {
+                        due = TimeSpan.Zero;
+                    }
+
+                    _timer.Change(due, Timeout.InfiniteTimeSpan);
+                }
+                catch (ObjectDisposedException)
+                {
+                }
             }
-            catch (ObjectDisposedException)
-            {
-            }
-        }
+        });
     }
 
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
@@ -284,11 +323,23 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     /// <summary>A timer cannot be set more than ~24 days out; a session that far off is re-checked then.</summary>
     private const long MaxTimerSeconds = 20L * 24 * 3600;
 
-    private void Publish(OverlayState state)
+    /// <summary>
+    /// Hands a state to the link. A state that describes the screen is remembered as the
+    /// latest (re-sent after every <c>Welcome</c>); a bare problem answer is not, so a busy
+    /// or failed pass never overwrites the truth the console last heard.
+    /// </summary>
+    private void Publish(OverlayState state, bool remember = true)
     {
         try
         {
-            _link.PublishOverlayState(state);
+            if (remember)
+            {
+                _link.PublishOverlayState(state);
+            }
+            else
+            {
+                _link.AnswerOverlayProblem(state);
+            }
         }
         catch (Exception ex)
         {
@@ -296,18 +347,22 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         }
     }
 
-    private static OverlayState RefusedBusy() => new()
+    private enum PassOutcome
     {
-        Kind = Overlay.Types.Kind.Unspecified,
-        Problem = PolicyEvents.Text("Busy", (long)Defaults.PolicyMutexWait.TotalSeconds),
-    };
+        Ran,
+        Busy,
+        Failed,
+    }
+
+    private string _lastFailure = string.Empty;
 
     /// <summary>
-    /// One pass under the mutex. Returns <c>false</c> when the mutex was held elsewhere for
-    /// the whole wait (reported as <see cref="PolicyEvents.Busy"/>, the pass skipped); an
-    /// exception inside the pass is logged, never thrown, and still counts as run.
+    /// One pass under the mutex. <see cref="PassOutcome.Busy"/> when the mutex was held
+    /// elsewhere for the whole wait (reported as <see cref="PolicyEvents.Busy"/>, the pass
+    /// skipped); <see cref="PassOutcome.Failed"/> when the pass threw (logged and reported,
+    /// never thrown); <see cref="PassOutcome.Ran"/> otherwise.
     /// </summary>
-    private bool Guarded(string what, Action pass)
+    private PassOutcome Guarded(string what, Action pass)
     {
         using var lease = PolicyMutex.TryAcquire(_mutexWait, _mutexName);
         switch (lease.Outcome)
@@ -315,8 +370,8 @@ public sealed class PolicyEnforcer : IAsyncDisposable
             case PolicyMutexOutcome.Busy:
                 var message = PolicyEvents.Text("Busy", (long)_mutexWait.TotalSeconds);
                 _log.LogWarning("policy {What}: {Message}", what, message);
-                _link.Report(Event.Types.Severity.Warning, PolicyEvents.Busy, message);
-                return false;
+                Report(Event.Types.Severity.Warning, PolicyEvents.Busy, message);
+                return PassOutcome.Busy;
 
             case PolicyMutexOutcome.Unavailable:
                 // A mutex that cannot be opened at all (an odd platform, a DACL) must not stop
@@ -334,24 +389,57 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         try
         {
             pass();
+            return PassOutcome.Ran;
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "policy {What} failed unexpectedly: {Message}", what, ex.Message);
+            _lastFailure = ex.Message;
+            Failed(what, ex);
+            return PassOutcome.Failed;
         }
-
-        return true;
     }
 
-    private void OnReported(PolicyEvent reported)
+    /// <summary>
+    /// The outermost net: whatever escapes a public entry point is logged, reported and
+    /// dropped here. The service loop, the link's read thread and the timer never see it.
+    /// </summary>
+    private void Safe(string what, Action action)
     {
         try
         {
-            _link.Report(reported.Severity, reported.Code, reported.Message);
+            action();
         }
         catch (Exception ex)
         {
-            _log.LogDebug(ex, "could not report {Code}: {Message}", reported.Code, ex.Message);
+            _lastFailure = ex.Message;
+            Failed(what, ex);
         }
     }
+
+    private void Failed(string what, Exception ex)
+    {
+        try
+        {
+            _log.LogError(ex, "policy {What} failed unexpectedly: {Message}", what, ex.Message);
+            Report(Event.Types.Severity.Error, PolicyEvents.EnforcerFailed, PolicyEvents.Text("EnforcerFailed", what, ex.Message));
+        }
+        catch
+        {
+            // Logging and reporting are the last resort; if they fail too there is nothing left to do.
+        }
+    }
+
+    private void Report(Event.Types.Severity severity, string code, string message)
+    {
+        try
+        {
+            _link.Report(severity, code, message);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "could not report {Code}: {Message}", code, ex.Message);
+        }
+    }
+
+    private void OnReported(PolicyEvent reported) => Report(reported.Severity, reported.Code, reported.Message);
 }

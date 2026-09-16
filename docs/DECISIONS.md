@@ -3008,13 +3008,26 @@ Decisions:
    been restarted. (2) Only now read `policy.json`. The reader is a **delegate**, so a disk
    error takes exactly the path a corrupt file takes: unreadable, newer schema, foreign lab,
    any null member → `policy.unreadable`, nothing re-applied, **never a reason to refuse to
-   start**. (3) Refine the restore from the document — a static DNS list back exactly, a
-   profile that was genuinely block-all before the policy. **A failed refine keeps
-   `DisplacedSettings`** until a later restore confirms; the teacher's original values are
-   never discarded on failure. (4) Confirm by read-back; a failure is `policy.restore_failed`
-   with the machine left as open as possible, and `MachineOpen` is **false** if anything
-   failed — it is never reported true on a failed lift. (5) Only now the clock: re-apply
-   each session iff `now < until` (or `until == 0`) and `now < hard_limit`, **re-clamping
+   start**. "Any null member" is checked by one validation pass over the deserialized
+   document (`PolicyDocument.MissingMember`), nested members included — a `dns: null`
+   inside `displaced`, a `session_id: null` inside a session, a null element in a list —
+   because System.Text.Json puts a JSON null into a non-nullable string, list or
+   dictionary without complaint, and a half-usable document is not usable at all. A
+   foreign lab's document is refused before that pass; its displaced block is *not*
+   refined (Windows defaults — DHCP, allow — are in place from step 1) and the file is
+   overwritten by step 6 with this lab's empty policy. (3) Refine the restore from the
+   document — a static DNS list back exactly, a profile that was genuinely block-all
+   before the policy. (4) Confirm by read-back; a failure is `policy.restore_failed` with
+   the machine left as open as possible, and `MachineOpen` is **false** if anything failed
+   — it is never reported true on a failed lift. **`DisplacedSettings` are kept until a
+   restore is confirmed**: a failed refine keeps them, and so does a refine that ran with
+   a read-back that failed; the teacher's original values are never discarded on a pass
+   that could not prove the machine open. (5) Only now the clock: re-apply each session
+   iff `now < until` (or `until == 0`) and `now < hard_limit` — **whether or not the
+   restore was confirmed**: an unconfirmed restore is "as open as possible", the teacher's
+   policy is still the teacher's, and `MachineOpen` stays false and says so. Only a `Lock`
+   is an overlay session in this build; a document edited to another kind is dropped, not
+   re-applied. Re-apply **re-clamps
    the stored hard limit against the agent's ceiling on every re-apply** — a hand-edited
    limit thirty days out, or a document written before the RTC went back to 2001, comes
    back at one hour from now, never at a far-future limit. A session the machine cannot
@@ -3036,7 +3049,20 @@ Decisions:
    it. The wait is bounded (`PolicyMutexWait`, 30 s); the loser reports `policy.busy` and
    does nothing rather than two passes restoring and re-applying over each other. An
    abandoned mutex is taken over: the next pass restores first anyway, so nothing half-done
-   needs to be trusted.
+   needs to be trusted. **The mutex is owned by a thread of its own, not the caller's.** A
+   Win32 mutant is owned by a thread: only that thread can release it, closing the handle
+   does not, and it is abandoned only when the thread ends — so a lease taken on one thread
+   and disposed on another (the shape of any `async` `OnStart`/`OnStop`) would leave the
+   mutex held for the life of the process, and every later pass, including the `OnStop`
+   restore and the watchdog in its own process, would report busy and do nothing.
+   `PolicyMutex.TryAcquire` therefore starts a dedicated thread that takes the mutex, holds
+   it for the lease's lifetime and releases it on `Dispose` from whichever thread disposes;
+   a process that dies mid-pass takes the owner thread with it and abandons the mutex,
+   which is exactly the case the watchdog exists for. `TryAcquire` never throws: the lease
+   says `Acquired`, `Busy`, or `Unavailable` with the reason (an object whose DACL this
+   caller cannot open, a platform without named mutexes), and both the enforcer and
+   `--restore-policy` run an *unserialized* pass on `Unavailable` rather than none — a PC
+   that never restores is the worse outcome.
 
 5. **`OnStop` is also a restore, and does not clear the document.** `sc failure` recovery
    fires on abnormal exit only; a graceful `sc stop` would otherwise leave a whitelist in
@@ -3116,6 +3142,33 @@ id>`) so thirty simulated PCs in one process, and the tests, never queue behind 
 another or a real agent. `PolicyEnforcerTests` cover restore-before-read, the published
 state, the timer lift on a moved clock, the re-assert, the `OnStop` restore that keeps the
 document and the busy mutex; `LockTests` (Console) run the whole thing over the real link.
+
+Reviewed (2026-09-16, the foundation review of the same day): two blockers and four majors,
+all fixed. A nested null (`"displaced": {"dns": null}`, `"session_id": null`, a null list
+element) threw out of `Start` — the one validation pass above replaced three scattered
+checks, and the `OverlayState` builders became null-safe besides, since a protobuf string
+setter throws on null and they run on the unattended paths. The mutex lease released on a
+foreign thread swallowed the failure and left the mutex held — the owner-thread design
+above, with `AbandonedMutexException` taken as acquired and a no-throw contract. A refine
+that succeeded with a read-back that failed discarded the originals — kept now until a
+restore confirms. Nothing drove `AgentLink`'s overlay delivery over a real link —
+`OverlayLinkTests` (Console) now prove the refusal on the wire with `problem` and no
+`kind` while `LatestOverlayState` is untouched, the validated instance id in the handler's
+hands and its exception swallowed without costing the link, a link with no handler
+answering `NotInThisBuild` rather than leaving the console waiting, and the latest state
+re-sent after every `Welcome`, including after the console drops the stream. Of the
+advisories: the composer clamps the picture to `Defaults.OverlayMaxDimension` per axis and
+`OverlayMaxPixels` in all (a lied-about desktop costs a blurrier stretch, not gigabytes),
+the message to `OverlayMessageMaxLength` (2000) on the agent and in the composer, stops
+drawing above the bottom band, and the countdown no longer overflows `TimeSpan`;
+`IMachineState.ApplyInternet` states that originals are recorded only while the block has
+none. Not done, on purpose: a journal-level reset of the helper's `input_blocked` word on
+lock/unlock — the supervisor already says "no session helper is connected" when a helper
+leaves and the next helper reports on every ping, and the simulator reports its word once
+at start, so the reset would have made its locks look unenforced; the per-repaint typeface
+lookup (Segoe UI has Cyrillic, and a cache of native typefaces needs lifetime rules the
+gain does not pay for); and the Windows `OnStop` ending the helper with the restore, which
+is agent code outside this pass.
 
 ## D-70 — The lock overlay: a raw Win32 window in the helper painted from one SkiaSharp bitmap; a lock has its own 1 h hard limit; the hooks run on a thread that does nothing else (M6 portion 1)
 

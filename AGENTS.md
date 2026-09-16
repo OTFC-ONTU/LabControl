@@ -113,7 +113,7 @@ the documents relevant to the task:
   keyboard/mouse hooks on a dedicated thread that pass injected input; `BlockInput` is
   the fallback only. The console has `LabSession.Lock`/`Unlock`, the *Lock screens*
   dialog (ceiling and Ctrl+Alt+Del stated), *Lock all…*/*Unlock all* and a tile badge fed
-  by the PC's `OverlayState`, never by the request. Tests: 782 Shared + 232 Console (778 + 228 before; one load-sensitive beacon test failed under the full run and passed alone). `dotnet publish -r
+  by the PC's `OverlayState`, never by the request. Tests: 795 Shared + 236 Console after the foundation review's fixes (782 + 232 when built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full run and passed alone). `dotnet publish -r
   win-x64` of the helper and the agent succeed; the VM drill is in ROADMAP M6. When
   touching `Overlay`/`OverlayState`, the ownership gate in `AgentLink` is judged before the
   enforcer sees the message and fails closed; keep `LeaveIfConsoleRevoked` as it is.

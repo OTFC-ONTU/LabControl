@@ -1988,6 +1988,15 @@ the corrupt `policy.json` one (`D-79`). Portions 2 and 3 could swap; 4 needs 3, 
   with the console silent, clamp a far limit to one hour, and refuse a withdrawn console
   at the gate; `UiTests` render the dialog and the badge; `PolicyEnforcerTests` cover the
   enforcer alone. `dotnet publish -r win-x64` of the helper and the agent succeed.
+  *Reviewed the same day* (`D-69`, *Reviewed*): the foundation review's two blockers
+  (nested nulls in `policy.json` throwing out of `Start`; null strings reaching the
+  protobuf setters on the unattended paths) and four majors (the mutex lease not released
+  from a foreign thread; originals discarded when the refine ran but the read-back failed;
+  no test over the real link for `AgentLink`'s overlay delivery; `TryAcquire` able to
+  throw) are fixed — one validation pass over the document, a mutex owned by its own
+  thread with a no-throw lease, originals kept until a restore confirms, and
+  `OverlayLinkTests` (Console) over the real link — plus the composer's size and message
+  clamps. Tests after the fixes: 795 Shared and 236 Console.
   **Not yet run on Windows:** the window, the hooks, the injected-input pass-through, the
   re-assert after logoff and `--restore-policy` wait for the VM. *The VM drill:* push (or
   `scripts/dev-install.ps1`) the `win-x64` agent and helper; lock the PC from the console

@@ -62,7 +62,11 @@ public interface IMachineState
     /// <summary>
     /// Enforce an internet policy (portion 3), recording what it displaces into
     /// <paramref name="displaced"/> <i>before</i> mutating and marking it applied only after
-    /// native read-back. Until portion 3 lands this returns <see cref="MachineOutcome.NotInThisBuild"/>.
+    /// native read-back. The same block is passed for every internet session of a pass — the
+    /// standalone policy and then the exam's — and may already hold originals kept from a
+    /// restore that was not confirmed, so an implementation records an original <b>only
+    /// while the block has none for it</b>; overwriting would replace the teacher's values
+    /// with the first policy's. Until portion 3 lands this returns <see cref="MachineOutcome.NotInThisBuild"/>.
     /// </summary>
     MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced);
 

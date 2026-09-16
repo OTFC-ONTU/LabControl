@@ -297,7 +297,7 @@ every physical event swallowed, injected input passed, `BlockInput` the fallback
 queued through `OverlayController`. The console has `LabSession.Lock`/`Unlock`, the *Lock
 screens* dialog (message, *until I unlock* or *N minutes*, the 60-minute ceiling and the
 Ctrl+Alt+Del line stated), *Lock all…*/*Unlock all*, and a tile badge fed by the PC's
-`OverlayState` alone, naming the console that set it. Tests: 782 Shared + 232 Console (778 + 228 before; one load-sensitive beacon test failed under the full run and passed alone) (`LockTests`,
+`OverlayState` alone, naming the console that set it. Tests: 795 Shared + 236 Console after the foundation review's fixes (782 + 232 when built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full run and passed alone) (`LockTests`,
 `PolicyEnforcerTests`, the UI renders). `dotnet publish -r win-x64` of the helper and the
 agent succeed. **Not yet run on Windows**: the window, the hooks, the injected-input
 pass-through, the re-assert after logoff and `--restore-policy` wait for the VM (the drill

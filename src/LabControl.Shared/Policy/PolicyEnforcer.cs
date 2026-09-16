@@ -31,7 +31,7 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     private readonly Action<Overlay, string> _onOverlay;
     private bool _started;
     private bool _stopped;
-    private bool _mutexAvailable = true;
+    private bool _mutexUnavailableLogged;
 
     /// <param name="link">The link the enforcer answers on; it subscribes to <see cref="AgentLink.OverlayReceived"/> on <see cref="Start"/>.</param>
     /// <param name="machine">What the PC does with a session — Windows, or the simulator.</param>
@@ -120,7 +120,12 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     /// <summary>
     /// What the helper says about its own enforcement (<c>HelperMessage.overlay_state</c>,
     /// with every status): merged into the next <c>OverlayState</c>, and published only when
-    /// the word changed — thirty PCs saying "still fine" every two seconds is not news.
+    /// the word differs from what the console last heard — thirty PCs saying "still fine"
+    /// every two seconds is not news. The comparison is against the state last published,
+    /// not a remembered pair, so whatever changed the published state in between is
+    /// followed by the helper's next report, never by a stale one. The word itself is
+    /// reset where a helper's departure is known — the supervisor says "no session helper is
+    /// connected" when one leaves, and the next helper reports on every ping.
     /// </summary>
     public void NoteEnforcement(bool inputBlocked, string reason)
     {
@@ -131,22 +136,18 @@ public sealed class PolicyEnforcer : IAsyncDisposable
             {
                 return;
             }
-
-            if (_lastInputBlocked == inputBlocked && string.Equals(_lastReason, reason, StringComparison.Ordinal))
-            {
-                Journal.NoteEnforcement(inputBlocked, reason);
-                return;
-            }
-
-            _lastInputBlocked = inputBlocked;
-            _lastReason = reason;
         }
 
-        Publish(Journal.NoteEnforcement(inputBlocked, reason));
-    }
+        var state = Journal.NoteEnforcement(inputBlocked, reason);
+        var last = _link.LatestOverlayState;
+        if (last is not null && last.Kind == state.Kind && last.InputBlocked == state.InputBlocked
+            && string.Equals(last.Reason, state.Reason, StringComparison.Ordinal) && last.Problem.Length == 0)
+        {
+            return;
+        }
 
-    private bool? _lastInputBlocked;
-    private string _lastReason = string.Empty;
+        Publish(state);
+    }
 
     /// <summary>
     /// The <c>OnStop</c> restore (D-69 item 5) under the mutex; the document is not cleared.
@@ -308,25 +309,26 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     /// </summary>
     private bool Guarded(string what, Action pass)
     {
-        IDisposable? lease = null;
-        try
+        using var lease = PolicyMutex.TryAcquire(_mutexWait, _mutexName);
+        switch (lease.Outcome)
         {
-            lease = PolicyMutex.TryAcquire(_mutexWait, _mutexName);
-        }
-        catch (Exception ex)
-        {
-            // A mutex that cannot be created at all (an odd platform) must not stop the pass:
-            // a lock that is not serialized is still better than a PC that never restores.
-            _log.LogWarning(ex, "the policy mutex is unavailable ({Message}); running {What} without it", ex.Message, what);
-            _mutexAvailable = false;
-        }
+            case PolicyMutexOutcome.Busy:
+                var message = PolicyEvents.Text("Busy", (long)_mutexWait.TotalSeconds);
+                _log.LogWarning("policy {What}: {Message}", what, message);
+                _link.Report(Event.Types.Severity.Warning, PolicyEvents.Busy, message);
+                return false;
 
-        if (lease is null && _mutexAvailable)
-        {
-            var message = PolicyEvents.Text("Busy", (long)_mutexWait.TotalSeconds);
-            _log.LogWarning("policy {What}: {Message}", what, message);
-            _link.Report(Event.Types.Severity.Warning, PolicyEvents.Busy, message);
-            return false;
+            case PolicyMutexOutcome.Unavailable:
+                // A mutex that cannot be opened at all (an odd platform, a DACL) must not stop
+                // the pass: a pass that is not serialized is still better than a PC that never
+                // restores. Said once, not on every tick.
+                if (!_mutexUnavailableLogged)
+                {
+                    _mutexUnavailableLogged = true;
+                    _log.LogWarning("the policy mutex is unavailable ({Problem}); running {What} without it", lease.Problem, what);
+                }
+
+                break;
         }
 
         try
@@ -336,10 +338,6 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         catch (Exception ex)
         {
             _log.LogError(ex, "policy {What} failed unexpectedly: {Message}", what, ex.Message);
-        }
-        finally
-        {
-            lease?.Dispose();
         }
 
         return true;

@@ -195,6 +195,57 @@ public sealed class PolicyJournalTests
         Assert.Contains("displaced", nullDisplaced.Events[0].Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("\"dns\": [", "\"dns\": null, \"was\": [", "displaced.dns")]
+    [InlineData("\"session_id\": \"lock-1\"", "\"session_id\": null", "overlay.session_id")]
+    [InlineData("\"servers\": [", "\"servers\": [null, ", "servers[0]")]
+    [InlineData("\"profile_default_outbound\": {", "\"profile_default_outbound\": {\"public\": null, ", "profile_default_outbound.public")]
+    [InlineData("\"set_by_instance\": \"console-a\"", "\"set_by_instance\": null", "overlay.set_by_instance")]
+    [InlineData("\"message\": \"Look here\"", "\"message\": null", "overlay.message")]
+    public void A_null_anywhere_the_schema_requires_a_value_makes_the_document_unreadable_and_nothing_throws(string find, string replaceWith, string named)
+    {
+        var policy = WithLock(0, Now + Hour);
+        policy.Displaced = new DisplacedSettings
+        {
+            ProfileDefaultOutbound = { ["private"] = "block" },
+            Dns = { new DisplacedDns { Interface = "Ethernet", Servers = { "10.0.0.1" } } },
+            Applied = true,
+        };
+        var text = Document(policy);
+        Assert.Contains(find, text, StringComparison.Ordinal);
+        var rig = new Rig(text.Replace(find, replaceWith, StringComparison.Ordinal));
+
+        var outcome = rig.Journal.Start(Now);
+
+        // Restore already done before the read, nothing re-applied, the refine never asked for.
+        Assert.Equal([nameof(IMachineState.RestoreDefaults), "read", nameof(IMachineState.Confirm)], rig.Machine.Calls);
+        Assert.True(outcome.MachineOpen);
+        Assert.Empty(outcome.Reapplied);
+        var unreadable = Assert.Single(rig.Events, e => e.Code == PolicyEvents.Unreadable);
+        Assert.Contains(named, unreadable.Message, StringComparison.Ordinal);
+        Assert.Null(rig.Machine.Shown);
+        Assert.Null(rig.Saved!.Policy!.Overlay);
+
+        // And the state for the Welcome re-send is built without a throw.
+        Assert.Equal(Overlay.Types.Kind.Unspecified, rig.Journal.OverlayStateOf(Now).Kind);
+        Assert.Equal(Overlay.Types.Kind.Unspecified, rig.Journal.ReassertOverlay(Now).Kind);
+        Assert.Equal(string.Empty, rig.Journal.NoteEnforcement(true, null!).Reason);
+    }
+
+    [Fact]
+    public void A_document_whose_overlay_is_not_a_lock_is_dropped_not_reapplied()
+    {
+        var rig = new Rig(Document(WithLock(0, Now + Hour)).Replace("\"kind\": \"lock\"", "\"kind\": \"broadcast_start\"", StringComparison.Ordinal));
+
+        var outcome = rig.Journal.Start(Now);
+
+        Assert.Single(outcome.Dropped);
+        Assert.Empty(outcome.Reapplied);
+        Assert.DoesNotContain(nameof(IMachineState.ApplyOverlay), rig.Machine.Calls);
+        Assert.Contains(PolicyEvents.ApplyFailed, rig.Codes);
+        Assert.Null(rig.Saved!.Policy!.Overlay);
+    }
+
     // ------------------------------------------------------------------ the clock
 
     [Fact]
@@ -300,6 +351,30 @@ public sealed class PolicyJournalTests
         var again = new Rig(Document(policy));
         Assert.True(again.Journal.Start(Now).MachineOpen);
         Assert.True(again.Saved!.Policy!.Displaced!.IsEmpty);
+    }
+
+    [Fact]
+    public void A_refine_that_succeeds_but_a_read_back_that_fails_keeps_the_displaced_settings_too()
+    {
+        var policy = new ClassroomPolicy
+        {
+            Displaced = new DisplacedSettings { Dns = { new DisplacedDns { Interface = "Ethernet", Servers = { "10.0.0.1" } } }, Applied = true },
+        };
+        var rig = new Rig(Document(policy));
+        rig.Machine.Answers[nameof(IMachineState.Confirm)] = () => MachineResult.Failed("still pointing at loopback");
+
+        var outcome = rig.Journal.Start(Now);
+
+        // The restore is not confirmed: the originals stay for the next pass, which confirms and clears them.
+        Assert.False(outcome.MachineOpen);
+        Assert.Equal("10.0.0.1", rig.Saved!.Policy!.Displaced!.Dns[0].Servers[0]);
+        Assert.Equal("10.0.0.1", rig.Journal.Snapshot().Displaced!.Dns[0].Servers[0]);
+
+        rig.Machine.Answers.Remove(nameof(IMachineState.Confirm));
+        var next = new Rig(JsonStore.Serialize(rig.Saved, PolicyDocument.Migrations));
+        Assert.True(next.Journal.Start(Now).MachineOpen);
+        Assert.Contains(nameof(IMachineState.RefineRestore), next.Machine.Calls);
+        Assert.True(next.Saved!.Policy!.Displaced!.IsEmpty);
     }
 
     [Fact]
@@ -624,36 +699,71 @@ public sealed class OwnershipGateTests
     }
 }
 
-/// <summary>The bounded named mutex every pass holds (D-69 item 4).</summary>
+/// <summary>The bounded named mutex every pass holds (D-69 item 4), owned by a thread of its own so any thread may release it.</summary>
 public sealed class PolicyMutexTests
 {
     [Fact]
     public void A_second_holder_waits_out_the_bound_and_gets_nothing_until_the_first_lets_go()
     {
-        // Every taker in this test is a thread of its own: a mutex is owned by a thread, and
-        // the product takes and releases it on one thread per pass.
         var name = Defaults.PolicyMutexName + "." + Guid.NewGuid().ToString("n");
-        IDisposable? first = null;
-        var firstTaken = new ManualResetEventSlim();
-        var release = new ManualResetEventSlim();
-        var holder = new Thread(() =>
+        using (var first = PolicyMutex.TryAcquire(TimeSpan.Zero, name))
         {
-            first = PolicyMutex.TryAcquire(TimeSpan.Zero, name);
-            firstTaken.Set();
-            release.Wait(TestContext.Current.CancellationToken);
-            first?.Dispose();
-        });
-        holder.Start();
-        firstTaken.Wait(TestContext.Current.CancellationToken);
-        Assert.NotNull(first);
+            Assert.Equal(PolicyMutexOutcome.Acquired, first.Outcome);
+            Assert.True(first.Acquired);
 
-        var busy = PolicyMutex.TryAcquire(TimeSpan.FromMilliseconds(100), name);
-        Assert.Null(busy);
-
-        release.Set();
-        holder.Join();
+            using var busy = PolicyMutex.TryAcquire(TimeSpan.FromMilliseconds(100), name);
+            Assert.Equal(PolicyMutexOutcome.Busy, busy.Outcome);
+            Assert.False(busy.Acquired);
+        }
 
         using var second = PolicyMutex.TryAcquire(TimeSpan.FromSeconds(5), name);
-        Assert.NotNull(second);
+        Assert.True(second.Acquired);
+    }
+
+    [Fact]
+    public async Task A_lease_disposed_on_another_thread_still_releases_the_mutex()
+    {
+        // The async OnStart/OnStop shape: taken on one pool thread, disposed on another.
+        var name = Defaults.PolicyMutexName + "." + Guid.NewGuid().ToString("n");
+        var lease = await Task.Run(() => PolicyMutex.TryAcquire(TimeSpan.Zero, name));
+        Assert.True(lease.Acquired);
+        await Task.Yield();
+        var disposer = new Thread(lease.Dispose);
+        disposer.Start();
+        disposer.Join();
+
+        using var next = PolicyMutex.TryAcquire(TimeSpan.Zero, name);
+        Assert.True(next.Acquired);
+        next.Dispose();
+        next.Dispose();
+    }
+
+    [Fact]
+    public void An_abandoned_mutex_is_acquired_not_refused()
+    {
+        // The previous holder died mid-pass: a thread takes the raw mutex and ends without releasing.
+        var name = Defaults.PolicyMutexName + "." + Guid.NewGuid().ToString("n");
+        Mutex? raw = null;
+        var holder = new Thread(() =>
+        {
+            raw = new Mutex(false, name);
+            Assert.True(raw.WaitOne(TimeSpan.Zero));
+        });
+        holder.Start();
+        holder.Join();
+
+        using var lease = PolicyMutex.TryAcquire(TimeSpan.FromSeconds(5), name);
+        Assert.Equal(PolicyMutexOutcome.Acquired, lease.Outcome);
+        raw!.Dispose();
+    }
+
+    [Fact]
+    public void A_mutex_that_cannot_be_created_is_reported_not_thrown()
+    {
+        // A name no platform accepts: far past every limit.
+        using var lease = PolicyMutex.TryAcquire(TimeSpan.Zero, Defaults.PolicyMutexName + "." + new string('x', 5000));
+        Assert.Equal(PolicyMutexOutcome.Unavailable, lease.Outcome);
+        Assert.NotEmpty(lease.Problem);
+        Assert.False(lease.Acquired);
     }
 }

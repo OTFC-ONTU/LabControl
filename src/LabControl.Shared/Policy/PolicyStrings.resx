@@ -31,4 +31,5 @@
   <data name="KindInternet" xml:space="preserve"><value>Internet policy</value></data>
   <data name="KindExamInternet" xml:space="preserve"><value>Exam internet policy</value></data>
   <data name="KindBroadcast" xml:space="preserve"><value>Broadcast</value></data>
+  <data name="StampNever" xml:space="preserve"><value>never</value></data>
 </root>

@@ -416,7 +416,7 @@ every physical event swallowed, injected input passed, <code>BlockInput</code> t
 queued through <code>OverlayController</code>. The console has <code>LabSession.Lock</code>/<code>Unlock</code>, the <em>Lock
 screens</em> dialog (message, <em>until I unlock</em> or <em>N minutes</em>, the 60-minute ceiling and the
 Ctrl+Alt+Del line stated), <em>Lock all…</em>/<em>Unlock all</em>, and a tile badge fed by the PC's
-<code>OverlayState</code> alone, naming the console that set it. Tests: 782 Shared + 232 Console (778 + 228 before; one load-sensitive beacon test failed under the full run and passed alone) (<code>LockTests</code>,
+<code>OverlayState</code> alone, naming the console that set it. Tests: 795 Shared + 236 Console after the foundation review's fixes (782 + 232 when built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full run and passed alone) (<code>LockTests</code>,
 <code>PolicyEnforcerTests</code>, the UI renders). <code>dotnet publish -r win-x64</code> of the helper and the
 agent succeed. <strong>Not yet run on Windows</strong>: the window, the hooks, the injected-input
 pass-through, the re-assert after logoff and <code>--restore-policy</code> wait for the VM (the drill
@@ -609,7 +609,7 @@ snapshot, refresh after repair and remain visible while the PC is offline. Physi
 is informational until tested; unsupported configuration and antivirus issues need attention.</p>
 
 </article>
-<footer>Generated 2026-09-16 16:16 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-16 18:00 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

@@ -64,4 +64,35 @@ public sealed class OverlayTextTests
         using var b = OverlayText.Compose(new OverlayContent("m", "PC-01", 60), 320, 200);
         Assert.False(a.Pixels.SequenceEqual(b.Pixels));
     }
+
+    [Fact]
+    public void An_absurd_size_is_composed_within_the_budget_and_a_long_message_is_clamped_not_thrown()
+    {
+        var (w, h) = OverlayText.ComposedSize(100_000, 100_000);
+        Assert.True(w <= Defaults.OverlayMaxDimension && h <= Defaults.OverlayMaxDimension);
+        Assert.True((long)w * h <= Defaults.OverlayMaxPixels);
+        Assert.Equal((1, 1), OverlayText.ComposedSize(0, -3));
+        Assert.Equal((1366, 768), OverlayText.ComposedSize(1366, 768));
+        var (tw, th) = OverlayText.ComposedSize(11520, 2160);
+        Assert.Equal((11520, 2160), (tw, th));
+        var (ww, wh) = OverlayText.ComposedSize(16384, 16384);
+        Assert.InRange((double)ww / wh, 0.99, 1.01);
+
+        using var huge = OverlayText.Compose(new OverlayContent("m", "PC-01", 5), int.MaxValue, int.MaxValue);
+        Assert.True((long)huge.Width * huge.Height <= Defaults.OverlayMaxPixels);
+
+        var message = string.Join(' ', Enumerable.Repeat("слово", 800));
+        Assert.True(message.Length > Defaults.OverlayMessageMaxLength);
+        Assert.Equal(Defaults.OverlayMessageMaxLength, OverlayText.ClampMessage(message).Length);
+        Assert.Equal(string.Empty, OverlayText.ClampMessage(null));
+        var surrogate = new string('a', Defaults.OverlayMessageMaxLength - 1) + "\U0001F600zzz";
+        Assert.Equal(Defaults.OverlayMessageMaxLength - 1, OverlayText.ClampMessage(surrogate).Length);
+
+        // A wall of text and no spaces: composes at screen size, and the bottom band is still drawn.
+        using var wall = OverlayText.Compose(new OverlayContent(message + new string('x', 3000), "PC-01", 61), 1366, 768);
+        Assert.Equal(1366, wall.Width);
+        Assert.Equal(OverlayText.CountdownText(long.MaxValue), OverlayText.CountdownText(long.MaxValue - 1));
+        Assert.NotEmpty(OverlayText.CountdownText(long.MaxValue));
+        Assert.NotEmpty(OverlayText.CountdownText(long.MinValue));
+    }
 }

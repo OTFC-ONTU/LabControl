@@ -188,30 +188,43 @@ public sealed class PolicyEnforcerTests
         var mutex = MutexPrefix + Guid.NewGuid().ToString("n");
         await using var rig = new Rig(mutex);
 
-        IDisposable? held = null;
-        var taken = new ManualResetEventSlim(false);
-        var release = new ManualResetEventSlim(false);
-        var holder = new Thread(() =>
-        {
-            held = PolicyMutex.TryAcquire(TimeSpan.Zero, mutex);
-            taken.Set();
-            release.Wait();
-            held?.Dispose();
-        });
-        holder.Start();
-        taken.Wait(TestContext.Current.CancellationToken);
-        Assert.NotNull(held);
+        using var held = PolicyMutex.TryAcquire(TimeSpan.Zero, mutex);
+        Assert.True(held.Acquired);
 
-        try
+        Assert.Null(rig.Enforcer.Start());
+        Assert.Empty(rig.Machine.Calls);
+    }
+
+    [Fact]
+    public async Task A_lock_whose_session_id_is_empty_survives_a_restart_and_the_state_for_the_welcome_resend_is_built_without_throwing()
+    {
+        await using var rig = new Rig(MutexPrefix + Guid.NewGuid().ToString("n"));
+        var document = new PolicyDocument
         {
-            Assert.Null(rig.Enforcer.Start());
-            Assert.Empty(rig.Machine.Calls);
-        }
-        finally
-        {
-            release.Set();
-            holder.Join(TimeSpan.FromSeconds(10));
-        }
+            LabId = rig.Store.Config.LabId,
+            SavedAtUnix = rig.Now,
+            Policy = new ClassroomPolicy
+            {
+                Overlay = new OverlaySession { SessionId = string.Empty, SetByInstance = string.Empty, Message = string.Empty, SinceUnix = rig.Now - 5, UntilUnix = 0, HardLimitUnix = rig.Now + 600 },
+                Displaced = new DisplacedSettings(),
+            },
+        };
+        JsonStore.Save(rig.Enforcer.DocumentPath, document, PolicyDocument.Migrations);
+
+        var outcome = rig.Enforcer.Start();
+        Assert.NotNull(outcome);
+        Assert.Single(outcome!.Reapplied);
+
+        // What the link re-sends after Welcome, and what the helper re-assert and the helper's word produce: no throw, empty strings.
+        var state = rig.Link.LatestOverlayState!;
+        Assert.Equal(Overlay.Types.Kind.Lock, state.Kind);
+        Assert.Equal(string.Empty, state.SessionId);
+        Assert.Equal(string.Empty, state.SetByInstance);
+        rig.Enforcer.ReassertOverlay();
+        rig.Enforcer.NoteEnforcement(true, null!);
+        Assert.Equal(Overlay.Types.Kind.Lock, rig.Link.LatestOverlayState!.Kind);
+        Assert.True(rig.Link.LatestOverlayState!.InputBlocked);
+        Assert.Equal(string.Empty, rig.Link.LatestOverlayState!.Reason);
     }
 
     private static async Task<bool> WaitAsync(Func<bool> condition, TimeSpan timeout)

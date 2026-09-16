@@ -201,10 +201,17 @@ internal static class Program
         }
 
         using var lease = PolicyMutex.TryAcquire();
-        if (lease is null)
+        if (lease.Outcome == PolicyMutexOutcome.Busy)
         {
             log.LogWarning("{Message}", PolicyEvents.Text("Busy", (long)Defaults.PolicyMutexWait.TotalSeconds));
             return 3;
+        }
+
+        if (lease.Outcome == PolicyMutexOutcome.Unavailable)
+        {
+            // Cannot be serialized against the service (a DACL, an unelevated operator): the
+            // restore runs anyway — an unserialized restore beats a PC that never restores.
+            log.LogWarning("the policy mutex is unavailable ({Problem}); restoring without it", lease.Problem);
         }
 
         var path = Path.Combine(Defaults.AgentDataDirectory, Defaults.PolicyFileName);

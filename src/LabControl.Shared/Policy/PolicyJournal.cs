@@ -139,24 +139,22 @@ public sealed class PolicyJournal
             // displaced settings are carried over until a restore confirms them gone.
             var policy = new ClassroomPolicy { Displaced = new DisplacedSettings() };
 
-            // Step 3: refine from the document, keeping the originals on failure.
-            if (loaded?.Displaced is { IsEmpty: false } displaced)
+            // Step 3: refine from the document. Step 4: read-back. The originals are dropped
+            // only once a restore is *confirmed* — a refine that ran and a read-back that
+            // failed is not a confirmed restore, and the teacher's static DNS is not lost for
+            // a netsh hiccup (D-69 item 2, M2 of the foundation review).
+            var displaced = loaded?.Displaced is { IsEmpty: false } originals ? originals : null;
+            var refined = displaced is null || Call(nameof(IMachineState.RefineRestore), () => _machine.RefineRestore(displaced), PolicyEvents.RestoreFailed, "RefineFailed");
+            var confirmed = Call(nameof(IMachineState.Confirm), _machine.Confirm, PolicyEvents.RestoreFailed, "ConfirmFailed");
+            open &= refined && confirmed;
+            if (displaced is not null && !(refined && confirmed))
             {
-                if (Call(nameof(IMachineState.RefineRestore), () => _machine.RefineRestore(displaced), PolicyEvents.RestoreFailed, "RefineFailed"))
-                {
-                    policy.Displaced = new DisplacedSettings();
-                }
-                else
-                {
-                    policy.Displaced = displaced;
-                    open = false;
-                }
+                policy.Displaced = displaced;
             }
 
-            // Step 4: read-back.
-            open &= Call(nameof(IMachineState.Confirm), _machine.Confirm, PolicyEvents.RestoreFailed, "ConfirmFailed");
-
-            // Step 5: only now the clock.
+            // Step 5: only now the clock. Sessions are re-applied whether or not the restore
+            // was confirmed: an unconfirmed restore is "as open as possible", and a policy the
+            // teacher set is still the teacher's — MachineOpen stays false and says so.
             if (loaded is not null)
             {
                 if (loaded.Internet is { } internet)
@@ -189,7 +187,18 @@ public sealed class PolicyJournal
 
                 if (loaded.Overlay is { } overlay)
                 {
-                    Reapply(overlay, Defaults.LockHardLimit, nowUnix, nameof(IMachineState.ApplyOverlay), _machine.ApplyOverlay, () => policy.Overlay = overlay, reapplied, dropped);
+                    if (overlay.Kind == Overlay.Types.Kind.Lock)
+                    {
+                        Reapply(overlay, Defaults.LockHardLimit, nowUnix, nameof(IMachineState.ApplyOverlay), _machine.ApplyOverlay, () => policy.Overlay = overlay, reapplied, dropped);
+                    }
+                    else
+                    {
+                        // Only a lock is a session in this build (D-71: a broadcast dies with its
+                        // stream and never reaches the document); an edited kind is not re-applied.
+                        dropped.Add(overlay);
+                        Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed,
+                            PolicyEvents.Text("ApplyFailed", PolicyEvents.KindName(overlay), overlay.SessionId, PolicyEvents.RefusedUnknownKind));
+                    }
                 }
             }
 
@@ -373,7 +382,7 @@ public sealed class PolicyJournal
             SinceUnix = _policy.Overlay is { } current && current.SessionId == request.SessionId ? current.SinceUnix : nowUnix,
             UntilUnix = Math.Max(0, request.UntilUnix),
             HardLimitUnix = ClassroomPolicy.Clamp(request.HardLimitUnix, Defaults.LockHardLimit, nowUnix),
-            Message = request.Message,
+            Message = OverlayText.ClampMessage(request.Message),
         };
 
         if (session.Ended(nowUnix))
@@ -415,19 +424,25 @@ public sealed class PolicyJournal
         return OverlayStateLocked(null);
     }
 
+    /// <summary>
+    /// The state as it stands. Null-safe on purpose: a protobuf string setter throws on
+    /// <c>null</c>, and this runs on the unattended paths (the re-send after <c>Welcome</c>,
+    /// the helper re-assert), so nothing that reaches it may throw — even if a session ever
+    /// carried a null the document validation did not see.
+    /// </summary>
     private OverlayState OverlayStateLocked(string? problem)
     {
         var state = new OverlayState { Problem = problem ?? string.Empty };
         if (_policy.Overlay is { } overlay)
         {
             state.Kind = overlay.Kind;
-            state.SessionId = overlay.SessionId;
+            state.SessionId = overlay.SessionId ?? string.Empty;
             state.SinceUnix = overlay.SinceUnix;
             state.UntilUnix = overlay.UntilUnix;
             state.HardLimitUnix = overlay.HardLimitUnix;
-            state.SetByInstance = overlay.SetByInstance;
+            state.SetByInstance = overlay.SetByInstance ?? string.Empty;
             state.InputBlocked = _inputBlocked;
-            state.Reason = _overlayReason;
+            state.Reason = _overlayReason ?? string.Empty;
         }
 
         return state;
@@ -561,31 +576,25 @@ public sealed class PolicyJournal
             return null;
         }
 
-        if (document.LabId is null)
+        if (document.LabId is not null && !string.Equals(document.LabId, _labId, StringComparison.OrdinalIgnoreCase))
         {
-            Unreadable(PolicyEvents.Text("UnreadableIncomplete", "lab_id"));
-            return null;
-        }
-
-        if (!string.Equals(document.LabId, _labId, StringComparison.OrdinalIgnoreCase))
-        {
+            // Another lab's document: not this PC's, and its displaced block is not refined
+            // either — the unconditional restore has put Windows defaults (DHCP, allow) in
+            // place, and Save overwrites the file with this lab's empty policy (D-69 item 2).
             Unreadable(PolicyEvents.Text("UnreadableForeignLab", document.LabId));
             return null;
         }
 
-        if (document.Policy is null)
+        // One pass over every required member, nested ones included: System.Text.Json puts a
+        // JSON null into a non-nullable string, list or dictionary without complaint, and a
+        // null anywhere makes the document unusable as a whole (B1/B2 of the foundation review).
+        if (document.MissingMember() is { } missing)
         {
-            Unreadable(PolicyEvents.Text("UnreadableIncomplete", "policy"));
+            Unreadable(PolicyEvents.Text("UnreadableIncomplete", missing));
             return null;
         }
 
-        if (document.Policy.Displaced is null)
-        {
-            Unreadable(PolicyEvents.Text("UnreadableIncomplete", "displaced"));
-            return null;
-        }
-
-        return document.Policy;
+        return document.Policy!;
     }
 
     private void Unreadable(string message) => Report(Event.Types.Severity.Warning, PolicyEvents.Unreadable, message);
@@ -615,7 +624,7 @@ public sealed class PolicyJournal
     }
 
     private static string Stamp(long unix) =>
-        unix >= long.MaxValue - 1 ? "never" : DateTimeOffset.FromUnixTimeSeconds(Math.Clamp(unix, DateTimeOffset.UnixEpoch.ToUnixTimeSeconds(), DateTimeOffset.MaxValue.ToUnixTimeSeconds())).ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+        unix >= long.MaxValue - 1 ? PolicyEvents.Text("StampNever") : DateTimeOffset.FromUnixTimeSeconds(Math.Clamp(unix, DateTimeOffset.UnixEpoch.ToUnixTimeSeconds(), DateTimeOffset.MaxValue.ToUnixTimeSeconds())).ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 
     private static ClassroomPolicy Copy(ClassroomPolicy policy) =>
         JsonSerializer.Deserialize<ClassroomPolicy>(JsonSerializer.Serialize(policy, JsonStore.Options), JsonStore.Options) ?? new ClassroomPolicy { Displaced = new DisplacedSettings() };

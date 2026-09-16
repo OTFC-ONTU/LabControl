@@ -937,6 +937,24 @@ public static class Defaults
     /// <summary>The helper repaints the lock or countdown overlay this often; a countdown changes once a second.</summary>
     public static readonly TimeSpan OverlayRepaintInterval = TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// The longest lock message the agent keeps and the helper draws (M6 portion 1): a
+    /// longer one is cut. Fifty wrapped lines already run off a 1366×768 screen; the picture
+    /// stops at its bottom band whatever the length.
+    /// </summary>
+    public const int OverlayMessageMaxLength = 2000;
+
+    /// <summary>
+    /// The largest overlay picture composed on either axis, in pixels — wider than any
+    /// virtual desktop a lab PC has (three 4K monitors side by side are 11520 wide) — so a
+    /// lied-about screen size never asks Skia for gigabytes. The picture is scaled down
+    /// further to stay within <see cref="OverlayMaxPixels"/>.
+    /// </summary>
+    public const int OverlayMaxDimension = 16384;
+
+    /// <summary>The most pixels an overlay picture holds (32 Mpx, 128 MiB of BGRA); a larger request is drawn smaller and stretched by the blit.</summary>
+    public const long OverlayMaxPixels = 32L * 1024 * 1024;
+
     // ---------------------------------------------------------------- exam mode
 
     /// <summary>

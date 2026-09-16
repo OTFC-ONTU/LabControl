@@ -62,7 +62,9 @@ public static class OverlayText
             return Text("CountdownUntilLifted");
         }
 
-        var remaining = TimeSpan.FromSeconds(Math.Max(0, remainingSeconds.Value));
+        // TimeSpan.FromSeconds overflows past ~2.9e11 s; a limit that far off is "until lifted" in every practical sense.
+        var seconds = Math.Clamp(remainingSeconds.Value, 0, (long)TimeSpan.MaxValue.TotalSeconds - 1);
+        var remaining = TimeSpan.FromSeconds(seconds);
         var clock = remaining.TotalHours >= 1
             ? string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}", (long)remaining.TotalHours, remaining.Minutes, remaining.Seconds)
             : string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}", remaining.Minutes, remaining.Seconds);
@@ -82,14 +84,64 @@ public static class OverlayText
     }
 
     /// <summary>
+    /// The message as the agent keeps it and the helper draws it: at most
+    /// <see cref="Defaults.OverlayMessageMaxLength"/> characters, never <c>null</c>. A
+    /// console cannot make a PC allocate or wrap without bound.
+    /// </summary>
+    public static string ClampMessage(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
+        {
+            return string.Empty;
+        }
+
+        if (message.Length <= Defaults.OverlayMessageMaxLength)
+        {
+            return message;
+        }
+
+        var cut = Defaults.OverlayMessageMaxLength;
+        if (char.IsHighSurrogate(message[cut - 1]))
+        {
+            cut--;
+        }
+
+        return message[..cut];
+    }
+
+    /// <summary>
+    /// The size a picture is actually composed at for a requested size: at least 1×1, at
+    /// most <see cref="Defaults.OverlayMaxDimension"/> on each axis and
+    /// <see cref="Defaults.OverlayMaxPixels"/> in all, the aspect kept — the helper's blit
+    /// stretches it to the window, so a lied-about desktop costs a blurrier picture, not
+    /// gigabytes.
+    /// </summary>
+    public static (int Width, int Height) ComposedSize(int width, int height)
+    {
+        width = Math.Clamp(width, 1, Defaults.OverlayMaxDimension);
+        height = Math.Clamp(height, 1, Defaults.OverlayMaxDimension);
+        var pixels = (long)width * height;
+        if (pixels > Defaults.OverlayMaxPixels)
+        {
+            var scale = Math.Sqrt((double)Defaults.OverlayMaxPixels / pixels);
+            width = Math.Max(1, (int)(width * scale));
+            height = Math.Max(1, (int)(height * scale));
+        }
+
+        return (width, height);
+    }
+
+    /// <summary>
     /// Draws the overlay at the given size — the virtual desktop's, so one picture covers
-    /// every monitor. Never throws on odd input: a size of zero yields a 1×1 picture.
+    /// every monitor. Never throws on odd input: a size of zero yields a 1×1 picture, an
+    /// absurd one is composed at <see cref="ComposedSize"/> and left to the blit to stretch,
+    /// and a message longer than the screen stops at the bottom band rather than running
+    /// under it.
     /// </summary>
     public static OverlayBitmap Compose(OverlayContent content, int width, int height)
     {
         ArgumentNullException.ThrowIfNull(content);
-        width = Math.Max(1, width);
-        height = Math.Max(1, height);
+        (width, height) = ComposedSize(width, height);
 
         var bitmap = new SKBitmap(new SKImageInfo(width, height, JpegCodec.PixelFormat, SKAlphaType.Premul));
         try
@@ -105,18 +157,27 @@ public static class OverlayText
 
             using var paint = new SKPaint { IsAntialias = true };
 
-            var y = height * 0.28f;
-            y = DrawCentered(canvas, paint, Text("LockTitle"), titleSize, Foreground, width, y, width - 2 * margin);
+            // The bottom band: the PC's name at the left, the one honest line at the right.
+            // Nothing above it may draw below `floor`, so a long message cannot push the
+            // countdown off the screen or under the band.
+            var bottom = height - margin;
+            var floor = bottom - smallSize * 1.6f;
 
-            var message = content.Message.Length > 0 ? content.Message : Text("LockDefaultMessage");
+            var y = height * 0.28f;
+            y = DrawCentered(canvas, paint, Text("LockTitle"), titleSize, Foreground, width, y, width - 2 * margin, floor);
+
+            var clamped = ClampMessage(content.Message);
+            var message = clamped.Length > 0 ? clamped : Text("LockDefaultMessage");
             y += messageSize * 0.8f;
-            y = DrawCentered(canvas, paint, message, messageSize, Foreground, width, y, width - 2 * margin);
+
+            // The countdown keeps its place: the message may take the room above it only.
+            var countdownSize = smallSize * 1.3f;
+            var countdownRoom = smallSize * 1.6f + countdownSize * 1.3f;
+            y = DrawCentered(canvas, paint, message, messageSize, Foreground, width, y, width - 2 * margin, floor - countdownRoom);
 
             y += smallSize * 1.6f;
-            y = DrawCentered(canvas, paint, CountdownText(content.RemainingSeconds), smallSize * 1.3f, Accent, width, y, width - 2 * margin);
+            DrawCentered(canvas, paint, CountdownText(content.RemainingSeconds), countdownSize, Accent, width, y, width - 2 * margin, floor);
 
-            // The bottom band: the PC's name at the left, the one honest line at the right.
-            var bottom = height - margin;
             DrawLeft(canvas, paint, Text("PcNameFormat", content.PcName), smallSize, Muted, margin, bottom);
             DrawRight(canvas, paint, Text("SecureAttentionNote"), smallSize, Muted, width - margin, bottom);
 
@@ -131,11 +192,17 @@ public static class OverlayText
 
     // ------------------------------------------------------------------ drawing
 
-    private static float DrawCentered(SKCanvas canvas, SKPaint paint, string text, float size, SKColor color, int width, float y, float maxWidth)
+    /// <summary>Draws wrapped, centred lines from <paramref name="y"/> down, stopping before a line's baseline would pass <paramref name="floor"/>; returns the next baseline.</summary>
+    private static float DrawCentered(SKCanvas canvas, SKPaint paint, string text, float size, SKColor color, int width, float y, float maxWidth, float floor)
     {
         paint.Color = color;
         foreach (var line in Wrap(text, size, maxWidth))
         {
+            if (y > floor)
+            {
+                break;
+            }
+
             var lineWidth = Measure(line, size);
             DrawRun(canvas, paint, line, size, (width - lineWidth) / 2f, y);
             y += size * 1.3f;

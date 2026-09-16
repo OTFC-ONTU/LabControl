@@ -1131,8 +1131,9 @@ public sealed partial class AgentLink : IAsyncDisposable
     /// that is already gone is harmless and locking a screen for nobody is not. A refusal
     /// answers <c>OverlayState</c> with <c>problem</c> set and <c>kind</c> unspecified — the
     /// link does not know what the PC shows and must not echo a kind that is not showing —
-    /// and never touches the enforcer's latest state. The handler is fire-and-forget, like
-    /// input: its failure is logged, never the link's problem.
+    /// and never touches the enforcer's latest state. A link with no handler answers the
+    /// same way, so a console never waits on a PC that cannot show overlays. The handler is
+    /// fire-and-forget, like input: its failure is logged, never the link's problem.
     /// </summary>
     private async Task DeliverOverlayAsync(Overlay overlay, ChannelWriter<AgentMessage> outgoing, CancellationToken token)
     {
@@ -1151,7 +1152,14 @@ public sealed partial class AgentLink : IAsyncDisposable
         var handler = OverlayReceived;
         if (handler is null)
         {
+            // No enforcer on this link: the console must not wait forever for a state that
+            // never comes. Answered like a refusal — a problem, no kind — and the latest
+            // state (there is none) is untouched.
             _log.LogDebug("{Pc}: overlay {Kind} arrived but nothing here shows overlays", Name, overlay.Kind);
+            await outgoing.WriteAsync(new AgentMessage
+            {
+                OverlayState = new OverlayState { Kind = Overlay.Types.Kind.Unspecified, Problem = PolicyEvents.Text("NotInThisBuild", PolicyEvents.Text("KindLock")) },
+            }, token);
             return;
         }
 

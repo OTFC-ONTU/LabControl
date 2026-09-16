@@ -1,6 +1,7 @@
 using LabControl.Shared;
 using LabControl.Shared.Discovery;
 using LabControl.Shared.Link;
+using LabControl.Shared.Policy;
 using LabControl.Shared.Protection;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Hosting;
@@ -40,12 +41,24 @@ internal sealed class AgentService : BackgroundService
             await using var behaviour = new WindowsAgentBehaviour(store, _loggers.CreateLogger("pc"));
             await using var link = behaviour.Link;
 
-            behaviour.Start();
-
             // The helper lives next to agent.exe in app\<version>\ (D-19); the supervisor keeps
             // one alive in the interactive session and reports that session to the console.
             var helperPath = Path.Combine(Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory, Defaults.SessionExecutableName);
             await using var supervisor = new SessionSupervisor(link, _sessionChanges, _loggers.CreateLogger("session"), helperPath);
+
+            // The policy journal (M6, D-69): restore first, then re-apply what policy.json
+            // still holds — before the link dials, so the first OverlayState after Welcome is
+            // already the truth, and before the helper runs, so a re-applied lock is what the
+            // first helper is told. Declared after the supervisor, so it is disposed before it:
+            // OnStop's restore pass runs first, then the supervisor ends the helper and the
+            // overlay dies with it (the overlay needs no restore of its own, D-69 item 2).
+            var machine = new WindowsMachineState(supervisor.SendToHelper, _loggers.CreateLogger("policy"));
+            await using var policy = new PolicyEnforcer(link, machine, Defaults.AgentDataDirectory, store.Config.LabId, _loggers.CreateLogger("policy"));
+            supervisor.Policy = policy;
+            policy.Start();
+
+            behaviour.Start();
+
             if (File.Exists(helperPath))
             {
                 supervisor.Start();

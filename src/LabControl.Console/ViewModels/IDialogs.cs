@@ -13,6 +13,9 @@ public sealed record SendFilesAnswer(IReadOnlyList<string> Paths, bool Open);
 /// <summary>A new key holder from the add-holder dialog.</summary>
 public sealed record HolderAnswer(string Name, string Passphrase);
 
+/// <summary>What the teacher asked the <i>Lock screens</i> dialog for (M6 portion 1): the message and how long, <c>null</c> meaning until lifted.</summary>
+public sealed record LockAnswer(string Message, TimeSpan? Duration);
+
 
 /// <summary>
 /// The dialogs a view model needs, behind an interface so the view models stay free of
@@ -45,6 +48,9 @@ public interface IDialogs
     Task ShowImportResultsAsync(IReadOnlyList<ImportFileResult> results);
 
     Task<SendFilesAnswer?> SendFilesAsync(int pcCount);
+
+    /// <summary>The <i>Lock screens</i> dialog (M6 portion 1, D-70): message and duration; the ceiling and the Ctrl+Alt+Del line are stated in it.</summary>
+    Task<LockAnswer?> LockScreensAsync(int pcCount);
 
     Task<string?> PickFolderAsync(string title);
 

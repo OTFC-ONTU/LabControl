@@ -21,7 +21,9 @@ namespace LabControl.Agent.Session;
 /// <see cref="IScreenSource"/> answers with <c>VideoFrame</c>s up the pipe, and the service
 /// forwards them to the console (D-35). Since M3 portion 3 the service also relays the
 /// teacher's <c>Input</c> down the pipe and an <see cref="InputInjector"/> turns it into
-/// <c>SendInput</c> (D-36). The overlay (M5) comes next.
+/// <c>SendInput</c> (D-36). Since M6 portion 1 it shows the lock: the service relays the
+/// enforcer's <c>Overlay</c> down the pipe and an <see cref="OverlayController"/> puts a
+/// topmost window and the low-level input hooks up, answering <c>overlay_state</c> (D-70).
 /// </summary>
 internal static class Program
 {
@@ -164,6 +166,10 @@ internal static class Program
         // The teacher's input (D-36): queued for a thread of its own, never handled on the read loop.
         using var injector = new InputInjector(loggers.CreateLogger("input"), Report);
 
+        // The lock (D-70): window and hooks on threads of their own; its state goes up with
+        // every status and on every change, so the service always knows what is shown.
+        using var overlay = new OverlayController(loggers.CreateLogger("overlay"), state => Send(new HelperMessage { OverlayState = state }), Environment.MachineName);
+
         var statusLoop = Task.Run(async () =>
         {
             var lastDesktop = string.Empty;
@@ -177,6 +183,7 @@ internal static class Program
                 }
 
                 await SendAsync(new HelperMessage { Status = status });
+                await SendAsync(new HelperMessage { OverlayState = overlay.State() });
                 await Task.Delay(Defaults.HelperStatusInterval, token);
             }
         }, token);
@@ -192,6 +199,7 @@ internal static class Program
                         // Never await a write from the read loop (D-35 item 8): the service may be
                         // waiting for us to read its next message before it reads ours.
                         Send(new HelperMessage { Status = DesktopProbe.Status() });
+                        overlay.Report();
                         break;
 
                     case ServiceMessage.PayloadOneofCase.VideoControl:
@@ -202,8 +210,12 @@ internal static class Program
                         injector.Offer(message.Input);
                         break;
 
+                    case ServiceMessage.PayloadOneofCase.Overlay:
+                        overlay.Offer(message.Overlay);
+                        break;
+
                     default:
-                        // Overlay (M5) is not here yet; say so once per message.
+                        // A message this build does not know; say so once per message.
                         log.LogWarning("the service sent {What}, which this build does not do yet", message.PayloadCase);
                         await SendAsync(new HelperMessage
                         {

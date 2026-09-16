@@ -1,5 +1,8 @@
 using System.Globalization;
 using LabControl.Shared;
+using LabControl.Shared.Link;
+using LabControl.Shared.Policy;
+using LabControl.Shared.Protection;
 using LabControl.Shared.Setup;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -25,6 +28,7 @@ internal static class Program
         "                                             provision this PC from a USB payload (setup.json + ca.crt)\n" +
         $"       agent.exe {Defaults.AgentVersionSwitch}                    print the version\n" +
         $"       agent.exe {Defaults.RestartServiceSwitch}            stop the '{Defaults.ServiceName}' service and start it again (used by a push, D-33)\n" +
+        $"       agent.exe {Defaults.PolicyRestoreSwitch}             restore the PC's normal settings and re-apply what policy.json still holds (the watchdog task, D-69)\n" +
         "  --verbose                                  debug logging";
 
     public static string Version =>
@@ -85,6 +89,23 @@ internal static class Program
                 return 1;
             }
             finally { await Log.CloseAndFlushAsync(); }
+        }
+
+        if (args.Contains(Defaults.PolicyRestoreSwitch, StringComparer.OrdinalIgnoreCase))
+        {
+            // The watchdog task's entry point (D-69 item 6) and a hand tool: the same pass the
+            // service runs at start, under the same mutex, with no service and no link. Exit 0
+            // only when the machine was proven open; the task retries a nonzero exit.
+            using var restoreLog = ConfigureLogging(interactive: !asService, verbose);
+            var restoreLogger = restoreLog.CreateLogger("restore-policy");
+            try
+            {
+                return RestorePolicy(restoreLogger);
+            }
+            finally
+            {
+                await Log.CloseAndFlushAsync();
+            }
         }
 
         if (args.Contains(Defaults.RestartServiceSwitch, StringComparer.OrdinalIgnoreCase))
@@ -156,6 +177,50 @@ internal static class Program
         {
             await Log.CloseAndFlushAsync();
         }
+    }
+
+    /// <summary>
+    /// <c>agent.exe --restore-policy</c>: D-69 steps 0–6 against a <see cref="WindowsMachineState"/>
+    /// with no helper (a lock that is still valid is recorded and shown by the service's next
+    /// helper), under <see cref="PolicyMutex"/>. Returns 0 when the machine is proven open,
+    /// 1 when a restore step failed, 2 when the PC is not provisioned, 3 when the mutex was
+    /// held elsewhere for the whole wait.
+    /// </summary>
+    private static int RestorePolicy(Microsoft.Extensions.Logging.ILogger log)
+    {
+        string labId;
+        try
+        {
+            using var store = DirectoryAgentStore.Open(Defaults.AgentDataDirectory, MachineKeyProtection.Dpapi);
+            labId = store.Config.LabId;
+        }
+        catch (Exception ex)
+        {
+            log.LogError("Cannot open {Directory}: {Message}. Nothing to restore for.", Defaults.AgentDataDirectory, ex.Message);
+            return 2;
+        }
+
+        using var lease = PolicyMutex.TryAcquire();
+        if (lease is null)
+        {
+            log.LogWarning("{Message}", PolicyEvents.Text("Busy", (long)Defaults.PolicyMutexWait.TotalSeconds));
+            return 3;
+        }
+
+        var path = Path.Combine(Defaults.AgentDataDirectory, Defaults.PolicyFileName);
+        var machine = new WindowsMachineState(_ => false, log);
+        var journal = new PolicyJournal(machine, labId, PolicyJournal.FileReader(path), PolicyJournal.FileWriter(path));
+        journal.Reported += reported => log.Log(reported.Severity switch
+        {
+            Shared.Protocol.Event.Types.Severity.Error => LogLevel.Error,
+            Shared.Protocol.Event.Types.Severity.Warning => LogLevel.Warning,
+            _ => LogLevel.Information,
+        }, "{Code}: {Message}", reported.Code, reported.Message);
+
+        var outcome = journal.Start(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        log.LogInformation("policy restore: machine {Open}, {Reapplied} session(s) re-applied, {Dropped} dropped",
+            outcome.MachineOpen ? "open" : "NOT proven open", outcome.Reapplied.Count, outcome.Dropped.Count);
+        return outcome.MachineOpen ? 0 : 1;
     }
 
     /// <summary>

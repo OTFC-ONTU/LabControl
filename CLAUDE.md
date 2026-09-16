@@ -278,6 +278,33 @@ ARCHITECTURE §3.9/§4 and PROTOCOL (*Discovery beacon*, *Files exchanged offlin
 *M5 additions*) describe the design; the `Welcome.console_access` `.proto` change landed
 with portion 5, and PROTOCOL was updated in that commit.
 
+**M6 portion 1 is built (2026-09-16, `D-69`, `D-70`; ROADMAP M6, *How it is being built*,
+six portions), all on the Mac.** The policy journal — `Shared/Policy/` (`ClassroomPolicy`,
+`PolicyJournal`, `PolicyMutex`, `OwnershipGate`, `OverlayText`, `PolicyEvents`) over
+`policy.json` (`Persistence/PolicyDocument`) — restores the machine unconditionally before
+it reads the document and re-applies only what is still within its limits, re-clamping the
+hard limit on every pass; a lock is a session with its own 1 h ceiling
+(`Defaults.LockHardLimit`) the agent clamps on its own clock, and it does **not** end on
+lab departure. The platform-neutral `Shared/Policy/PolicyEnforcer` (mutex, timer, link
+wiring, `OverlayState` publishing) is driven by the Windows service (`WindowsMachineState`;
+`SessionSupervisor` relays `Overlay` down the helper pipe, re-asserts the lock to every
+freshly connected helper and merges the helper's `overlay_state` back), by the simulator
+(`FakeMachineState`, the lock drawn on `FakeScreen` so the mosaic shows it) and by
+`agent.exe --restore-policy`. The helper shows the lock with a raw topmost Win32 window
+(`OverlayWindow`, one `StretchDIBits` of the SkiaSharp bitmap, repainted every second) and
+`WH_KEYBOARD_LL`/`WH_MOUSE_LL` hooks on a thread that does nothing else (`InputBlock`,
+every physical event swallowed, injected input passed, `BlockInput` the fallback only),
+queued through `OverlayController`. The console has `LabSession.Lock`/`Unlock`, the *Lock
+screens* dialog (message, *until I unlock* or *N minutes*, the 60-minute ceiling and the
+Ctrl+Alt+Del line stated), *Lock all…*/*Unlock all*, and a tile badge fed by the PC's
+`OverlayState` alone, naming the console that set it. Tests: 782 Shared + 232 Console (778 + 228 before; one load-sensitive beacon test failed under the full run and passed alone) (`LockTests`,
+`PolicyEnforcerTests`, the UI renders). `dotnet publish -r win-x64` of the helper and the
+agent succeed. **Not yet run on Windows**: the window, the hooks, the injected-input
+pass-through, the re-assert after logoff and `--restore-policy` wait for the VM (the drill
+is in ROADMAP M6). The ownership gate for `Overlay` fails closed when the link is unbound
+and answers a refusal with `problem` and no `kind`; the console never lets such an answer
+clear a lock the PC still shows.
+
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, `FakeAgent` and the console UI — see the M1 *Progress* and

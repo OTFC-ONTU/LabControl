@@ -649,8 +649,7 @@ helper from a previous service instance, or an impostor). The service answers wi
 `Default` while the student works, `Winlogon` at the lock screen, the logon screen and a UAC
 prompt. A helper silent for `HelperSilenceTimeout` (10 s) is killed and restarted; an
 `Event` from the helper is relayed to the console unchanged. When the pipe closes the helper
-exits at once; when the helper exits the service respawns it (D-30). `Overlay` is answered
-with a `session.not_in_this_build` warning until the M6 helper overlay lands.
+exits at once; when the helper exits the service respawns it (D-30).
 
 **Overlay over the pipe (M6 portion 1, `D-70`).** The service is the policy owner: it
 judges the ownership gate, keeps the lock in `policy.json`, clamps its hard limit and ends
@@ -658,13 +657,24 @@ it on its own clock; the helper only shows it. Every `Overlay` the journal appli
 written down the pipe as it is, and the service **re-asserts the current lock to every
 freshly connected helper** right after the `Ping` — `D-30` restarts the helper at logon and
 logoff, so a lock would otherwise vanish at the logon screen — the same way it re-sends
-the current `VideoControl`. The helper answers with `HelperMessage.overlay_state`: `kind`
-(what it shows), `input_blocked` (its `WH_KEYBOARD_LL` / `WH_MOUSE_LL` hooks are in
-place) and `reason` (`BlockInput` fallback, no input desktop, …); the service merges
-those two fields into the `OverlayState` it sends the console and treats a helper that
-shows nothing while a lock is held as its cue to re-assert. Injected input
-(`LLKHF_INJECTED` / `LLMHF_INJECTED`) passes the hooks, so the teacher's remote control
-works under a lock.
+the current `VideoControl`. On the helper's side (`OverlayController`) every `Overlay` is
+queued for a thread of its own — like input, so the pipe's read loop never waits on
+Windows — and applied in order: `LOCK` puts the `WH_KEYBOARD_LL` / `WH_MOUSE_LL` hooks up
+first (`InputBlock`, on a thread that does nothing else) and then the topmost popup
+(`OverlayWindow`, on a thread that joined the input desktop), or re-states an existing
+window's text and limits when the `session_id` is the same; `UNLOCK` lifts both. The helper
+answers with `HelperMessage.overlay_state` on every change, with every `HelperStatus` and
+on every `Ping`: `kind` (`LOCK` while the window is up, `KIND_UNSPECIFIED` otherwise),
+`session_id`, `since_unix` and the limits it was given, `input_blocked` (both hooks are in
+place) and `reason` (the window could not be created, a hook could not be installed and
+`BlockInput` is in use, …). The service merges `input_blocked` and `reason` into the
+`OverlayState` it sends the console, treats a helper that shows nothing while a lock is
+held as its cue to re-assert (at most once every few seconds), tells a helper that still
+shows a lock the journal has lifted to lift it again, and reports *no session helper is
+connected* as the reason the moment the pipe ends. Injected input (`LLKHF_INJECTED` /
+`LLMHF_INJECTED`) passes the hooks, so the teacher's remote control works under a lock;
+every physical keyboard and mouse event is swallowed — Alt+Tab, Alt+Esc, Ctrl+Esc, the
+Windows keys and Alt+F4 among them. Ctrl+Alt+Del never reaches a hook.
 
 **Input over the pipe (M3 portion 3, `D-36`).** Every `Input` from the console except
 `CTRL_ALT_DEL` is written down the pipe as it is (fire-and-forget, like the controls); the

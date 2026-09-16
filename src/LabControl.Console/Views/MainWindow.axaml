@@ -65,6 +65,11 @@
         <Button Content="{loc:Localize Action.Reboot}" Command="{Binding RebootCommand}" />
         <Button Content="{loc:Localize Action.Logoff}" Command="{Binding LogoffCommand}" />
         <Button Content="{loc:Localize Action.SendFiles}" Command="{Binding SendFilesCommand}" />
+        <!-- Lock (M6 portion 1, D-70): the selection, or the whole lab; the tile badge follows what each PC reports. -->
+        <Button Content="{loc:Localize Action.LockScreens}" Command="{Binding LockScreensCommand}" />
+        <Button Content="{loc:Localize Action.UnlockScreens}" Command="{Binding UnlockScreensCommand}" />
+        <Button Content="{loc:Localize Action.LockAll}" Command="{Binding LockAllScreensCommand}" />
+        <Button Content="{loc:Localize Action.UnlockAll}" Command="{Binding UnlockAllScreensCommand}" />
         <Button Content="{loc:Localize Action.PushBuild}" Command="{Binding PushBuildCommand}" IsVisible="{Binding IsAdministrator}" />
         <Button Content="{loc:Localize Action.RemoveSelected}" Command="{Binding RemoveSelectedCommand}" />
         <Rectangle Width="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" Margin="4,0" />

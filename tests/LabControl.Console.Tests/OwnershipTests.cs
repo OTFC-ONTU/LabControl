@@ -510,6 +510,8 @@ public sealed class OwnershipTests
 
         public Task<SendFilesAnswer?> SendFilesAsync(int pcCount) => Task.FromResult<SendFilesAnswer?>(null);
 
+        public Task<LockAnswer?> LockScreensAsync(int pcCount) => Task.FromResult<LockAnswer?>(null);
+
         public Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
 
         public Task<AgentBuild?> PushAgentBuildAsync(int pcCount) => Task.FromResult<AgentBuild?>(null);

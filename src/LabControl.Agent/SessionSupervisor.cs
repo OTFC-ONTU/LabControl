@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using System.ServiceProcess;
 using LabControl.Shared;
 using LabControl.Shared.Link;
+using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Session;
 using LabControl.Shared.Video;
@@ -25,7 +26,12 @@ namespace LabControl.Agent;
 /// request back to the helper, so nothing the console has not seen is ever lost. Since M3
 /// portion 3 it relays input the same way — every <c>Input</c> from the console goes down
 /// the pipe as it is, except <c>CTRL_ALT_DEL</c>, which only a service can raise
-/// (<see cref="SecureAttention"/>, D-36). Nothing here may throw out of the loop.
+/// (<see cref="SecureAttention"/>, D-36). Since M6 portion 1 it is the relay for the lock
+/// too (D-70 item 4): the enforcer's <c>Overlay</c> goes down the pipe through
+/// <see cref="SendToHelper"/>, the current lock is re-asserted to every freshly connected
+/// helper right where the current <c>VideoControl</c> is re-sent, and the helper's
+/// <c>overlay_state</c> comes back up into <see cref="PolicyEnforcer.NoteEnforcement"/>.
+/// Nothing here may throw out of the loop.
 /// </summary>
 internal sealed class SessionSupervisor : IAsyncDisposable
 {
@@ -53,6 +59,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
     private string? _lastSpawnFailure;
     private bool _pipeFailureReported;
     private NamedPipeServerStream? _server;
+    private DateTimeOffset _lastReassert = DateTimeOffset.MinValue;
 
     public SessionSupervisor(AgentLink link, SessionChangeSource changes, ILogger log, string helperPath)
     {
@@ -60,6 +67,30 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         _changes = changes;
         _log = log;
         _helperPath = helperPath;
+    }
+
+    /// <summary>
+    /// The policy enforcer this supervisor relays for (M6): set once by the service before
+    /// <see cref="Start"/>. <c>null</c> only in a build that has no enforcer, when the lock is
+    /// simply not relayed.
+    /// </summary>
+    public PolicyEnforcer? Policy { get; set; }
+
+    /// <summary>
+    /// Writes a message down the pipe to the connected helper, fire-and-forget (D-35 item 8);
+    /// <c>false</c> when no helper is connected, and the caller knows the message is not
+    /// queued — the helper is told the current state when it connects.
+    /// </summary>
+    public bool SendToHelper(ServiceMessage message)
+    {
+        var helper = _helper;
+        if (helper is not { Connected: true })
+        {
+            return false;
+        }
+
+        _ = helper.SendAsync(message, _log);
+        return true;
     }
 
     /// <summary>The helper is connected and has spoken recently.</summary>
@@ -628,6 +659,11 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                 _ = helper.SendAsync(new ServiceMessage { VideoControl = wanted }, _log);
             }
 
+            // A helper born while a lock is held shows it at once (D-70 item 4): D-30 restarts
+            // the helper at logon and logoff, and a lock must not vanish at the logon screen.
+            // Off the read loop — the re-assert takes the policy mutex.
+            ReassertOverlay("a session helper connected", force: true);
+
             var announced = false;
             while (await PipeFraming.ReadAsync(server, HelperMessage.Parser, token) is { } message)
             {
@@ -661,6 +697,10 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                         RelayFrame(helper, message.VideoFrame);
                         break;
 
+                    case HelperMessage.PayloadOneofCase.OverlayState:
+                        RelayOverlayState(message.OverlayState);
+                        break;
+
                     default:
                         _log.LogDebug("session.exe sent {What}, which this build does not handle", message.PayloadCase);
                         break;
@@ -679,9 +719,80 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         finally
         {
             helper.Connected = false;
+            // Whatever the helper showed went with it; a lock that is held is shown again by
+            // the next helper, and the console sees the gap until then.
+            Policy?.NoteEnforcement(false, "no session helper is connected");
             Wake();
         }
     }
+
+    /// <summary>
+    /// The helper's word on what it shows (PROTOCOL "Overlay over the pipe"): its hook state
+    /// and reason go into the enforcer's next <c>OverlayState</c>; a helper that shows
+    /// nothing while a lock is held is re-asserted, at most every few seconds so a helper
+    /// that cannot show the lock does not get one <c>Overlay</c> per status.
+    /// </summary>
+    private void RelayOverlayState(OverlayState reported)
+    {
+        var policy = Policy;
+        if (policy is null)
+        {
+            return;
+        }
+
+        var held = policy.Journal.Snapshot().Overlay;
+        if (held is not null && reported.Kind != Overlay.Types.Kind.Lock)
+        {
+            policy.NoteEnforcement(false, reported.Reason.Length > 0 ? reported.Reason : "the session helper is not showing the lock yet");
+            ReassertOverlay("the helper shows no lock while one is held");
+            return;
+        }
+
+        if (held is null && reported.Kind == Overlay.Types.Kind.Lock)
+        {
+            // A lock the helper still shows after the journal lifted it (a lift that raced a
+            // restart): the enforcer's truth wins, so tell the helper again.
+            _log.LogInformation("the helper still shows lock {Session}; lifting it again", reported.SessionId);
+            SendToHelper(new ServiceMessage { Overlay = new Overlay { Kind = Overlay.Types.Kind.Unlock } });
+        }
+
+        policy.NoteEnforcement(reported.InputBlocked, reported.Reason);
+    }
+
+    private void ReassertOverlay(string why, bool force = false)
+    {
+        var policy = Policy;
+        if (policy is null)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        lock (_lock)
+        {
+            if (!force && now - _lastReassert < ReassertInterval)
+            {
+                return;
+            }
+
+            _lastReassert = now;
+        }
+
+        _log.LogDebug("re-asserting the current overlay: {Why}", why);
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                policy.ReassertOverlay();
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "re-asserting the overlay failed: {Message}", ex.Message);
+            }
+        });
+    }
+
+    private static readonly TimeSpan ReassertInterval = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// A frame from the helper goes to the console through the link's uplink. The uplink

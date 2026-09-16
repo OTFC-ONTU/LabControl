@@ -100,6 +100,23 @@ the documents relevant to the task:
   clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the
   physical lab. The `Welcome.console_access`
   `.proto` change landed with portion 5 and `docs/PROTOCOL.md` was updated in that commit.
+- **M6 portion 1 is built (2026-09-16, `D-69`, `D-70`), all on the Mac, not yet run on
+  Windows.** The policy journal (`Shared/Policy/`, `policy.json`) restores the machine
+  first and re-applies second, under the named mutex `Global\LabControl.Policy`, with the
+  hard limit re-clamped on every pass; a lock has its own 1 h ceiling
+  (`Defaults.LockHardLimit`) clamped on the agent's clock and does **not** end on lab
+  departure. One platform-neutral `PolicyEnforcer` is driven by the Windows service
+  (`WindowsMachineState`, the overlay relayed by `SessionSupervisor` and re-asserted to
+  every fresh helper), by the simulator (`FakeMachineState`, the lock drawn on the fake
+  desktop) and by `agent.exe --restore-policy`. The helper shows the lock with a raw
+  topmost Win32 window painted from the `OverlayText.Compose` bitmap and low-level
+  keyboard/mouse hooks on a dedicated thread that pass injected input; `BlockInput` is
+  the fallback only. The console has `LabSession.Lock`/`Unlock`, the *Lock screens*
+  dialog (ceiling and Ctrl+Alt+Del stated), *Lock all…*/*Unlock all* and a tile badge fed
+  by the PC's `OverlayState`, never by the request. Tests: 782 Shared + 232 Console (778 + 228 before; one load-sensitive beacon test failed under the full run and passed alone). `dotnet publish -r
+  win-x64` of the helper and the agent succeed; the VM drill is in ROADMAP M6. When
+  touching `Overlay`/`OverlayState`, the ownership gate in `AgentLink` is judged before the
+  enforcer sees the message and fails closed; keep `LeaveIfConsoleRevoked` as it is.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Student PCs may have no internet. Do not introduce a cloud or per-PC runtime

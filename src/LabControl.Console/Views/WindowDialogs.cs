@@ -42,6 +42,9 @@ public sealed class WindowDialogs : IDialogs
     public async Task<SendFilesAnswer?> SendFilesAsync(int pcCount) =>
         await Show(new SendFilesDialog(pcCount));
 
+    public async Task<LockAnswer?> LockScreensAsync(int pcCount) =>
+        await Show(new LockScreensDialog(pcCount));
+
     public void ShowScreen(ScreenViewModel screen) => new ScreenWindow(screen).Show();
 
     public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string extension)

@@ -99,6 +99,46 @@ public sealed class AgentConnection
     }
 
     /// <summary>
+    /// What the PC is showing, from its last <c>OverlayState</c> (M6 portion 1, D-70): the
+    /// enforcer's truth, never an echo of what this console asked for. <c>null</c> until the
+    /// agent said anything (an agent from before M6 never does). A refusal — <c>problem</c>
+    /// set, <c>kind</c> unspecified — is kept in <see cref="OverlayProblem"/> and does
+    /// <b>not</b> replace the last state that described the screen.
+    /// </summary>
+    public OverlayState? OverlayState { get; private set; }
+
+    /// <summary>Why the last <c>Overlay</c> was refused or failed, until the next state without a problem; <c>null</c> otherwise.</summary>
+    public string? OverlayProblem { get; private set; }
+
+    /// <summary>The PC holds a lock (its own word, from <see cref="OverlayState"/>).</summary>
+    public bool OverlayLocked => OverlayState is { Kind: Overlay.Types.Kind.Lock };
+
+    /// <summary>
+    /// Merges an <c>OverlayState</c>; returns <c>true</c> when what the tile shows changed.
+    /// A refused request carries no picture of the screen (PROTOCOL <i>Overlay</i>), so only
+    /// its <c>problem</c> is taken; a state without a problem clears the last one.
+    /// </summary>
+    public bool ApplyOverlayState(OverlayState state)
+    {
+        var lockedBefore = OverlayLocked;
+        var problemBefore = OverlayProblem;
+        var setByBefore = OverlayState?.SetByInstance;
+        var sessionBefore = OverlayState?.SessionId;
+        if (state.Problem.Length > 0 && state.Kind == Overlay.Types.Kind.Unspecified && OverlayState is not null)
+        {
+            OverlayProblem = state.Problem;
+        }
+        else
+        {
+            OverlayState = state;
+            OverlayProblem = state.Problem.Length > 0 ? state.Problem : null;
+        }
+
+        return lockedBefore != OverlayLocked || problemBefore != OverlayProblem
+            || setByBefore != OverlayState?.SetByInstance || sessionBefore != OverlayState?.SessionId;
+    }
+
+    /// <summary>
     /// Reads the capture and input problems out of the agent's events; returns <c>true</c>
     /// when something the tile shows changed.
     /// </summary>

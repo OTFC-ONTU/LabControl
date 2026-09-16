@@ -1,5 +1,6 @@
 using System.Globalization;
 using LabControl.Shared.Control;
+using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
 using SkiaSharp;
@@ -15,6 +16,8 @@ namespace LabControl.FakeAgent;
 /// runs in the session helper runs here. Since M3 portion 3 it also shows the teacher's
 /// input (D-36): a pointer that follows the mouse, a ring where a button went down, and a
 /// second editor line that shows what was typed — so remote control can be tried on the Mac.
+/// Since M6 portion 1 it also shows a lock: the very picture <see cref="OverlayText.Compose"/>
+/// gives the real helper, over the whole desktop, repainted when the countdown changes.
 /// </summary>
 public sealed class FakeScreen : IScreenSource
 {
@@ -49,6 +52,10 @@ public sealed class FakeScreen : IScreenSource
     private string _teacherText = string.Empty;
     private bool _teacherTextDirty;
     private SKRect? _ring;
+
+    private OverlaySession? _overlay;
+    private string _overlayCountdown = string.Empty;
+    private bool _overlayDrawn;
 
     private string _clock = string.Empty;
     private int _typed;
@@ -115,6 +122,31 @@ public sealed class FakeScreen : IScreenSource
         }
     }
 
+    /// <summary>
+    /// The lock to show, or <c>null</c> for the desktop (M6 portion 1). From any thread; the
+    /// next <see cref="Advance"/> draws it, so the bitmap keeps its one writer.
+    /// </summary>
+    public void SetOverlay(OverlaySession? overlay)
+    {
+        lock (this)
+        {
+            _overlay = overlay;
+            _overlayDrawn = false;
+        }
+    }
+
+    /// <summary>The lock this desktop is showing right now, for the tests.</summary>
+    public OverlaySession? Overlay
+    {
+        get
+        {
+            lock (this)
+            {
+                return _overlayDrawn ? _overlay : null;
+            }
+        }
+    }
+
     public int Width { get; }
 
     public int Height { get; }
@@ -166,21 +198,42 @@ public sealed class FakeScreen : IScreenSource
     {
         var dirty = new List<Rect>();
 
-        if (!_drawn)
+        if (_overlay is { } overlay)
         {
+            // The lock covers everything: the desktop underneath neither draws nor matters,
+            // and it is redrawn from scratch once the lock lifts. The teacher's pointer still
+            // shows on top — remote control works under a lock on a real PC too (D-70).
+            _drawn = false;
+            var remaining = OverlayText.Remaining(overlay.UntilUnix, overlay.HardLimitUnix, now.ToUnixTimeSeconds());
+            var countdown = OverlayText.CountdownText(remaining);
+            if (!_overlayDrawn || countdown != _overlayCountdown)
+            {
+                using var picture = OverlayText.Compose(new OverlayContent(overlay.Message, string.Format(CultureInfo.InvariantCulture, Shared.Defaults.MachineNameFormat, _number), remaining), Width, Height);
+                _canvas.DrawBitmap(picture.Bitmap, 0, 0);
+                _overlayDrawn = true;
+                _overlayCountdown = countdown;
+                _pointerRect = null;
+                _ring = null;
+                dirty.Add(VideoGeometry.Whole(Width, Height));
+            }
+        }
+        else if (!_drawn)
+        {
+            _pointerRect = null;
+            _ring = null;
             DrawWallpaper();
             _drawn = true;
             dirty.Add(VideoGeometry.Whole(Width, Height));
         }
 
         var clock = now.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-        if (clock != _clock)
+        if (clock != _clock && _overlay is null)
         {
             _clock = clock;
             dirty.Add(DrawClock());
         }
 
-        if (!_idle)
+        if (!_idle && _overlay is null)
         {
             dirty.Add(DrawTyping());
             dirty.Add(MoveBox());

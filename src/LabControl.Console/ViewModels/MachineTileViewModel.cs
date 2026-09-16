@@ -86,6 +86,34 @@ public sealed partial class MachineTileViewModel : ObservableObject
     [ObservableProperty]
     public partial string CaptureProblem { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The PC holds a lock screen — its own word, from its last <c>OverlayState</c> (M6
+    /// portion 1, D-70), never what this console asked for. The badge is fed by this.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LockText))]
+    public partial bool IsLocked { get; set; }
+
+    /// <summary>Who set the lock: "this console" or the other console's name; empty while unlocked.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LockText))]
+    public partial string LockedBy { get; set; } = string.Empty;
+
+    /// <summary>The lock is up but weaker than usual: the PC's <c>OverlayState.reason</c> (hooks not in place, fallback in use); empty otherwise.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LockText))]
+    public partial string LockReason { get; set; } = string.Empty;
+
+    /// <summary>Why the PC refused or could not apply the last lock or unlock; empty otherwise.</summary>
+    [ObservableProperty]
+    public partial string LockProblem { get; set; } = string.Empty;
+
+    /// <summary>"locked by this console", "locked by Teacher laptop", with the weakness when there is one; empty while unlocked.</summary>
+    public string LockText =>
+        !IsLocked ? string.Empty
+        : LockReason.Length > 0 ? Strings.Format("Tile.LockedByWeak", LockedBy, LockReason)
+        : Strings.Format("Tile.LockedBy", LockedBy);
+
     /// <summary>"student", "student (locked)", "nobody logged on" — the tile's session line.</summary>
     public string SessionText =>
         LoggedOnUser.Length == 0
@@ -200,6 +228,27 @@ public sealed partial class MachineTileViewModel : ObservableObject
 
     private bool _hadPicture;
 
+    /// <summary>The lock badge follows the PC's <c>OverlayState</c> alone; an unlinked PC shows none (it may well still be locked, but this console cannot see it).</summary>
+    private void RefreshLock(AgentConnection? connection, string? thisInstanceId, Func<string, string>? nameOfInstance)
+    {
+        var state = connection?.OverlayState;
+        IsLocked = connection?.OverlayLocked == true;
+        LockProblem = connection?.OverlayProblem ?? string.Empty;
+        if (!IsLocked || state is null)
+        {
+            LockedBy = string.Empty;
+            LockReason = string.Empty;
+            return;
+        }
+
+        LockedBy = thisInstanceId is not null && string.Equals(state.SetByInstance, thisInstanceId, StringComparison.OrdinalIgnoreCase)
+            ? Strings.Get("Lock.ByThisConsole")
+            : state.SetByInstance.Length == 0
+                ? Strings.Get("Lock.ByUnknown")
+                : nameOfInstance?.Invoke(state.SetByInstance) ?? state.SetByInstance;
+        LockReason = state.InputBlocked ? string.Empty : state.Reason.Length > 0 ? state.Reason : Strings.Get("Lock.InputNotBlocked");
+    }
+
     /// <summary>A known capture reason in words; an unknown one as the code itself, so a new reason is never hidden.</summary>
     public static string CaptureReasonText(string reason) =>
         reason is "no_desktop" or "access_lost" or "no_duplication" or "gdi_failed" or "open_failed" or "failed"
@@ -211,7 +260,10 @@ public sealed partial class MachineTileViewModel : ObservableObject
     /// "nothing is known and no other console is live", which is what an offline PC looks
     /// like; a PC is shown as held by another machine only for a positive observation.
     /// </param>
-    public void Refresh(MachineRecord machine, AgentConnection? connection, MachineOwnership? ownership, DateTimeOffset now, bool waking = false)
+    /// <param name="thisInstanceId">This console's instance id, so a lock it set reads "by this console".</param>
+    /// <param name="nameOfInstance">Names another console from its instance id (<see cref="LabSession.NameOfInstance"/>); the id itself when <c>null</c>.</param>
+    public void Refresh(MachineRecord machine, AgentConnection? connection, MachineOwnership? ownership, DateTimeOffset now, bool waking = false,
+        string? thisInstanceId = null, Func<string, string>? nameOfInstance = null)
     {
         IsWaking = waking && connection is null;
         Number = machine.Number;
@@ -242,6 +294,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
                        DateTimeOffset.FromUnixTimeSeconds(machine.CertificateNotAfterUnix) - now < Defaults.CertificateRenewalLeadTime;
 
         SessionLocked = connection?.SessionLocked ?? false;
+        RefreshLock(connection, thisInstanceId, nameOfInstance);
         NoSession = connection?.NoSession ?? false;
         HelperDown = connection?.HelperAlive == false && !NoSession;
         CaptureProblem = connection?.CaptureProblem ?? string.Empty;

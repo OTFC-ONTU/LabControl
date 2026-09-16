@@ -656,8 +656,10 @@ public sealed class LabSession : IAsyncDisposable
     /// A teacher machine's display name, from the beacons heard now or the instances
     /// <c>lab.json</c> remembers; the bare id when this console has never met it.
     /// </summary>
-    private string NameOfInstance(string instanceId)
+    /// <summary>A console instance's name as this session knows it — live, from the registry, or the id itself.</summary>
+    public string NameOfInstance(string instanceId)
     {
+        ArgumentNullException.ThrowIfNull(instanceId);
         lock (_gate)
         {
             if (_others.TryGetValue(instanceId, out var other) && other.Name.Length > 0)
@@ -1241,6 +1243,10 @@ public sealed class LabSession : IAsyncDisposable
                 MachinesChanged?.Invoke();
                 break;
 
+            case AgentMessage.PayloadOneofCase.OverlayState:
+                ApplyOverlayState(connection, message.OverlayState, who);
+                break;
+
             case AgentMessage.PayloadOneofCase.JobProgress:
                 Jobs.Progress(message.JobProgress, now);
                 break;
@@ -1739,6 +1745,98 @@ public sealed class LabSession : IAsyncDisposable
         }
 
         return connection.TrySend(new ConsoleMessage { Input = input });
+    }
+
+    // ------------------------------------------------------------------ lock (M6 portion 1)
+
+    /// <summary>
+    /// Locks the screens of the given PCs (PROTOCOL <i>Overlay</i>, D-70): one <c>Overlay</c>
+    /// per linked PC with one fresh <c>session_id</c> for the whole action, <c>until_unix</c>
+    /// from <paramref name="duration"/> (<c>null</c> = until lifted) and a proposed hard
+    /// limit of <see cref="Defaults.LockHardLimit"/> from now, which the agent clamps on its
+    /// own clock. A PC that is not linked, or too old to know the message, is skipped — a
+    /// lock is a link message like <c>Input</c>, not a job, and is never queued for later.
+    /// Returns how many PCs were asked; what each one <i>shows</i> arrives as
+    /// <c>OverlayState</c> and is what the tile follows.
+    /// </summary>
+    public int Lock(IEnumerable<string> agentIds, string message, TimeSpan? duration)
+    {
+        ArgumentNullException.ThrowIfNull(agentIds);
+        ArgumentNullException.ThrowIfNull(message);
+        var now = _clock();
+        var overlay = new Overlay
+        {
+            Kind = Overlay.Types.Kind.Lock,
+            Message = message,
+            SessionId = Guid.NewGuid().ToString("n"),
+            UntilUnix = duration is { } d && d > TimeSpan.Zero ? now.Add(d).ToUnixTimeSeconds() : 0,
+            HardLimitUnix = now.Add(Defaults.LockHardLimit).ToUnixTimeSeconds(),
+        };
+
+        var (sent, skipped) = SendOverlay(agentIds, overlay);
+        Events.Info("overlay.lock_sent", Localization.Strings.Format("Event.LockSent", sent, skipped, message));
+        return sent;
+    }
+
+    /// <summary>Lifts the lock on the given PCs; any console of the same lab may end a lock it can see (owner decision 4).</summary>
+    public int Unlock(IEnumerable<string> agentIds)
+    {
+        ArgumentNullException.ThrowIfNull(agentIds);
+        var (sent, skipped) = SendOverlay(agentIds, new Overlay { Kind = Overlay.Types.Kind.Unlock });
+        Events.Info("overlay.unlock_sent", Localization.Strings.Format("Event.UnlockSent", sent, skipped));
+        return sent;
+    }
+
+    private (int Sent, int Skipped) SendOverlay(IEnumerable<string> agentIds, Overlay overlay)
+    {
+        var sent = 0;
+        var skipped = 0;
+        foreach (var agentId in agentIds.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var connection = FindLinked(agentId);
+            if (connection is null || connection.IsOutdated || !connection.TrySend(new ConsoleMessage { Overlay = overlay.Clone() }))
+            {
+                skipped++;
+                continue;
+            }
+
+            sent++;
+        }
+
+        return (sent, skipped);
+    }
+
+    /// <summary>
+    /// The PC's word on what it shows (D-70): merged into the connection, logged when the
+    /// lock appears, ends or is refused, and pushed to the tiles. Never the console's request.
+    /// </summary>
+    private void ApplyOverlayState(AgentConnection connection, OverlayState state, string who)
+    {
+        var lockedBefore = connection.OverlayLocked;
+        var problemBefore = connection.OverlayProblem;
+        var changed = connection.ApplyOverlayState(state);
+
+        if (connection.OverlayProblem is { } problem && problem != problemBefore)
+        {
+            Events.Warning("overlay.refused", Localization.Strings.Format("Event.OverlayRefused", who, problem), connection.AgentId, connection.Number);
+        }
+
+        if (!lockedBefore && connection.OverlayLocked)
+        {
+            var by = string.Equals(state.SetByInstance, Instance.InstanceId, StringComparison.OrdinalIgnoreCase)
+                ? Localization.Strings.Get("Lock.ByThisConsole")
+                : NameOfInstance(state.SetByInstance);
+            Events.Info("overlay.locked", Localization.Strings.Format("Event.Locked", who, by), connection.AgentId, connection.Number);
+        }
+        else if (lockedBefore && !connection.OverlayLocked)
+        {
+            Events.Info("overlay.unlocked", Localization.Strings.Format("Event.Unlocked", who), connection.AgentId, connection.Number);
+        }
+
+        if (changed)
+        {
+            MachinesChanged?.Invoke();
+        }
     }
 
     /// <summary>Asks a PC in full mode for a whole picture: the console has nothing to patch a delta onto.</summary>

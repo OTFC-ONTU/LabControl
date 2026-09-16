@@ -47,3 +47,55 @@ KEYBD_EVENT_FLAGS
 VIRTUAL_KEY
 XBUTTON1
 XBUTTON2
+
+// The lock overlay (M6 portion 1, D-70): a raw topmost popup window on the input desktop,
+// painted from one BGRA bitmap, repainted on a timer for the countdown
+RegisterClassExW
+UnregisterClassW
+CreateWindowExW
+DestroyWindow
+ShowWindow
+SetWindowPos
+SetForegroundWindow
+DefWindowProcW
+GetMessageW
+TranslateMessage
+DispatchMessageW
+PostQuitMessage
+PostMessageW
+PostThreadMessageW
+BeginPaint
+EndPaint
+InvalidateRect
+StretchDIBits
+SetTimer
+KillTimer
+GetModuleHandleW
+WNDCLASSEXW
+MSG
+PAINTSTRUCT
+HWND_TOPMOST
+WM_PAINT
+WM_DESTROY
+WM_TIMER
+WM_CLOSE
+WM_ERASEBKGND
+WM_QUIT
+WM_USER
+WM_KEYDOWN
+WM_KEYUP
+WM_SYSKEYDOWN
+WM_SYSKEYUP
+WM_SYSCOMMAND
+
+// The input block under a lock: low-level keyboard and mouse hooks on a thread of their
+// own; BlockInput only as the fallback (D-70 item 3)
+SetWindowsHookExW
+UnhookWindowsHookEx
+CallNextHookEx
+BlockInput
+KBDLLHOOKSTRUCT
+MSLLHOOKSTRUCT
+KBDLLHOOKSTRUCT_FLAGS
+LLMHF_INJECTED
+WINDOWS_HOOK_ID

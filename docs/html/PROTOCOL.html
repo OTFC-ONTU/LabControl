@@ -856,21 +856,31 @@ helper from a previous service instance, or an impostor). The service answers wi
 <code>Default</code> while the student works, <code>Winlogon</code> at the lock screen, the logon screen and a UAC
 prompt. A helper silent for <code>HelperSilenceTimeout</code> (10 s) is killed and restarted; an
 <code>Event</code> from the helper is relayed to the console unchanged. When the pipe closes the helper
-exits at once; when the helper exits the service respawns it (D-30). <code>Overlay</code> is answered
-with a <code>session.not_in_this_build</code> warning until the M6 helper overlay lands.</p>
+exits at once; when the helper exits the service respawns it (D-30).</p>
 <p><strong>Overlay over the pipe (M6 portion 1, <code>D-70</code>).</strong> The service is the policy owner: it
 judges the ownership gate, keeps the lock in <code>policy.json</code>, clamps its hard limit and ends
 it on its own clock; the helper only shows it. Every <code>Overlay</code> the journal applied is
 written down the pipe as it is, and the service <strong>re-asserts the current lock to every
 freshly connected helper</strong> right after the <code>Ping</code> — <code>D-30</code> restarts the helper at logon and
 logoff, so a lock would otherwise vanish at the logon screen — the same way it re-sends
-the current <code>VideoControl</code>. The helper answers with <code>HelperMessage.overlay_state</code>: <code>kind</code>
-(what it shows), <code>input_blocked</code> (its <code>WH_KEYBOARD_LL</code> / <code>WH_MOUSE_LL</code> hooks are in
-place) and <code>reason</code> (<code>BlockInput</code> fallback, no input desktop, …); the service merges
-those two fields into the <code>OverlayState</code> it sends the console and treats a helper that
-shows nothing while a lock is held as its cue to re-assert. Injected input
-(<code>LLKHF_INJECTED</code> / <code>LLMHF_INJECTED</code>) passes the hooks, so the teacher's remote control
-works under a lock.</p>
+the current <code>VideoControl</code>. On the helper's side (<code>OverlayController</code>) every <code>Overlay</code> is
+queued for a thread of its own — like input, so the pipe's read loop never waits on
+Windows — and applied in order: <code>LOCK</code> puts the <code>WH_KEYBOARD_LL</code> / <code>WH_MOUSE_LL</code> hooks up
+first (<code>InputBlock</code>, on a thread that does nothing else) and then the topmost popup
+(<code>OverlayWindow</code>, on a thread that joined the input desktop), or re-states an existing
+window's text and limits when the <code>session_id</code> is the same; <code>UNLOCK</code> lifts both. The helper
+answers with <code>HelperMessage.overlay_state</code> on every change, with every <code>HelperStatus</code> and
+on every <code>Ping</code>: <code>kind</code> (<code>LOCK</code> while the window is up, <code>KIND_UNSPECIFIED</code> otherwise),
+<code>session_id</code>, <code>since_unix</code> and the limits it was given, <code>input_blocked</code> (both hooks are in
+place) and <code>reason</code> (the window could not be created, a hook could not be installed and
+<code>BlockInput</code> is in use, …). The service merges <code>input_blocked</code> and <code>reason</code> into the
+<code>OverlayState</code> it sends the console, treats a helper that shows nothing while a lock is
+held as its cue to re-assert (at most once every few seconds), tells a helper that still
+shows a lock the journal has lifted to lift it again, and reports <em>no session helper is
+connected</em> as the reason the moment the pipe ends. Injected input (<code>LLKHF_INJECTED</code> /
+<code>LLMHF_INJECTED</code>) passes the hooks, so the teacher's remote control works under a lock;
+every physical keyboard and mouse event is swallowed — Alt+Tab, Alt+Esc, Ctrl+Esc, the
+Windows keys and Alt+F4 among them. Ctrl+Alt+Del never reaches a hook.</p>
 <p><strong>Input over the pipe (M3 portion 3, <code>D-36</code>).</strong> Every <code>Input</code> from the console except
 <code>CTRL_ALT_DEL</code> is written down the pipe as it is (fire-and-forget, like the controls); the
 helper queues it (<code>Defaults.InputQueueLength</code>, the newest dropped when full) for an input
@@ -1236,7 +1246,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-09-16 15:38 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-16 16:16 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

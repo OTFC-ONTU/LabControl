@@ -72,6 +72,8 @@ public partial class LabChooserWindow : Window, IDialogs
 
     public Task<SendFilesAnswer?> SendFilesAsync(int pcCount) => _dialogs.SendFilesAsync(pcCount);
 
+    public Task<LockAnswer?> LockScreensAsync(int pcCount) => _dialogs.LockScreensAsync(pcCount);
+
     public Task<AgentBuild?> PushAgentBuildAsync(int pcCount) => _dialogs.PushAgentBuildAsync(pcCount);
 
     public void ShowScreen(ScreenViewModel screen) => _dialogs.ShowScreen(screen);

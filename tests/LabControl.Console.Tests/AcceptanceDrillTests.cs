@@ -505,6 +505,8 @@ public sealed class AcceptanceDrillTests
 
         public Task<ViewModels.SendFilesAnswer?> SendFilesAsync(int pcCount) => Task.FromResult<ViewModels.SendFilesAnswer?>(null);
 
+        public Task<ViewModels.LockAnswer?> LockScreensAsync(int pcCount) => Task.FromResult<ViewModels.LockAnswer?>(null);
+
         public Task<Shared.Setup.AgentBuild?> PushAgentBuildAsync(int pcCount) => Task.FromResult<Shared.Setup.AgentBuild?>(null);
 
         public void ShowScreen(ViewModels.ScreenViewModel screen)

@@ -176,7 +176,7 @@ public sealed partial class MainViewModel : ObservableObject
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand), nameof(LockScreensCommand), nameof(UnlockScreensCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
@@ -292,7 +292,8 @@ public sealed partial class MainViewModel : ObservableObject
             // leaving for it.
             var ownership = connection is null ? _session.Ownership(machine) : null;
 
-            tile.Refresh(machine, connection, ownership, now, _session.Waking(machine.AgentId) is not null);
+            tile.Refresh(machine, connection, ownership, now, _session.Waking(machine.AgentId) is not null,
+                _session.Instance.InstanceId, _session.NameOfInstance);
 
             if (layout.TryGetValue(machine.Number, out var cell))
             {
@@ -502,6 +503,50 @@ public sealed partial class MainViewModel : ObservableObject
         {
             await _dialogs.ShowMessageAsync(Strings.Get("Action.SendFiles"), Strings.Format("Files.Failed", ex.Message));
         }
+    }
+
+    // ------------------------------------------------------------------ lock (M6 portion 1)
+
+    /// <summary>The <i>Lock screens</i> dialog for the selected PCs, then one <c>Overlay</c> per linked PC (D-70); the tiles follow what each PC reports.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private Task LockScreensAsync() => LockAsync(Selected.Select(t => t.AgentId).ToArray());
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private void UnlockScreens() => Unlock(Selected.Select(t => t.AgentId).ToArray());
+
+    /// <summary>The lab-wide variant: every PC in the lab, selected or not; the ones that are not linked are simply not reached.</summary>
+    [RelayCommand]
+    private Task LockAllScreensAsync() => LockAsync(Machines.Select(t => t.AgentId).ToArray());
+
+    [RelayCommand]
+    private void UnlockAllScreens() => Unlock(Machines.Select(t => t.AgentId).ToArray());
+
+    private async Task LockAsync(IReadOnlyList<string> targets)
+    {
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var answer = await _dialogs.LockScreensAsync(targets.Count);
+        if (answer is null)
+        {
+            return;
+        }
+
+        var sent = _session.Lock(targets, answer.Message, answer.Duration);
+        StatusLine = Strings.Format("Lock.Sent", sent, targets.Count);
+    }
+
+    private void Unlock(IReadOnlyList<string> targets)
+    {
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var sent = _session.Unlock(targets);
+        StatusLine = Strings.Format("Lock.UnlockSent", sent, targets.Count);
     }
 
     private void CreateJobs(Job.Types.Kind kind, IReadOnlyDictionary<string, string>? args = null, TimeSpan? timeout = null)

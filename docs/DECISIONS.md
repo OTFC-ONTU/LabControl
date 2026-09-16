@@ -3099,6 +3099,24 @@ edge; `OwnershipGateTests` the four refusals. Not yet run anywhere but the Mac: 
 Windows `IMachineState`, the mutex against a real second process, and the watchdog task —
 those arrive with the rest of portion 1 (ROADMAP M6).
 
+Built, the rest of portion 1 (2026-09-16): the pass is driven by one platform-neutral
+`Policy/PolicyEnforcer` — it owns the journal over `policy.json`, takes the mutex around
+every pass (`Start`, the timer's `Tick`, each `Overlay`, `ReassertOverlay`, the `OnStop`
+restore in `DisposeAsync`), arms a timer on `NextDeadline`, hands each `Overlay` from the
+link's read thread to a pool worker, and publishes `OverlayState` after every change — so
+the Windows service (`WindowsMachineState`, portion 1: the overlay down the helper pipe,
+`NotInThisBuild` for internet and exam, the restore steps empty with the portion-3 hooks
+marked), the simulator (`FakeMachineState`, drawing `OverlayText.Compose` onto its desktop)
+and `agent.exe --restore-policy` (no service, no link; exit 0 only when the machine is
+proven open, 3 when the mutex was held) drive one implementation. Two details the entry
+did not spell out: a mutex held elsewhere for the whole wait answers the console's
+`Overlay` with `problem = policy.busy` on the wire (the enforcer's own latest state is
+untouched), and the simulator names its mutex per PC (`Global\LabControl.Policy.<agent
+id>`) so thirty simulated PCs in one process, and the tests, never queue behind one
+another or a real agent. `PolicyEnforcerTests` cover restore-before-read, the published
+state, the timer lift on a moved clock, the re-assert, the `OnStop` restore that keeps the
+document and the busy mutex; `LockTests` (Console) run the whole thing over the real link.
+
 ## D-70 — The lock overlay: a raw Win32 window in the helper painted from one SkiaSharp bitmap; a lock has its own 1 h hard limit; the hooks run on a thread that does nothing else (M6 portion 1)
 
 Context (2026-09-16): the lock screen is the first visible M6 feature and the first thing
@@ -3170,6 +3188,30 @@ that the countdown text — and the picture — change at a second boundary;
 a pre-M6 `Overlay` byte for byte; `PolicyJournalTests` cover the clamp to one hour and the
 re-assert. The Win32 window, the hooks and the injected-input pass-through are not yet
 written and can only be verified on a PC; they are the rest of portion 1 (ROADMAP M6).
+
+Built, the rest of portion 1 (2026-09-16), with three departures from the text above.
+(1) The hooks swallow **every** physical keyboard event, not only the five combinations
+named in item 3 — a superset that costs nothing (the topmost window would receive the
+rest anyway) and closes the case where focus is somewhere else; injected input passes as
+stated. (2) The helper queues every `Overlay` for a thread of its own (`OverlayController`,
+the `InputInjector` pattern) because creating the window and the hook thread waits on
+those threads for up to five seconds each, and the pipe's read loop must never wait on
+Windows; the hooks go up before the picture, so no click lands in between. (3) The helper
+reports `overlay_state` with every `HelperStatus` and on every `Ping`, not only on change,
+which is what lets the service notice a helper that shows nothing while a lock is held
+and re-assert (rate-limited to once every three seconds, and forced on connect), and lets
+it tell a helper that still shows a lifted lock to lift it. The window re-measures the
+virtual desktop on its timer and follows a plugged-in monitor. `OverlayState.reason` on
+the console names the gap in words — *no session helper is connected*, the window's or
+the hook's failure, the `BlockInput` fallback — and the tile shows *locked by X — input
+not fully blocked: reason* for it. On the console, a state that carries only a `problem`
+(`kind` unspecified) never replaces the last state that described the screen, so a
+refused request cannot clear a lock the PC still shows; `LockTests` prove a withdrawn
+console's `Overlay` is refused at the gate with the link still up (the entry placed in the
+PC's revocation set directly, because on the wire it makes the PC leave first — the gate
+covers the window in between). Cross-compiled on the Mac (`dotnet publish -r win-x64` of
+the helper and the agent); **not yet run on Windows** — the window, the hooks and the
+injected-input pass-through wait for the VM.
 
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 

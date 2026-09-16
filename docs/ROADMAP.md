@@ -20,7 +20,7 @@ implement.
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
 | **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the `app.manifest` double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the `group=` argument that made the printed `netsh` line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest `PC-27`) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three `--remove-data` answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`; on Linux, the `SO_PEERCRED` path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
-| **M6** | Classroom control: broadcast, lock, exam mode | not started | M5 |
+| **M6** | Classroom control: broadcast, lock, exam mode | **in progress — plan settled 2026-09-16 (`D-69`…`D-79`, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, *Lock screens* in the console, the simulator's lock; cross-compiled for `win-x64`, **not yet run on Windows** | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
 Update the **State** column (`not started` / `in progress` / `done <date>`) in the same
@@ -1953,6 +1953,54 @@ packaging and the multi-device acceptance drills.
 
 **Rough size.** Large. The program whitelist, the firewall switch and the loopback
 resolver are the risky parts.
+
+**How it is being built.** In six portions, on the M2…M5 pattern — each committed, then
+run on the Windows VM before the next (`D-79`; the settled constraints of 2026-09-16):
+**(1)** the policy journal and the lock — `policy.json` on the agent, restore first and
+re-apply second under the named mutex, agent-clamped hard limits, the Win32 overlay and
+the low-level hooks in the helper, *Lock screens* / *Unlock* in the console (`D-69`,
+`D-70`); **(2)** broadcast — the console's own screen source (CoreGraphics on macOS, GDI on
+Windows), one encode fanned out to every PC over a server-streaming `PullBroadcast` the
+agent dials (`D-71`, `D-72`); **(3)** internet control — the profile's default outbound
+action, owned allow rules with the `agent.exe` exemption, the loopback resolver, exact DNS
+restore, the watchdog task (`D-73`, `D-74`); **(4)** exam mode — four independent switches,
+the whitelist in the service judging session and token before name, the opening sweep,
+presets (`D-75`, `D-76`); **(5)** collect work and profile reset — `RequestUpload`,
+`DeleteProfile`, the bounded light reset, account-off installations refusing a reset
+(`D-77`, `D-78`); **(6)** departure, the drills and the close-out — the departure contract
+for every policy, `ProtocolVersion` 2, the `D-56` amendment, the fail-safe drills including
+the corrupt `policy.json` one (`D-79`). Portions 2 and 3 could swap; 4 needs 3, 5 needs 4,
+6 is last.
+
+- *Portion 1 built (2026-09-16), all on the Mac.* The foundation first (`Shared/Policy/`:
+  `ClassroomPolicy`, `PolicyJournal`, `PolicyMutex`, `OwnershipGate`, `OverlayText`,
+  `PolicyEvents`; `Persistence/PolicyDocument`; the `Overlay` fields, `OverlayState`, the
+  gate in `AgentLink`), then the rest: the platform-neutral `PolicyEnforcer` the Windows
+  service, the simulator and `agent.exe --restore-policy` all drive; `WindowsMachineState`
+  and the overlay relay in `SessionSupervisor` (re-asserted to every freshly connected
+  helper, the helper's `overlay_state` merged back); `OverlayWindow`, `InputBlock` and
+  `OverlayController` in the helper; `FakeMachineState` and the lock drawn on `FakeScreen`;
+  `LabSession.Lock`/`Unlock`, the *Lock screens* dialog with the 60-minute ceiling and the
+  Ctrl+Alt+Del line, *Lock all…* / *Unlock all*, the tile badge fed by `OverlayState` and
+  naming the console that set it. Tests: 782 Shared (778 before) and 232 Console (228 before; 13 macOS bundle tests skip unless the package has been built, and `BeaconTests…follow_a_take_over` failed once under the full run and passed alone, like the known load-sensitive `LabSwitchTests.Twenty_rounds…`). `LockTests` lock and unlock a
+  full lab of thirty over the real link, prove the badge follows the PC's word and not the
+  request, re-lock a PC from its own document after a restart, end a lock at the hard limit
+  with the console silent, clamp a far limit to one hour, and refuse a withdrawn console
+  at the gate; `UiTests` render the dialog and the badge; `PolicyEnforcerTests` cover the
+  enforcer alone. `dotnet publish -r win-x64` of the helper and the agent succeed.
+  **Not yet run on Windows:** the window, the hooks, the injected-input pass-through, the
+  re-assert after logoff and `--restore-policy` wait for the VM. *The VM drill:* push (or
+  `scripts/dev-install.ps1`) the `win-x64` agent and helper; lock the PC from the console
+  with a Ukrainian message and *for 2 minutes*; on the PC try Alt+Tab, Win, Alt+F4,
+  Ctrl+Esc, a click and typing (nothing must happen), then Ctrl+Alt+Del (the secure screen
+  must open, and the lock must be back on it and after *Cancel*); with *Control* on in the
+  single-PC window, move the mouse and type — the teacher's input must reach the desktop
+  under the lock; log the student off and on again — the lock must be back within the
+  helper's restart; let the two minutes pass — the PC must unlock itself with the console
+  silent and `overlay.expired` in the events; lock again *until I unlock*, `sc stop`/`sc
+  start` the service — the lock must be back, then `agent.exe --restore-policy` from an
+  elevated prompt must exit 0 and leave the lock on (still within its limit); finally check
+  `policy.json` and the tile badge after each step.
 
 ---
 

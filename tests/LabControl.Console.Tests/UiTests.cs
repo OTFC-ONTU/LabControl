@@ -8,6 +8,7 @@ using Avalonia.VisualTree;
 using LabControl.Console.Services;
 using LabControl.Console.ViewModels;
 using LabControl.Console.Views;
+using LabControl.Shared;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
@@ -229,6 +230,37 @@ public sealed class UiTests
                 await Render(handouts, "send-files-empty");
                 Assert.False(handouts.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "Send").IsEnabled);
                 handouts.Close();
+
+                // The Lock screens dialog (M6 portion 1): the ceiling and the Ctrl+Alt+Del line are stated in it.
+                Assert.False(vm.LockScreensCommand.CanExecute(null));
+                var lockDialog = new LockScreensDialog(8);
+                lockDialog.Show();
+                await Render(lockDialog, "lock-screens");
+                var dialogText = string.Join("\n", lockDialog.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+                Assert.Contains("Ctrl+Alt+Del", dialogText, StringComparison.Ordinal);
+                Assert.Contains($"{(int)Defaults.LockHardLimit.TotalMinutes} minutes", dialogText, StringComparison.Ordinal);
+                Assert.False(lockDialog.GetVisualDescendants().OfType<NumericUpDown>().Single().IsEnabled);
+                lockDialog.Close();
+
+                // The lock badge follows OverlayState — the PC's word, never the request: PC-04
+                // reports a lock this console set, PC-06 one another console set with the hooks missing.
+                agents[3].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Lock, SessionId = "s4", SetByInstance = console.Session.Instance.InstanceId, InputBlocked = true });
+                agents[5].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Lock, SessionId = "s6", SetByInstance = "other-console", InputBlocked = false, Reason = "BlockInput fallback" });
+                Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[3].AgentId)?.OverlayLocked == true && console.Session.FindLinked(agents[5].AgentId)?.OverlayLocked == true));
+                await Render(window, "main-lab-locked");
+                var locked4 = vm.Machines.Single(m => m.Number == 4);
+                Assert.True(locked4.IsLocked);
+                Assert.Equal("locked by this console", locked4.LockText);
+                var locked6 = vm.Machines.Single(m => m.Number == 6);
+                Assert.True(locked6.IsLocked);
+                Assert.Equal("locked by other-console — input not fully blocked: BlockInput fallback", locked6.LockText);
+                Assert.False(vm.Machines.Single(m => m.Number == 1).IsLocked);
+                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "LOCKED" && t.IsVisible);
+                agents[3].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Unspecified });
+                agents[5].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Unspecified });
+                Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[3].AgentId)?.OverlayLocked == false));
+                await Render(window, "main-lab-unlocked");
+                Assert.False(locked4.IsLocked);
 
 
                 Assert.Equal(7, vm.Machines.Count(m => m.HasPicture));

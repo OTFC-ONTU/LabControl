@@ -4,6 +4,7 @@ using LabControl.Shared;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
+using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
 using LabControl.Shared.Setup;
@@ -26,6 +27,8 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     private CancellationTokenSource? _powerCycle;
     private readonly ScreenProducer _screen;
+    private readonly FakeMachineState _machineState;
+    private readonly PolicyEnforcer _policy;
     private FakeScreen? _desktop;
     private int _sasCount;
 
@@ -50,18 +53,23 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         Link.Linked += (_, name) => Console = name;
         Link.Unlinked += _ => Console = null;
 
-        // A simulated desktop (M3): odd numbers are 1080p, even ones 1366×768 like the older
-        // lab PCs; every third PC sits idle so the mosaic shows screens that do not change.
-        var number = store.Config.Number;
-        // The producer is the one the session helper runs (D-35); only the source is simulated.
+        // A simulated desktop (M3, OpenDesktop); the producer is the one the session helper
+        // runs (D-35) and only the source is simulated.
         _screen = new ScreenProducer(
             Link.Name,
-            () => _desktop = number % 2 == 1 ? new FakeScreen(number, 1920, 1080, idle: number % 3 == 0) : new FakeScreen(number, 1366, 768, idle: number % 3 == 0),
+            OpenDesktop,
             (frame, _) => ValueTask.FromResult(Link.TryPushVideo(frame)),
             (severity, code, message) => Link.Report(severity, code, message),
             log);
         Link.VideoControlChanged += _screen.Apply;
         Link.InputReceived += OnInput;
+
+        // The policy journal (M6, D-69) is the real one over policy.json in this PC's own
+        // directory; only what the machine does with a lock is simulated. The mutex name is
+        // per PC so thirty of them in one process never queue behind one another.
+        _machineState = new FakeMachineState(() => _desktop);
+        _policy = new PolicyEnforcer(Link, _machineState, store.Directory, store.Config.LabId, log,
+            mutexName: Defaults.PolicyMutexName + "." + store.Config.AgentId.Replace("-", string.Empty, StringComparison.Ordinal));
 
         // A real PC's supervisor publishes this at start and on every change (M2); the
         // simulator pretends the helper is up and the student is at the desk.
@@ -69,6 +77,27 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     }
 
     public AgentLink Link { get; }
+
+    /// <summary>The policy enforcer over this PC's <c>policy.json</c> (M6), for the status line and the tests.</summary>
+    public PolicyEnforcer Policy => _policy;
+
+    /// <summary>The lock this PC holds right now, from its own journal; <c>null</c> when none.</summary>
+    public OverlaySession? Lock => _machineState.Overlay;
+
+    /// <summary>
+    /// A simulated desktop (M3): odd numbers are 1080p, even ones 1366×768 like the older lab
+    /// PCs; every third PC sits idle so the mosaic shows screens that do not change. It is
+    /// created when the console first asks for video, so a lock applied before that is drawn
+    /// onto the desktop that appears later.
+    /// </summary>
+    private FakeScreen OpenDesktop()
+    {
+        var number = Number;
+        var desktop = number % 2 == 1 ? new FakeScreen(number, 1920, 1080, idle: number % 3 == 0) : new FakeScreen(number, 1366, 768, idle: number % 3 == 0);
+        desktop.SetOverlay(_machineState.Overlay);
+        _desktop = desktop;
+        return desktop;
+    }
 
     public string MaterialsDirectory => Path.Combine(_store.Directory, Defaults.MaterialsFolderName);
 
@@ -114,7 +143,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         !PoweredOn ? "off"
         : Link.State switch
         {
-            LinkState.Linked => _screen.Streaming is { } mode ? $"linked to {Console}, streaming {mode.ToString().ToLowerInvariant()}" : $"linked to {Console}",
+            LinkState.Linked => (_screen.Streaming is { } mode ? $"linked to {Console}, streaming {mode.ToString().ToLowerInvariant()}" : $"linked to {Console}") + (Lock is null ? string.Empty : ", locked"),
             LinkState.Connecting => "connecting",
             LinkState.Searching => Link.IsEnrolled ? "searching" : "waiting to enrol",
             _ => "stopped",
@@ -122,6 +151,12 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     public void Start()
     {
+        // Restore first, then re-apply what policy.json still holds (D-69) — before the link
+        // dials, so the first OverlayState after Welcome already says whether a lock survived.
+        // The simulated helper's hooks always hold; a real one reports this over the pipe.
+        _policy.Start();
+        _policy.NoteEnforcement(inputBlocked: true, reason: string.Empty);
+
         switch (Failure)
         {
             case FailureKind.NeverConnects:
@@ -491,6 +526,8 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         _powerCycle?.Cancel();
         Link.VideoControlChanged -= _screen.Apply;
         Link.InputReceived -= OnInput;
+        // The OnStop restore (D-69 item 5): the machine is opened, the document is kept.
+        await _policy.DisposeAsync();
         await _screen.DisposeAsync();
         await Link.DisposeAsync();
         _store.Dispose();

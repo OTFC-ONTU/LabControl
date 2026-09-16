@@ -495,4 +495,32 @@ exit 0
   <data name="Chooser.Renewed" xml:space="preserve"><value>{0}: this device now serves with an administrator certificate.</value></data>
   <data name="Chooser.RenewFailed" xml:space="preserve"><value>Could not renew the certificate for {0}: {1}</value></data>
   <data name="Chooser.Status.RenewalDue" xml:space="preserve"><value>Access expires {0} — request a renewal</value></data>
+  <data name="Action.LockScreens" xml:space="preserve"><value>Lock screens…</value></data>
+  <data name="Action.UnlockScreens" xml:space="preserve"><value>Unlock</value></data>
+  <data name="Action.LockAll" xml:space="preserve"><value>Lock all…</value></data>
+  <data name="Action.UnlockAll" xml:space="preserve"><value>Unlock all</value></data>
+  <data name="Tile.LockedBadge" xml:space="preserve"><value>LOCKED</value></data>
+  <data name="Tile.LockedBy" xml:space="preserve"><value>locked by {0}</value></data>
+  <data name="Tile.LockedByWeak" xml:space="preserve"><value>locked by {0} — input not fully blocked: {1}</value></data>
+  <data name="Tile.LockProblemFormat" xml:space="preserve"><value>lock: {0}</value></data>
+  <data name="Lock.ByThisConsole" xml:space="preserve"><value>this console</value></data>
+  <data name="Lock.ByUnknown" xml:space="preserve"><value>another console</value></data>
+  <data name="Lock.InputNotBlocked" xml:space="preserve"><value>the helper's input hooks are not in place</value></data>
+  <data name="Lock.Title" xml:space="preserve"><value>Lock screens</value></data>
+  <data name="Lock.Targets" xml:space="preserve"><value>Lock the screens of {0} PC(s)</value></data>
+  <data name="Lock.MessageLabel" xml:space="preserve"><value>Message shown on the student screens</value></data>
+  <data name="Lock.MessagePlaceholder" xml:space="preserve"><value>Please look at the teacher.</value></data>
+  <data name="Lock.UntilLifted" xml:space="preserve"><value>Until I unlock them</value></data>
+  <data name="Lock.ForMinutes" xml:space="preserve"><value>For this many minutes:</value></data>
+  <data name="Lock.Ceiling" xml:space="preserve"><value>A lock never lasts longer than {0} minutes: each PC lifts it by itself at that limit, even if this console is gone.</value></data>
+  <data name="Lock.SecureAttention" xml:space="preserve"><value>Keyboard, mouse, Alt+Tab and the Windows key are blocked. Ctrl+Alt+Del is not blocked — Windows does not allow it — and the lock screen says so.</value></data>
+  <data name="Lock.Offline" xml:space="preserve"><value>A PC that is offline or too old to know locks is skipped; the lock is not queued for it.</value></data>
+  <data name="Lock.Action" xml:space="preserve"><value>Lock</value></data>
+  <data name="Lock.Sent" xml:space="preserve"><value>Lock sent to {0} of {1} PC(s); each tile shows what the PC reports.</value></data>
+  <data name="Lock.UnlockSent" xml:space="preserve"><value>Unlock sent to {0} of {1} PC(s).</value></data>
+  <data name="Event.LockSent" xml:space="preserve"><value>Lock sent to {0} PC(s), {1} skipped (offline or outdated): “{2}”.</value></data>
+  <data name="Event.UnlockSent" xml:space="preserve"><value>Unlock sent to {0} PC(s), {1} skipped (offline or outdated).</value></data>
+  <data name="Event.OverlayRefused" xml:space="preserve"><value>{0}: the lock request was not applied — {1}</value></data>
+  <data name="Event.Locked" xml:space="preserve"><value>{0}: screen locked by {1}.</value></data>
+  <data name="Event.Unlocked" xml:space="preserve"><value>{0}: screen unlocked.</value></data>
 </root>

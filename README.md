@@ -4,8 +4,8 @@
 
 # LabControl
 
-**Керування комп'ютерним класом: екрани, Wake-on-LAN, встановлення ПЗ, режим іспиту.**<br>
-**Classroom computer-lab control: live screens, Wake-on-LAN, software deployment, exam mode.**
+**Керування комп'ютерним класом: екрани, керування живленням, скрипти й файли на весь клас.**<br>
+**Classroom computer-lab control: live screens, power control, scripts and files for the whole room.**
 
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Console: Windows · macOS · Linux](https://img.shields.io/badge/console-Windows%20%7C%20macOS%20%7C%20Linux-0b6b53)](docs/INSTALLER.md)

@@ -32,12 +32,9 @@ tools/windows-tests/out/
 .claude/m6-plan/
 .claude/worktrees/
 .claude/settings.local.json
-*.log
-*.lock
-devlab-data/
-payload/
-setup.json
-ca.crt
+/*.log
+/devlab-data/
+/payload/
 *.lcbak
 *.lclab
 *.lcgrant

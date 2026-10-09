@@ -736,10 +736,11 @@ public sealed class SingleInstanceTests
             {
                 read = await stream.ReadAsync(chunk, cancellation);
             }
-            catch (Exception ex) when (ex is IOException or SocketException)
+            catch (Exception ex) when (IsConnectionReset(ex))
             {
                 // Linux resets a Unix socket closed with unread input instead of ending it: the
-                // same hang-up as a zero-byte read, so no answer either.
+                // same hang-up as a zero-byte read, so no answer either. Any other read error
+                // still fails the test.
                 read = 0;
             }
 
@@ -758,6 +759,10 @@ public sealed class SingleInstanceTests
         var text = Encoding.UTF8.GetString(buffer.ToArray()).TrimEnd('\n');
         return text.Length == 0 ? null : text;
     }
+
+    /// <summary>A peer reset, thrown bare or wrapped in an <see cref="IOException"/> by the stream.</summary>
+    private static bool IsConnectionReset(Exception ex) =>
+        (ex as SocketException ?? ex.InnerException as SocketException)?.SocketErrorCode == SocketError.ConnectionReset;
 
     /// <summary>A console as the app runs one: the data directory's lock, and the endpoint that lock entitles it to.</summary>
     private sealed class TestServer : IAsyncDisposable

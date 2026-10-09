@@ -3269,8 +3269,9 @@ Decisions:
    moved to `docs/DEVELOPMENT.md` unchanged in substance. The settled M6 plan moved from the
    scratch folder into ROADMAP M6, *Settled before implementation*.
 3. **Local scratch is never committed**: `.gitignore` covers `.claude/m6-plan/` and
-   `.claude/worktrees/`, logs, lock files, `devlab-data/`, `payload/`, `setup.json`,
-   `ca.crt` and the lab documents (`.lcbak`, `.lclab`, `.lcgrant`, `.lcreq`).
+   `.claude/worktrees/`, logs, `devlab-data/` and `payload/` at the root, and the lab
+   documents (`.lcbak`, `.lclab`, `.lcgrant`, `.lcreq`) anywhere. Root-anchored patterns
+   keep a future test fixture named `setup.json` or `payload/` from being skipped silently.
 4. **History is not rewritten.** A scan of every commit found no private key, token or
    code of a real classroom; the removed payload held only single-use codes of a
    development lab on a VM and its public CA certificate.

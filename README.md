@@ -1,62 +1,159 @@
+<div align="center">
+
+<img src="src/LabControl.Console/Assets/labcontrol.png" alt="LabControl icon" width="128" height="128">
+
 # LabControl
 
-Classroom fleet control for one active computer lab: **one teacher console
-(macOS / Windows / Linux)** managing **14 Windows student PCs** on the same LAN —
-live screen mosaic with remote control, Wake-on-LAN / shutdown / reboot, silent
-software installs and scripts on all PCs at once, teacher-screen broadcast, screen lock,
-a composable exam mode, and a **one-shot USB installer** that prepares a PC completely
-(service, firewall, WoL, `student` user with auto-logon) in one run. Planned for M4:
-account creation is checked by default but can be turned off for testing with an existing
-home-PC account; a standalone uninstaller removes LabControl without the USB or console
-([installer plan](docs/INSTALLER.md), D-40).
+**Керування комп'ютерним класом: екрани, Wake-on-LAN, встановлення ПЗ, режим іспиту.**<br>
+**Classroom computer-lab control: live screens, Wake-on-LAN, software deployment, exam mode.**
 
-Self-hosted, no server, no cloud, no domain, no internet required on the student PCs.
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![Console: Windows · macOS · Linux](https://img.shields.io/badge/console-Windows%20%7C%20macOS%20%7C%20Linux-0b6b53)](docs/INSTALLER.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The product UI is English today. M7 must ship the complete product-facing experience in
-**Ukrainian, English and Russian**, including the teacher console, Windows Setup/removal,
-stock student-facing text and generated USB instructions. The console will have a saved
-language selector; English remains the safe fallback (`D-67`).
+</div>
 
-The teacher machine is **replaceable**: the lab's identity is a private certificate
-authority, not the laptop's certificate, so moving the console to another computer —
-macOS, Windows or Linux — means importing one encrypted backup file, and no student PC is
-touched. The software is designed for labs of up to 30 PCs, not just the first one's 14.
+LabControl — це самостійна система для керування комп'ютерним класом: одна консоль
+викладача (macOS, Windows або Linux) бачить екрани всіх учнівських ПК з Windows, вмикає й
+вимикає їх, запускає скрипти й роздає файли на весь клас одночасно. Їй не потрібні сервер,
+хмара, домен чи інтернет — лише локальна мережа класу. Кожен ПК готується одним проходом
+USB-інсталятора.
 
-**Planned M5 — several saved labs, one active room.** Teachers will add files for all
-their labs at once, then select the room for each lesson without restarting the app or
-re-importing a backup. Inactive rooms will have no background connections or video.
-Routine teacher lab files will be distinct from administrator recovery backups; this
-workflow is not implemented yet. Administrators will be able to add `.lcbak` backups
-directly to the same list and switch rooms with their administrator access preserved.
-M5 also includes simple offline console installers/packages for Windows, macOS and
-Linux: application files, launchers and opening both file types, without installing
-student services or changing student-account/system settings on the teacher's device.
-Classroom control is now M6 and catalog/localization/polish M7.
-See M5 in [the roadmap](docs/ROADMAP.md).
+LabControl is a self-hosted classroom-management system for one computer lab at a time:
+**one teacher console** on macOS, Windows or Linux manages **up to 30 Windows student
+PCs** on the same LAN. It replaces walking from desk to desk to install software, power
+machines on and off, and watch what students are doing.
 
-**Downgrading to a pre-M5 build.** An M5 console keeps each lab in
-`labs/<lab_id>/` under its data directory (`~/.labcontrol/` or `%APPDATA%\LabControl\`).
-To run an older build on the same lab, copy `labs/<lab_id>/*` back to the data root;
-the old build reads it, but on its next save it drops the schema-2 `lab.json` fields it
-does not know. The next launch of an M5 build notices the root differs from its saved
-copy, moves the root files to `migration-conflict-<timestamp>/` and opens the saved
-lab — nothing is deleted, but the two copies have to be reconciled by hand.
+<p align="center">
+  <img src="docs/images/mosaic.png" alt="The lab mosaic: live tiles for eight PCs, two of them selected, with the power and file actions above" width="820">
+</p>
 
-Built with .NET 10 + Avalonia + gRPC. See [`CLAUDE.md`](CLAUDE.md) for the detailed
-project brief, [`AGENTS.md`](AGENTS.md) for Codex instructions and the shared agent
-documentation contract, and [`docs/`](docs/) for architecture, protocol, installer
-and roadmap.
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/scripts.png" alt="The script library with a PowerShell editor, syntax highlighting and a run button for the selected PCs"></td>
+    <td width="50%"><img src="docs/images/settings.png" alt="Lab settings: the lab identity, this console's certificate, the lab key and its holders"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Script library — run on every selected PC, per-PC results</sub></td>
+    <td align="center"><sub>Settings — the lab's own certificate authority and its key holders</sub></td>
+  </tr>
+</table>
 
-## Documentation
+## Можливості / Features
+
+- **Live screen mosaic and remote control** — every student screen at once; double-click a
+  tile for a full-size view and take over the mouse and keyboard, *Ctrl+Alt+Del* included.
+- **Power for one PC or the whole room** — Wake-on-LAN, shutdown, reboot and log off.
+- **Scripts and files on all PCs in parallel** — a PowerShell / cmd script library and
+  file handouts over the LAN, with a separate result and log for every PC; the installer
+  catalog for silent software installs is planned for M7.
+- **Broadcast, lock and exam mode** *(planned, M6)* — show the teacher's screen on every
+  PC, lock screens with a message, and an exam mode built from four independent switches
+  (timer, allowed programs, internet block, collect work) that always restores the PC by
+  itself.
+- **One-shot USB installer** — run once as administrator on each PC; it asks at most the
+  PC number and does the rest: service, firewall, Wake-on-LAN, power settings, a standard
+  `student` account with auto-logon, enrolment. A standalone uninstaller restores the PC.
+- **No server, no cloud, no domain, no internet** — everything runs on the lab's own LAN.
+- **A replaceable teacher console** — the lab's identity is its own certificate authority,
+  so moving the console to another computer is one encrypted backup file and no student
+  PC is touched. Several saved labs, one active room at a time.
+- **Up to 30 PCs per lab** — nothing assumes the first room's 14.
+
+## Як це працює / How it works
+
+```mermaid
+flowchart LR
+    subgraph T["Teacher machine — macOS / Windows / Linux"]
+        K[("Lab key<br/>private CA, encrypted")]
+        C["LabControl Console<br/>Avalonia UI + gRPC server"]
+    end
+    subgraph P["Student PC × up to 30 — Windows 10/11"]
+        A["agent.exe<br/>Windows service, SYSTEM"]
+        S["session.exe<br/>in the student's session:<br/>screen capture, input, overlay"]
+    end
+    U["USB stick<br/>Setup.exe + public CA certificate<br/>+ single-use enrolment codes"]
+
+    K -->|signs certificates| C
+    C -.->|"signed beacon, UDP broadcast on the LAN"| A
+    A ==>|"mutual TLS + gRPC, the agent dials out"| C
+    A <-->|named pipe| S
+    U -->|"one-shot install and enrolment"| A
+```
+
+- The **console** holds the lab key — a private certificate authority — and runs the gRPC
+  server. It announces itself with a beacon signed through that CA, so PCs find it on
+  any IP address without configuration.
+- The **agent** is a Windows service on every PC. It verifies the beacon, dials out and
+  keeps one mutually authenticated TLS link: commands and events, plus separate streams
+  for video and files. It never trusts an IP address or a hostname, only the lab's CA.
+- **`session.exe`** is the agent's helper inside the interactive session: it captures the
+  screen (DXGI, GDI fallback), injects the teacher's input and draws the overlays.
+- The **USB stick carries no secret**: only the public CA certificate and single-use
+  enrolment codes. Each PC generates its own key and gets its certificate at first contact.
+
+Details: [Architecture](docs/ARCHITECTURE.md) · [Protocol](docs/PROTOCOL.md) ·
+[Installer](docs/INSTALLER.md).
+
+## Швидкий старт / Quick start
+
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0); nothing
+else. The Windows projects compile on macOS and Linux too.
+
+```bash
+dotnet build
+dotnet test
+dotnet run --project src/LabControl.Console            # first run: the wizard creates a lab
+#   Settings → Write USB payload… → choose a folder, e.g. ~/usb
+dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb
+#   in the console: Enrol PCs… → passphrase → 14 simulated PCs enrol and appear
+```
+
+`FakeAgent` plays a whole room of PCs with synthetic screens, so the console can be tried
+on any computer without a single Windows machine.
+
+**Packages.** The teacher console installs per user from one file per platform, into
+`artifacts/package/`:
+
+| Script | Produces |
+|---|---|
+| [`tools/package-windows.sh`](tools/package-windows.sh) | one self-contained `Setup.exe` for Windows |
+| [`tools/package-mac.sh`](tools/package-mac.sh) | `LabControl.app` in a DMG (needs macOS) |
+| [`tools/package-linux.sh`](tools/package-linux.sh) | a tarball with `install.sh` / `uninstall.sh` |
+| [`tools/package-all.sh`](tools/package-all.sh) | all three |
+
+The student-PC side is built with [`tools/publish-all.sh`](tools/publish-all.sh) and
+[`tools/build-usb.sh`](tools/build-usb.sh); see [the installer guide](docs/INSTALLER.md).
+Command-line options, the simulator's failure injection, the Windows VM workflow and
+more are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+## Статус / Status
+
+| Milestone | Scope | State |
+|---|---|---|
+| **M0** | Skeleton and toolchain | ✅ done (2026-09-04) |
+| **M1** | Lab identity, link and presence | ✅ done (2026-09-05) |
+| **M2** | Windows agent: service, helper, power, scripts | ✅ built and verified on a VM and a lab PC |
+| **M3** | Screens: mosaic, full view, remote control | ✅ built and verified on a lab PC; close-out measurements remain |
+| **M4** | Deployment: USB installer, files, self-update | 🔨 in progress — `1.0.0` release candidate in the first lab |
+| **M5** | Lab files, teacher access, fast switching between rooms | 🔨 in progress — all portions built, field acceptance remains |
+| **M6** | Classroom control: broadcast, lock, exam mode | 📋 planned |
+| **M7** | Software catalog, localization (uk / en / ru), polish | 📋 planned |
+
+The detailed acceptance criteria and verification ledger are in the
+[roadmap](docs/ROADMAP.md).
+
+## Документація / Documentation
 
 | Document | What it answers |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md) | Shared project context and working rules for Claude Code and Codex |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | What gets built, in what order, and how each milestone is judged done |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components, processes, data flow, threat model |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | gRPC services, discovery, video encoding, job lifecycle |
 | [`docs/INSTALLER.md`](docs/INSTALLER.md) | Student USB Setup and the teacher-console packages for Windows, macOS and Linux |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Building and testing: command lines, the simulator, the Windows VM, status notes |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why each choice was made, and what was rejected |
+| [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md) | Shared project context and working rules for Claude Code and Codex |
 
 The same documents are mirrored as a small self-contained website in
 [`docs/html/`](docs/html/index.html) — open `docs/html/index.html` in any browser, no
@@ -67,185 +164,14 @@ generated. After editing any `.md`:
 tools/docs-build.sh
 ```
 
-## Status
+## Ліцензія / License
 
-**M0 — skeleton and toolchain: done (2026-09-04).**
+[MIT](LICENSE) © 2026 Viacheslav Stohul, Одеський технічний фаховий коледж ОНТУ.
 
-**M1 — lab identity, link and presence: done (2026-09-05).** The trust model, the beacon,
-mutual TLS, enrolment, the link with jobs and renewal, take-over between two teacher
-machines, the sealed backup, the console UI and a `FakeAgent` that plays a room of PCs —
-demonstrated live by the owner with two console profiles and 30 fake PCs.
+---
 
-**M2 — the real Windows agent: in progress.** Portion 1 of 4 — the service host, the
-DPAPI-protected store, provisioning from the USB payload, real inventory, the side-by-side
-version layout and `scripts/dev-install.ps1` — and portion 2 — `session.exe` living on the
-student's desktop as SYSTEM, supervised by the service over a named pipe, with the console
-showing who is logged on, whether the screen is locked and whether the helper is up — are
-verified on the Windows VM. Portion 3 — shutdown / reboot / log off, Wake-on-LAN from the
-console, the minimal `PullFile` and `run_script` with streamed output and a kill at the
-timeout, plus a development-only *Run test script…* — is verified on the VM too, down to a
-script surviving a 30-second network cut; only Wake-on-LAN itself waits for the real
-`PC-00`, since the VM has no such thing. Portion 4 — the minimal push-and-restart: *Push
-agent build…* in the console sends a published `agent.exe` + `session.exe` to a PC, which
-installs it side by side, repoints its service, restarts and reports back as the new
-version — is verified on the VM and on the first real lab PC (`PC-10`, x64, 2026-09-07);
-only Wake-on-LAN is deferred to M4 with the installer ([`docs/ROADMAP.md`](docs/ROADMAP.md)).
+<div align="center">
 
-**M3 — screens: in progress.** Portion 1 of 3 (2026-09-07) — the `PushVideo` channel, the
-thumbnail and full-mode frame formats, the console's per-PC pictures, live thumbnails on the
-tiles, the single-PC window with dirty-rectangle deltas, and `FakeAgent` drawing synthetic
-desktops — is built and tested on the Mac. Portion 2 (2026-09-07) puts real capture into
-`session.exe` — DXGI Desktop Duplication with a GDI fallback, relayed through the service's
-pipe, on the same producer the simulator uses — and is verified on `PC-10`. Portion 3
-(2026-09-07) adds remote control: a *Control* toggle in the single-PC window sends the
-teacher's mouse and keyboard to the PC (text as Unicode, so Ukrainian typed on the Mac is
-Ukrainian on the PC), with *Ctrl+Alt+Del* raised by the service; it awaits its run on
-`PC-10`.
+Розроблено в [Одеському технічному фаховому коледжі ОНТУ](https://otfk.od.ua/)
 
-**M4 deployment is being integrated** (`D-52`). USB building, signed updates with
-external recovery, Windows handout delivery and Setup/removal/rekey code are under test.
-Isolated Windows install, file delivery and recovery checks have passed; remaining
-removal, administrator-access and physical-lab acceptance is tracked in
-[the roadmap](docs/ROADMAP.md).
-
-The owner designated `1.0.0` as the clean physical-lab release candidate on 2026-09-08.
-It is not called released until those remaining M4 checks pass. Agents installed from
-this candidate remain update-compatible with the additive M5 portion-5 access field.
-
-**Send files…** prepares a batch for the selected PCs. The Windows path now requires an
-installer-owned student SID and a usable local profile; it never substitutes a personal
-profile. Keep source files available until jobs finish. Files are hash-verified before
-replacement; optional opening uses the student's interactive token. The Jobs panel shows
-a separate result for every file and PC. Delivery, replacement and PDF opening under the
-standard student token have passed on the VM; Word and the physical fleet remain to verify.
-
-In **Jobs**, select any result row and click **Export batch logs…** to save a ZIP
-with results and output for every PC in that group action. Running and offline PCs
-are included with their current status. Automatic batch snapshots also remain in
-`logs/batches/` inside the console's data directory.
-
-## Quick start
-```bash
-dotnet build
-dotnet test
-dotnet run --project src/LabControl.Console            # first run: the wizard creates a lab
-#   Settings → Write USB payload… → choose a folder, e.g. ~/usb
-dotnet run --project src/LabControl.FakeAgent -- --count 14 --payload ~/usb
-#   in the console: Enrol PCs… → passphrase → the PCs enrol and appear
-tools/publish-all.sh
-tools/package-all.sh                                   # the teacher-console packages (below)
-tools/docs-build.sh
-tools/make-icon.py                                     # regenerate the console icon (png/ico/icns)
-```
-
-The console is installed from one file per platform — no administrator, no runtime
-download, nothing that installs a service or touches an account. The packages are built
-on any machine that can run `dotnet` (the macOS `.app` and DMG need macOS) and land in
-`artifacts/package/`:
-
-```bash
-tools/package-windows.sh   # one self-contained Setup.exe, installs per user; --dry-run prints the plan
-tools/package-mac.sh       # LabControl.app, ad-hoc signed, in a DMG with an Applications symlink
-tools/package-linux.sh     # a tarball with per-user install.sh / uninstall.sh
-tools/package-all.sh       # all three; the macOS part is skipped off macOS
-```
-
-`tools/publish-all.sh` is unchanged and still produces the plain executable directories
-used for development and for the USB payload. See
-[the teacher-console chapter](docs/INSTALLER.md) for what each package does, and for the
-Windows LAN-access banner and the first-open steps on macOS.
-
-Two console profiles on one machine (the alternation and take-over tests):
-
-```bash
-dotnet run --project src/LabControl.Console -- --data ~/labA --port 47800
-dotnet run --project src/LabControl.Console -- --data ~/labB --port 47810   # import the backup from A
-```
-
-The console also takes documents to open as positional arguments — `.lclab` lab files,
-`.lcbak` backups, `.lcgrant` grants and `.lcreq` requests — which is what a double-click
-or *Open with* passes it. They are imported exactly like *Add labs…* and never open a lab:
-
-```bash
-dotnet run --project src/LabControl.Console -- ~/Downloads/room-444.lclab
-dotnet run --project src/LabControl.Console -- --import-only ~/Downloads/room-444.lclab
-```
-
-One console runs per data directory. A second launch does not start a second console: it
-hands its file paths to the running one and exits (0 once they were taken). `--import-only`
-never starts a console of its own — it exits 1 when none is running — and is what a
-file-type registration uses.
-
-`FakeAgent --fail 7:never --fail 8:late=20 --fail 9:die-mid-job --fail 10:job-error
---fail 11:burned-code --fail 12:forged-revocation --fail 13:outdated` injects failures;
-`--reinstall 7` plays a reinstalled PC; `burned-code` implies a reinstall of that PC,
-since only an enrolment can present a code; `--console 127.0.0.1` pins the console on a
-machine with no network. Screenshots of the UI from the headless tests:
-`LABCONTROL_UI_SHOTS=/tmp/shots dotnet test --project tests/LabControl.Console.Tests`.
-
-## Testing the agent in a Windows VM
-
-The agent is Windows-only and cannot run on the Mac, so M2 is tested in a VM on the
-MacBook (fast, revertible) and on `PC-00` in the lab (real NIC, real antivirus). On Apple
-Silicon the VM is **Windows 11 ARM**, so the agent is published as `win-arm64`; the lab PCs
-get `win-x64`. `tools/publish-all.sh` produces both.
-
-1. **Install a VM.** [UTM](https://mac.getutm.app) is free: *Create a New Virtual
-   Machine → Virtualize → Windows*, tick *Install Windows 10 or higher* and let UTM
-   download the Windows 11 ARM installer; 4 GB RAM and 64 GB disk are plenty. Install the
-   SPICE guest tools when prompted (shared folders, clipboard). Take a snapshot once Windows
-   is on the desktop — every destructive test starts from it.
-2. **Network.** Leave UTM's *Shared Network*; the Mac is reachable from the VM at the
-   gateway address of the `vmnet` bridge (usually `192.168.64.1`). UDP broadcasts from the Mac
-   do reach the VM on that bridge, but if the PC stays *searching*, pin the console with
-   `-ConsoleHost 192.168.64.1` — that is what `console_host` in `agent.json` is for.
-3. **Publish and share.** Make a folder to share, say `~/LabVM`, and put in it the
-   published build as `win-arm64\` (`agent.exe`, `session.exe`), the USB payload as `usb\`
-   (Settings → *Write USB payload…* in the console, pointed at `~/LabVM/usb`) and both
-   files from `scripts/` (`dev-install.ps1`, `dev-install.cmd`). Point the VM's shared
-   directory at it (UTM: the folder icon in the VM window); the SPICE tools mount it as
-   drive `Z:`.
-4. **Install** in the VM: open `Z:` in Explorer and double-click `dev-install.cmd`
-   (edit the PC number and the console address at the top of it first if they differ; the
-   default is `-Number 1 -ConsoleHost 192.168.64.1`). Accept the SmartScreen and UAC
-   prompts. The script raises the WebDAV size limit the shared drive needs, lays out
-   `C:\Program Files\LabControl\app\<version>\`, locks down `C:\ProgramData\LabControl\`,
-   runs `agent.exe --install` (keypair under DPAPI, pinned `ca.crt`, one enrollment code
-   from the stick, `agent.json`), registers the `LabControl` service and starts it. Then
-   open *Enrol PCs* in the console and type the passphrase: the VM enrols within half a
-   minute and appears as `PC-01` with its real inventory.
-5. **Watch and iterate.** The log is
-   `C:\ProgramData\LabControl\logs\agent-<date>.log`; `agent.exe --run --verbose` runs the
-   same agent in the foreground. Re-running `dev-install.cmd` with a new build installs it
-   side by side and repoints the service, keeping the PC's identity. Two things to know
-   about the shared drive: Windows caches WebDAV files, so a rebuilt file with the same
-   name may be served stale for a while — publish a new build into a differently named
-   folder if in doubt — and restarting the `WebClient` service (which the script does once)
-   can leave `Z:` unavailable until the VM is rebooted. `dev-install.ps1 -Uninstall`
-   removes everything but the PC's identity, `-Uninstall -PurgeData` removes that too. On a
-   real PC add `-Student` (or `STUDENT=1` in `dev-install.cmd`) to also create the standard
-   `student` account with auto-logon, the way Setup.exe will; `-Uninstall -RemoveStudent`
-   takes it away again.
-6. **Check the session helper** (M2 portion 2). Within a few seconds of the service
-   starting, Task Manager → *Details* shows `session.exe` running as SYSTEM in the user's
-   session (not session 0), and the console's events panel shows *Session helper … is up in
-   session 1 (…, desktop Default)*. Then: end `session.exe` from Task Manager — it is back
-   within 5 s and the console logs a *session.helper_exited* warning; press Win+L — the tile
-   reads *student (locked)* (or your account name) and *screen locked* appears in the
-   events, unlocking clears it; sign out — the tile reads *nobody logged on* and a new
-   helper appears on the logon screen; sign in — the user is back. The helper's own log is
-   `C:\ProgramData\LabControl\logs\session-<date>.log`; `session.exe --probe` from an
-   elevated prompt prints what a process in the session sees. A standard user cannot end
-   `session.exe` and cannot read the logs.
-7. **Network updates now use the M4 signed recovery flow.** For M4 acceptance, use a
-   clean, installer-owned installation from [the USB Setup instructions](docs/INSTALLER.md);
-   Setup does not migrate the unowned development installation described above. Unlock
-   the console's lab key, select the PC, choose *Push agent build…*, select the published
-   Windows agent/session pair and press *Push*. The console signs the bundle and displays
-   per-PC update state. Acceptance requires ten continuous minutes connected on the new
-   build. An actual crashing or unlinked release has been verified to recover automatically
-   to the previous version on the isolated VM; see the roadmap for fleet acceptance.
-
-Requires the .NET 10 SDK and nothing else. The `net10.0-windows` projects compile on
-macOS and Linux too (they just cannot run there), so a broken Windows build is caught
-immediately rather than at the next visit to the lab.
+</div>

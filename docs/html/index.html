@@ -72,6 +72,13 @@ pre code{background:none;border:0;padding:0;font-size:.845rem;white-space:pre}
 blockquote{margin:0 0 1.2em;padding:.1em 0 .1em 1.1em;border-left:3px solid var(--accent);
            color:var(--muted)}
 
+img{max-width:100%;height:auto}
+.badge{display:inline-block;font-size:.8rem;color:var(--muted);border:1px solid var(--line);
+       border-radius:5px;padding:.05em .45em;margin:0 .15em}
+.mermaid{font-family:var(--mono);font-size:.845rem;white-space:pre;overflow-x:auto;
+         background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+         padding:14px 16px;margin:0 0 1.3em;line-height:1.5}
+
 /* ---- tables ---- */
 .table-wrap{overflow-x:auto;margin:0 0 1.5em;border:1px solid var(--line);
             border-radius:var(--radius);background:var(--panel)}
@@ -130,7 +137,7 @@ footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
 </head>
 <body>
 <div class="layout">
-<nav class="side" aria-label="Documents"><a class="brand" href="index.html"><span class="brand-mark">LC</span><span class="brand-name">LabControl</span><span class="brand-sub">documentation</span></a><ul><li><a href="README.html">Overview</a></li><li><a href="CLAUDE.html">Claude project brief</a></li><li><a href="AGENTS.html">Codex instructions</a></li><li><a href="ARCHITECTURE.html">Architecture</a></li><li><a href="PROTOCOL.html">Protocol</a></li><li><a href="INSTALLER.html">Installer</a></li><li><a href="ROADMAP.html">Roadmap</a></li><li><a href="DECISIONS.html">Decisions</a></li></ul></nav>
+<nav class="side" aria-label="Documents"><a class="brand" href="index.html"><span class="brand-mark">LC</span><span class="brand-name">LabControl</span><span class="brand-sub">documentation</span></a><ul><li><a href="README.html">Overview</a></li><li><a href="CLAUDE.html">Claude project brief</a></li><li><a href="AGENTS.html">Codex instructions</a></li><li><a href="ARCHITECTURE.html">Architecture</a></li><li><a href="PROTOCOL.html">Protocol</a></li><li><a href="INSTALLER.html">Installer</a></li><li><a href="DEVELOPMENT.html">Development</a></li><li><a href="ROADMAP.html">Roadmap</a></li><li><a href="DECISIONS.html">Decisions</a></li></ul></nav>
 <main>
 <article class="doc">
   <h1>LabControl documentation</h1>
@@ -142,7 +149,7 @@ footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
   <div class="cards"><a class="card" href="README.html">
   <span class="card-kicker">Overview</span>
   <span class="card-title">LabControl</span>
-  <span class="card-summary">Classroom fleet control for one active computer lab: one teacher console (macOS / Windows / Linux) managing 14 Windows student PCs on the same LAN — live screen mosaic with remo…</span>
+  <span class="card-summary">Керування комп&#39;ютерним класом: екрани, Wake-on-LAN, встановлення ПЗ, режим іспиту. Classroom computer-lab control: live screens, Wake-on-LAN, software deployment, exam mode.</span>
   <span class="card-source">README.md</span>
 </a><a class="card" href="CLAUDE.html">
   <span class="card-kicker">Claude project brief</span>
@@ -169,6 +176,11 @@ footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
   <span class="card-title">Installer (LabControl.Setup)</span>
   <span class="card-summary">Windows Setup.exe embeds the same application icon as the teacher console, from src/LabControl.Console/Assets/labcontrol.ico. Its setup and reboot dialogs use that embedded icon…</span>
   <span class="card-source">docs/INSTALLER.md</span>
+</a><a class="card" href="DEVELOPMENT.html">
+  <span class="card-kicker">Development</span>
+  <span class="card-title">Developing LabControl</span>
+  <span class="card-summary">The working notes for building, running and testing LabControl. The public overview is the README; the milestone plan and its acceptance criteria are in the roadmap.</span>
+  <span class="card-source">docs/DEVELOPMENT.md</span>
 </a><a class="card" href="ROADMAP.html">
   <span class="card-kicker">Roadmap</span>
   <span class="card-title">Roadmap</span>
@@ -181,7 +193,7 @@ footer{margin-top:5em;padding-top:1.3em;border-top:1px solid var(--line);
   <span class="card-source">docs/DECISIONS.md</span>
 </a></div>
 </article>
-<footer>Generated 2026-09-09 11:08 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-09 07:52 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 
 </div>

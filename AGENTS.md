@@ -209,6 +209,7 @@ LabControl/
 ├── CLAUDE.md                      detailed project brief and Claude Code rules
 ├── README.md                      public project page: features, screenshots, quick start
 ├── LICENSE                        MIT
+├── .github/workflows/ci.yml       CI: build + tests on Linux, native build on Windows
 ├── docs/                          architecture, protocol, installer, ADRs, roadmap
 │   ├── DEVELOPMENT.md             command lines, FakeAgent, Windows VM workflow, status notes
 │   ├── images/                    README screenshots from the headless UI renders

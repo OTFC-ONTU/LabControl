@@ -103,6 +103,7 @@ LabControl/
 ├── CLAUDE.md                  ← this file
 ├── README.md                  ← public project page: features, screenshots, quick start
 ├── LICENSE                    ← MIT
+├── .github/workflows/ci.yml   ← CI: build + tests on Linux, native build on Windows
 ├── LabControl.sln             ← classic .sln, not .slnx (D-18)
 ├── Directory.Build.props      ← settings shared by every project
 ├── Directory.Packages.props   ← central package versions; projects reference names only

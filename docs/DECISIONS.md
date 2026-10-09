@@ -3280,6 +3280,11 @@ Decisions:
    file in the repository. Mermaid diagrams stay readable as text in the offline mirror —
    it loads no script — and GitHub renders them.
 
+6. **CI on GitHub Actions** (`.github/workflows/ci.yml`, badge in the README): on every push
+   to `main` and every pull request, Linux builds the solution and runs the whole test suite,
+   and Windows compiles it natively, so a Windows-only break is caught before a lab visit.
+   Windows tests are not run there: the agent and Setup need a real or virtual lab PC.
+
 Rejected: rewriting history to drop the scratch folder (nothing secret in it, and every
 existing clone and commit link would break); a separate docs site (the offline mirror
 already exists, `D-12`).

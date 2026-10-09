@@ -3284,6 +3284,10 @@ Decisions:
    to `main` and every pull request, Linux builds the solution and runs the whole test suite,
    and Windows compiles it natively, so a Windows-only break is caught before a lab visit.
    Windows tests are not run there: the agent and Setup need a real or virtual lab PC.
+   A failed Linux test run is repeated once with a warning: the suite races real sockets,
+   timers and file saves, and on a two-core runner a different one lost in each of the
+   first runs (journal row, temp cleanup, pull before the link's client, lab-switch burst).
+   A real break fails twice and stays red; each warning is a flake to fix in the test.
 
 Rejected: rewriting history to drop the scratch folder (nothing secret in it, and every
 existing clone and commit link would break); a separate docs site (the offline mirror

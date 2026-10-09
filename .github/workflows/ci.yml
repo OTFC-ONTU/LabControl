@@ -40,7 +40,16 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-
 
       - run: dotnet build --configuration Release
-      - run: dotnet test --configuration Release --no-build
+      # Many tests race real sockets, timers and file saves; on a two-core runner one of
+      # them occasionally loses. A failed run is repeated once and flagged: a real break
+      # fails twice and stays red, a timing flake leaves a warning to look into.
+      - name: dotnet test
+        run: |
+          if dotnet test --configuration Release --no-build; then
+            exit 0
+          fi
+          echo "::warning title=Flaky test run::the first test run failed; the suite was run again. Check the log above for the failed test."
+          dotnet test --configuration Release --no-build
 
   windows-build:
     name: Build (Windows)

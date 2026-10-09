@@ -19,9 +19,10 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
 
     <Product>LabControl</Product>
-    <Company>ОНТФК</Company>
+    <Company>ОТФК ОНТУ</Company>
     <VersionPrefix>1.0.0</VersionPrefix>
-    <Copyright>Viacheslav Stohul</Copyright>
+    <Copyright>Copyright (c) 2026 Viacheslav Stohul, Одеський технічний фаховий коледж ОНТУ</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
 </Project>

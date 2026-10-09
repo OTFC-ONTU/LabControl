@@ -485,7 +485,7 @@ originals — and only those that still match their copy byte for byte (`D-55` i
 `instance-<instanceId>` are unchanged, so no student PC notices. Downgrading means
 copying `labs/<lab_id>/*` back to the root; the pre-M5 build drops the schema-2
 `lab.json` fields it does not know on its next save, and the next M5 launch keeps that
-changed root in a conflict directory rather than deleting it (README, *Downgrading*).
+changed root in a conflict directory rather than deleting it (`docs/DEVELOPMENT.md`, *Downgrading*).
 
 Every one of these files — and the backup archive — carries a `schema_version` as its
 first field, and the console refuses to open a file written by a **newer** version of

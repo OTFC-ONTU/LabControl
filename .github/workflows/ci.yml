@@ -1,0 +1,62 @@
+name: CI
+
+# Build and tests on every push and pull request. Linux runs the full suite (the console,
+# the shared library and the simulator are cross-platform); Windows compiles the
+# Windows-only agent, session helper and Setup natively. The macOS bundle tests skip
+# themselves without tools/package-mac.sh output.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  test:
+    name: Build & test (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - run: dotnet build --configuration Release
+      - run: dotnet test --configuration Release --no-build
+
+  windows-build:
+    name: Build (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - run: dotnet build --configuration Release

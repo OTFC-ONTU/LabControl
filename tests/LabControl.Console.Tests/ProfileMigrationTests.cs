@@ -385,7 +385,7 @@ public sealed class ProfileMigrationTests
             var target = Path.Combine(directory, Defaults.LabsDirectoryName, labId);
             var committed = HashLabFiles(target);
 
-            // README "Downgrading": the owner copied labs/<id>/ back to the root and ran a pre-M5
+            // docs/DEVELOPMENT.md "Downgrading": the owner copied labs/<id>/ back to the root and ran a pre-M5
             // build, which enrolled a PC and wrote a log. Then this build starts again.
             CopyRootTo(target, directory);
             var store = new LabStore(directory);

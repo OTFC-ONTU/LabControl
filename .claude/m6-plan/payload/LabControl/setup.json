@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "lab_id": "4f3e7260-59a2-491f-897b-1107c6694c8e",
+  "lab_name": "M6-dev",
+  "console_port": 47800,
+  "student": {
+    "name": "student",
+    "password": "1"
+  },
+  "naming": "PC-{0:00}",
+  "next_number": 1,
+  "enrollment_codes": [
+    "RHTP-D5JV-YJPR-CMKX",
+    "36ZW-220T-AARG-EFSX",
+    "194H-STCA-61A6-PBQW",
+    "YWDP-23QD-JM8P-9TZB",
+    "F2CS-C6Z8-DWPC-80SF",
+    "F4WB-DHJX-2Q0Y-5X06"
+  ],
+  "used_enrollment_codes": [],
+  "written_by": "MacBook-Air-Viacheslav (M6 dev)",
+  "written_at_unix": 1789573369
+}

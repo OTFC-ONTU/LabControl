@@ -181,13 +181,13 @@ implement.</p>
 <tr>
 <td><strong>M4</strong></td>
 <td>Deployment: USB installer, files, self-update</td>
-<td><strong>in progress — script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (<code>D-38</code>, <code>D-41</code>…<code>D-52</code>; verification ledger below)</strong></td>
+<td><strong>in progress — <code>1.0.0</code> is the physical-lab release candidate (owner decision 2026-09-08); script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (<code>D-38</code>, <code>D-41</code>…<code>D-52</code>; verification ledger below)</strong></td>
 <td>M3</td>
 </tr>
 <tr>
 <td><strong>M5</strong></td>
 <td>Lab files, teacher access and fast switching between rooms</td>
-<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>), extended by <code>D-68</code>; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational <code>Welcome.console_access</code>, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the <code>app.manifest</code> double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the <code>group=</code> argument that made the printed <code>netsh</code> line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest <code>PC-27</code>) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three <code>--remove-data</code> answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). <strong>Still unverified:</strong> on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, <code>win-x64</code> (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as <code>LOCAL SERVICE</code> and the elevated one as <code>SYSTEM</code>; on Linux, the <code>SO_PEERCRED</code> path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation</strong></td>
+<td><strong>in progress — design recorded 2026-09-08 (<code>D-53</code>…<code>D-60</code>); portions 1–7 built and reviewed (1–3 on 2026-09-08 — profile store and migration; <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, bulk <code>.lcbak</code> import; signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher sessions without a vault, <code>instance:</code> withdrawal with confirmed delivery, dormant imported codes — portion 4 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; portion 5 on 2026-09-09: the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational <code>Welcome.console_access</code>; portion 6 on 2026-09-09: command-line documents, single-instance forwarding and macOS file activation; portion 7 on 2026-09-09: the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6 and 7 checked by hand on the owner's Mac; portion 5 has not been run on the Windows VM, where two consoles with skewed clocks must move a real agent, and portion 8 (the acceptance drills and the documentation close-out) is in progress; real-Mac switch timing under investigation; the Windows pipe and the Linux <code>SO_PEERCRED</code> path of the single instance, the Windows installer itself, the LAN banner against a real Windows Firewall and a real Linux desktop menu are not yet run on those systems</strong></td>
 <td>M4</td>
 </tr>
 <tr>
@@ -1072,6 +1072,33 @@ managed handouts, ordered sign-in and activation, hostname/firewall/Defender/hib
 adapters, session policies and executable setup/removal/rekey integration. The two existing
 UDP test failures are addressed by a separate in-process test port.</p>
 <p><strong>Verification ledger (isolated fixtures; milestone still in progress).</strong></p>
+<p>The owner designated version <code>1.0.0</code> as the clean physical-lab release candidate on
+2026-09-08. This does not close M4 before the remaining rows pass. The later M5 portion-5
+<code>Welcome.console_access</code> addition is informational and preserves the frozen v1 update
+subset, so this baseline is updated in place rather than reinstalled.
+The clean <code>f1b7137</code> source snapshot with only the <code>1.0.0</code> version change passed all
+702 tests (591 Shared, 111 Console); its <code>win-x64</code> Agent/Session/Setup publish formed
+the initial physical-lab media. The first two physical runs stopped at the Defender step
+despite successful independent exclusion read-back. <code>D-61</code> adds conservative repair and
+WMI value compatibility. That rebuild reached Hibernation, where the physical PC proved
+Windows had successfully removed the file while normalizing enable/type to absent and size
+to zero. <code>D-62</code> handles and journals that bounded result. Exact USB/local hash comparison
+proved that rebuild was present when a rerun still stopped there; the remaining file-type
+sentinel check is now ignored only when no hibernation file exists, and Setup prints its
+version/build identity. The hash-verified rerun still failed during state reading, before
+journal comparison. <code>D-63</code> now bypasses the native capabilities query only after a
+fixed-path probe proves the file absent and logs fixed safe stage codes. Latest tests pass
+600 Shared + 111 Console. Build <code>96756f3f</code> isolated a strict path/native disagreement;
+the successful native &quot;no active file&quot; result now overrides a residual/protected path
+object. A second PC also reproduced the generic Defender failure on its first run; <code>D-64</code>
+tests the delayed-read-back inference with a bounded ten-second convergence window and
+fixed safe codes. Build <code>09f13b86</code> (hash-identical on the USB stick) still stopped at
+Hibernation; elevated read-back showed <em>Hibernate available</em>, <code>HibernateEnabled</code> absent and
+<code>HibernateEnabledDefault=1</code>, i.e. the factory OS-default state that the adapter rejected.
+<code>D-65</code> accepts the absent value as enabled and restores it as absent. Tests pass 602 Shared</p>
+<ul>
+<li>111 Console. The combined rebuilt Setup requires another physical rerun before acceptance.</li>
+</ul>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -1118,8 +1145,8 @@ UDP test failures are addressed by a separate in-process test port.</p>
 </tr>
 <tr>
 <td>Physical lab</td>
-<td>Installer reports supported NIC changes, selected wired MAC and persistent readiness advisories.</td>
-<td>All 14 PCs, backup-only console migration, fresh-PC setup, real LAN transfers and shutdown Wake-on-LAN. A virtual NIC is not hardware acceptance.</td>
+<td>Installer reports supported NIC changes, selected wired MAC and persistent readiness advisories. On 2026-09-08 both the previously used and clean PCs reached the Defender step; an independent elevated <code>Add-MpPreference</code> returned success and exact read-back. <code>D-61</code> repaired that recovery path. A second PC reproduced the first-run failure; D-64 adds bounded provider convergence and safe stage codes. The next runs reached Hibernation and read-only evidence showed the file absent, enable/type absent and size zero. Exact hash/size comparison proved the first D-62 rebuild was on USB. D-63 added safe diagnostics; build <code>96756f3f</code> identified a residual/protected path object disagreeing with the native inactive state, which is now resolved in favor of the successful native result. Build <code>09f13b86</code> then exposed the real cause: a factory-fresh PC with hibernation enabled and no <code>HibernateEnabled</code> value (<code>D-65</code>); the PowerShell &quot;file absent&quot; probes were unreliable. The rebuilt Setup installed PC-04 and PC-10 completely; both reconnect after reboot with automatic student sign-in. Wake-on-LAN failed on both, also from a wired neighbour: the in-box Realtek driver exposes no WoL settings, so all <code>Network …</code> steps were skipped. That advisory is now informational (<code>D-66</code>). A third PC stopped at Defender with <code>DefenderProviderRejected</code> on its first run and installed completely on Repair; Setup now prints the provider status and retries the additive call three times (<code>D-64</code> addendum). <strong>Owner's call (2026-09-08, end of day): the physical baseline is established.</strong> Five PCs (PC-04, PC-08, PC-09, PC-10, PC-11) are installed from the <code>1.0.0</code> USB media with the D-65 Setup, all enrolled in lab <code>444-2</code>, all linked to the console with agent <code>1.0.0+a3c9f3ac</code>, automatic <code>student</code> sign-in and a live session helper; two of them still report their pre-rename <code>DESKTOP-…</code> hostname until their next reboot. The remaining M4 physical checks continue in the background of M5 rather than blocking it.</td>
+<td>Remaining nine PCs from the same media. Vendor Realtek driver + USB repair, then the shutdown-and-wake test (Wake-on-LAN is known impossible with the in-box driver). Rerun the rebuilt Setup on both PCs, then all 14 PCs, backup-only console migration, fresh-PC setup, real LAN transfers and shutdown Wake-on-LAN. Manual native read-back is diagnostic evidence, not completed Setup acceptance, and a virtual NIC is not hardware acceptance.</td>
 </tr>
 </tbody>
 </table></div>
@@ -1624,7 +1651,7 @@ lab-A beacons in the 5 s after departure; 20 × A → B → C → A with bounded
 no leaked session. Two limits: under sustained refusal load a departure can spend
 Kestrel's 2 s stop budget, and a PC refused for a long stretch returns within the 30 s
 reconnect cap rather than the 15 s target — a <code>BeaconGate</code> follow-up that portion 5 did
-not make and that portion 8 then made (<code>D-68</code> item 4).
+not make and that is now portion 8's.
 Tests: 728 (603 Shared + 125 Console; the Console run twice, <code>LabSwitchTests</code> a
 non-parallel collection). <em>On the owner's Mac</em> (Debug build, ad-hoc signed) the server
 was up 4–6 s after <em>Open</em> and after a re-open; the Keychain prompt per rebuilt ad-hoc
@@ -1776,25 +1803,23 @@ the second positive source the design imagined — a <code>Hello</code> naming i
 instance — cannot produce an observed-elsewhere state, because the same <code>Hello</code> puts the
 PC on our own line, so it is recorded as the event <code>link.arrived_from</code> (<code>NoteArrival</code>)
 instead. <strong><code>Welcome</code> gained the additive, informational <code>console_access = 6</code></strong> (field 6
-was free and not reserved; <code>Welcome</code> is not in the frozen update subset, so older agents ignore it
-and older consoles do not send it). The console fills it from its own leaf's subject OU
-(<code>ConsoleInstance.Access</code>) and the agent keeps it in <code>AgentLink.AnnouncedConsoleAccess</code>,
-apart from <code>LinkedConsoleAccess</code>; every refusal still reads the validated certificate,
-never this field, and a test makes a teacher console announce administrator access and
-still get <code>rekey</code> refused. PROTOCOL was updated in the same commit. Tests: the branch
-added skew cases in both directions, honour-once, the window bound, a take that arrived
-before the link and a press made just before linking, plus ownership tests for a skewed
-take-over both ways, offline versus unknown, the named holder and the banner count;
-<strong>after the merge main stands at 960 (744 Shared + 216 Console)</strong>, 13 of them macOS
-bundle tests that skip unless <code>tools/package-mac.sh</code> has been run. Open items: this
+was free and not reserved; <code>Welcome</code> is not in the frozen update subset, so older agents
+ignore it and older consoles do not send it). The console fills it from the subject OU of
+its own leaf (<code>ConsoleInstance.Access</code>) and the agent keeps it in
+<code>AgentLink.AnnouncedConsoleAccess</code>, apart from <code>LinkedConsoleAccess</code>; every refusal still
+reads the validated certificate, never this field, and a test makes a teacher console
+announce administrator access and still get <code>rekey</code> refused. PROTOCOL was updated in the
+same commit. Tests: the branch added skew cases in both directions, honour-once, the
+window bound, a take that arrived before the link and a press made just before linking,
+plus ownership tests for a skewed take-over both ways, offline versus unknown, the named
+holder and the banner count; <strong>after the merge main stands at 960 (744 Shared + 216
+Console)</strong>, 13 of them macOS bundle tests that skip unless <code>tools/package-mac.sh</code> has
+been run. Open items: this
 portion has <strong>not been run on the Windows VM</strong>, and the design calls for two consoles
 with skewed clocks against a real agent; and a PC refused across many switches still
 returns on the reconnect ceiling rather than the 15 s target, because a verified beacon
-for the agent's own lab does not yet shorten its dial backoff — that was portion 8's and
-is built (<code>D-68</code> item 4). Two parts of this portion were also superseded the same day by
-the portion-5 security fixes below: withdrawal is now judged on the beacon itself, and a
-PC is credited to a taker only on its own departure report, never on a stream that ended
-while the press was live.</li>
+for the agent's own lab does not yet shorten its dial backoff — that is portion 8's, and
+portion 8 is in progress.</li>
 <li><em>Portion 6 (built, reviewed and fixed 2026-09-09, on the Mac).</em> Command-line documents,
 the single instance and macOS file activation (<code>D-59</code> item 5); the review's blocker and
 should-fix items were all fixed before the merge. <code>ConsoleOptions.TryParse</code> takes
@@ -1848,11 +1873,9 @@ appeared as 0600 inside a 0700 directory; a second launch forwarded a lab file a
 0 while the running console logged the hand-over and showed the import result; a bare
 second launch delivered an empty batch and brought the window forward; and after a
 <code>kill -9</code> the next launch exited immediately instead of hanging, while a restart removed
-the stale socket and served again. Open items: the Windows named-pipe path was
-exercised on 2026-09-09 by portion 7's Windows drill, where a second launch handed both a
-<code>.lclab</code> and a <code>.lcbak</code> to a running console over <code>\\.\pipe\labcontrol-console-&lt;hash&gt;</code>
-and exited 0; the Linux <code>SO_PEERCRED</code> path is still compile- and logic-checked only, with
-no Linux run; the shutdown-window refusal has an automated test but could
+the stale socket and served again. Open items: the Windows named-pipe path and the Linux
+<code>SO_PEERCRED</code> path are compile- and logic-checked only, with no Windows or Linux run (they
+belong to portion 7's matrix); the shutdown-window refusal has an automated test but could
 not be reproduced in the real GUI, because there is no way to ask a running console to
 quit from the shell; and after a refusal the forwarding launch may briefly report that a
 console is already running while the departing one still holds the lock for up to ten
@@ -1920,146 +1943,10 @@ built, its <code>Info.plist</code> keys and ad-hoc signature verified, the Gatek
 observed as documented, and the bundle launched once against a copy of a data directory;
 the Linux tarball installed and uninstalled into a throwaway <code>HOME</code>, with the generated
 <code>.desktop</code> entry inspected (absolute <code>Exec</code>/<code>TryExec</code>, an executable launcher, nothing
-left behind). <em><strong>On Windows, for the first time, 2026-09-09</strong></em> — the isolated UTM clone
-<em>M4 isolated native tests 2026-09-08</em>: Windows 11 Pro 10.0.26200 ARM64, guest <code>PC-27</code>,
-one host-only NIC, <code>LabControl-Console-0.1.4-win-arm64-Setup.exe</code> hash-compared on host
-and guest before every run, the clone stopped and left in its pre-drill state afterwards.
-The clone has no interactive session and takes no password, so every unelevated run was
-made as <code>LOCAL SERVICE</code> — a non-administrator with a real profile — through a scheduled
-task, and the one elevated step ran as <code>SYSTEM</code>. <strong>Four defects, all fixed and merged
-(<code>a7fbe33</code>):</strong> (1) <code>app.manifest</code> carried a double hyphen inside an XML comment, which
-XML forbids, so Windows refused to build the activation context and the installer would
-not start at all (<em>&quot;side-by-side configuration is incorrect&quot;</em>, an invalid-manifest-XML
-entry in the event log) — nothing in the console installer had ever run on Windows before
-that day, and the failure is an OS refusal, not a compile error; (2)
-<code>ConsoleFirewallRuleSpec.Profiles</code> was 6, but <code>NET_FW_PROFILE_TYPE2</code> numbers the profiles
-Domain 1, Private 2, Public 4, so the installer opened the <strong>Public</strong> profile it says it
-never requests, left the domain closed, and — the same constant deciding coverage —
-rejected a genuine private-and-domain rule as missing; at 3 the rule reads back as
-<em>Domain, Private</em> and the banner reports the port allowed; (3) the printed <code>netsh</code> line
-carried <code>group=&quot;…&quot;</code>, which <code>add rule</code> has no argument for and refuses outright, so the
-fallback created nothing — removed, and the accepted price is that a hand-made rule has
-no group, so uninstall leaves it for review; (4) the uninstaller's temporary copy never
-deleted itself, because the command line was built with <code>ArgumentList</code>, whose C-runtime
-<code>\&quot;</code> escaping <code>cmd.exe</code> rejects, leaving a 148 MB executable in the temp directory — one
-argument string now, and no copies remain. <strong>Verified with the rebuilt installer</strong>: that
-it starts at all; the whole ordered plan and a dry run that changes nothing; a clean
-per-user install by a non-administrator into the per-user programs directory; the
-Start-menu shortcut, and that it launches the console; the Installed-apps entry with its
-name, version, publisher and uninstall command; both file-type registrations and their
-open commands; a byte-identical machine on a repeat run; the refusal to install while a
-console holds its lock; document forwarding through the registered command into a running
-console's import flow for both file types, including a path with spaces and Ukrainian
-characters — which exercises portion 6's Windows named pipe; the real Windows Firewall
-rules and their profiles, the banner moving from missing to allowed, a rule belonging to
-another program correctly not counting as coverage, and uninstall removing only its own
-rule while leaving a foreign one for review; the unelevated uninstall's firewall policy;
-the temporary-copy hand-over including its self-deletion; all three answers to
-<code>--remove-data</code>, including its refusal with redirected input and its insistence on the
-exact word; and a DPAPI-sealed lab key still opening after the application was replaced.
-<strong>Still unverified</strong>: Explorer's own double-click (the registration, the forwarding and
-the import are proven, the shell's resolution step is not — it needs a desktop session);
-a real elevation consent prompt answered yes or no by a teacher (no interactive session,
-so Windows cannot show one); anything on <code>win-x64</code> (only the ARM64 package was built and
-run); the installer under an ordinary interactive user profile rather than a service
-account; the unsigned-download warning; the Linux <code>SO_PEERCRED</code> path of the single
-instance (portion 6); and a real GNOME or KDE application menu. Those stay in portion 7's
-manual matrix and must not be reported as passing until they are run. <strong>Rough edges for a
-later pass</strong>, none of them wrong behaviour: the dry run prints its plan header twice; a
-repeat install reports steps as <em>written</em> where the code's comments promise <em>already</em>, so
-the machine is idempotent but the wording is not; and uninstall leaves the now-empty
-parent programs directory behind.</li>
-<li><em>Portion 8 (built and reviewed 2026-09-09, on the Mac).</em> The acceptance drills, and
-the six gaps an adversarial audit of every M5 acceptance criterion found (<code>D-68</code>).
-<strong>The file picker could not take a mixed selection</strong>: <code>LabImports</code> registered one
-filter per extension and both the macOS panel and the Windows common dialog apply
-exactly one filter at a time, so <em>Add labs…</em> opened with only backups selectable;
-<code>LabImports.Filters</code> now puts one combined filter over every extension in
-<code>Defaults.ConsoleDocumentExtensions</code> first and keeps the per-type filters after it.
-<strong>Authorization was not batched</strong>: one request per lab meant a teacher with three
-rooms made three selections and three save dialogs, so
-<code>DeviceAccess.NeedingAuthorization</code>/<code>WriteRequests</code> write a request for every lab that
-needs authorization or renewal into one chosen folder, deduplicating the file name
-when two rooms share a display name, writing nothing for a lab that needs nothing and
-failing one lab alone exactly like one file of an import batch; the chooser's
-<em>Authorize all (N)…</em> (<code>AuthorizeAllCommand</code>, <code>PendingAuthorizations</code>) is that one
-gesture and the single-row action stays. <strong>Three drills the criteria name were
-added</strong>: three independent labs of 30 PCs each imported and authorized in one
-workflow, with the source files deleted before a restart to prove they are no longer
-needed (<code>AcceptanceDrillTests</code>); switching while a screen streams and a PC is
-controlled, asserting that no frame, no released buffer and no keystroke reaches the
-wrong room; and the departure flow itself, which leaves at once when nothing runs,
-stays when asked, and waits and then leaves when asked (both in <code>LabSwitchTests</code>).
-<strong>Quitting the application bypassed the departure report entirely</strong>: the report, the
-wait and the choices moved into <code>Services/DepartureFlow.cs</code> (<code>IDeparturePrompt</code>,
-<code>MayLeaveAsync</code>, <code>MayQuitAsync</code>, <code>DepartureChoice</code>), which <em>Disconnect</em>, the main
-window's close and <code>App.QuitAsync</code> now all ask, with a guard so a second quit cannot
-open a second report and a catch so a dialog that cannot be shown never traps the
-teacher in an application that will not quit. <strong>A PC refused across many switches came
-back only on the 30-second reconnect ceiling</strong> instead of the 15-second target:
-<code>BeaconGate</code> now records when a verified beacon of the agent's own lab last arrived
-from each endpoint, and a serving gap of at least the new <code>Defaults.BeaconResumeGap</code>
-(two beacon intervals) re-arms a one-shot permission to step over the wait a failed
-dial imposed. The exponential escalation is deliberately not reset, and a console
-beaconing without a pause produces no gap and so earns at most one extra dial.
-Measured in the sixty-switch drill on the same machine: <strong>30.3 s to relink thirty PCs
-without it, 2.7 s with it</strong>; what the step-over is worth on its own is asserted
-deterministically in <code>BeaconGateTests</code>. <strong>Agent events were not bound to the
-delivering console</strong> the way results and progress are: <code>AgentLink.Report</code> takes a
-<code>forInstance</code> and <code>ReportForJob</code> reads the deliverer out of the ledger, so an event
-about a console's work reaches that console and waits for it, while machine events
-stay unbound on purpose — a dead helper or a broken permission must reach whoever is
-in the room — and the capacity line about dropped results (<code>job.result_dropped</code>) stays
-unbound for the same reason. Four audit claims were checked and all four hold, two of
-them previously untested and now covered: re-import preserves this device's identity,
-the same room on two devices does not clone one private identity, a backup re-imported
-over an existing administrator profile does not duplicate the room, and the same lab
-id arriving with different trust is refused for <code>.lcbak</code> as it already was for
-<code>.lclab</code>. Honest limit: the Avalonia shutdown hook itself is two lines calling that
-flow and is not covered by a headless test, because the harness never gives the
-application a classic desktop lifetime; it needs a manual quit check.</li>
-<li><em>Portion 5 security fixes (built 2026-09-09 on the Mac, merged into main the same
-day).</em> An adversarial review of the built portion reproduced two blockers; both are
-fixed, with the hardening around them (<code>D-58</code>, amended). <strong>A withdrawn console could
-still seize the room, repeatedly</strong>: the take-over decision rested on the certificate
-authority's endorsement alone, so the instance-level withdrawal was enforced only at
-the TLS handshake — which happens after the agent has already dropped its link — and
-each press carried a fresh <code>take</code> value, defeating the honour-once rule. <code>BeaconGate</code>
-now takes the agent's live <code>RevocationSet</code> (the same object <code>AgentLink</code> merges into)
-through a required three-argument constructor, so no call site can skip it, and
-refuses a revoked instance's beacon immediately after signature verification, ahead of
-both the take-over and the dial branch. The console mirrors it: a withdrawn instance's
-beacon is dropped, <code>ForgetOtherConsole</code> removes the machine from the other-console
-list the moment access is withdrawn, and it can never be named as a holder. <strong>A PC
-that merely died during the take-over window was credited to the taker</strong>: any linked
-PC whose stream ended inside the window was attributed, so a student shutdown, a Wi-Fi
-blip or a crash all counted as evidence — exactly the presumption the ownership work
-exists to delete. Attribution is now the agent's own positive report: on a take-over
-the agent writes the fixed-code <code>link.taken_over</code> departure notice naming the taker
-(<code>Shared/Link/DepartureNotice.cs</code>, an ordinary <code>Event</code>, no <code>.proto</code> change),
-half-closes the request stream rather than resetting it so the notice is delivered in
-order, and cuts the link anyway after <code>Defaults.DepartureNoticeGrace</code> (two seconds);
-<code>LabSession.NoteDeparture</code> attributes only on that report, and only to an instance
-this console has itself heard beaconing and has not withdrawn. Also fixed: the <em>took
-over the lab at …</em> wording never expired and now shows only while the press this
-console saw is younger than the observations it produced, and is cleared outright when
-this console takes over; the <em>arrived after the link</em> condition could not fire in
-production because the arrival clock was read inside the handler, so <code>BeaconListener</code>
-stamps each datagram once in its receive loop before the fan-out and
-<code>AgentLink.OfferBeacon</code> carries that stamp; the claim that a machine minutes out of
-step could still move the room was false — past <code>Defaults.BeaconMaxSkew</code> such a
-console is not merely unable to take over, it is invisible to the whole lab — so the
-comment is corrected and a beacon rejected for a stale timestamp now raises the
-rate-limited <code>console.clock_skew</code> warning saying the two consoles cannot see each
-other until a clock is set; honoured take tokens are pruned once they can never be
-honoured again; the freshness check clamps the future side to the beacon skew, so a
-lab file written while the clock was ahead cannot count as fresh; the two fields
-behind an ownership claim are read as one pair under one lock; and a PC being woken
-says so instead of reading as held elsewhere. Tests: after both merges <strong>main stands
-at 984 (755 Shared + 229 Console)</strong>, 13 of them macOS bundle tests that skip unless
-<code>tools/package-mac.sh</code> has been run, and the full suite was run twice on the merged
-tree with no failures. Still open: this portion has not been run on the Windows VM,
-where two consoles with skewed clocks must move a real agent.</li>
+left behind). <strong>Never run, and not runnable on a Mac</strong>: the Windows installer itself in
+any form, the LAN banner against a real Windows Firewall, and a real GNOME or KDE
+application menu. Those join portion 6's Windows named-pipe and Linux <code>SO_PEERCRED</code> paths
+in portion 7's manual matrix and must not be reported as passing until they are.</li>
 </ul>
 <p><strong>Not in scope.</strong> Simultaneous control of several labs by one console, a shared live view
 between teachers, an always-on server/cloud, automatic timetable scheduling, moving PCs
@@ -2149,7 +2036,14 @@ computes the hash, proposes a <code>detect</code> rule, writes the YAML, and off
 install on one PC</strong> before the fleet.</li>
 <li><code>install_package</code> job: push over the LAN, run silently, verify <code>detect</code>, report per PC,
 &quot;Install on all missing&quot;.</li>
-<li>Ukrainian localization of the console UI from the resource files created in M0.</li>
+<li>Complete Ukrainian, English and Russian localization from the resource seam created in
+M0. This covers the teacher console, Windows Setup/removal, stock student-facing text
+and generated USB instructions; protocol identifiers, diagnostic codes and developer
+logs remain stable English (<code>D-67</code>).</li>
+<li>A console language selector offers <code>Українська</code>, <code>English</code> and <code>Русский</code>, persists per
+user and can override the OS language. Before a preference exists, use a supported OS
+display language and otherwise fall back to English. Setup follows the supported Windows
+display language, and generated USB instructions follow the console's selected language.</li>
 <li>Robustness pass: reconnect storms, many simultaneous full-view requests, disk-full,
 clock skew, a PC powered off for a week, a lab key backup older than the machine list.</li>
 <li>Documented and <em>rehearsed</em> recovery: &quot;the teacher machine died and the lab must run
@@ -2169,8 +2063,11 @@ PC without hanging the job or the console.</li>
 <li>Installing one real program on all 14 PCs in parallel, with the PCs having <strong>no
 internet</strong>, succeeds with <code>detect</code> verified; the wall-clock time is measured and written
 into this file next to the manual afternoon it replaces.</li>
-<li>Every UI string comes from the resource files; switching to Ukrainian changes all of
-them.</li>
+<li>Every product-facing stock string comes from the resource files. Switching among
+Ukrainian, English and Russian changes the entire console and survives a restart; each
+language is checked for missing keys, clipped controls and broken formatting.</li>
+<li>Setup/removal is exercised in all three languages, and the USB builder emits each of the
+three instruction variants with English fallback for any unsupported culture.</li>
 <li>The console runs a full 90-minute lesson without a restart, a leak, or a stuck job.</li>
 <li>The recovery procedure is executed once for real, from the backup, and it works.</li>
 </ul>
@@ -2201,17 +2098,24 @@ done, item 6).</p>
 <h2 id="on-site-verification-checklist-fills-d-10">On-site verification checklist (fills <code>D-10</code>)<a class="anchor" href="#on-site-verification-checklist-fills-d-10" aria-label="Link to this section">#</a></h2>
 <p>Do this on the first visit to the lab; several milestones depend on the answers.</p>
 <ul class="contains-task-list">
-<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Router model; is the Wi-Fi on the <strong>same subnet and broadcast domain</strong> as the wired
-hub? Is AP isolation / guest mode off?</li>
-<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Do UDP broadcasts from the MacBook reach the wired PCs? (Test before M1 ships.)</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" checked="checked" /> Router model; is the Wi-Fi on the <strong>same subnet and broadcast domain</strong> as the wired
+hub? Is AP isolation / guest mode off? — Yes: MacBook <code>192.168.0.168/24</code> on Wi-Fi,
+PCs <code>192.168.0.x</code> on the wire, one broadcast domain (2026-09-08).</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" checked="checked" /> Do UDP broadcasts from the MacBook reach the wired PCs? — Yes: the console's beacon
+is found by every installed PC and they enrol and link within seconds (2026-09-08).</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> Is it a switch or a real hub? Bandwidth headroom for 14 (later 30) video streams.</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> DHCP lease behaviour; do PCs keep their IPs?</li>
-<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Per PC: BIOS/UEFI &quot;Wake on LAN&quot; / &quot;Power on by PCI-E&quot; enabled.</li>
-<li class="task-list-item"><input disabled="disabled" type="checkbox" /> NIC models across the PCs (Realtek/Intel differences change the WoL settings).</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Per PC: BIOS/UEFI &quot;Wake on LAN&quot; / &quot;Power on by PCI-E&quot; enabled. — Not yet checked;
+pointless until the NIC driver below is replaced.</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" checked="checked" /> NIC models across the PCs (Realtek/Intel differences change the WoL settings). —
+All seen so far: Realtek PCIe GbE (RTL8168) on ASUS boards with the Microsoft
+in-box driver 9.1.410.2015, which exposes no Wake-on-LAN settings at all (<code>D-66</code>).
+The vendor driver is required before any wake test.</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> Windows edition and build (Home vs Pro changes some policy options).</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> Local administrator account name and password, per PC or common.</li>
-<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Antivirus in use — Defender only, or a third-party product that Setup cannot
-configure?</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" checked="checked" /> Antivirus in use — Defender only, or a third-party product that Setup cannot
+configure? — Defender only on the five installed PCs; its provider needed a retry
+on one of them (<code>D-64</code> addendum).</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> Do the PCs have internet at all, and is it permanent or occasional?</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> Screen resolutions (drives the mosaic tile sizing).</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> Which folder should be offered as the default when setting up <em>collect work</em>?</li>
@@ -2330,7 +2234,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-09-09 13:36 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 11:08 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

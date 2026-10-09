@@ -946,8 +946,17 @@ public static class Defaults
     public const string HibernateEnabledValue = "HibernateEnabled";
     public const string HibernationFileTypeValue = "HiberFileType";
     public const string HibernationFileSizeValue = "HiberFileSizePercent";
+    public const string HibernationFileName = "hiberfil.sys";
     public const string PowerConfigurationExecutableName = "powercfg.exe";
     public static readonly TimeSpan SetupWmiTimeout = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan SetupDefenderReadBackTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>A nonzero Defender <c>Add</c> return value on a PC that then accepts the very
+    /// same call on a repair run is a transient provider state (D-64 addendum). Setup retries
+    /// the additive call this many times in total, pausing between attempts, before it
+    /// reports the last status.</summary>
+    public const int SetupDefenderMutationAttempts = 3;
+    public static readonly TimeSpan SetupDefenderMutationRetryDelay = TimeSpan.FromSeconds(3);
     public static readonly TimeSpan SetupPowerCommandTimeout = TimeSpan.FromSeconds(60);
     public static readonly Guid StudentDesktopKnownFolderId = new("B4BFCC3A-DB2C-424C-B029-7FE99A87C641");
     public const string WindowsExplorerExecutableName = "explorer.exe";

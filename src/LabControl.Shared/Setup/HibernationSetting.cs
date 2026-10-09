@@ -11,8 +11,10 @@ public interface IHibernationSystem
 }
 
 /// <summary>Disabling hibernation owns the native file and saved metadata as one tuple.
-/// A changed file type or size on an otherwise disabled PC also blocks restoration.</summary>
-public sealed class HibernationSetting(IHibernationSystem system) : ISetupSetting
+/// A changed file type or size on an otherwise disabled PC also blocks restoration.
+/// An absent <c>HibernateEnabled</c> value next to an active file is the OS default
+/// (<c>HibernateEnabledDefault</c>) and is restored as absent (D-65).</summary>
+public sealed class HibernationSetting(IHibernationSystem system) : ISetupSetting, ISetupResolvedAppliedValue
 {
     private HibernationState? _lastRead;
     public string Id => "machine.hibernation";
@@ -24,7 +26,7 @@ public sealed class HibernationSetting(IHibernationSystem system) : ISetupSettin
     {
         var original = Decode(current);
         if (!original.FilePresent) return current;
-        if (original.Enabled != 1 || original.NativeFileType is not (1 or 2)
+        if (original.Enabled is not (null or 1) || original.NativeFileType is not (1 or 2)
             || original.SizePercent is > 100)
             throw new InvalidDataException("The existing hibernation configuration cannot be restored safely.");
         return Encode(original with { FilePresent = false, NativeFileType = 0, Enabled = 0 });
@@ -44,6 +46,20 @@ public sealed class HibernationSetting(IHibernationSystem system) : ISetupSettin
         _lastRead = null;
         system.Write(expected, desired);
     }
+
+    public bool AcceptsResolvedAppliedValue(byte[]? requested, byte[]? actual)
+    {
+        try
+        {
+            var requestedState = Decode(requested);
+            var actualState = Decode(actual);
+            return IsDisabled(requestedState) && IsDisabled(actualState);
+        }
+        catch (InvalidDataException) { return false; }
+    }
+
+    public static bool IsDisabled(HibernationState state) => !state.FilePresent
+        && state.Enabled is null or 0 && state.SizePercent is null or <= 100;
 
     public static byte[] Encode(HibernationState state)
     {

@@ -913,8 +913,10 @@ validates and translates these codes; it never displays raw JSON as teacher inst
 A valid snapshot replaces previous advisories and is cached in the optional
 `MachineRecord.SetupReadinessCodes` field for offline tiles. Invalid or newer snapshots
 do not clear older warnings. Missing reports from legacy agents do not certify readiness.
-Unverified physical wake is informational; configuration/antivirus/report errors need
-attention. This event does not change the frozen protocol subset or prove connectivity
+Unverified physical wake and an unconfigurable network driver are informational;
+antivirus and unreadable-report codes need attention. The console logs a snapshot only
+when it differs from the cached codes, with *Info* severity unless a code needs
+attention (`D-66`). This event does not change the frozen protocol subset or prove connectivity
 beyond the connection carrying it.
 
 `Hello.update_state` tells the console where a PC stands — `STABLE`, `ON_PROBATION` (with

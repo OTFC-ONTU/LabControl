@@ -1,5 +1,6 @@
 using System.Management;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using LabControl.Shared;
 using LabControl.Shared.Setup;
 
@@ -8,14 +9,15 @@ namespace LabControl.Setup;
 /// <summary>Use the native Defender provider's additive methods; never replace the list.</summary>
 internal sealed class WindowsDefenderExclusionStore : IDefenderExclusionStore
 {
-    public string? Read() => Guard(ReadCore);
+    public string? Read() => Guard(ReadCore, SetupDiagnosticCode.DefenderReadFailed);
 
     public void Write(string? expected, string? value) => Guard(() =>
     {
         if ((expected is not null && !DefenderExclusionSetting.IsInstallDirectory(expected))
             || (value is not null && !DefenderExclusionSetting.IsInstallDirectory(value)))
-            throw new IOException();
-        if (!string.Equals(ReadCore(), expected, StringComparison.Ordinal)) throw new IOException();
+            throw new SetupDiagnosticException(SetupDiagnosticCode.DefenderProviderDataInvalid);
+        if (!string.Equals(Read(), expected, StringComparison.Ordinal))
+            throw new SetupDiagnosticException(SetupDiagnosticCode.DefenderConcurrentChange);
         if (expected == value) return true;
         using var provider = new ManagementClass(Scope(Defaults.DefenderWmiNamespace),
             new ManagementPath(Defaults.DefenderPreferenceClass), null);
@@ -23,18 +25,31 @@ internal sealed class WindowsDefenderExclusionStore : IDefenderExclusionStore
         using var arguments = provider.GetMethodParameters(method);
         arguments[Defaults.DefenderExclusionPathProperty] = new[] { value ?? expected! };
         arguments["Force"] = true;
-        // Recheck after connecting to WMI, immediately before the mutation.
-        if (!string.Equals(ReadCore(), expected, StringComparison.Ordinal)) throw new IOException();
-        using var result = provider.InvokeMethod(method, arguments, new InvokeMethodOptions { Timeout = Defaults.SetupWmiTimeout });
-        if (result?["ReturnValue"] is not uint status || status != 0
-            || !string.Equals(ReadCore(), value, StringComparison.Ordinal)) throw new IOException();
+        for (var attempt = 1; ; attempt++)
+        {
+            // Recheck after connecting to WMI, immediately before the mutation. A retry
+            // that finds the previous attempt applied after all is simply done.
+            var current = Read();
+            if (attempt > 1 && string.Equals(current, value, StringComparison.Ordinal)) break;
+            if (!string.Equals(current, expected, StringComparison.Ordinal))
+                throw new SetupDiagnosticException(SetupDiagnosticCode.DefenderConcurrentChange);
+            using var result = provider.InvokeMethod(method, arguments, new InvokeMethodOptions { Timeout = Defaults.SetupWmiTimeout });
+            var status = result?["ReturnValue"];
+            if (Succeeded(status)) break;
+            if (attempt >= Defaults.SetupDefenderMutationAttempts)
+                throw new SetupDiagnosticException(SetupDiagnosticCode.DefenderProviderRejected, StatusNumber(status));
+            Thread.Sleep(Defaults.SetupDefenderMutationRetryDelay);
+        }
+        if (!WaitForValue(value))
+            throw new SetupDiagnosticException(SetupDiagnosticCode.DefenderReadBackTimeout);
         return true;
-    });
+    }, SetupDiagnosticCode.DefenderProviderCallFailed);
 
     private static string? ReadCore()
     {
         var first = Once();
-        if (!string.Equals(first, Once(), StringComparison.Ordinal)) throw new IOException();
+        if (!string.Equals(first, Once(), StringComparison.Ordinal))
+            throw new SetupDiagnosticException(SetupDiagnosticCode.DefenderReadUnstable);
         return first;
 
         static string? Once()
@@ -52,32 +67,80 @@ internal sealed class WindowsDefenderExclusionStore : IDefenderExclusionStore
                     count++;
                     var raw = instance[Defaults.DefenderExclusionPathProperty];
                     if (raw is null) continue;
-                    if (raw is not string[] paths) throw new IOException();
+                    var paths = raw switch
+                    {
+                        string path => [path],
+                        string[] array => array,
+                        _ => throw new SetupDiagnosticException(SetupDiagnosticCode.DefenderProviderDataInvalid),
+                    };
                     foreach (var path in paths.Where(DefenderExclusionSetting.IsInstallDirectory))
                     {
-                        if (found is not null) throw new IOException();
+                        if (found is not null)
+                            throw new SetupDiagnosticException(SetupDiagnosticCode.DefenderProviderDataInvalid);
                         found = path;
                     }
                 }
             }
-            if (count != 1) throw new IOException();
+            if (count != 1)
+                throw new SetupDiagnosticException(SetupDiagnosticCode.DefenderProviderDataInvalid);
             return found;
         }
     }
 
+    private bool WaitForValue(string? expected)
+    {
+        var elapsed = Stopwatch.StartNew();
+        do
+        {
+            try
+            {
+                if (string.Equals(Read(), expected, StringComparison.Ordinal)) return true;
+            }
+            catch (SetupDiagnosticException error) when (error.Code is SetupDiagnosticCode.DefenderReadFailed
+                or SetupDiagnosticCode.DefenderReadUnstable) { }
+            if (elapsed.Elapsed >= Defaults.SetupDefenderReadBackTimeout) break;
+            Thread.Sleep(250);
+        }
+        while (true);
+        return false;
+    }
+
+    // UInt32 is the provider contract. Older System.Management/provider combinations
+    // have also surfaced a successful zero as another CLR integral type.
+    private static long? StatusNumber(object? value) => value switch
+    {
+        byte or ushort or uint or sbyte or short or int or long => Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture),
+        ulong status => unchecked((long)status),
+        _ => null,
+    };
+
+    private static bool Succeeded(object? value) => value switch
+    {
+        byte status => status == 0,
+        ushort status => status == 0,
+        uint status => status == 0,
+        ulong status => status == 0,
+        sbyte status => status == 0,
+        short status => status == 0,
+        int status => status == 0,
+        long status => status == 0,
+        _ => false,
+    };
+
     internal static ManagementScope Scope(string path) => new(path,
         new ConnectionOptions { EnablePrivileges = true, Timeout = Defaults.SetupWmiTimeout });
 
-    private static T Guard<T>(Func<T> action)
+    private static T Guard<T>(Func<T> action, SetupDiagnosticCode fallback)
     {
         try { return action(); }
+        catch (SetupDiagnosticException) { throw; }
         catch (ManagementException ex) when (ex.ErrorCode is ManagementStatus.InvalidNamespace or ManagementStatus.InvalidClass)
         { throw new DefenderProviderUnavailableException(); }
         catch (COMException ex) when (ex.HResult is (int)ManagementStatus.InvalidNamespace or (int)ManagementStatus.InvalidClass)
         { throw new DefenderProviderUnavailableException(); }
         catch (Exception ex) when (ex is ManagementException or COMException or UnauthorizedAccessException or IOException or InvalidOperationException)
         {
-            throw new IOException("The Defender exclusion could not be read or changed safely. Check antivirus policy or tamper protection; existing exclusions were not replaced.");
+            throw new SetupDiagnosticException(fallback);
         }
     }
 }

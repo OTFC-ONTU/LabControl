@@ -20,7 +20,7 @@
 
     <Product>LabControl</Product>
     <Company>ОНТФК</Company>
-    <VersionPrefix>0.1.4</VersionPrefix>
+    <VersionPrefix>1.0.0</VersionPrefix>
     <Copyright>Viacheslav Stohul</Copyright>
   </PropertyGroup>
 

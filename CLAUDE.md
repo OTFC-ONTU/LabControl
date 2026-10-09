@@ -161,8 +161,10 @@ Solution file: `LabControl.sln` at the root (create in M0).
   under `docs/html/`. A change that leaves the docs stale, or the HTML out of sync with
   the Markdown — including either agent's applicable instructions — is not finished.
 - Any non-obvious design choice goes into `docs/DECISIONS.md` as a new `D-NN` entry.
-- Code, identifiers, commits, comments: English. UI strings of the console: English first,
-  Ukrainian localization is a later milestone (resource files from day one, no hard-coded UI text).
+- Code, identifiers, commits, comments: English. English is the neutral resource and
+  fallback locale; M7 must ship Ukrainian, English and Russian across the ordinary
+  product-facing surfaces, with an explicit persistent console language choice (`D-67`).
+  Resource files are used from day one and UI text is never hard-coded.
 - Agent must never crash the student's session: every Win32 call is wrapped, every
   failure is reported to the console as an event, never thrown out of the service loop.
 - Never log the `student` password, the lab key or its passphrase. Never commit
@@ -271,9 +273,11 @@ selection possible, batched authorization in one folder, the departure flow *Dis
 the window close and quit all ask, the beacon-resume step-over that relinks thirty refused
 PCs in 2.7 s instead of 30.3 s, and agent events bound to the console that delivered their
 job while machine events stay unbound. Main stands at 984 tests (755 Shared + 229 Console),
-run twice on the merged tree. **Still unverified:** the Windows and Linux runs of the
-console packaging, portion 5 on Windows with two consoles and skewed clocks against a real
-agent, the Avalonia quit hook by hand, and the milestone in the physical lab.
+run twice on the merged tree. **Still unverified:** the rest of the console packaging on
+Windows (Explorer's double-click, a real elevation prompt, `win-x64`, an ordinary
+interactive profile, the unsigned-download warning) and all of it on Linux, portion 5 on
+Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by
+hand, and the milestone in the physical lab.
 ARCHITECTURE §3.9/§4 and PROTOCOL (*Discovery beacon*, *Files exchanged offline*,
 *M5 additions*) describe the design; the `Welcome.console_access` `.proto` change landed
 with portion 5, and PROTOCOL was updated in that commit.
@@ -461,6 +465,47 @@ opening under the student token passed; the repeated deadline recovery also veri
 console terminal status after the race fix; ROADMAP records the evidence and
 physical-lab limits.
 
+**Release candidate (owner decision 2026-09-08):** the clean physical-lab baseline is
+version `1.0.0`. It remains a candidate until the outstanding M4 physical checks pass;
+do not rewrite that distinction as a completed release. M5 portion 5 adds the
+informational `Welcome.console_access` field without changing the frozen update subset,
+so PCs installed from this baseline update in place and do not require another USB visit.
+The clean `f1b7137` source snapshot with only the `1.0.0` version change passed all
+702 tests (591 Shared, 111 Console); its `win-x64` Agent/Session/Setup and `osx-arm64`
+console publishes produced the initial physical-lab media. Both the previously used and
+clean physical PCs then stopped at Defender exclusion even though an elevated independent
+`Add-MpPreference` call reported success and exact read-back. `D-61` hardens the WMI value
+bridge and lets Repair discard only an unconfirmed additive-exclusion intent, preserving
+the exclusion as unowned. Post-fix tests pass 594 Shared + 111 Console; the rebuilt Setup
+then reached Hibernation. The physical PC showed a successful disabled state as absent
+`HibernateEnabled`/`HiberFileType` and size zero; `D-62` records the OS-resolved exact
+state and conservatively repairs the interrupted attempt without ownership. Exact USB/local
+hash comparison proved the first rebuilt binary was running when it still stopped there;
+the follow-up treats file-type fields as undefined only while the file is absent and prints
+version/build identity at startup. The hash-verified rerun still threw while reading the
+step, before journal comparison; `D-63` bypasses the power-capabilities query only when a
+fixed-path probe proves the hibernation file absent and adds value-free stage diagnostics
+plus build identity to the append-only log. Build `96756f3f` then identified a strict
+path/native disagreement; a successful native "no active file" answer now overrides a
+residual/protected path object. Latest tests pass 599 Shared + 111 Console; the rebuilt
+Setup and physical rerun remain candidate work.
+
+A different classroom PC subsequently reproduced the generic Defender failure on its first run.
+`D-64` retains the additive operation, return-code check and exact double-read semantics,
+but gives the provider up to ten seconds to converge after a confirmed mutation and emits
+only fixed safe stage codes. A third physical PC then returned a nonzero `Add` status on
+its first run and installed on Repair with the same call, so Setup now prints that status
+as `status 0x…` and retries the additive call up to three times, three seconds apart
+(`D-64` addendum); the installer stays one-shot. The combined candidate passes 600 Shared + 111 Console tests; native
+rerun remains required.
+
+Build `09f13b86`, hash-identical on the USB stick, still stopped at Hibernation with
+`HibernationStateInconsistent`. Elevated read-back showed the factory OS-default state:
+*Hibernate available*, `HibernateEnabled` absent, `HibernateEnabledDefault=1`. `D-65`
+treats the absent value as enabled, disables normally and restores it as absent after
+`powercfg /hibernate on`; PowerShell `Get-Item`/`Test-Path` on `hiberfil.sys` is not
+evidence of absence. Tests pass 602 Shared + 111 Console; the physical rerun is pending.
+
 The owner specifically requires Setup to finish console-push and Wake-on-LAN prerequisites.
 Setup now selects a physical Ethernet MAC, repairs a previously recorded generic MAC,
 reports NIC/driver inventory and applies supported power controls in dependency order.
@@ -469,4 +514,16 @@ still require the physical hardware. Do not treat local installation success as 
 console connection or a successful wake test.
 Installer antivirus/network advisories now reach the console via a validated fixed-code
 snapshot, refresh after repair and remain visible while the PC is offline. Physical wake
-is informational until tested; unsupported configuration and antivirus issues need attention.
+and a network driver without Wake-on-LAN settings are informational (tooltip only, one
+event line per change, `D-66`); antivirus and unreadable-report issues need attention.
+The first physical PCs (in-box Realtek driver) need the vendor driver plus USB repair
+before Wake-on-LAN can work; `D-65` made their installation complete.
+
+**Physical lab status (owner decision, 2026-09-08 evening):** five of the fourteen PCs
+(PC-04, PC-08, PC-09, PC-10, PC-11) are installed from the `1.0.0` media with the `D-65`
+Setup, enrolled in lab `444-2`, linked to the MacBook console over Wi-Fi with automatic
+`student` sign-in and live screens. The owner considers the physical baseline established
+and development moves on (M5 portion 2 onwards); the remaining nine PCs, the vendor NIC
+driver, the wake test and the other M4 physical checks continue alongside, tracked in
+ROADMAP's *Physical lab* row and the on-site checklist. Do not describe Wake-on-LAN as
+working in this lab until the vendor-driver rerun proves it.

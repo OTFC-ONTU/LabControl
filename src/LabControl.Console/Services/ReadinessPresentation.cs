@@ -6,6 +6,16 @@ namespace LabControl.Console.Services;
 
 public static class ReadinessPresentation
 {
+    /// <summary>The validated codes of a snapshot, or <c>null</c> when it is unreadable.</summary>
+    public static string[]? TryParse(string payload)
+    {
+        try { return SetupReadiness.Parse(payload).Codes; }
+        catch (Exception ex) when (ex is InvalidDataException or System.Text.Json.JsonException or SchemaVersionException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Never exposes the untrusted wire payload as teacher-facing text.</summary>
     public static string EventText(string payload)
     {

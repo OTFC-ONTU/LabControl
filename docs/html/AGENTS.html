@@ -169,13 +169,13 @@ Teacher-console installers package/register the desktop app and file types, with
 no agent services or student preparation. Verify scoped LAN permissions and native
 prerequisites separately from copying files; retain profiles/keys on upgrade and by
 default on uninstall (<code>D-54</code>, <code>docs/INSTALLER.md</code>).</li>
-<li>The M5 design is recorded in <code>D-55</code>…<code>D-60</code> (2026-09-08), extended by <code>D-68</code>
-(2026-09-09): profile store and resumable migration, signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code>
+<li>The M5 design is recorded in <code>D-55</code>…<code>D-60</code> (2026-09-08) and implementation started the
+same day: profile store and resumable migration, signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code>
 files with the role in the subject OU and <code>instance:</code> revocation, one
 <code>ActiveLabController</code> with release-before-acquire and result ownership, take-over on
 the agent's clock, per-user console packaging with single-instance forwarding, dormant
 imported enrollment codes. Follow those entries and ROADMAP M5 <em>How it is being built</em>
-(eight portions; <strong>all eight built and reviewed</strong>, 1–3 on 2026-09-08 — portion 1: profile
+(eight portions; portions 1–7 built and reviewed, 1–3 on 2026-09-08 — portion 1: profile
 store, resumable migration, <code>lab.json</code> schema 2, <code>console.lock</code>; portion 2:
 <code>ActiveLabController</code>, the <em>My labs</em> chooser, <em>Disconnect</em>, the departure report and bulk
 <code>.lcbak</code> import; portion 3: the signed <code>.lclab</code>/<code>.lcreq</code>/<code>.lcgrant</code> exchange, teacher
@@ -188,53 +188,52 @@ on the agent's own clock (arrival order, the press bound to its own beacon, hono
 once), the four ownership states a console can prove — linked here, observed elsewhere
 within <code>Defaults.OwnershipObservationLifetime</code>, unknown, offline — the banner's <em>holds at
 least N</em>, and the additive informational <code>Welcome.console_access</code> that never decides a
-refusal, followed the same day by the portion-5 security fixes — a withdrawn instance's
-beacon refused where the beacon is judged (the agent ahead of both the take-over and the
-dial branch, the console in the same way), ownership attributed only on the PC's own
-<code>link.taken_over</code> departure report, an expiring banner and the arrival stamped in the
-listener's receive loop — still not run on the Windows VM with two consoles and
+refusal, 960 tests after the merge, not yet run on the Windows VM with two consoles and
 skewed clocks — and portion 6 on 2026-09-09: console documents
 on the command line, <code>--import-only</code>, a second launch forwarding its file paths over a
 per-data-directory named pipe or private-directory Unix socket instead of starting a
 second console, macOS file activation, 788 tests, checked by hand on the Mac, with the
-Windows pipe since exercised by portion 7's Windows drill and the Linux <code>SO_PEERCRED</code> path
-still not run — and portion 7
+Windows pipe and the Linux <code>SO_PEERCRED</code> path not yet run on those systems — and portion 7
 on 2026-09-09: teacher-console packaging (<code>D-59</code> items 1–4) — the single-file per-user
 Windows installer with an untrusted <code>installed-files.txt</code>, a finishing temporary copy and
 an uninstall that never elevates, the read-only LAN-access banner that calls a port
 reachable only when a rule opens it for this console and nothing blocks it, the
 ad-hoc-signed macOS <code>.app</code>/DMG, the per-user Linux tarball and <code>tools/package-*.sh</code> into
 <code>artifacts/package/</code>, 936 tests after the merge with portions 4 and 6, packages built and
-the Linux scripts round-tripped on the Mac, then <strong>run on Windows for the first time on
-2026-09-09</strong> (isolated Windows 11 ARM64 clone, guest <code>PC-27</code>, no interactive session, so
-every unelevated step ran as <code>LOCAL SERVICE</code> and the elevated one as <code>SYSTEM</code>), which
-found four defects, all fixed and merged (<code>a7fbe33</code>): an <code>app.manifest</code> double hyphen
-inside an XML comment that made Windows refuse the activation context so the installer
-would not start at all, a firewall profile constant of 6 that opened Public and rejected a
-real private-and-domain rule (<code>NET_FW_PROFILE_TYPE2</code> is Domain 1, Private 2, Public 4, so
-3), a <code>group=</code> argument in the printed <code>netsh</code> line that <code>add rule</code> refuses outright, and
-an <code>ArgumentList</code>-built self-delete command <code>cmd.exe</code> cannot parse, which left a 148 MB
-copy in the temp directory — the install, the plan and dry run, the shortcut, the
-Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock
-refusal, document forwarding into a running console over the Windows named pipe, the real
-firewall rules and the banner, uninstall with its temporary copy, <code>--remove-data</code> and a
-DPAPI-sealed key surviving replacement are verified, while Explorer's own double-click, a
-real elevation prompt a teacher answers, <code>win-x64</code> (only ARM64 was built and run), the
-installer under an ordinary interactive profile, the unsigned-download warning, the Linux
-<code>SO_PEERCRED</code> path and a real Linux desktop menu are not — and portion 8
-on 2026-09-09: the acceptance drills and the six gaps an adversarial audit of every M5
-acceptance criterion found (<code>D-68</code>) — the combined picker filter that makes a mixed
-selection possible, batched authorization written into one folder, the departure flow
-<em>Disconnect</em>, the window close and quit all ask, the beacon-resume step-over that relinks
-thirty refused PCs in 2.7 s instead of 30.3 s, and agent events bound to the console that
-delivered their job while machine events stay unbound; main stands at 984 tests, 755
-Shared + 229 Console, run twice on the merged tree). Still unverified: the Windows and
-Linux runs of the console packaging, portion 5 on Windows with two consoles and skewed
-clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the
-physical lab. The <code>Welcome.console_access</code>
+the Linux scripts round-tripped on the Mac, with the Windows installer itself, the banner
+against a real Windows Firewall and a real Linux desktop menu never run; portion 8 — the
+acceptance drills, the documentation close-out and the dial backoff a verified beacon for
+the agent's own lab should shorten — is in progress); the <code>Welcome.console_access</code>
 <code>.proto</code> change landed with portion 5 and <code>docs/PROTOCOL.md</code> was updated in that commit.</li>
 <li>The Windows student agent must survive reboots and must not let a failed Win32
 operation escape the service loop.</li>
+<li>Physical lab status (2026-09-08 evening): five PCs installed and linked from the
+<code>1.0.0</code> media; the owner declared the baseline established and moved development on
+to M5. Remaining PCs, the vendor Realtek driver and the wake test continue alongside
+(ROADMAP <em>Physical lab</em> row and on-site checklist). Never claim Wake-on-LAN works here.</li>
+<li><code>1.0.0</code> is the current physical-lab release candidate (owner decision 2026-09-08).
+Do not call it released until the remaining M4 physical acceptance checks pass; the
+later additive M5 portion-5 <code>Welcome.console_access</code> field preserves the frozen
+update subset and does not require reinstalling this agent.</li>
+<li>The first physical runs exposed a Defender WMI/completion-journal failure (<code>D-61</code>).
+Repair may preserve only the explicitly marked additive exclusion as pre-existing;
+it must not claim ownership or clear unrelated history. After a successful provider
+mutation, allow only the bounded stable read-back convergence window and fixed safe
+stage codes from <code>D-64</code>. A nonzero <code>Add</code> status is retried three times, three seconds
+apart, and printed as <code>status 0x…</code>; the numeric status is the only value a diagnostic
+may carry (<code>D-64</code> addendum).</li>
+<li>The next physical step showed Windows normalizing successful hibernation-off to absent
+enable/type values and size zero (<code>D-62</code>). Record an accepted exact resolved post-state
+only after read-back; interrupted results remain unowned. With no hibernation file,
+native/registry type fields are undefined metadata and do not reject the disabled state.
+An absent fixed-path file also bypasses the native capabilities query, while an existing
+path still requires it for exact restoration; a successful native &quot;no active file&quot;
+answer overrides a residual/protected path object (<code>D-63</code>). Setup logs version/build
+identity and fixed value-free diagnostic codes for field verification. An absent
+<code>HibernateEnabled</code> value is the OS default (<code>HibernateEnabledDefault</code>), accepted as
+enabled next to an active file and restored as absent on removal (<code>D-65</code>); never treat
+a PowerShell <code>Get-Item</code>/<code>Test-Path</code> miss on <code>hiberfil.sys</code> as proof the file is absent.
+Native rerun is pending.</li>
 <li>Student PCs may have no internet. Do not introduce a cloud or per-PC runtime
 dependency.</li>
 <li>Never log or persist secrets outside their designed stores. In particular, do
@@ -286,8 +285,10 @@ or the generated HTML stale is not finished.</p>
 <h2 id="engineering-conventions">Engineering conventions<a class="anchor" href="#engineering-conventions" aria-label="Link to this section">#</a></h2>
 <ul>
 <li>Code, identifiers, comments, and commit messages are English.</li>
-<li>UI strings are resources, not hard-coded text. English is the primary locale;
-Ukrainian localization is planned.</li>
+<li>UI strings are resources, not hard-coded text. English is the neutral source and
+fallback locale. M7 must ship Ukrainian, English and Russian for every ordinary
+product-facing surface, with an explicit persistent console language choice (<code>D-67</code>).
+Stable protocol identifiers, diagnostic codes and developer logs remain English.</li>
 <li>Prefer simple, well-supported libraries. Record every new NuGet dependency and
 its reason in <code>docs/DECISIONS.md</code>.</li>
 <li>Preserve protocol compatibility rules documented in <code>docs/PROTOCOL.md</code>,
@@ -342,10 +343,13 @@ never an arbitrary active virtual adapter. Apply dependent NIC power controls in
 restore in reverse dependency order. Report unsupported capabilities; a local settings
 read-back is not proof of network reachability or physical wake from shutdown.
 Keep installer advisories bounded to the fixed readiness-code schema; translate them in
-the console, retain valid cached warnings offline and never display arbitrary report JSON.</p>
+the console, retain valid cached warnings offline and never display arbitrary report JSON.
+<code>network.wol_unverified</code> and <code>network.configuration_warning</code> are informational (tooltip,
+no amber, logged only when the snapshot changes, <code>D-66</code>); do not promote them back to
+attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-09-09 13:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 11:08 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

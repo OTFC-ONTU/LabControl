@@ -8,7 +8,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationIcon>Assets/labcontrol.ico</ApplicationIcon>
-    <!-- The console is localized (English now, Ukrainian in M6), so globalization stays on. -->
+    <!-- The console is English now; M7 adds Ukrainian and Russian (D-67), so globalization stays on. -->
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 

@@ -10,7 +10,7 @@ public interface IDefenderExclusionStore
     void Write(string? expected, string? value);
 }
 
-public sealed class DefenderExclusionSetting(IDefenderExclusionStore store) : ISetupSetting
+public sealed class DefenderExclusionSetting(IDefenderExclusionStore store) : ISetupSetting, ISetupPreservableExistingValue
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
     private bool _hasRead;

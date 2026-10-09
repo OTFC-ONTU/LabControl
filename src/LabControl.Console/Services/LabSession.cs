@@ -1260,7 +1260,22 @@ public sealed class LabSession : IAsyncDisposable
                 {
                     connection.NoteLeavingFor(takerInstance);
                 }
-
+                if (reported.Code == SetupReadiness.EventCode)
+                {
+                    // The agent repeats its readiness snapshot on every reconnect. A valid,
+                    // unchanged snapshot is not news: no event line, nothing to save (D-66).
+                    // An unreadable one is still logged below, and never clears the cache.
+                    var codes = ReadinessPresentation.TryParse(reported.Message);
+                    if (codes is not null && (connection.Machine.SetupReadinessCodes ?? []).SequenceEqual(codes)) break;
+                    Events.Add(codes is null || SetupReadiness.AnyNeedsAttention(codes) ? EventSeverity.Warning : EventSeverity.Info,
+                        reported.Code, $"{who}: {ReadinessPresentation.EventText(reported.Message)}", connection.AgentId, connection.Number);
+                    if (connection.ApplyEvent(reported))
+                    {
+                        SaveLabSoon();
+                        MachinesChanged?.Invoke();
+                    }
+                    break;
+                }
                 var eventText = reported.Code == SetupReadiness.EventCode
                     ? ReadinessPresentation.EventText(reported.Message)
                     : reported.Code == UpdateTerminalReport.RolledBackCode

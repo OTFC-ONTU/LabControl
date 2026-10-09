@@ -35,6 +35,21 @@ public interface ISetupOwnedCreation
     bool ConfirmsOwnedCreation(byte[] expected);
 }
 
+/// <summary>Opt-in only for an additive value whose presence is useful even when Setup
+/// cannot prove that it created it. After an interrupted absent-to-present apply, repair
+/// may discard the pending ownership record and preserve the value as pre-existing.
+/// Removal must then leave it in place.</summary>
+public interface ISetupPreservableExistingValue { }
+
+/// <summary>Opt-in for a native operation whose successful exact post-state is chosen
+/// by Windows. The requested bytes still bound the operation; an accepted resolved value
+/// is journaled only after read-back. A matching interrupted result is preserved without
+/// ownership because completion was never recorded.</summary>
+public interface ISetupResolvedAppliedValue
+{
+    bool AcceptsResolvedAppliedValue(byte[]? requested, byte[]? actual);
+}
+
 /// <summary>Write-ahead journal under Setup's private-directory/exclusive-lock scope.
 /// All contents are protected before disk I/O. Missing history is an error, not an empty
 /// baseline; initialize once before a positively identified fresh setup changes anything.</summary>
@@ -73,12 +88,17 @@ public sealed class SetupSettingsJournal(
         var desired = selectDesired(current?.ToArray());
         if (entry is null)
             return new(Equal(current, desired) ? SetupStepStatus.AlreadyDone : SetupStepStatus.Needed);
+        if (entry.Phase == SettingChangePhase.PendingApply
+            && (CanPreserveAsExisting(setting, entry, current)
+                || AcceptsResolvedAppliedValue(setting, entry.Applied, current)))
+            return new(SetupStepStatus.Needed);
         if (!Equal(entry.Applied, desired) || entry.Phase is SettingChangePhase.PendingRestore or SettingChangePhase.Restored)
             return new(SetupStepStatus.Conflict, "Saved ownership does not permit this change.");
         if (entry.Phase == SettingChangePhase.Applied)
             return new(Equal(current, entry.Applied) ? SetupStepStatus.AlreadyDone : SetupStepStatus.Conflict,
                 Equal(current, entry.Applied) ? "" : "A later change was preserved.");
-        if (ConfirmsCreation(setting, entry, current)) return new(SetupStepStatus.Needed);
+        if (ConfirmsCreation(setting, entry, current))
+            return new(SetupStepStatus.Needed);
         return new(Equal(current, entry.Original) ? SetupStepStatus.Needed : SetupStepStatus.Conflict,
             Equal(current, entry.Original) ? "" : "An interrupted change requires review.");
     }
@@ -97,6 +117,17 @@ public sealed class SetupSettingsJournal(
         var desired = selectDesired(current?.ToArray());
         if (entry is not null)
         {
+            if (entry.Phase == SettingChangePhase.PendingApply
+                && (CanPreserveAsExisting(setting, entry, current)
+                    || AcceptsResolvedAppliedValue(setting, entry.Applied, current)))
+            {
+                // A crash may have happened after the native effect but before its exact
+                // representation and ownership could be recorded. Preserve the effect,
+                // discard only the unconfirmed intent, and never adopt it on repair.
+                data.Entries.Remove(entry);
+                Save(data);
+                return SettingChangeResult.Unchanged;
+            }
             if (!Equal(entry.Applied, desired) || entry.Phase is SettingChangePhase.PendingRestore or SettingChangePhase.Restored)
                 return SettingChangeResult.Conflict;
             if (entry.Phase == SettingChangePhase.Applied)
@@ -125,7 +156,12 @@ public sealed class SetupSettingsJournal(
 
         if (!Equal(setting.Read(), entry.Original)) return SettingChangeResult.Conflict;
         setting.Write(entry.Applied?.ToArray());
-        if (!Equal(setting.Read(), entry.Applied)) return SettingChangeResult.Conflict;
+        var actual = setting.Read();
+        if (!Equal(actual, entry.Applied))
+        {
+            if (!AcceptsResolvedAppliedValue(setting, entry.Applied, actual)) return SettingChangeResult.Conflict;
+            entry.Applied = actual?.ToArray();
+        }
         Activate(setting, entry.Applied);
         entry.Phase = SettingChangePhase.Applied;
         Save(data);
@@ -149,7 +185,15 @@ public sealed class SetupSettingsJournal(
         }
         if (entry.Phase == SettingChangePhase.PendingApply)
         {
-            if (!ConfirmsCreation(setting, entry, setting.Read())) return SettingChangeResult.Conflict;
+            var pendingCurrent = setting.Read();
+            if (CanPreserveAsExisting(setting, entry, pendingCurrent)
+                || AcceptsResolvedAppliedValue(setting, entry.Applied, pendingCurrent))
+            {
+                data.Entries.Remove(entry);
+                Save(data);
+                return SettingChangeResult.Untracked;
+            }
+            if (!ConfirmsCreation(setting, entry, pendingCurrent)) return SettingChangeResult.Conflict;
             entry.Phase = SettingChangePhase.Applied;
             Save(data);
         }
@@ -177,6 +221,14 @@ public sealed class SetupSettingsJournal(
         entry.Phase == SettingChangePhase.PendingApply && entry.Original is null && entry.Applied is not null
         && Equal(current, entry.Applied) && setting is ISetupOwnedCreation owned
         && owned.ConfirmsOwnedCreation(entry.Applied.ToArray()) && Equal(setting.Read(), entry.Applied);
+
+    private static bool CanPreserveAsExisting(ISetupSetting setting, SettingEntry entry, byte[]? current) =>
+        setting is ISetupPreservableExistingValue && entry.Phase == SettingChangePhase.PendingApply
+        && entry.Original is null && entry.Applied is not null && Equal(current, entry.Applied);
+
+    private static bool AcceptsResolvedAppliedValue(ISetupSetting setting, byte[]? requested, byte[]? actual) =>
+        setting is ISetupResolvedAppliedValue resolved && resolved.AcceptsResolvedAppliedValue(
+            requested?.ToArray(), actual?.ToArray());
 
     private JournalData Load()
     {

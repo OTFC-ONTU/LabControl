@@ -44,6 +44,23 @@ public sealed class SetupPipelineTests
         Assert.Equal(0, later.Checks);
     }
 
+    [Fact]
+    public void Fixed_diagnostic_code_is_exposed_without_a_native_message()
+    {
+        var bad = new DiagnosticStep();
+        var result = SetupPipeline.Run([bad], false).Single();
+        Assert.Contains(nameof(SetupDiagnosticCode.HibernationRegistryReadFailed), result.Detail);
+        Assert.DoesNotContain("sensitive-native-detail", result.Detail);
+    }
+
+    [Fact]
+    public void Defender_diagnostic_code_is_exposed_without_a_native_message()
+    {
+        var result = SetupPipeline.Run([new DiagnosticStep(SetupDiagnosticCode.DefenderReadBackTimeout)], false).Single();
+        Assert.Contains(nameof(SetupDiagnosticCode.DefenderReadBackTimeout), result.Detail);
+        Assert.DoesNotContain("sensitive-native-detail", result.Detail);
+    }
+
     [Theory]
     [InlineData("--uninstall", "--rekey")]
     [InlineData("--remove-student")]
@@ -64,5 +81,23 @@ public sealed class SetupPipelineTests
         public bool Fail;
         public SetupCheck Check() { Checks++; return new(Applies > 0 && ConfirmWrite ? SetupStepStatus.AlreadyDone : SetupStepStatus.Needed); }
         public void Apply() { Applies++; if (Fail) throw new IOException("sensitive-native-detail"); }
+    }
+
+    [Fact]
+    public void Diagnostic_status_is_printed_as_hex_without_any_other_detail()
+    {
+        var error = new SetupDiagnosticException(SetupDiagnosticCode.DefenderProviderRejected, unchecked((int)0x800106BA));
+        Assert.Equal("DefenderProviderRejected, status 0x800106BA", error.Describe());
+        Assert.Equal("DefenderProviderRejected", new SetupDiagnosticException(SetupDiagnosticCode.DefenderProviderRejected).Describe());
+        var result = SetupPipeline.Run([new DiagnosticStep(error)], false, _ => { });
+        Assert.Contains("status 0x800106BA", Assert.Single(result).Detail);
+    }
+
+    private sealed class DiagnosticStep(SetupDiagnosticException error) : ISetupStep
+    {
+        public DiagnosticStep(SetupDiagnosticCode code = SetupDiagnosticCode.HibernationRegistryReadFailed) : this(new SetupDiagnosticException(code)) { }
+        public string Name => "Test";
+        public SetupCheck Check() => throw error;
+        public void Apply() => throw new NotSupportedException();
     }
 }

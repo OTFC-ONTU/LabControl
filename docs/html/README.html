@@ -145,6 +145,10 @@ account creation is checked by default but can be turned off for testing with an
 home-PC account; a standalone uninstaller removes LabControl without the USB or console
 (<a href="docs/INSTALLER.md">installer plan</a>, D-40).</p>
 <p>Self-hosted, no server, no cloud, no domain, no internet required on the student PCs.</p>
+<p>The product UI is English today. M7 must ship the complete product-facing experience in
+<strong>Ukrainian, English and Russian</strong>, including the teacher console, Windows Setup/removal,
+stock student-facing text and generated USB instructions. The console will have a saved
+language selector; English remains the safe fallback (<code>D-67</code>).</p>
 <p>The teacher machine is <strong>replaceable</strong>: the lab's identity is a private certificate
 authority, not the laptop's certificate, so moving the console to another computer —
 macOS, Windows or Linux — means importing one encrypted backup file, and no student PC is
@@ -158,7 +162,7 @@ directly to the same list and switch rooms with their administrator access prese
 M5 also includes simple offline console installers/packages for Windows, macOS and
 Linux: application files, launchers and opening both file types, without installing
 student services or changing student-account/system settings on the teacher's device.
-Classroom control is now M6 and catalog/polish M7.
+Classroom control is now M6 and catalog/localization/polish M7.
 See M5 in <a href="docs/ROADMAP.md">the roadmap</a>.</p>
 <p><strong>Downgrading to a pre-M5 build.</strong> An M5 console keeps each lab in
 <code>labs/&lt;lab_id&gt;/</code> under its data directory (<code>~/.labcontrol/</code> or <code>%APPDATA%\LabControl\</code>).
@@ -247,6 +251,9 @@ external recovery, Windows handout delivery and Setup/removal/rekey code are und
 Isolated Windows install, file delivery and recovery checks have passed; remaining
 removal, administrator-access and physical-lab acceptance is tracked in
 <a href="docs/ROADMAP.md">the roadmap</a>.</p>
+<p>The owner designated <code>1.0.0</code> as the clean physical-lab release candidate on 2026-09-08.
+It is not called released until those remaining M4 checks pass. Agents installed from
+this candidate remain update-compatible with the additive M5 portion-5 access field.</p>
 <p><strong>Send files…</strong> prepares a batch for the selected PCs. The Windows path now requires an
 installer-owned student SID and a usable local profile; it never substitutes a personal
 profile. Keep source files available until jobs finish. Files are hash-verified before
@@ -368,7 +375,7 @@ macOS and Linux too (they just cannot run there), so a broken Windows build is c
 immediately rather than at the next visit to the lab.</p>
 
 </article>
-<footer>Generated 2026-09-09 13:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 11:08 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#documentation">Documentation</a></li><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#quick-start">Quick start</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li></ul></nav>
 </div>

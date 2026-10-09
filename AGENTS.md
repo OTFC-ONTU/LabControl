@@ -95,13 +95,41 @@ the documents relevant to the task:
   *Disconnect*, the window close and quit all ask, the beacon-resume step-over that relinks
   thirty refused PCs in 2.7 s instead of 30.3 s, and agent events bound to the console that
   delivered their job while machine events stay unbound; main stands at 984 tests, 755
-  Shared + 229 Console, run twice on the merged tree). Still unverified: the Windows and
-  Linux runs of the console packaging, portion 5 on Windows with two consoles and skewed
-  clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the
-  physical lab. The `Welcome.console_access`
+  Shared + 229 Console, run twice on the merged tree). Still unverified: the rest of the
+  console packaging on Windows (Explorer's double-click, a real elevation prompt,
+  `win-x64`, an ordinary interactive profile, the unsigned-download warning) and all of it
+  on Linux, portion 5 on Windows with two consoles and skewed clocks against a real agent,
+  the Avalonia quit hook by hand, and the milestone in the physical lab. The `Welcome.console_access`
   `.proto` change landed with portion 5 and `docs/PROTOCOL.md` was updated in that commit.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
+- Physical lab status (2026-09-08 evening): five PCs installed and linked from the
+  `1.0.0` media; the owner declared the baseline established and moved development on
+  to M5. Remaining PCs, the vendor Realtek driver and the wake test continue alongside
+  (ROADMAP *Physical lab* row and on-site checklist). Never claim Wake-on-LAN works here.
+- `1.0.0` is the current physical-lab release candidate (owner decision 2026-09-08).
+  Do not call it released until the remaining M4 physical acceptance checks pass; the
+  later additive M5 portion-5 `Welcome.console_access` field preserves the frozen
+  update subset and does not require reinstalling this agent.
+- The first physical runs exposed a Defender WMI/completion-journal failure (`D-61`).
+  Repair may preserve only the explicitly marked additive exclusion as pre-existing;
+  it must not claim ownership or clear unrelated history. After a successful provider
+  mutation, allow only the bounded stable read-back convergence window and fixed safe
+  stage codes from `D-64`. A nonzero `Add` status is retried three times, three seconds
+  apart, and printed as `status 0x…`; the numeric status is the only value a diagnostic
+  may carry (`D-64` addendum).
+- The next physical step showed Windows normalizing successful hibernation-off to absent
+  enable/type values and size zero (`D-62`). Record an accepted exact resolved post-state
+  only after read-back; interrupted results remain unowned. With no hibernation file,
+  native/registry type fields are undefined metadata and do not reject the disabled state.
+  An absent fixed-path file also bypasses the native capabilities query, while an existing
+  path still requires it for exact restoration; a successful native "no active file"
+  answer overrides a residual/protected path object (`D-63`). Setup logs version/build
+  identity and fixed value-free diagnostic codes for field verification. An absent
+  `HibernateEnabled` value is the OS default (`HibernateEnabledDefault`), accepted as
+  enabled next to an active file and restored as absent on removal (`D-65`); never treat
+  a PowerShell `Get-Item`/`Test-Path` miss on `hiberfil.sys` as proof the file is absent.
+  Native rerun is pending.
 - Student PCs may have no internet. Do not introduce a cloud or per-PC runtime
   dependency.
 - Never log or persist secrets outside their designed stores. In particular, do
@@ -155,8 +183,10 @@ or the generated HTML stale is not finished.
 ## Engineering conventions
 
 - Code, identifiers, comments, and commit messages are English.
-- UI strings are resources, not hard-coded text. English is the primary locale;
-  Ukrainian localization is planned.
+- UI strings are resources, not hard-coded text. English is the neutral source and
+  fallback locale. M7 must ship Ukrainian, English and Russian for every ordinary
+  product-facing surface, with an explicit persistent console language choice (`D-67`).
+  Stable protocol identifiers, diagnostic codes and developer logs remain English.
 - Prefer simple, well-supported libraries. Record every new NuGet dependency and
   its reason in `docs/DECISIONS.md`.
 - Preserve protocol compatibility rules documented in `docs/PROTOCOL.md`,
@@ -221,3 +251,6 @@ restore in reverse dependency order. Report unsupported capabilities; a local se
 read-back is not proof of network reachability or physical wake from shutdown.
 Keep installer advisories bounded to the fixed readiness-code schema; translate them in
 the console, retain valid cached warnings offline and never display arbitrary report JSON.
+`network.wol_unverified` and `network.configuration_warning` are informational (tooltip,
+no amber, logged only when the snapshot changes, `D-66`); do not promote them back to
+attention without an owner decision.

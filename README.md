@@ -12,6 +12,11 @@ home-PC account; a standalone uninstaller removes LabControl without the USB or 
 
 Self-hosted, no server, no cloud, no domain, no internet required on the student PCs.
 
+The product UI is English today. M7 must ship the complete product-facing experience in
+**Ukrainian, English and Russian**, including the teacher console, Windows Setup/removal,
+stock student-facing text and generated USB instructions. The console will have a saved
+language selector; English remains the safe fallback (`D-67`).
+
 The teacher machine is **replaceable**: the lab's identity is a private certificate
 authority, not the laptop's certificate, so moving the console to another computer —
 macOS, Windows or Linux — means importing one encrypted backup file, and no student PC is
@@ -26,7 +31,7 @@ directly to the same list and switch rooms with their administrator access prese
 M5 also includes simple offline console installers/packages for Windows, macOS and
 Linux: application files, launchers and opening both file types, without installing
 student services or changing student-account/system settings on the teacher's device.
-Classroom control is now M6 and catalog/polish M7.
+Classroom control is now M6 and catalog/localization/polish M7.
 See M5 in [the roadmap](docs/ROADMAP.md).
 
 **Downgrading to a pre-M5 build.** An M5 console keeps each lab in
@@ -102,6 +107,10 @@ external recovery, Windows handout delivery and Setup/removal/rekey code are und
 Isolated Windows install, file delivery and recovery checks have passed; remaining
 removal, administrator-access and physical-lab acceptance is tracked in
 [the roadmap](docs/ROADMAP.md).
+
+The owner designated `1.0.0` as the clean physical-lab release candidate on 2026-09-08.
+It is not called released until those remaining M4 checks pass. Agents installed from
+this candidate remain update-compatible with the additive M5 portion-5 access field.
 
 **Send files…** prepares a batch for the selected PCs. The Windows path now requires an
 installer-owned student SID and a usable local profile; it never substitutes a personal

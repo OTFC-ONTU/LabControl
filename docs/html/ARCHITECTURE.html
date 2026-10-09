@@ -443,36 +443,20 @@ linked (§3.4). Two live consoles therefore hold <strong>disjoint</strong> sets 
 each PC happened to connect to first. No PC ever takes commands from two consoles.</li>
 <li>Each console sees the other's beacon and shows a <strong>persistent, informational</strong> banner:
 <em>&quot;Lab PC (instance <code>…</code>) is also running this lab and holds at least 6 of 14 PCs.&quot;</em> The
-count is the PCs that <strong>said themselves</strong> they were leaving for that machine — each sent
-a <code>link.taken_over</code> notice naming it before its stream ended (<code>D-58</code>) — not what agents
-report in <code>Hello</code>, and not every PC whose link happened to drop, because a PC switched
-off, a dropped cable and a crash end a stream exactly the same way. The banner lists
-those PCs by number; it says <em>at least</em> because the PCs it knows nothing about may be
-anywhere, and when it has seen none leave it says so plainly instead of guessing. A
-machine whose access has been withdrawn is not one of these consoles at all: its beacon
-is dropped, it leaves this list at once, it gets no banner and it can never be named as
-holding a PC. This banner has <strong>no revoke button</strong>; revocation is a security action for
-a stolen machine, not a way to win an argument about who is teaching.</li>
+count is what this console watched leave during the other machine's signed take-over —
+not what agents report in <code>Hello</code> — and the banner lists exactly those PCs by number; it
+says <em>at least</em> because the PCs it knows nothing about may be anywhere, and when it has
+seen none leave it says so plainly instead of guessing (<code>D-58</code>). This banner has <strong>no
+revoke button</strong>; revocation is a security action for a stolen machine, not a way to win
+an argument about who is teaching.</li>
 <li>The banner offers <strong>Take over the lab</strong>. For the next 30 s the console adds a <code>take</code>
 timestamp to its beacon. An agent linked to <em>another</em> instance disconnects and dials the
 taker when an endorsed beacon carrying a <code>take</code> <strong>arrives after the link was made</strong> — the
 order is judged on the agent's own clock alone, the press must belong to the beacon that
 carries it, and each press is honoured once (<code>D-58</code>), so a console whose clock is out of
-step by anything a beacon may carry still takes its own room back. Further out than that
-it is not merely unable to take over: past the tolerated skew its beacons verify nowhere
-and the two consoles cannot see each other at all, which the console says in the log
-rather than leaving two teachers guessing.
-Before any of this is decided, a beacon from an instance whose access has been
-<strong>withdrawn</strong> is refused — by the agent as soon as the signature verifies, ahead of both
-the take-over and the dial, and by the console in the same way (<code>D-56</code> item 6). The TLS
-handshake used to be the only place withdrawal was enforced, and it comes too late: by
-then the PC has already given up the room it was told to leave.
-On its way out the PC sends a <code>link.taken_over</code> notice naming the taker and half-closes
-its stream so the notice arrives in order, and the console it is leaving shows
-<em>&quot;MacBook-2026 took over the lab at 10:32.&quot;</em> That wording is news and expires with the
-observations the press produced, and pressing <em>Take over</em> here clears it outright, so a
-console that has just taken the room back never goes on claiming it lost it.
-No arbitration, no locking, no shared state between consoles: the last person
+step still takes its own room back.
+The other console watches its PCs leave and shows <em>&quot;MacBook-2026 took over the lab at
+10:32.&quot;</em> No arbitration, no locking, no shared state between consoles: the last person
 to press the button has the room, and every PC always answers to exactly one console.
 The <code>take</code> field only works for endorsed beacons, so it is no more forgeable than the
 beacon itself.</li>
@@ -1181,7 +1165,7 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-09-09 13:29 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-09-09 11:08 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#separate-identities">3.1 Separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl3"><a href="#saved-labs-and-one-active-room-m5-d-53.d-60-designed-being-implemented">3.9 Saved labs and one active room (M5, D-53…D-60 — designed, being implemented)</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>

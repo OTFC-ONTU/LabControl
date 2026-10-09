@@ -6,8 +6,8 @@ namespace LabControl.Console.Localization;
 
 /// <summary>
 /// Every user-visible string comes from here — never from a literal in code or XAML.
-/// English is the only culture today; Ukrainian is added in M6 by dropping
-/// <c>Strings.uk.resx</c> next to <c>Strings.resx</c>, with no code change.
+/// English is the only culture today; M7 adds Ukrainian and Russian satellite
+/// resources next to <c>Strings.resx</c> and an explicit persistent selector (D-67).
 /// </summary>
 public static class Strings
 {

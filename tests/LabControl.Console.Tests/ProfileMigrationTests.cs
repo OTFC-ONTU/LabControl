@@ -199,7 +199,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -260,7 +260,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -308,7 +308,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -331,7 +331,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -370,7 +370,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -422,7 +422,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -451,7 +451,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -497,7 +497,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -532,7 +532,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -558,7 +558,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -584,7 +584,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -608,7 +608,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -646,7 +646,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -679,7 +679,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -818,7 +818,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -841,7 +841,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -866,7 +866,7 @@ public sealed class ProfileMigrationTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 

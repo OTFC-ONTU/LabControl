@@ -593,7 +593,7 @@ public sealed class ResultOwnershipTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 
@@ -793,20 +793,50 @@ public sealed class ResultOwnershipTests
         return new LabSession(options, store, vault, instance, instance.Document, TestLogging.Factory);
     }
 
+    /// <summary>
+    /// The job's journal row. A job's state turns finished before the session's update handler
+    /// appends the row, so a test that saw the state can be a moment early: wait for it.
+    /// </summary>
     internal static async Task<JsonElement> JournalRowAsync(string logsDirectory, string jobId)
     {
-        foreach (var file in Directory.EnumerateFiles(logsDirectory, "jobs-*.jsonl"))
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (true)
         {
-            foreach (var line in await File.ReadAllLinesAsync(file, Ct))
+            if (Directory.Exists(logsDirectory))
             {
-                var element = JsonDocument.Parse(line).RootElement;
-                if (element.GetProperty("id").GetString() == jobId)
+                foreach (var file in Directory.EnumerateFiles(logsDirectory, "jobs-*.jsonl"))
                 {
-                    return element;
+                    foreach (var line in await File.ReadAllLinesAsync(file, Ct))
+                    {
+                        if (line.Length == 0)
+                        {
+                            continue;
+                        }
+
+                        JsonElement element;
+                        try
+                        {
+                            element = JsonDocument.Parse(line).RootElement;
+                        }
+                        catch (JsonException)
+                        {
+                            continue; // the last line, caught half-written
+                        }
+
+                        if (element.GetProperty("id").GetString() == jobId)
+                        {
+                            return element;
+                        }
+                    }
                 }
             }
-        }
 
-        throw new Xunit.Sdk.XunitException($"no journal row for job {jobId} under {logsDirectory}");
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new Xunit.Sdk.XunitException($"no journal row for job {jobId} under {logsDirectory}");
+            }
+
+            await Task.Delay(50, Ct);
+        }
     }
 }

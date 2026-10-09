@@ -593,7 +593,7 @@ public sealed class ResultOwnershipTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TestConsole.DeleteTempDirectory(directory);
         }
     }
 

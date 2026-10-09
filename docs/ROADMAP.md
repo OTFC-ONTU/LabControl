@@ -723,7 +723,7 @@ to answer Windows questions (`D-34`).
   after Win+L / unlock and after a reboot — the helper reconnects into a console that
   already wants video without the old hang. Still to measure on `PC-10`: CPU of
   `session.exe` in thumbnail mode, fps in the single-PC window while scrolling, memory
-  after an hour; and the GDI fallback on the VM. Owner's word: "все работает".
+  after an hour; and the GDI fallback on the VM. Owner's word: "everything works".
 - *Portion 3 (built 2026-09-07, not yet run on a PC).* Input (`D-36`). The single-PC
   window has a *Control* toggle, *Ctrl+Alt+Del* and *Win* buttons and a status line that
   says why control is unavailable; `Console/Services/InputMapper` + `KeyMap` turn Avalonia

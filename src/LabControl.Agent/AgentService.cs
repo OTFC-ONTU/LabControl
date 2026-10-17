@@ -55,6 +55,7 @@ internal sealed class AgentService : BackgroundService
             // Guarded on its own: whatever the enforcer does or fails to do, the link dials —
             // a corrupt policy.json is a warning on the console, never an offline PC.
             await using var policy = StartPolicy(link, supervisor, store.Config.LabId);
+            behaviour.NetworkPolicyHeld = () => policy?.HoldsNetworkPolicy ?? false;
 
             behaviour.Start();
 

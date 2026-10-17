@@ -203,6 +203,12 @@ public sealed class ConsoleBootstrap
                 store.SaveScripts(payload.Scripts);
             }
 
+            if (payload.InternetPresets is not null && store.LoadInternetPresets() is null)
+            {
+                payload.InternetPresets.LabId = lab.LabId;
+                store.SaveInternetPresets(payload.InternetPresets);
+            }
+
             var enrollment = payload.Enrollment ?? new EnrollmentDocument();
             enrollment.LabId = lab.LabId;
             new EnrollmentAuthority(enrollment).MarkDormant(now);
@@ -359,6 +365,13 @@ public sealed class ConsoleBootstrap
                 // The library moves with the lab (D-31 item 4); the seed is imported only when nothing came.
                 payload.Scripts.LabId = lab.LabId;
                 store.SaveScripts(payload.Scripts);
+            }
+
+            if (payload.InternetPresets is not null)
+            {
+                // The whitelist presets move with the lab too (D-73); the seed preset is created only when nothing came.
+                payload.InternetPresets.LabId = lab.LabId;
+                store.SaveInternetPresets(payload.InternetPresets);
             }
 
             if (payload.Enrollment is not null)
@@ -663,7 +676,7 @@ public sealed class ConsoleBootstrap
             return false;
         }
 
-        if (!session.Vault.Use(lab => LabBackup.Serialize(LabBackup.Export(lab, session.Registry.Document, store.ReadCatalog(), session.Instance.InstanceName, now, session.Enrollment.Document, session.Scripts.Document)), out var json))
+        if (!session.Vault.Use(lab => LabBackup.Serialize(LabBackup.Export(lab, session.Registry.Document, store.ReadCatalog(), session.Instance.InstanceName, now, session.Enrollment.Document, session.Scripts.Document, store.LoadInternetPresets())), out var json))
         {
             error = Strings.Get("Bootstrap.KeyLocked");
             return false;
@@ -714,7 +727,7 @@ public sealed class ConsoleBootstrap
         if (!session.Vault.Use(lab =>
             {
                 LabFilePayload payload = null!;
-                session.Registry.Persist(document => payload = LabFile.Snapshot(lab, document, session.Scripts.Document, session.Instance.InstanceId, session.Instance.InstanceName, version, now));
+                session.Registry.Persist(document => payload = LabFile.Snapshot(lab, document, session.Scripts.Document, session.Instance.InstanceId, session.Instance.InstanceName, version, now, session.Store.LoadInternetPresets()));
                 return LabFile.Serialize(LabFile.Export(lab, payload));
             }, out var json))
         {
@@ -752,7 +765,7 @@ public sealed class ConsoleBootstrap
             {
                 version = LabFile.NextSnapshotVersion(document.ExportedSnapshotVersion, now);
                 document.ExportedSnapshotVersion = version;
-                payload = LabFile.Snapshot(lab, document, active.Scripts.Document, active.Instance.InstanceId, active.Instance.InstanceName, version, now);
+                payload = LabFile.Snapshot(lab, document, active.Scripts.Document, active.Instance.InstanceId, active.Instance.InstanceName, version, now, active.Store.LoadInternetPresets());
             });
             active.SaveLab();
             return payload;
@@ -764,7 +777,7 @@ public sealed class ConsoleBootstrap
         labDocument.ExportedSnapshotVersion = next;
         store.SaveLab(labDocument);
         var instance = store.LoadInstance();
-        return LabFile.Snapshot(lab, labDocument, store.LoadScripts(), instance?.InstanceId ?? string.Empty, instance?.InstanceName ?? string.Empty, next, now);
+        return LabFile.Snapshot(lab, labDocument, store.LoadScripts(), instance?.InstanceId ?? string.Empty, instance?.InstanceName ?? string.Empty, next, now, store.LoadInternetPresets());
     }
 
     // ------------------------------------------------------------------ index

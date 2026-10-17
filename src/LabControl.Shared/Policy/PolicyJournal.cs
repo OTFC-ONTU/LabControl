@@ -157,11 +157,6 @@ public sealed class PolicyJournal
             // teacher set is still the teacher's — MachineOpen stays false and says so.
             if (loaded is not null)
             {
-                if (loaded.Internet is { } internet)
-                {
-                    Reapply(internet, Defaults.InternetPolicyHardLimit, nowUnix, nameof(IMachineState.ApplyInternet), s => _machine.ApplyInternet(s, policy.Displaced!), () => policy.Internet = internet, reapplied, dropped);
-                }
-
                 if (loaded.Exam is { } exam)
                 {
                     Reapply(exam, Defaults.ExamHardLimit, nowUnix, nameof(IMachineState.ApplyExam), _machine.ApplyExam, () => policy.Exam = exam, reapplied, dropped);
@@ -176,13 +171,32 @@ public sealed class PolicyJournal
                         else
                         {
                             var ceiling = TimeSpan.FromSeconds(Math.Max(0, Math.Min((long)Defaults.ExamHardLimit.TotalSeconds, exam.HardLimitUnix - nowUnix)));
-                            Reapply(examInternet, ceiling, nowUnix, nameof(IMachineState.ApplyInternet), s => _machine.ApplyInternet(s, policy.Displaced!), () => policy.ExamInternet = examInternet, reapplied, dropped);
+                            Reapply(examInternet, ceiling, nowUnix, nameof(IMachineState.ApplyInternet),
+                                s => _machine.ApplyInternet(s, policy.Displaced!, () => Save(policy, nowUnix)), () => policy.ExamInternet = examInternet, reapplied, dropped,
+                                undo: () => open &= UndoInternet(policy));
                         }
                     }
                 }
                 else if (loaded.ExamInternet is { } orphan)
                 {
                     DropWithExam(orphan, dropped);
+                }
+
+                // The standalone policy after the exam's: the exam's wins (D-22), and while it is in
+                // force the standalone one only waits underneath it, re-applied when it ends.
+                if (loaded.Internet is { } internet)
+                {
+                    if (policy.ExamInternet is not null && !internet.Ended(nowUnix))
+                    {
+                        internet.HardLimitUnix = ClassroomPolicy.Clamp(internet.HardLimitUnix, Defaults.InternetPolicyHardLimit, nowUnix);
+                        policy.Internet = internet;
+                    }
+                    else
+                    {
+                        Reapply(internet, Defaults.InternetPolicyHardLimit, nowUnix, nameof(IMachineState.ApplyInternet),
+                            s => _machine.ApplyInternet(s, policy.Displaced!, () => Save(policy, nowUnix)), () => policy.Internet = internet, reapplied, dropped,
+                            undo: () => open &= UndoInternet(policy));
+                    }
                 }
 
                 if (loaded.Overlay is { } overlay)
@@ -209,6 +223,36 @@ public sealed class PolicyJournal
             Save(nowUnix);
 
             return new PolicyRestoreOutcome(open, reapplied, dropped);
+        }
+    }
+
+    /// <summary>
+    /// The watchdog task's pass when the service is not running (D-73 item 7): D-69 steps 0–4 —
+    /// the unconditional restore, the refine from the document's displaced block, the read-back —
+    /// and <b>nothing re-applied</b>. A short-lived process cannot hold a whitelist (its resolver
+    /// would die with it, leaving every name unresolvable), and the service re-applies whatever
+    /// is still valid at its own next start, so the sessions stay in the document; the displaced
+    /// block is dropped only once the restore is confirmed.
+    /// </summary>
+    public PolicyRestoreOutcome RestoreOnly(long nowUnix)
+    {
+        lock (_lock)
+        {
+            var open = Call(nameof(IMachineState.RestoreDefaults), _machine.RestoreDefaults, PolicyEvents.RestoreFailed, "RestoreFailed");
+            var loaded = ReadDocument();
+            var policy = loaded ?? new ClassroomPolicy { Displaced = new DisplacedSettings() };
+            var displaced = policy.Displaced is { IsEmpty: false } originals ? originals : null;
+            var refined = displaced is null || Call(nameof(IMachineState.RefineRestore), () => _machine.RefineRestore(displaced), PolicyEvents.RestoreFailed, "RefineFailed");
+            var confirmed = Call(nameof(IMachineState.Confirm), _machine.Confirm, PolicyEvents.RestoreFailed, "ConfirmFailed");
+            open &= refined && confirmed;
+            if (refined && confirmed)
+            {
+                policy.Displaced = new DisplacedSettings();
+            }
+
+            _machineOpen = open;
+            Save(policy, nowUnix);
+            return new PolicyRestoreOutcome(open, [], []);
         }
     }
 
@@ -253,19 +297,65 @@ public sealed class PolicyJournal
                 return lifted;
             }
 
+            if (_policy.Internet is { } internet && internet.Ended(nowUnix))
+            {
+                if (_policy.ExamInternet is not null)
+                {
+                    // Waiting underneath the exam's policy, never enforced: forgotten, nothing to lift.
+                    _policy.Internet = null;
+                    lifted.Add(internet);
+                    changed = true;
+                    Report(Event.Types.Severity.Info, PolicyEvents.Expired, PolicyEvents.Text("SessionExpired", PolicyEvents.KindName(internet), internet.SessionId));
+                }
+                else
+                {
+                    changed |= Lift(internet, nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!), () =>
+                    {
+                        _policy.Internet = null;
+                        _policy.Displaced = new DisplacedSettings();
+                    }, lifted);
+                }
+            }
+
             if (_policy.ExamInternet is { } examInternet && (examInternet.Ended(nowUnix) || _policy.Exam is null || _policy.Exam.Ended(nowUnix)))
             {
-                changed |= Lift(examInternet, nameof(IMachineState.LiftInternet), _machine.LiftInternet, () => _policy.ExamInternet = null, lifted);
+                if (_policy.Internet is { } underneath && !underneath.Ended(nowUnix))
+                {
+                    // The standalone policy comes back when the exam's ends (D-22): the machine
+                    // changes from one to the other without opening in between.
+                    var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(underneath, _policy.Displaced!, () => Save(nowUnix)));
+                    if (result.Succeeded)
+                    {
+                        _policy.ExamInternet = null;
+                        lifted.Add(examInternet);
+                        changed = true;
+                        Report(Event.Types.Severity.Info, PolicyEvents.Expired, PolicyEvents.Text("SessionExpired", PolicyEvents.Text("KindExamInternet"), examInternet.SessionId));
+                    }
+                    else
+                    {
+                        Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed, PolicyEvents.Text("ApplyFailed", PolicyEvents.KindName(underneath), underneath.SessionId, Describe(result, PolicyEvents.KindName(underneath))));
+                        _policy.Internet = null;
+                        changed |= Lift(examInternet, nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!), () =>
+                        {
+                            _policy.ExamInternet = null;
+                            _policy.Displaced = new DisplacedSettings();
+                        }, lifted);
+                        changed = true;
+                    }
+                }
+                else
+                {
+                    changed |= Lift(examInternet, nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!), () =>
+                    {
+                        _policy.ExamInternet = null;
+                        _policy.Displaced = new DisplacedSettings();
+                    }, lifted);
+                }
             }
 
             if (_policy.Exam is { } exam && exam.Ended(nowUnix))
             {
                 changed |= Lift(exam, nameof(IMachineState.LiftExam), _machine.LiftExam, () => _policy.Exam = null, lifted);
-            }
-
-            if (_policy.Internet is { } internet && internet.Ended(nowUnix))
-            {
-                changed |= Lift(internet, nameof(IMachineState.LiftInternet), _machine.LiftInternet, () => _policy.Internet = null, lifted);
             }
 
             if (_policy.Overlay is { } overlay && overlay.Ended(nowUnix))
@@ -465,10 +555,249 @@ public sealed class PolicyJournal
         return state;
     }
 
+    // ------------------------------------------------------------------ internet (portion 3)
+
+    /// <summary>
+    /// A console's standalone <c>InternetPolicy</c>, already past the ownership gate (D-73):
+    /// <c>WHITELIST</c> or <c>BLOCKED</c> starts or replaces the standalone policy, its hard
+    /// limit clamped to <see cref="Defaults.InternetPolicyHardLimit"/> on this clock;
+    /// <c>OPEN</c> lifts it; <c>amend_hosts</c> changes only the host list of the session the PC
+    /// holds. The limits arrive as durations and become moments here, as for a lock (D-70
+    /// item 6). Host patterns are normalized by <see cref="Internet.HostPattern"/>; one that does
+    /// not normalize is dropped. While the exam's internet policy is in force the standalone
+    /// one is only kept, not applied (D-22). Returns what the PC enforces afterwards, with
+    /// <c>problem</c> set when the request was refused or failed.
+    /// </summary>
+    public InternetState SetInternet(InternetPolicy request, string setByInstance, long nowUnix, InternetRuntime? runtime = null)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(setByInstance);
+
+        lock (_lock)
+        {
+            if (_stopped)
+            {
+                return InternetStateLocked(PolicyEvents.RefusedStopped, nowUnix, runtime);
+            }
+
+            if (request.AmendHosts)
+            {
+                return AmendInternetLocked(request, nowUnix, runtime);
+            }
+
+            return request.Mode switch
+            {
+                InternetPolicy.Types.Mode.Open => LiftInternetLocked(nowUnix, runtime),
+                InternetPolicy.Types.Mode.Whitelist or InternetPolicy.Types.Mode.Blocked => ApplyInternetLocked(request, setByInstance, nowUnix, runtime),
+                _ => InternetStateLocked(PolicyEvents.RefusedUnknownMode, nowUnix, runtime),
+            };
+        }
+    }
+
+    /// <summary>The internet state as it stands, for the re-send after <c>Welcome</c> and the refused-names refresh.</summary>
+    public InternetState InternetStateOf(long nowUnix, InternetRuntime? runtime = null)
+    {
+        lock (_lock)
+        {
+            return InternetStateLocked(null, nowUnix, runtime);
+        }
+    }
+
+    /// <summary>True while a firewall or DNS policy is held or its originals are not yet confirmed restored: <c>self_update</c> is refused then (D-69 item 6).</summary>
+    public bool HoldsNetworkPolicy
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _policy.Internet is not null || _policy.ExamInternet is not null || _policy.Displaced is { IsEmpty: false };
+            }
+        }
+    }
+
+    private InternetState ApplyInternetLocked(InternetPolicy request, string setByInstance, long nowUnix, InternetRuntime? runtime)
+    {
+        if (request.UntilSeconds < 0)
+        {
+            return InternetStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix, runtime);
+        }
+
+        var previous = _policy.Internet;
+        var session = new InternetSession
+        {
+            Mode = request.Mode,
+            SessionId = request.SessionId.Length > 0 ? request.SessionId : Guid.NewGuid().ToString("n"),
+            SetByInstance = setByInstance,
+            SinceUnix = previous is not null && previous.SessionId == request.SessionId ? previous.SinceUnix : nowUnix,
+            UntilUnix = request.UntilSeconds > 0 ? ClassroomPolicy.Add(nowUnix, request.UntilSeconds) : 0,
+            HardLimitUnix = ClassroomPolicy.Clamp(request.HardLimitSeconds > 0 ? ClassroomPolicy.Add(nowUnix, request.HardLimitSeconds) : 0, Defaults.InternetPolicyHardLimit, nowUnix),
+            AllowedHosts = request.Mode == InternetPolicy.Types.Mode.Whitelist ? Normalize(request.AllowedHosts) : [],
+            PresetName = request.PresetName ?? string.Empty,
+        };
+
+        if (session.Ended(nowUnix))
+        {
+            return InternetStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix, runtime);
+        }
+
+        return EnforceInternetLocked(session, nowUnix, runtime);
+    }
+
+    private InternetState AmendInternetLocked(InternetPolicy request, long nowUnix, InternetRuntime? runtime)
+    {
+        if (_policy.Internet is not { } current || current.SessionId != request.SessionId || current.Mode != InternetPolicy.Types.Mode.Whitelist)
+        {
+            return InternetStateLocked(PolicyEvents.RefusedNoInternetSession, nowUnix, runtime);
+        }
+
+        var amended = Copy(current);
+        amended.AllowedHosts = Normalize(request.AllowedHosts);
+        return EnforceInternetLocked(amended, nowUnix, runtime);
+    }
+
+    /// <summary>Applies a standalone session — or only keeps it while the exam's policy wins — and keeps the document honest about the outcome.</summary>
+    private InternetState EnforceInternetLocked(InternetSession session, long nowUnix, InternetRuntime? runtime)
+    {
+        if (_policy.ExamInternet is not null)
+        {
+            _policy.Internet = session;
+            Save(nowUnix);
+            return InternetStateLocked(null, nowUnix, runtime);
+        }
+
+        var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(session, _policy.Displaced!, () => Save(nowUnix)));
+        if (result.Succeeded)
+        {
+            _policy.Internet = session;
+            Save(nowUnix);
+            return InternetStateLocked(null, nowUnix, runtime);
+        }
+
+        var name = PolicyEvents.KindName(session);
+        var problem = Describe(result, name);
+        Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed, PolicyEvents.Text("ApplyFailed", name, session.SessionId, problem));
+
+        // The apply may have changed half the machine. Put it all back: the previous policy, if
+        // any, is gone with it — a PC whose state is unknown is opened, never guessed at.
+        var undo = Guard(nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!));
+        if (undo.Succeeded)
+        {
+            if (_policy.Internet is { } previous)
+            {
+                Report(Event.Types.Severity.Warning, PolicyEvents.Expired, PolicyEvents.Text("SessionExpired", PolicyEvents.KindName(previous), previous.SessionId));
+            }
+
+            _policy.Internet = null;
+            _policy.Displaced = new DisplacedSettings();
+        }
+        else
+        {
+            // Not provably open: the new session is kept so the clock and the hard limit retry
+            // the lift; the document claims at most what may still be in force.
+            _machineOpen = false;
+            _policy.Internet = session;
+            Report(Event.Types.Severity.Warning, PolicyEvents.RestoreFailed, PolicyEvents.Text("LiftFailed", name, session.SessionId, Describe(undo, name)));
+        }
+
+        Save(nowUnix);
+        return InternetStateLocked(problem, nowUnix, runtime);
+    }
+
+    private InternetState LiftInternetLocked(long nowUnix, InternetRuntime? runtime)
+    {
+        if (_policy.Internet is not { } internet)
+        {
+            return InternetStateLocked(null, nowUnix, runtime);
+        }
+
+        if (_policy.ExamInternet is not null)
+        {
+            // Waiting underneath the exam's policy, never enforced: forgotten, nothing to lift.
+            _policy.Internet = null;
+            Save(nowUnix);
+            return InternetStateLocked(null, nowUnix, runtime);
+        }
+
+        var result = Guard(nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!));
+        if (!result.Succeeded)
+        {
+            var name = PolicyEvents.KindName(internet);
+            var problem = Describe(result, name);
+            _machineOpen = false;
+            Report(Event.Types.Severity.Warning, PolicyEvents.RestoreFailed, PolicyEvents.Text("LiftFailed", name, internet.SessionId, problem));
+            return InternetStateLocked(problem, nowUnix, runtime);
+        }
+
+        _policy.Internet = null;
+        _policy.Displaced = new DisplacedSettings();
+        Save(nowUnix);
+        return InternetStateLocked(null, nowUnix, runtime);
+    }
+
+    /// <summary>The effective policy — the exam's if one is in force, else the standalone one — with the live side folded in. Never throws.</summary>
+    private InternetState InternetStateLocked(string? problem, long nowUnix, InternetRuntime? runtime)
+    {
+        var state = new InternetState { Mode = InternetPolicy.Types.Mode.Open, Problem = problem ?? string.Empty };
+        var reasons = new List<string>();
+        var effective = _policy.ExamInternet ?? _policy.Internet;
+        if (effective is not null)
+        {
+            state.Mode = effective.Mode;
+            state.SessionId = effective.SessionId ?? string.Empty;
+            state.UntilUnix = effective.UntilUnix;
+            state.HardLimitUnix = effective.HardLimitUnix;
+            state.RemainingSeconds = Math.Max(0, effective.DeadlineUnix - nowUnix);
+            state.SetByInstance = effective.SetByInstance ?? string.Empty;
+            state.PresetName = effective.PresetName ?? string.Empty;
+            state.AllowedHosts.AddRange((effective.AllowedHosts ?? []).Where(h => h is not null));
+            if (_policy.ExamInternet is not null && _policy.Internet is not null)
+            {
+                reasons.Add(InternetReasons.ExamWins);
+            }
+        }
+
+        if (!_machineOpen && effective is null)
+        {
+            reasons.Add(InternetReasons.RestoreUnconfirmed);
+        }
+
+        if (runtime is not null)
+        {
+            state.ResolverActive = runtime.ResolverActive;
+            if (effective is { Mode: InternetPolicy.Types.Mode.Whitelist })
+            {
+                state.RefusedRecently.AddRange(runtime.Refused.Where(n => n is not null));
+            }
+
+            reasons.AddRange(InternetCodes(runtime.Reason));
+        }
+
+        state.Reason = string.Join(' ', reasons.Distinct(StringComparer.Ordinal));
+        return state;
+    }
+
+    private static IEnumerable<string> InternetCodes(string? reason) =>
+        string.IsNullOrWhiteSpace(reason) ? [] : reason.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>The host patterns a session keeps: normalized, distinct, in the teacher's order; any that does not normalize is dropped.</summary>
+    private static List<string> Normalize(IEnumerable<string> hosts)
+    {
+        var kept = new List<string>();
+        foreach (var host in hosts)
+        {
+            if (Internet.HostPattern.TryNormalize(host, out var pattern, out _) && !kept.Contains(pattern, StringComparer.Ordinal))
+            {
+                kept.Add(pattern);
+            }
+        }
+
+        return kept;
+    }
+
     // ------------------------------------------------------------------ the pieces
 
     private void Reapply<T>(T session, TimeSpan ceiling, long nowUnix, string what, Func<T, MachineResult> apply, Action keep,
-        List<PolicySession> reapplied, List<PolicySession> dropped)
+        List<PolicySession> reapplied, List<PolicySession> dropped, Action? undo = null)
         where T : PolicySession
     {
         var name = PolicyEvents.KindName(session);
@@ -496,7 +825,35 @@ public sealed class PolicyJournal
         {
             dropped.Add(session);
             Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed, PolicyEvents.Text("ApplyFailed", name, session.SessionId, Describe(result, name)));
+
+            // A failed apply may have changed half the machine; the session is not held, so
+            // nothing of it may stay (the document must not claim, nor the PC enforce, what is
+            // not in force).
+            undo?.Invoke();
         }
+    }
+
+    /// <summary>
+    /// Puts the machine back after an internet apply that failed during a restore pass: a full
+    /// lift with the pass's displaced block, which is forgotten only if the lift proves the
+    /// machine open. Only runs when no other internet session of the pass is in force.
+    /// </summary>
+    private bool UndoInternet(ClassroomPolicy policy)
+    {
+        if (policy.Internet is not null || policy.ExamInternet is not null || policy.Displaced is not { IsEmpty: false } displaced)
+        {
+            return true;
+        }
+
+        var result = Guard(nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(displaced));
+        if (result.Succeeded)
+        {
+            policy.Displaced = new DisplacedSettings();
+            return true;
+        }
+
+        Report(Event.Types.Severity.Warning, PolicyEvents.RestoreFailed, PolicyEvents.Text("RestoreFailed", Describe(result, PolicyEvents.Text("KindInternet"))));
+        return false;
     }
 
     /// <summary>An exam internet policy whose exam is not in force is not in force either; said once, never applied.</summary>
@@ -616,11 +973,13 @@ public sealed class PolicyJournal
 
     private void Unreadable(string message) => Report(Event.Types.Severity.Warning, PolicyEvents.Unreadable, message);
 
-    private void Save(long nowUnix)
+    private void Save(long nowUnix) => Save(_policy, nowUnix);
+
+    private void Save(ClassroomPolicy policy, long nowUnix)
     {
         try
         {
-            _write(new PolicyDocument { LabId = _labId, SavedAtUnix = nowUnix, Policy = Copy(_policy) });
+            _write(new PolicyDocument { LabId = _labId, SavedAtUnix = nowUnix, Policy = Copy(policy) });
         }
         catch (Exception ex)
         {
@@ -642,6 +1001,9 @@ public sealed class PolicyJournal
 
     private static string Stamp(long unix) =>
         unix >= long.MaxValue - 1 ? PolicyEvents.Text("StampNever") : DateTimeOffset.FromUnixTimeSeconds(Math.Clamp(unix, DateTimeOffset.UnixEpoch.ToUnixTimeSeconds(), DateTimeOffset.MaxValue.ToUnixTimeSeconds())).ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+
+    private static InternetSession Copy(InternetSession session) =>
+        JsonSerializer.Deserialize<InternetSession>(JsonSerializer.Serialize(session, JsonStore.Options), JsonStore.Options) ?? new InternetSession();
 
     private static ClassroomPolicy Copy(ClassroomPolicy policy) =>
         JsonSerializer.Deserialize<ClassroomPolicy>(JsonSerializer.Serialize(policy, JsonStore.Options), JsonStore.Options) ?? new ClassroomPolicy { Displaced = new DisplacedSettings() };

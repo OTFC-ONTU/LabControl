@@ -109,7 +109,8 @@ public sealed class PolicyDocument : ISchemaVersioned
             }
         }
 
-        return MissingElement(displaced.OwnedRules, path + ".owned_rules");
+        return MissingElement(displaced.OwnedRules, path + ".owned_rules")
+            ?? MissingElement(displaced.DisabledRules, path + ".disabled_rules");
     }
 
     private static string? Missing(PolicySession session, string path)

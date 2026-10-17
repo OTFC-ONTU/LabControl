@@ -868,6 +868,8 @@ public sealed class SingleInstanceTests
 
         public Task<LockAnswer?> LockScreensAsync(int pcCount) => Task.FromResult<LockAnswer?>(null);
 
+        public Task<InternetAnswer?> InternetAsync(InternetDialogModel model) => Task.FromResult<InternetAnswer?>(null);
+
         public Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
 
         public Task<AgentBuild?> PushAgentBuildAsync(int pcCount) => Task.FromResult<AgentBuild?>(null);

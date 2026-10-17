@@ -187,6 +187,7 @@ public sealed class LabSession : IAsyncDisposable
         _journal = new JobJournal(store.LogsDirectory);
         BatchLogs = new JobBatchLogs(store.LogsDirectory, Jobs, id => Registry.FindByAgentId(id)?.Number ?? 0, _clock);
         Scripts = new ScriptLibrary(store, identity.LabId, seedScripts ?? [], _clock, loggers.CreateLogger<ScriptLibrary>());
+        InternetPresets = new InternetPresetLibrary(store, identity.LabId, _clock, loggers.CreateLogger<InternetPresetLibrary>());
 
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
@@ -242,6 +243,9 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>The script library (D-31 item 4), seeded on the first run.</summary>
     public ScriptLibrary Scripts { get; }
+
+    /// <summary>The teacher's named whitelist presets (M6 portion 3, D-73), beside <c>lab.json</c> and in the backup.</summary>
+    public InternetPresetLibrary InternetPresets { get; }
 
     public EventLog Events { get; }
 
@@ -1262,6 +1266,10 @@ public sealed class LabSession : IAsyncDisposable
                 ApplyOverlayState(connection, message.OverlayState, who);
                 break;
 
+            case AgentMessage.PayloadOneofCase.InternetState:
+                ApplyInternetState(connection, message.InternetState, who);
+                break;
+
             case AgentMessage.PayloadOneofCase.JobProgress:
                 Jobs.Progress(message.JobProgress, now);
                 break;
@@ -1835,6 +1843,178 @@ public sealed class LabSession : IAsyncDisposable
         }
 
         return (sent, skipped);
+    }
+
+    // ------------------------------------------------------------------ internet (M6 portion 3)
+
+    /// <summary>
+    /// Sets a standalone internet policy on the given PCs (PROTOCOL <i>Internet control</i>,
+    /// D-73): one <c>InternetPolicy</c> per linked PC with one fresh <c>session_id</c>, the host
+    /// patterns for a whitelist, <c>until_seconds</c> from <paramref name="duration"/>
+    /// (<c>null</c> = until lifted) and a proposed hard limit of
+    /// <see cref="Defaults.InternetPolicyHardLimit"/> — durations each PC stamps onto its own
+    /// clock. Like a lock it is a link message, never queued for a PC that is not linked.
+    /// Returns how many PCs were asked; the tiles follow what each reports in <c>InternetState</c>.
+    /// </summary>
+    public int SetInternet(IEnumerable<string> agentIds, InternetPolicy.Types.Mode mode, IReadOnlyList<string> hosts, string presetName, TimeSpan? duration)
+    {
+        ArgumentNullException.ThrowIfNull(agentIds);
+        ArgumentNullException.ThrowIfNull(hosts);
+        if (mode is not (InternetPolicy.Types.Mode.Whitelist or InternetPolicy.Types.Mode.Blocked))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "only a whitelist or a block is set; Open is LiftInternet");
+        }
+
+        var policy = new InternetPolicy
+        {
+            Mode = mode,
+            SessionId = Guid.NewGuid().ToString("n"),
+            PresetName = presetName ?? string.Empty,
+            UntilSeconds = duration is { } d && d > TimeSpan.Zero ? (long)Math.Ceiling(d.TotalSeconds) : 0,
+            HardLimitSeconds = (long)Defaults.InternetPolicyHardLimit.TotalSeconds,
+        };
+        if (mode == InternetPolicy.Types.Mode.Whitelist)
+        {
+            policy.AllowedHosts.AddRange(hosts);
+        }
+
+        var (sent, skipped) = SendInternet(agentIds, _ => policy.Clone());
+        Events.Info("internet.set_sent", Localization.Strings.Format(
+            mode == InternetPolicy.Types.Mode.Blocked ? "Event.InternetBlockSent" : "Event.InternetWhitelistSent", sent, skipped, policy.PresetName));
+        return sent;
+    }
+
+    /// <summary>Lifts the standalone internet policy on the given PCs; any console of the lab may lift one it can see (owner decision 4).</summary>
+    public int LiftInternet(IEnumerable<string> agentIds)
+    {
+        ArgumentNullException.ThrowIfNull(agentIds);
+        var (sent, skipped) = SendInternet(agentIds, _ => new InternetPolicy { Mode = InternetPolicy.Types.Mode.Open });
+        Events.Info("internet.lift_sent", Localization.Strings.Format("Event.InternetLiftSent", sent, skipped));
+        return sent;
+    }
+
+    /// <summary>
+    /// The teacher's <i>Allow</i> on a refused name (owner decision 2026-10-17, D-74): every
+    /// linked PC whose whitelist refused it — and every other PC under a whitelist that does not
+    /// cover it yet — gets its own host list plus <paramref name="name"/>, as an
+    /// <c>amend_hosts</c> on the session it holds, so the timing of each PC's policy is kept.
+    /// Returns how many PCs were asked.
+    /// </summary>
+    public int AllowRefusedName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (!LabControl.Shared.Internet.HostPattern.TryNormalize(name, out var pattern, out _))
+        {
+            return 0;
+        }
+
+        var targets = Linked
+            .Where(c => c.InternetState is { Mode: InternetPolicy.Types.Mode.Whitelist } state
+                && !LabControl.Shared.Internet.HostPattern.AnyMatches(state.AllowedHosts, pattern))
+            .ToDictionary(c => c.AgentId, c => c.InternetState!, StringComparer.OrdinalIgnoreCase);
+        var (sent, skipped) = SendInternet(targets.Keys, agentId =>
+        {
+            var state = targets[agentId];
+            var amend = new InternetPolicy { Mode = InternetPolicy.Types.Mode.Whitelist, SessionId = state.SessionId, AmendHosts = true, PresetName = state.PresetName };
+            amend.AllowedHosts.AddRange(state.AllowedHosts);
+            amend.AllowedHosts.Add(pattern);
+            return amend;
+        });
+        Events.Info("internet.allow_sent", Localization.Strings.Format("Event.InternetAllowSent", pattern, sent, skipped));
+        return sent;
+    }
+
+    /// <summary>
+    /// The names the linked PCs' whitelists refused lately, merged (D-74): each with how many PCs
+    /// refused it, most widespread first. What the <i>Internet</i> dialog lists with an
+    /// <i>Allow</i> button.
+    /// </summary>
+    public IReadOnlyList<RefusedName> RefusedNames()
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var order = new List<string>();
+        foreach (var connection in Linked)
+        {
+            if (connection.InternetState is not { Mode: InternetPolicy.Types.Mode.Whitelist } state)
+            {
+                continue;
+            }
+
+            foreach (var name in state.RefusedRecently.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (LabControl.Shared.Internet.HostPattern.AnyMatches(state.AllowedHosts, name))
+                {
+                    // Allowed since: the PC's list still names it until its window passes.
+                    continue;
+                }
+
+                if (counts.TryAdd(name, 1))
+                {
+                    order.Add(name);
+                }
+                else
+                {
+                    counts[name]++;
+                }
+            }
+        }
+
+        return order.Select((n, i) => (Name: n, Index: i))
+            .OrderByDescending(x => counts[x.Name]).ThenBy(x => x.Index)
+            .Select(x => new RefusedName(x.Name, counts[x.Name]))
+            .ToArray();
+    }
+
+    private (int Sent, int Skipped) SendInternet(IEnumerable<string> agentIds, Func<string, InternetPolicy> policyFor)
+    {
+        var sent = 0;
+        var skipped = 0;
+        foreach (var agentId in agentIds.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var connection = FindLinked(agentId);
+            if (connection is null || connection.IsOutdated || !connection.TrySend(new ConsoleMessage { InternetPolicy = policyFor(agentId) }))
+            {
+                skipped++;
+                continue;
+            }
+
+            sent++;
+        }
+
+        return (sent, skipped);
+    }
+
+    private void ApplyInternetState(AgentConnection connection, InternetState state, string who)
+    {
+        var modeBefore = connection.InternetMode;
+        var problemBefore = connection.InternetProblem;
+        var changed = connection.ApplyInternetState(state);
+
+        if (connection.InternetProblem is { } problem && problem != problemBefore)
+        {
+            Events.Warning("internet.refused", Localization.Strings.Format("Event.InternetRefused", who, problem), connection.AgentId, connection.Number);
+        }
+
+        if (modeBefore != connection.InternetMode)
+        {
+            if (connection.InternetMode == InternetPolicy.Types.Mode.Open)
+            {
+                Events.Info("internet.opened", Localization.Strings.Format("Event.InternetOpened", who), connection.AgentId, connection.Number);
+            }
+            else
+            {
+                var by = string.Equals(state.SetByInstance, Instance.InstanceId, StringComparison.OrdinalIgnoreCase)
+                    ? Localization.Strings.Get("Lock.ByThisConsole")
+                    : NameOfInstance(state.SetByInstance);
+                Events.Info("internet.restricted", Localization.Strings.Format(
+                    connection.InternetMode == InternetPolicy.Types.Mode.Blocked ? "Event.InternetBlocked" : "Event.InternetWhitelisted", who, by), connection.AgentId, connection.Number);
+            }
+        }
+
+        if (changed)
+        {
+            MachinesChanged?.Invoke();
+        }
     }
 
     // ------------------------------------------------------------------ broadcast (M6 portion 2)

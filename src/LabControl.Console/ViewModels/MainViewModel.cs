@@ -194,7 +194,7 @@ public sealed partial class MainViewModel : ObservableObject
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand), nameof(LockScreensCommand), nameof(UnlockScreensCommand), nameof(ShowScreenCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand), nameof(LockScreensCommand), nameof(UnlockScreensCommand), nameof(ShowScreenCommand), nameof(InternetCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
@@ -647,6 +647,35 @@ public sealed partial class MainViewModel : ObservableObject
 
         var sent = _session.Unlock(targets);
         StatusLine = Strings.Format("Lock.UnlockSent", sent, targets.Count);
+    }
+
+    // ------------------------------------------------------------------ internet (M6 portion 3)
+
+    /// <summary>The <i>Internet</i> dialog for the selected PCs, then one <c>InternetPolicy</c> per linked PC (D-73); the tiles follow what each PC reports.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private Task InternetAsync() => SetInternetAsync(Selected.Select(t => t.AgentId).ToArray());
+
+    /// <summary>The lab-wide variant: every PC in the lab; the ones that are not linked are simply not reached.</summary>
+    [RelayCommand]
+    private Task InternetForAllAsync() => SetInternetAsync(Machines.Select(t => t.AgentId).ToArray());
+
+    private async Task SetInternetAsync(IReadOnlyList<string> targets)
+    {
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var answer = await _dialogs.InternetAsync(new InternetDialogModel(_session, targets.Count));
+        if (answer is null)
+        {
+            return;
+        }
+
+        var sent = answer.Mode == InternetPolicy.Types.Mode.Open
+            ? _session.LiftInternet(targets)
+            : _session.SetInternet(targets, answer.Mode, answer.Hosts, answer.PresetName, answer.Duration);
+        StatusLine = Strings.Format(answer.Mode == InternetPolicy.Types.Mode.Open ? "Internet.LiftSent" : "Internet.Sent", sent, targets.Count);
     }
 
     private void CreateJobs(Job.Types.Kind kind, IReadOnlyDictionary<string, string>? args = null, TimeSpan? timeout = null)

@@ -80,20 +80,47 @@ public interface IMachineState
     MachineResult StopBroadcast() => MachineResult.Done;
 
     /// <summary>
-    /// Enforce an internet policy (portion 3), recording what it displaces into
-    /// <paramref name="displaced"/> <i>before</i> mutating and marking it applied only after
-    /// native read-back. The same block is passed for every internet session of a pass — the
-    /// standalone policy and then the exam's — and may already hold originals kept from a
-    /// restore that was not confirmed, so an implementation records an original <b>only
-    /// while the block has none for it</b>; overwriting would replace the teacher's values
-    /// with the first policy's. Until portion 3 lands this returns <see cref="MachineOutcome.NotInThisBuild"/>.
+    /// Enforce an internet policy (portion 3, D-73): <c>WHITELIST</c> or <c>BLOCKED</c>. Called
+    /// again with the same or another session to change it — another mode, another host list —
+    /// and must then change only what differs. Records what it displaces into
+    /// <paramref name="displaced"/> and calls <paramref name="recordDisplaced"/> <i>before</i>
+    /// mutating (the journal saves the document there, the D-47 discipline), and marks the block
+    /// applied only after native read-back. The same block is passed for every internet session
+    /// of a pass — the standalone policy and then the exam's — and may already hold originals
+    /// kept from a restore that was not confirmed, so an implementation records an original
+    /// <b>only while the block has none for it</b>; overwriting would replace the teacher's
+    /// values with the first policy's. A failure may leave the machine half-changed: the journal
+    /// then calls <see cref="LiftInternet"/> with the same block.
     /// </summary>
-    MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced);
+    MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced, Action recordDisplaced);
 
-    MachineResult LiftInternet();
+    /// <summary>
+    /// End every internet policy: the unconditional restore, then the refine from
+    /// <paramref name="displaced"/>, then the read-back — the same steps a restore pass takes,
+    /// so a lift proves the machine open or fails. On success the journal forgets the block.
+    /// </summary>
+    MachineResult LiftInternet(DisplacedSettings displaced);
+
+    /// <summary>
+    /// What the internet enforcement is doing right now, for <c>InternetState</c>: whether the
+    /// whitelist resolver runs, the names it refused lately and a counter that moves when they
+    /// change, and <see cref="InternetReasons"/> codes for anything weaker than asked. Cheap and
+    /// thread-safe: the enforcer reads it every <see cref="Defaults.InternetStateRefusedInterval"/>.
+    /// </summary>
+    InternetRuntime InternetRuntime() => Policy.InternetRuntime.None;
 
     /// <summary>Enforce an exam's timer, whitelist and collection (portion 4); <see cref="MachineOutcome.NotInThisBuild"/> until then.</summary>
     MachineResult ApplyExam(ExamSession session);
 
     MachineResult LiftExam();
+}
+
+/// <summary>The live side of internet enforcement (D-74), read by the enforcer for <c>InternetState</c>.</summary>
+/// <param name="ResolverActive">The whitelist resolver is listening.</param>
+/// <param name="Refused">Names refused within <see cref="Defaults.WhitelistRefusedWindow"/>, most recent first.</param>
+/// <param name="RefusedVersion">Moves whenever <paramref name="Refused"/> changes.</param>
+/// <param name="Reason"><see cref="InternetReasons"/> codes, space-separated; empty when all is well.</param>
+public sealed record InternetRuntime(bool ResolverActive, IReadOnlyList<string> Refused, long RefusedVersion, string Reason)
+{
+    public static InternetRuntime None { get; } = new(false, [], 0, string.Empty);
 }

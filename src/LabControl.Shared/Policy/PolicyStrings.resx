@@ -37,4 +37,11 @@
   <data name="BroadcastStalled" xml:space="preserve"><value>The screen broadcast brought no picture for {0} seconds; this PC gave its screen back.</value></data>
   <data name="RefusedNoSession" xml:space="preserve"><value>refused: the broadcast names no session</value></data>
   <data name="StampNever" xml:space="preserve"><value>never</value></data>
+  <data name="RefusedNoInternetSession" xml:space="preserve"><value>refused: this PC holds no such internet policy to change</value></data>
+  <data name="RefusedUnknownMode" xml:space="preserve"><value>refused: this agent build does not know that internet mode</value></data>
+  <data name="InternetFirewallOff" xml:space="preserve"><value>Windows Firewall is switched off for a network profile this PC is using, so an internet policy cannot be enforced here</value></data>
+  <data name="InternetReadBack" xml:space="preserve"><value>the internet policy did not read back as applied ({0})</value></data>
+  <data name="InternetStepFailed" xml:space="preserve"><value>a firewall or DNS change failed: {0}</value></data>
+  <data name="InternetResolverFailed" xml:space="preserve"><value>the whitelist resolver could not listen on the loopback interface ({0}); another program may be using port 53</value></data>
+  <data name="UpdateRefusedPolicy" xml:space="preserve"><value>refused: an internet policy is in force on this PC; lift it, then push the update</value></data>
 </root>

@@ -275,6 +275,38 @@ public sealed class UiTests
                 agents[3].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Unspecified });
                 Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[3].AgentId)?.OverlayBroadcasting == false));
 
+                // The Internet dialog (M6 portion 3): the example preset, the 8 h ceiling, the refused names.
+                Assert.False(vm.InternetCommand.CanExecute(null));
+                var internetDialog = new InternetDialog(new InternetDialogModel(console.Session, 8));
+                internetDialog.Show();
+                await Render(internetDialog, "internet");
+                var internetText = string.Join("\n", internetDialog.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+                Assert.Contains($"{(int)Defaults.InternetPolicyHardLimit.TotalHours} hours", internetText, StringComparison.Ordinal);
+                Assert.Contains("Nothing refused lately.", internetText, StringComparison.Ordinal);
+                Assert.Contains("*.jetbrains.com", internetDialog.GetVisualDescendants().OfType<TextBox>().First(t => t.AcceptsReturn).Text, StringComparison.Ordinal);
+                internetDialog.Close();
+
+                // The internet badge follows InternetState: PC-07 under a block, PC-08 under a whitelist with refusals.
+                agents[6].Link.PublishInternetState(new InternetState { Mode = InternetPolicy.Types.Mode.Blocked, SessionId = "i7", SetByInstance = console.Session.Instance.InstanceId, RemainingSeconds = 5400 });
+                var whitelist = new InternetState { Mode = InternetPolicy.Types.Mode.Whitelist, SessionId = "i8", SetByInstance = "other-console", PresetName = "Java docs", RemainingSeconds = 2700, ResolverActive = true };
+                whitelist.AllowedHosts.Add("*.jetbrains.com");
+                whitelist.RefusedRecently.Add("fonts.gstatic.com");
+                agents[7].Link.PublishInternetState(whitelist);
+                Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[6].AgentId)?.InternetMode == InternetPolicy.Types.Mode.Blocked
+                    && console.Session.FindLinked(agents[7].AgentId)?.InternetMode == InternetPolicy.Types.Mode.Whitelist));
+                await Render(window, "main-lab-internet");
+                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "NO INTERNET" && t.IsVisible);
+                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "SITES: Java docs" && t.IsVisible);
+                Assert.Equal("internet blocked by this console, 90 min left", vm.Machines.Single(m => m.Number == 7).InternetText);
+                var refusedDialog = new InternetDialog(new InternetDialogModel(console.Session, 8));
+                refusedDialog.Show();
+                await Render(refusedDialog, "internet-refused");
+                Assert.Contains(refusedDialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "fonts.gstatic.com — 1 PC(s)");
+                refusedDialog.Close();
+                agents[6].Link.PublishInternetState(new InternetState { Mode = InternetPolicy.Types.Mode.Open });
+                agents[7].Link.PublishInternetState(new InternetState { Mode = InternetPolicy.Types.Mode.Open });
+                Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[7].AgentId)?.InternetMode == InternetPolicy.Types.Mode.Open));
+
 
                 Assert.Equal(7, vm.Machines.Count(m => m.HasPicture));
                 Assert.False(vm.Machines.Single(m => m.Number == 3).HasPicture);

@@ -1,5 +1,6 @@
 using LabControl.Shared;
 using LabControl.Shared.Link;
+using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 
@@ -80,6 +81,9 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         }
     }
 
+    /// <summary>True while an internet policy is applied; <c>self_update</c> is refused then (D-69 item 6). Set by the service once the enforcer runs.</summary>
+    public Func<bool>? NetworkPolicyHeld { get; set; }
+
     public async Task<JobResult> RunJobAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
     {
         _log.LogInformation("{Pc}: job {Kind} {Id}", Link.Name, job.Kind, job.Id);
@@ -102,6 +106,15 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
                 return await new HandoutRunner(Link).RunAsync(job, report, token);
 
             case Job.Types.Kind.SelfUpdate:
+                if (NetworkPolicyHeld?.Invoke() == true)
+                {
+                    // The agent.exe exemption is pinned to app\<version>\ (D-69 item 6): a new
+                    // version would be the one program the firewall blocks, and the PC would drop
+                    // off the lab until the policy's hard limit.
+                    _log.LogWarning("{Pc}: self_update {Id} refused — an internet policy is in force", Link.Name, job.Id);
+                    return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PolicyEvents.Text("UpdateRefusedPolicy") };
+                }
+
                 // The minimal push-and-restart (D-33). On success this never returns: the
                 // service is stopped mid-job and the new version answers the re-sent job.
                 return await _updater.RunAsync(job, report, token);

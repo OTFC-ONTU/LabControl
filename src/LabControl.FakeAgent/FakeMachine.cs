@@ -31,6 +31,18 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     private readonly PolicyEnforcer _policy;
     private FakeScreen? _desktop;
     private int _sasCount;
+    private readonly Timer _browsing;
+
+    /// <summary>
+    /// Names a simulated student's browser asks for (M6 portion 3): the CDN and font hosts a
+    /// documentation site typically pulls in, so a whitelist on the simulator refuses a few
+    /// and the console's refused-names list has something to show.
+    /// </summary>
+    private static readonly string[] BrowsedNames =
+    [
+        "www.jetbrains.com", "resources.jetbrains.com", "docs.oracle.com", "fonts.googleapis.com", "fonts.gstatic.com",
+        "cdn.jsdelivr.net", "www.google-analytics.com", "www.youtube.com", "static.oracle.com", "stackoverflow.com",
+    ];
 
     /// <summary>What this PC says it runs; a simulated push changes it (D-33).</summary>
     private string _version = typeof(FakeMachine).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -76,6 +88,10 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
             mutexName: PolicyMutexName(store.Config.AgentId), mutexWait: policyMutexWait, broadcastCeiling: broadcastCeiling,
             broadcastStallTimeout: broadcastStallTimeout);
 
+        // A whitelist on a simulated PC refuses what a real student's browser would ask for.
+        var browseEvery = TimeSpan.FromSeconds(15 + _random.Next(15));
+        _browsing = new Timer(_ => _machineState.Browse(BrowsedNames[Random.Shared.Next(BrowsedNames.Length)]), null, browseEvery, browseEvery);
+
         // A real PC's supervisor publishes this at start and on every change (M2); the
         // simulator pretends the helper is up and the student is at the desk.
         PublishSession(SessionState.Types.Kind.Unspecified);
@@ -91,6 +107,12 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     /// <summary>The lock this PC holds right now, from its own journal; <c>null</c> when none.</summary>
     public OverlaySession? Lock => _machineState.Overlay;
+
+    /// <summary>The internet policy this PC holds right now (M6 portion 3); <c>null</c> when none.</summary>
+    public InternetSession? Internet => _machineState.Internet;
+
+    /// <summary>One simulated browser request, for the tests: refused and noted when a whitelist does not cover it.</summary>
+    public void Browse(string name) => _machineState.Browse(name);
 
     /// <summary>The broadcast this PC shows right now (M6 portion 2); <c>null</c> when none.</summary>
     public BroadcastSession? Broadcast => _machineState.Broadcast;
@@ -546,6 +568,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         Link.VideoControlChanged -= _screen.Apply;
         Link.InputReceived -= OnInput;
         // The OnStop restore (D-69 item 5): the machine is opened, the document is kept.
+        await _browsing.DisposeAsync();
         await _policy.DisposeAsync();
         _machineState.Dispose();
         await _screen.DisposeAsync();

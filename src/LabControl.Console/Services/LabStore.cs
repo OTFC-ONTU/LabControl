@@ -29,6 +29,8 @@ public sealed class LabStore
 
     public string ScriptsPath => Path.Combine(Directory, Defaults.ScriptsFileName);
 
+    public string InternetPresetsPath => Path.Combine(Directory, Defaults.InternetPresetsFileName);
+
     public string LogsDirectory => Path.Combine(Directory, Defaults.LogsDirectoryName);
 
     /// <summary>Delivered, unanswered jobs kept across a switch away from this lab (M5, D-57 item 4).</summary>
@@ -89,6 +91,11 @@ public sealed class LabStore
     public ScriptsDocument? LoadScripts() => JsonStore.LoadIfExists<ScriptsDocument>(ScriptsPath, ScriptsDocument.Migrations);
 
     public void SaveScripts(ScriptsDocument document) => JsonStore.Save(ScriptsPath, document, ScriptsDocument.Migrations);
+
+    /// <summary>The named whitelist presets, or null before the first run created the seed preset (D-73).</summary>
+    public InternetPresetsDocument? LoadInternetPresets() => JsonStore.LoadIfExists<InternetPresetsDocument>(InternetPresetsPath, InternetPresetsDocument.Migrations);
+
+    public void SaveInternetPresets(InternetPresetsDocument document) => JsonStore.Save(InternetPresetsPath, document, InternetPresetsDocument.Migrations);
 
     // ------------------------------------------------------------------ catalog
 

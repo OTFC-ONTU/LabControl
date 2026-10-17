@@ -45,6 +45,9 @@ public sealed class WindowDialogs : IDialogs
     public async Task<LockAnswer?> LockScreensAsync(int pcCount) =>
         await Show(new LockScreensDialog(pcCount));
 
+    public async Task<InternetAnswer?> InternetAsync(InternetDialogModel model) =>
+        await Show(new InternetDialog(model));
+
     public void ShowScreen(ScreenViewModel screen) => new ScreenWindow(screen).Show();
 
     public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string extension)

@@ -3,6 +3,7 @@ using LabControl.Console.Localization;
 using LabControl.Console.Services;
 using LabControl.Shared;
 using LabControl.Shared.Policy;
+using LabControl.Shared.Protocol;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Video;
 
@@ -115,6 +116,38 @@ public sealed partial class MachineTileViewModel : ObservableObject
     /// <summary>Why the PC refused or could not apply the last lock or unlock; empty otherwise.</summary>
     [ObservableProperty]
     public partial string LockProblem { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The internet policy the PC enforces — its own word, from <c>InternetState</c> (M6 portion
+    /// 3, D-73): <c>OPEN</c> for none, or while this console cannot see the PC.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasInternetPolicy), nameof(InternetBadge))]
+    public partial InternetPolicy.Types.Mode InternetMode { get; set; } = InternetPolicy.Types.Mode.Open;
+
+    /// <summary>The preset the whitelist came from, for the badge; empty for a block or an unnamed list.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(InternetBadge))]
+    public partial string InternetPreset { get; set; } = string.Empty;
+
+    /// <summary>"Internet blocked by this console, 42 min left", with the PC's reasons; empty while open.</summary>
+    [ObservableProperty]
+    public partial string InternetText { get; set; } = string.Empty;
+
+    /// <summary>Why the PC refused or could not apply the last internet policy, or why it is not proven open; empty otherwise.</summary>
+    [ObservableProperty]
+    public partial string InternetProblem { get; set; } = string.Empty;
+
+    public bool HasInternetPolicy => InternetMode != InternetPolicy.Types.Mode.Open;
+
+    /// <summary>"NO INTERNET", "SITES: Java docs", "SITES ONLY".</summary>
+    public string InternetBadge => InternetMode switch
+    {
+        InternetPolicy.Types.Mode.Blocked => Strings.Get("Tile.InternetBlockedBadge"),
+        InternetPolicy.Types.Mode.Whitelist when InternetPreset.Length > 0 => Strings.Format("Tile.InternetWhitelistBadgeNamed", InternetPreset),
+        InternetPolicy.Types.Mode.Whitelist => Strings.Get("Tile.InternetWhitelistBadge"),
+        _ => string.Empty,
+    };
 
     /// <summary>"locked by this console", "locked by Teacher laptop", with the weakness when there is one; empty while unlocked.</summary>
     public string LockText =>
@@ -258,6 +291,44 @@ public sealed partial class MachineTileViewModel : ObservableObject
         LockReason = state.InputBlocked ? string.Empty : state.Reason.Length > 0 ? OverlayReasonText(state.Reason) : Strings.Get("Lock.InputNotBlocked");
     }
 
+    /// <summary>The internet badge follows the PC's <c>InternetState</c> alone; an unlinked PC shows none.</summary>
+    private void RefreshInternet(AgentConnection? connection, string? thisInstanceId, Func<string, string>? nameOfInstance)
+    {
+        var state = connection?.InternetState;
+        InternetMode = connection?.InternetMode ?? InternetPolicy.Types.Mode.Open;
+        var reasons = state is null ? string.Empty : InternetReasonText(state.Reason);
+        InternetProblem = string.Join("; ", new[] { connection?.InternetProblem ?? string.Empty, InternetMode == InternetPolicy.Types.Mode.Open ? reasons : string.Empty }
+            .Where(t => t.Length > 0));
+        if (!HasInternetPolicy || state is null)
+        {
+            InternetPreset = string.Empty;
+            InternetText = string.Empty;
+            return;
+        }
+
+        InternetPreset = state.PresetName;
+        var by = thisInstanceId is not null && string.Equals(state.SetByInstance, thisInstanceId, StringComparison.OrdinalIgnoreCase)
+            ? Strings.Get("Lock.ByThisConsole")
+            : state.SetByInstance.Length == 0 ? Strings.Get("Lock.ByUnknown") : nameOfInstance?.Invoke(state.SetByInstance) ?? state.SetByInstance;
+        var minutes = (int)Math.Ceiling(state.RemainingSeconds / 60.0);
+        var text = InternetMode == InternetPolicy.Types.Mode.Blocked
+            ? Strings.Format("Tile.InternetBlockedBy", by, minutes)
+            : Strings.Format("Tile.InternetWhitelistBy", state.AllowedHosts.Count, by, minutes);
+        if (InternetMode == InternetPolicy.Types.Mode.Whitelist && state.RefusedRecently.Count > 0)
+        {
+            text += "\n" + Strings.Format("Tile.InternetRefused", state.RefusedRecently.Count);
+        }
+
+        InternetText = reasons.Length > 0 ? text + "\n" + reasons : text;
+    }
+
+    /// <summary>The PC's <c>InternetState.reason</c> codes in words; an unknown code shown as itself, never hidden.</summary>
+    public static string InternetReasonText(string reason) =>
+        string.Join("; ", OverlayReasons.Split(reason).Select(code =>
+            InternetReasons.IsKnown(code)
+                ? Strings.Get("Internet." + code[(code.IndexOf('.') + 1)..])
+                : code.StartsWith("internet.", StringComparison.Ordinal) ? code[9..].Replace('_', ' ') : code.Replace('_', ' ')));
+
     /// <summary>A known capture reason in words; an unknown one as the code itself, so a new reason is never hidden.</summary>
     public static string CaptureReasonText(string reason) =>
         reason is "no_desktop" or "access_lost" or "no_duplication" or "gdi_failed" or "open_failed" or "failed"
@@ -316,6 +387,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
 
         SessionLocked = connection?.SessionLocked ?? false;
         RefreshLock(connection, thisInstanceId, nameOfInstance);
+        RefreshInternet(connection, thisInstanceId, nameOfInstance);
         NoSession = connection?.NoSession ?? false;
         HelperDown = connection?.HelperAlive == false && !NoSession;
         CaptureProblem = connection?.CaptureProblem ?? string.Empty;

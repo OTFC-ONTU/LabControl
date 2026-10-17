@@ -474,9 +474,9 @@ public class LockTests
 
         public MachineResult LiftOverlay() => Boom(nameof(LiftOverlay));
 
-        public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced) => Boom(nameof(ApplyInternet));
+        public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced, Action recordDisplaced) => Boom(nameof(ApplyInternet));
 
-        public MachineResult LiftInternet() => Boom(nameof(LiftInternet));
+        public MachineResult LiftInternet(DisplacedSettings displaced) => Boom(nameof(LiftInternet));
 
         public MachineResult ApplyExam(ExamSession session) => Boom(nameof(ApplyExam));
 

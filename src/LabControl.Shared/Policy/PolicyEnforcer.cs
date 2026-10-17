@@ -34,6 +34,10 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     private readonly Timer _timer;
     private readonly Lock _lock = new();
     private readonly Action<Overlay, string> _onOverlay;
+    private readonly Action<InternetPolicy, string> _onInternet;
+    private readonly IMachineState _machine;
+    private readonly Timer _refusedTimer;
+    private long _publishedRefusedVersion = -1;
     private bool _started;
     private bool _stopped;
     private bool _mutexUnavailableLogged;
@@ -65,6 +69,7 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(labId);
         ArgumentNullException.ThrowIfNull(log);
         _link = link;
+        _machine = machine;
         _log = log;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _mutexName = mutexName;
@@ -74,6 +79,8 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         Journal.Reported += OnReported;
         _timer = new Timer(_ => Tick(), null, Timeout.Infinite, Timeout.Infinite);
         _onOverlay = OnOverlay;
+        _onInternet = OnInternet;
+        _refusedTimer = new Timer(_ => RefreshRefused(), null, Timeout.Infinite, Timeout.Infinite);
         Broadcast = new BroadcastReceiver(link, machine, log, _clock, broadcastCeiling, broadcastStallTimeout);
         Broadcast.Changed += () => Safe("broadcast", () => Publish(Journal.OverlayStateOf(_clock().ToUnixTimeSeconds())));
     }
@@ -131,7 +138,9 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         // Subscribed and published whatever the pass did: a link that never hears the enforcer
         // would leave the console waiting on every Overlay.
         Safe("start", () => _link.OverlayReceived += _onOverlay);
+        Safe("start", () => _link.InternetPolicyReceived += _onInternet);
         Safe("start", () => Publish(Journal.OverlayStateOf(_clock().ToUnixTimeSeconds())));
+        Safe("start", PublishInternet);
         Rearm();
         return outcome;
     }
@@ -207,6 +216,15 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         }
 
         Safe("stop", () => _link.OverlayReceived -= _onOverlay);
+        Safe("stop", () => _link.InternetPolicyReceived -= _onInternet);
+        try
+        {
+            await _refusedTimer.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "disposing the refused-names timer failed: {Message}", ex.Message);
+        }
         try
         {
             await Broadcast.DisposeAsync();
@@ -296,6 +314,143 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         });
     }
 
+    /// <summary>True while a firewall or DNS policy is held: the agent refuses <c>self_update</c> then (D-69 item 6). Never throws.</summary>
+    public bool HoldsNetworkPolicy
+    {
+        get
+        {
+            try
+            {
+                return Journal.HoldsNetworkPolicy;
+            }
+            catch (Exception ex)
+            {
+                _log.LogDebug(ex, "reading the held policy failed: {Message}", ex.Message);
+                return true;
+            }
+        }
+    }
+
+    /// <summary>From the link's read thread: handed to a worker at once, never waited for.</summary>
+    private void OnInternet(InternetPolicy policy, string instanceId) => _ = Task.Run(() => ApplyInternet(policy, instanceId));
+
+    /// <summary>
+    /// An <c>InternetPolicy</c> already past the ownership gate (D-73), applied under the mutex
+    /// and answered with what the PC enforces afterwards. Synchronous, like <see cref="Apply"/>;
+    /// never throws, and a busy or failed pass answers with a <c>problem</c>.
+    /// </summary>
+    public void ApplyInternet(InternetPolicy policy, string setByInstance)
+    {
+        Safe("internet", () =>
+        {
+            if (policy is null || setByInstance is null)
+            {
+                _log.LogWarning("an internet policy with no {What} was handed to the enforcer; ignored", policy is null ? "message" : "instance");
+                return;
+            }
+
+            var outcome = Guarded("internet", () => PublishInternet(Journal.SetInternet(policy, setByInstance, _clock().ToUnixTimeSeconds(), Runtime())));
+            if (outcome != PassOutcome.Ran)
+            {
+                AnswerInternet(new InternetState
+                {
+                    Mode = InternetPolicy.Types.Mode.Unspecified,
+                    Problem = outcome == PassOutcome.Busy
+                        ? PolicyEvents.Text("Busy", (long)_mutexWait.TotalSeconds)
+                        : PolicyEvents.Text("EnforcerFailed", "internet", _lastFailure),
+                });
+            }
+
+            Rearm();
+        });
+    }
+
+    /// <summary>The machine's live side; <see cref="Policy.InternetRuntime.None"/> if it throws.</summary>
+    private InternetRuntime Runtime()
+    {
+        try
+        {
+            return _machine.InternetRuntime() ?? Policy.InternetRuntime.None;
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "reading the internet runtime failed: {Message}", ex.Message);
+            return Policy.InternetRuntime.None;
+        }
+    }
+
+    private void PublishInternet() => PublishInternet(Journal.InternetStateOf(_clock().ToUnixTimeSeconds(), Runtime()));
+
+    /// <summary>Hands the state to the link and keeps the refused-names refresh running while a whitelist is in force.</summary>
+    private void PublishInternet(InternetState state)
+    {
+        try
+        {
+            _link.PublishInternetState(state);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "could not publish the internet state: {Message}", ex.Message);
+        }
+
+        lock (_lock)
+        {
+            if (_stopped)
+            {
+                return;
+            }
+
+            try
+            {
+                _publishedRefusedVersion = Runtime().RefusedVersion;
+                var interval = state.Mode == InternetPolicy.Types.Mode.Whitelist ? Defaults.InternetStateRefusedInterval : Timeout.InfiniteTimeSpan;
+                _refusedTimer.Change(interval, interval);
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+    }
+
+    private void AnswerInternet(InternetState problem)
+    {
+        try
+        {
+            _link.AnswerInternetProblem(problem);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "could not answer the internet policy: {Message}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Every <see cref="Defaults.InternetStateRefusedInterval"/> while a whitelist is in force:
+    /// re-sends the state when the resolver refused something new, so the teacher's list of
+    /// missing names stays current without thirty PCs sending one message per refusal (D-74).
+    /// </summary>
+    private void RefreshRefused()
+    {
+        Safe("refused", () =>
+        {
+            long published;
+            lock (_lock)
+            {
+                if (_stopped)
+                {
+                    return;
+                }
+
+                published = _publishedRefusedVersion;
+            }
+
+            if (Runtime().RefusedVersion != published)
+            {
+                PublishInternet();
+            }
+        });
+    }
+
     private void Tick()
     {
         Safe("tick", () =>
@@ -308,6 +463,10 @@ public sealed class PolicyEnforcer : IAsyncDisposable
                 if (sessions.Count > 0)
                 {
                     Publish(Journal.OverlayStateOf(now));
+                    if (sessions.Any(s => s is InternetSession))
+                    {
+                        PublishInternet();
+                    }
                 }
             });
 

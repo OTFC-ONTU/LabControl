@@ -74,10 +74,14 @@ public sealed class InternetSession : PolicySession
     public string PresetName { get; set; } = string.Empty;
 }
 
-/// <summary>One interface's DNS servers before a whitelist policy pointed them at the loopback resolver.</summary>
+/// <summary>One interface's DNS servers, for one address family, before a whitelist policy pointed them at the loopback resolver.</summary>
 public sealed class DisplacedDns
 {
+    /// <summary>The interface's GUID (<c>{…}</c>), the key <c>SetInterfaceDnsSettings</c> takes (D-74).</summary>
     public string Interface { get; set; } = string.Empty;
+
+    /// <summary>True for the interface's IPv6 DNS servers; an interface displaced in both families has two entries.</summary>
+    public bool Ipv6 { get; set; }
 
     /// <summary>True when the servers came from DHCP — the restore is "back to DHCP", not the list.</summary>
     public bool Dhcp { get; set; }
@@ -101,11 +105,19 @@ public sealed class DisplacedSettings
     /// <summary>The firewall rules the agent owns in <see cref="Defaults.InternetFirewallRuleGroup"/>; deleted on restore, the <c>agent.exe</c> exemption last.</summary>
     public List<string> OwnedRules { get; set; } = [];
 
+    /// <summary>
+    /// Other programs' outbound allow rules the policy switched off so they cannot reach past
+    /// it (owner decision 2026-10-17, D-73 item 4), as fingerprints — firewall rule names are
+    /// not unique. A refined restore switches them back on; the unconditional restore cannot
+    /// know them, and leaves them off, which changes nothing while outbound is allowed.
+    /// </summary>
+    public List<string> DisabledRules { get; set; } = [];
+
     /// <summary>Set only after native read-back proved the displacement took (the D-47 discipline).</summary>
     public bool Applied { get; set; }
 
     [JsonIgnore]
-    public bool IsEmpty => ProfileDefaultOutbound.Count == 0 && Dns.Count == 0 && OwnedRules.Count == 0;
+    public bool IsEmpty => ProfileDefaultOutbound.Count == 0 && Dns.Count == 0 && OwnedRules.Count == 0 && DisabledRules.Count == 0;
 }
 
 /// <summary>

@@ -52,6 +52,9 @@ public interface IDialogs
     /// <summary>The <i>Lock screens</i> dialog (M6 portion 1, D-70): message and duration; the ceiling and the Ctrl+Alt+Del line are stated in it.</summary>
     Task<LockAnswer?> LockScreensAsync(int pcCount);
 
+    /// <summary>The <i>Internet</i> dialog (M6 portion 3, D-73): mode, sites and presets, duration, and the refused names with their <i>Allow</i>.</summary>
+    Task<InternetAnswer?> InternetAsync(InternetDialogModel model);
+
     Task<string?> PickFolderAsync(string title);
 
     /// <summary>The development-only <i>Push agent build</i> dialog (D-33): which folder, which version number; returns the build read from it.</summary>

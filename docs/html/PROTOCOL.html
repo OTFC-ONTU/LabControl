@@ -613,27 +613,56 @@ are delivered without opening. FakeAgent saves real verified bytes under its own
 <code>Materials</code> and only simulates opening. It reports received bytes as job progress, and
 replaces an older file only after a successful pull; failures remove the partial file.
 One toolbar selection creates one batch for all file/PC pairs. No wire fields changed.</p>
-<h2 id="internet-policy">Internet policy<a class="anchor" href="#internet-policy" aria-label="Link to this section">#</a></h2>
-<pre><code>InternetPolicy {
-  string   session_id;            // one per policy application, like an exam session
-  Mode     mode;                  // OPEN | WHITELIST | BLOCKED
-  repeated string allowed_hosts;  // WHITELIST only: hostnames, optional leading &quot;*.&quot;
-  int64    until_unix;            // 0 = until lifted; otherwise the agent restores itself here
-  int64    hard_limit_unix;       // always set; never more than 8 h out
-  string   preset_name;           // shown on the tile badge and in the student banner
-}
+<h2 id="internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, <code>D-73</code>, <code>D-74</code>)<a class="anchor" href="#internet-policy-m6-portion-3-d-73-d-74" aria-label="Link to this section">#</a></h2>
+<pre><code>InternetPolicy { session_id, mode: OPEN | WHITELIST | BLOCKED, allowed_hosts,
+                 until_seconds, hard_limit_seconds, preset_name, amend_hosts }   console → agent, on Link
+InternetState  { mode, session_id, until_unix, resolver_active, refused_recently,
+                 hard_limit_unix, remaining_seconds, set_by_instance, preset_name,
+                 allowed_hosts, problem, reason }                                  agent → console
 </code></pre>
-<p>Sent as its own <code>ConsoleMessage</code> for a standalone policy (<code>docs/ARCHITECTURE.md</code> §6.2) and
-embedded in <code>ExamMode.internet</code> for an exam. The agent keeps at most one of each, persisted;
-the exam's wins while the exam is active and the standalone one is re-applied when the
-exam ends if it is still within its limits. <code>OPEN</code> with <code>until_unix = 0</code> lifts a standalone
-policy. The agent answers every change, and every service start, with:</p>
-<pre><code>InternetState { mode, session_id, until_unix, resolver_active,
-                repeated string refused_recently }   // names the whitelist resolver refused
-</code></pre>
-<p><code>refused_recently</code> is what lets the teacher see which CDN hostname a site needs.
-Enforcement (firewall rule group, loopback resolver, DNS restore) is described in
-<code>docs/ARCHITECTURE.md</code> §6.2; the fail-safe rules are those of exam mode below.</p>
+<p>Sent as its own <code>ConsoleMessage</code> for a standalone policy (<code>docs/ARCHITECTURE.md</code> §6.2) and,
+from portion 4, embedded in <code>ExamMode.internet</code> for an exam. <code>WHITELIST</code> and <code>BLOCKED</code> start
+or replace the standalone policy; <code>OPEN</code> lifts it, whatever its session. <code>allowed_hosts</code> are
+hostnames with an optional leading <code>*.</code>, which also matches the name itself (<code>*.jetbrains.com</code>
+covers <code>jetbrains.com</code>); the agent normalizes each (a pasted URL keeps only its host, IDN
+becomes punycode) and drops one that does not normalize. <strong>Both limits are durations from
+arrival</strong>, stamped on the PC's own clock like <code>Overlay</code>'s (<code>D-70</code> item 6): <code>until_seconds</code>
+(0 = until lifted, negative = refused as already ended) and <code>hard_limit_seconds</code>, a proposal
+the agent clamps to <code>Defaults.InternetPolicyHardLimit</code> (8 h), 0 or less yielding the ceiling.
+<code>amend_hosts</code> changes only the host list of the session <code>session_id</code> the PC holds, keeping its
+timing — the console's <em>Allow</em> on a refused name; it is refused when the PC holds no such
+whitelist. No build ever sent the absolute <code>until_unix</code> / <code>hard_limit_unix</code> these fields
+replaced, so fields 4 and 5 were renamed in place.</p>
+<p><strong>What the PC answers.</strong> <code>InternetState</code>, on every change, after every <code>Welcome</code> (the latest
+one, re-sent like <code>OverlayState</code>), when the resolver's refused names change (at most every
+<code>Defaults.InternetStateRefusedInterval</code>, 2 s), and as the answer to a refused or failed
+<code>InternetPolicy</code>. <code>mode</code> is what the PC <strong>enforces now</strong> — <code>OPEN</code> for nothing — the exam's
+policy while one is in force (portion 4), else the standalone one; never an echo. The stamps
+are the agent's own, <code>remaining_seconds</code> is how long is left as of sending, <code>allowed_hosts</code>
+the normalized patterns enforced, <code>refused_recently</code> the names the whitelist resolver refused
+within <code>Defaults.WhitelistRefusedWindow</code> (10 min), most recent first, at most
+<code>Defaults.WhitelistRefusedMax</code> (50), noise such as single-label names, <code>wpad</code>, <code>.local</code> and
+Windows' connectivity probes left out. <code>problem</code> is why a policy was refused or could not be
+applied, in the agent's words; a refusal carries <code>mode</code> unspecified and does not replace the
+latest state. <code>reason</code> is zero or more stable codes the console puts into words —
+<code>internet.restore_unconfirmed</code> (the last restore could not be proven by read-back),
+<code>internet.firewall_off</code> (Windows Firewall is off for a profile in use: cannot enforce),
+<code>internet.resolver_down</code>, <code>internet.no_upstream</code>, <code>internet.exam_wins</code> (the standalone policy
+waits under the exam's).</p>
+<p><strong>Who may send it.</strong> The ownership gate of <code>Overlay</code> (<code>D-69</code> item 7), in the same read loop,
+failing closed when the link is unbound; a refusal answers <code>InternetState { mode: MODE_UNSPECIFIED, problem }</code>. Any console of the lab may lift a policy it can see; a <code>teacher</code>-access console may
+set one. While a policy is applied — or its originals are not yet proven restored — the agent
+answers <code>self_update</code> with a refusal (<code>D-69</code> item 6): the <code>agent.exe</code> exemption is pinned to
+its version directory.</p>
+<p><strong>How it ends.</strong> On the PC's own clock at <code>until_unix</code> or the clamped hard limit, on <code>OPEN</code>,
+and never on lab departure in this portion (portion 6 sets the departure contract). Persisted
+in <code>policy.json</code>: after a restart the PC comes back <strong>open</strong> before anything is re-applied,
+then re-applies a policy still within its limits with the limit re-clamped. The watchdog task
+<code>LabControl Policy Restore</code> restores a PC whose service is not running and re-applies nothing
+(<code>D-73</code> item 7). Events: <code>policy.reapplied</code>, <code>policy.apply_failed</code>, <code>policy.restore_failed</code>,
+<code>policy.expired</code>, <code>policy.unreadable</code>, <code>policy.busy</code>, <code>policy.failed</code>. An agent from before
+portion 3 answers <code>problem</code> &quot;cannot enforce internet policy yet&quot;; one from before M6 ignores the
+message.</p>
 <h2 id="exam-mode">Exam mode<a class="anchor" href="#exam-mode" aria-label="Link to this section">#</a></h2>
 <pre><code>ExamMode {
   string   session_id;            // one per exam, so late joiners get the same state
@@ -1359,9 +1388,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-17 22:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 23:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>
 </body>
 </html>

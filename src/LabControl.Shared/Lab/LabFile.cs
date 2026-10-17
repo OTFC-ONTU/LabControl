@@ -107,7 +107,8 @@ public sealed record LabFileMergeReport(int MachinesAdded, int MachinesUpdated, 
 public static class LabFile
 {
     /// <summary>Builds the payload from a console's own documents; <paramref name="snapshotVersion"/> is the caller's monotonic counter.</summary>
-    public static LabFilePayload Snapshot(LabKey lab, LabDocument labDocument, ScriptsDocument? scripts, string issuedByInstanceId, string issuedByInstanceName, long snapshotVersion, DateTimeOffset now)
+    public static LabFilePayload Snapshot(LabKey lab, LabDocument labDocument, ScriptsDocument? scripts, string issuedByInstanceId, string issuedByInstanceName, long snapshotVersion, DateTimeOffset now,
+        InternetPresetsDocument? internetPresets = null)
     {
         var authority = lab.Document.Authority;
         return new LabFilePayload
@@ -133,6 +134,7 @@ public static class LabFile
             Layout = labDocument.Layout.Select(t => new LayoutTile { Number = t.Number, Column = t.Column, Row = t.Row }).ToList(),
             Revocations = labDocument.Revocations.Select(r => new RevocationRecord { Serial = r.Serial, RevokedAtUnix = r.RevokedAtUnix, Reason = r.Reason, Signature = r.Signature }).ToList(),
             Scripts = scripts is null ? null : CopyScripts(scripts),
+            InternetPresets = internetPresets is null ? null : CopyInternetPresets(internetPresets),
         };
     }
 
@@ -425,4 +427,7 @@ public static class LabFile
 
     private static ScriptsDocument CopyScripts(ScriptsDocument scripts) =>
         JsonSerializer.Deserialize<ScriptsDocument>(JsonSerializer.SerializeToUtf8Bytes(scripts, JsonStore.Options), JsonStore.Options) ?? new ScriptsDocument();
+
+    private static InternetPresetsDocument CopyInternetPresets(InternetPresetsDocument presets) =>
+        JsonSerializer.Deserialize<InternetPresetsDocument>(JsonSerializer.SerializeToUtf8Bytes(presets, JsonStore.Options), JsonStore.Options) ?? new InternetPresetsDocument();
 }

@@ -55,7 +55,7 @@ public class ProtocolTests
             SessionId = "i1",
             Mode = InternetPolicy.Types.Mode.Whitelist,
             AllowedHosts = { "*.jetbrains.com", "docs.oracle.com" },
-            HardLimitUnix = 28_800,
+            HardLimitSeconds = 28_800,
             PresetName = "Java docs",
         };
 

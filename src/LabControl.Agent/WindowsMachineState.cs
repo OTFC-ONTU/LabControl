@@ -6,13 +6,12 @@ namespace LabControl.Agent;
 
 /// <summary>
 /// What a real PC does with a policy (M6, D-69): the Windows half of the
-/// <see cref="PolicyEnforcer"/>. In portion 1 only the overlay exists — a lock goes down the
-/// helper pipe as an <c>Overlay</c> and the helper's <c>overlay_state</c> comes back through
-/// <see cref="SessionSupervisor"/> — so the restore steps have nothing to restore yet (the
-/// overlay lives in a helper that a restart has already ended, D-69 item 2) and the internet
-/// and exam calls answer <see cref="MachineOutcome.NotInThisBuild"/> without touching anything.
-/// Portion 3 fills <see cref="RestoreDefaults"/>, <see cref="RefineRestore"/> and
-/// <see cref="Confirm"/> with the firewall, DNS and watchdog-task work; the hooks are marked.
+/// <see cref="PolicyEnforcer"/>. A lock goes down the helper pipe as an <c>Overlay</c> and the
+/// helper's <c>overlay_state</c> comes back through <see cref="SessionSupervisor"/>; the overlay
+/// needs no restore, it lives in a helper a restart has already ended (D-69 item 2). Since portion 3 the
+/// restore steps and the internet calls are <see cref="WindowsInternetControl"/>'s — the
+/// firewall, the DNS, the resolver and the watchdog task (D-73, D-74); the exam calls still
+/// answer <see cref="MachineOutcome.NotInThisBuild"/> without touching anything.
 /// <para>
 /// Since portion 2 the broadcast goes the same way (D-71): <c>BROADCAST_START</c> and
 /// <c>BROADCAST_STOP</c> as <c>Overlay</c>s, every frame as <c>ServiceMessage.broadcast_frame</c>,
@@ -28,6 +27,7 @@ internal sealed class WindowsMachineState : IMachineState
     private readonly Func<ServiceMessage, bool> _sendToHelper;
     private readonly Func<ServiceMessage, ValueTask<bool>> _sendToHelperAsync;
     private readonly ILogger _log;
+    private readonly WindowsInternetControl _internet;
 
     /// <param name="sendToHelper">Writes a message down the helper pipe, fire-and-forget; <c>false</c> when no helper is connected.</param>
     /// <param name="sendToHelperAsync">The same, waiting until it is written — for broadcast frames, so a slow helper holds the stream back.</param>
@@ -36,28 +36,15 @@ internal sealed class WindowsMachineState : IMachineState
         _sendToHelper = sendToHelper;
         _sendToHelperAsync = sendToHelperAsync;
         _log = log;
+        _internet = new WindowsInternetControl(log, Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "agent.exe"));
     }
 
-    public MachineResult RestoreDefaults()
-    {
-        // Portion 3 (D-69 item 2, D-73): every profile's default outbound action to Allow,
-        // the owned rule group with the agent.exe exemption last, loopback DNS back to DHCP,
-        // the resolver stopped, the watchdog task deleted. In portion 1 nothing on the machine
-        // outlives the helper, so there is nothing to put back.
-        return MachineResult.Done;
-    }
+    /// <summary>The internet half of the unconditional restore (D-69 item 2, D-73); the overlay lives in a helper a restart has already ended.</summary>
+    public MachineResult RestoreDefaults() => _internet.RestoreDefaults();
 
-    public MachineResult RefineRestore(DisplacedSettings displaced)
-    {
-        // Portion 3: a static DNS list back exactly, a profile that was genuinely block-all.
-        return displaced.IsEmpty ? MachineResult.Done : MachineResult.NotInThisBuild(PolicyEvents.Text("KindInternet"));
-    }
+    public MachineResult RefineRestore(DisplacedSettings displaced) => _internet.RefineRestore(displaced);
 
-    public MachineResult Confirm()
-    {
-        // Portion 3: read the firewall profiles and DNS back. Nothing to confirm yet.
-        return MachineResult.Done;
-    }
+    public MachineResult Confirm() => _internet.Confirm();
 
     public MachineResult ApplyOverlay(OverlaySession session)
     {
@@ -126,14 +113,12 @@ internal sealed class WindowsMachineState : IMachineState
         return MachineResult.Done;
     }
 
-    public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced)
-    {
-        // Portion 3 (D-73, D-74): the watchdog task is armed here, right after the first
-        // displaced setting is confirmed applied (UpdateRecovery.Arm pattern).
-        return MachineResult.NotInThisBuild(PolicyEvents.KindName(session));
-    }
+    public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced, Action recordDisplaced) =>
+        _internet.Apply(session, displaced, recordDisplaced);
 
-    public MachineResult LiftInternet() => MachineResult.NotInThisBuild(PolicyEvents.Text("KindInternet"));
+    public MachineResult LiftInternet(DisplacedSettings displaced) => _internet.Lift(displaced);
+
+    public InternetRuntime InternetRuntime() => _internet.Runtime();
 
     public MachineResult ApplyExam(ExamSession session) => MachineResult.NotInThisBuild(PolicyEvents.KindName(session));
 

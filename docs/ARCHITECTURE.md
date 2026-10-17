@@ -204,6 +204,7 @@ What the machines share and what each keeps to itself:
 | Revocation list | `lab.json` on each machine **and** every agent | merged as a set (§3.7.3); a console learns from the first agent that connects what the other console revoked |
 | Package catalog, cached installers | that machine only | export / import a backup, or copy the `packages/` directory; the console shows *catalog last changed on <instance>* so a stale copy is visible |
 | Script library (`scripts.json`) | that machine only | inside the backup (`D-38`); seeded from the console's built-in scripts on a first run that has no backup |
+| Internet presets (`internet-presets.json`) | that machine only | inside the backup and the lab file, like the script library (`D-73`); one example preset on a first run |
 | Logs, job results | that machine only | never |
 
 The rule that follows from the table: **the lab's truth is the lab key plus what the agents
@@ -430,6 +431,8 @@ enrollment.json   outstanding single-use enrollment codes and which ones were bu
 scripts.json      the script library (D-31, D-38): name, description, shell, run-as,
                   timeout and text per script; seeded from the console's built-in
                   scripts/library/ on the first run, inside the backup
+internet-presets.json  named whitelists (M6 portion 3, D-73): name and host patterns;
+                  one example on the first run, inside the backup and the lab file
 packages/         package catalog: <name>.yaml + cached installer binaries
 logs/             per-day console log + per-command result bundles
 ```
@@ -461,6 +464,7 @@ labs/
                   MachineRecord.RevocationSerialsSeen, MachineRecord.LastInstanceObservedUnix
     enrollment.json  administrator profiles only; codes imported from a backup are dormant (D-60)
     scripts.json
+    internet-presets.json  M6 portion 3 (D-73)
     access.json   teacher profiles: pending request / grant metadata (D-56)
     packages/
     logs/         events-*, jobs-*, batches/ — per lab
@@ -494,8 +498,8 @@ what keeps §3.6 working a year from now, when the backup being restored was wri
 older build than the console restoring it.
 
 Created on first launch by the setup wizard. **Backup** = `lab-key.lck` + `lab.json` +
-`enrollment.json` + `scripts.json` + the catalog (`BackupPayload`: Lab, Catalog,
-Enrollment, Scripts), exported as one file (`<lab> <date>.lcbak`): the key document as it is —
+`enrollment.json` + `scripts.json` + `internet-presets.json` + the catalog (`BackupPayload`:
+Lab, Catalog, Enrollment, Scripts, InternetPresets), exported as one file (`<lab> <date>.lcbak`): the key document as it is —
 already encrypted under its holders and the recovery code — and the rest sealed with
 AES-256-GCM under the same master key, so whoever can open the lab key can open the backup
 and nobody else can read even the machine list (`D-26`). It is what makes §3.6 a
@@ -618,7 +622,7 @@ limitation. Source files must remain unchanged and available until all jobs comp
 | Exam mode | A composable set of independent switches, not a single mode (see §6.1). |
 | — timer | Countdown rendered by the helper; the deadline is absolute (console clock, skew-corrected at `Hello`) so it keeps running if the link drops, and the mode ends by itself. |
 | — app whitelist | Helper subscribes to process-start events (WMI `Win32_ProcessStartTrace`, polling fallback) and terminates anything outside the allowed list. Matching is by **executable path/name only** — a process started by an allowed program is judged on its own name, not on its parent (owner's choice: the simpler rule). Hard-coded never-touch set: session, shell and OS processes, and LabControl itself. |
-| Internet control | Three modes per PC — *open*, *whitelist* (named sites only), *blocked* — as a standalone action on one PC or the whole lab, and as the exam mode's internet switch. Enforcement is always Windows Firewall: outbound blocked in a LabControl rule group, exempting the lab's own subnet (so the console, the file channel and the printer keep working) and, in whitelist mode, the addresses of allowed sites. Names become addresses through a small resolver the agent runs on the loopback interface while a whitelist is active: it forwards allowed names upstream, records the answers as allow rules, and refuses everything else; encrypted-DNS bypasses fail on the firewall anyway. Fail-safe exactly like exam mode: the policy carries an expiry and a hard limit, is removed on service start before anything is re-applied, and a crashed agent can never leave a PC offline (§6.2, `D-22`). |
+| Internet control | **Built (M6 portion 3), not yet run on Windows.** Three modes per PC — *open*, *whitelist* (named sites only), *blocked* — as a standalone action on one PC or the whole lab, and (portion 4) as the exam mode's internet switch. Enforcement is Windows Firewall: every profile's default outbound action set to *Block*, after the rule group `LabControl Internet` opened the ways that stay open — `agent.exe` (pinned to its version directory: the console link, the file channel), the lab's own subnet for every program, the loopback — and after every other program's outbound allow rule outside *Core Networking* was switched off for the policy (`D-73`). In whitelist mode a resolver the agent runs on `127.0.0.1:53` and `[::1]:53`, with every interface's DNS pointed at it in both families, forwards allowed names upstream and admits the answer's addresses to one allow rule before the answer leaves; everything else is refused, and DoH gains nothing because the firewall is the gate (`D-74`). Fail-safe exactly like exam mode: durations stamped on the PC's clock, an 8 h hard limit, the originals saved before anything changes, restore first on service start, a watchdog task for a dead service (§6.2, `D-22`, `D-69`, `D-73`). |
 | — collect work | At the end (or on demand) the agent zips **one folder chosen when the exam is set up** and uploads it through `PushFile`; the console files it under `<exam>/PC-07/`. The folder is a dedicated work directory, not the whole `student` desktop, so what is collected is predictable and small. |
 | Package management | The console's *Add package* wizard takes any local `.exe`/`.msi`, suggests silent arguments for known installer families, computes the hash, writes the YAML, and offers a test install on one PC before the fleet. The catalog ships **empty** — it is filled by the teacher. |
 | Profile reset | Agent logs `student` off, deletes the profile (`Win32_UserProfile.Delete`), reboots; auto-logon recreates a pristine profile. Optional "light reset" = wipe Desktop/Documents/Downloads only. |
@@ -656,28 +660,42 @@ switch is the same mechanism with the exam's lifetime.
 | Whitelist | the lab's own subnet, plus the listed sites: hostnames with optional wildcard (`*.jetbrains.com`, `docs.oracle.com`). Hostnames only — with HTTPS a URL path is invisible to the machine, so a rule cannot say "this page but not that one" |
 | Blocked | the lab's own subnet only |
 
-Lists are saved as named presets (*Java docs*, *Nothing but the college site*) and
-reused in exam presets. A standalone policy always has a duration — *this lesson*
+Lists are saved as named presets (*Java docs*, *Nothing but the college site*), kept beside
+`lab.json` in `internet-presets.json`, carried in the backup and the lab file like the script
+library, and reused in exam presets; a new console starts with one example, *Java docs*. The
+student's screen shows nothing: the browser says the site cannot be reached, and the policy is
+visible on the teacher's tile (owner decision 2026-10-17). A standalone policy always has a duration — *this lesson*
 (default 90 min), *N minutes*, or *until I lift it* — and, like an exam, an absolute hard
 limit (`Defaults.InternetPolicyHardLimit`, 8 h) past which the agent restores the
 machine on its own. If an exam starts while a standalone policy is in force, the exam's
 policy wins; when the exam ends, the standalone one is re-applied if it is still within
 its limits, so a "no internet today" is not silently cancelled by a test.
 
-How the whitelist is enforced, because this is the part that can go wrong:
+How the whitelist is enforced, because this is the part that can go wrong (`D-73`, `D-74`):
 
-1. The agent installs the outbound block rules and the subnet exemption (same as
-   *Blocked*), plus a rule allowing UDP/TCP 53 to the loopback interface only.
-2. It starts a resolver on `127.0.0.1:53` and points the NIC's DNS at it, remembering the
-   previous DNS servers in the persisted policy state so they can be put back.
-3. For an allowed name the resolver forwards to the previous upstream, returns the real
-   answer, and adds every address in it (following CNAMEs) to the allow rule set with an
-   expiry a little longer than the record's TTL. For any other name it answers `REFUSED`.
-4. A browser that ignores the system resolver (DNS-over-HTTPS) still resolves only through
-   addresses the firewall lets it reach — which, for an unlisted site, it cannot. The
-   result is a blocked page, not a bypass.
-5. Restore = remove the rule group, stop the resolver, put the NIC's DNS back. This runs on
-   policy end, at the hard limit, and **first thing on every service start**.
+1. The agent records the originals — each profile's default outbound action, each interface's
+   DNS per address family (DHCP or the exact static list), the other programs' outbound allow
+   rules it is about to switch off — and the journal saves them **before** anything changes.
+   It arms the watchdog task, creates the `agent.exe`, local-subnet and loopback allow rules,
+   switches the other programs' outbound allow rules off (all but *Core Networking* and rules
+   that only reach the local network), and only then sets every profile's default outbound
+   action to *Block*. *Blocked* stops here.
+2. It starts a resolver on `127.0.0.1:53` and `[::1]:53` and points every interface's DNS at
+   it, in both families, with `SetInterfaceDnsSettings`; the previous servers are the upstream.
+3. For an allowed name the resolver forwards to the upstream, adds every address in the answer
+   (following CNAMEs) to the rule `LabControl Internet (sites)` **before** returning the answer,
+   and keeps it for the session (the least recently used goes past 1000 addresses). For any
+   other name it answers `REFUSED` and notes the name for the teacher; an `HTTPS`/`SVCB` query
+   for an allowed name gets an empty answer, so browsers use the A/AAAA addresses that were
+   admitted.
+4. A browser that ignores the system resolver (DNS-over-HTTPS) still reaches only addresses the
+   firewall lets through — which, for an unlisted site, it cannot. The result is a blocked page,
+   not a bypass.
+5. Restore = every profile's default outbound back to *Allow*, the resolver stopped, the rule
+   group removed with the `agent.exe` rule last, resolver-pointed DNS back to DHCP, the watchdog
+   deleted; then the originals put back exactly — static DNS, a block-all profile, the switched-off
+   rules. This runs on policy end, at the hard limit, **first thing on every service start**,
+   and from the watchdog task when the service is not running (which re-applies nothing).
 
 Known limits, accepted: a site behind a large CDN may need its CDN hostnames listed too
 (the console shows the resolver's refused names for the last minutes, so the missing one

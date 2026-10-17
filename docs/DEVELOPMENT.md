@@ -288,6 +288,17 @@ build. `FakeAgent` draws the received picture onto its simulated desktops, so th
 shows the broadcast on every simulated tile without a Windows machine; Linux consoles have
 no capture yet and say so.
 
+**M6 — trying internet control on the Mac** (portion 3, `D-73`, `D-74`). `FakeAgent` holds
+the policy without touching the Mac's network, and under a whitelist each simulated student
+"browses" one of a few documentation, CDN and font hosts every 15–30 s, so the *Internet*
+dialog's refused-names list fills within a minute and *Allow* can be tried. The real firewall,
+DNS and resolver work only on Windows; on the VM, `agent.exe --restore-policy` restores a PC
+only while the service is stopped (`sc stop LabControl` first). If the agent binaries are gone,
+undo a policy by hand: `netsh advfirewall set allprofiles firewallpolicy blockinbound,allowoutbound`,
+then `netsh advfirewall firewall delete rule name="LabControl Internet (sites)"` and the same for
+`(loopback)`, `(local subnet)` and `(agent)` (`netsh` has no `group=` for deleting, the portion-7
+lesson); DNS then needs `netsh interface ip set dns "<adapter>" dhcp` per interface.
+
 **Languages.** The product UI is English today. M7 must ship the complete product-facing
 experience in **Ukrainian, English and Russian**, including the teacher console, Windows
 Setup/removal, stock student-facing text and generated USB instructions. The console will

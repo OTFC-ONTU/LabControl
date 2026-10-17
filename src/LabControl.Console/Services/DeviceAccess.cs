@@ -96,6 +96,12 @@ public sealed class DeviceAccess
                 store.SaveScripts(payload.Scripts);
             }
 
+            if (payload.InternetPresets is not null)
+            {
+                payload.InternetPresets.LabId = payload.LabId;
+                store.SaveInternetPresets(payload.InternetPresets);
+            }
+
             // The pending identity: a key pair under the keystore and a fresh instance id. No
             // certificate yet, so nothing beacons until the grant arrives (D-56 item 3).
             DeviceAuthorization.CreateRequest(access, _newProtector(), payload.LabName, ConsoleVersion, now);
@@ -174,6 +180,12 @@ public sealed class DeviceAccess
         {
             snapshot.Scripts.LabId = profile.LabId;
             store.SaveScripts(snapshot.Scripts);
+        }
+
+        if (importScripts && snapshot.InternetPresets is not null && store.LoadInternetPresets() is null && active is not { IsDisposed: false })
+        {
+            snapshot.InternetPresets.LabId = profile.LabId;
+            store.SaveInternetPresets(snapshot.InternetPresets);
         }
 
         _bootstrap.Profiles.Upsert(profile);

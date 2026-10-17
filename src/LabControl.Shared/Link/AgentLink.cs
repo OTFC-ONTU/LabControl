@@ -77,6 +77,7 @@ public sealed partial class AgentLink : IAsyncDisposable
     private AgentService.AgentServiceClient? _client;
     private SessionState? _latestSessionState;
     private OverlayState? _latestOverlayState;
+    private InternetState? _latestInternetState;
     private VideoUplink? _video;
     private VideoControl? _videoControl;
 
@@ -450,6 +451,53 @@ public sealed partial class AgentLink : IAsyncDisposable
             lock (_gateLock)
             {
                 return _latestOverlayState;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ internet (M6 portion 3)
+
+    /// <summary>
+    /// Raised with every <c>InternetPolicy</c> the ownership gate let through (PROTOCOL
+    /// "Internet control", D-73), on the link's read thread, with the validated instance id
+    /// of the console that sent it. Like <see cref="OverlayReceived"/>: hand it on without
+    /// waiting; the enforcer answers with <see cref="PublishInternetState"/>.
+    /// </summary>
+    public event Action<InternetPolicy, string>? InternetPolicyReceived;
+
+    /// <summary>
+    /// Tells the console which internet policy the PC enforces (D-73). Sent at once while
+    /// linked and re-sent right after every <c>Welcome</c>, like <see cref="PublishOverlayState"/>;
+    /// a refusal at the gate answers on the wire but never overwrites it.
+    /// </summary>
+    public void PublishInternetState(InternetState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        lock (_gateLock)
+        {
+            _latestInternetState = state;
+            _outgoing?.TryWrite(new AgentMessage { InternetState = state });
+        }
+    }
+
+    /// <summary>Answers one <c>InternetPolicy</c> with a problem without touching the latest state; dropped when not linked.</summary>
+    public void AnswerInternetProblem(InternetState problem)
+    {
+        ArgumentNullException.ThrowIfNull(problem);
+        lock (_gateLock)
+        {
+            _outgoing?.TryWrite(new AgentMessage { InternetState = problem });
+        }
+    }
+
+    /// <summary>The last state given to <see cref="PublishInternetState"/>; <c>null</c> until the enforcer said anything.</summary>
+    public InternetState? LatestInternetState
+    {
+        get
+        {
+            lock (_gateLock)
+            {
+                return _latestInternetState;
             }
         }
     }
@@ -830,6 +878,11 @@ public sealed partial class AgentLink : IAsyncDisposable
                     outgoing.Writer.TryWrite(new AgentMessage { OverlayState = overlayState });
                 }
 
+                if (_latestInternetState is { } internetState)
+                {
+                    outgoing.Writer.TryWrite(new AgentMessage { InternetState = internetState });
+                }
+
                 // Events wait like results do (M5 portion 8): one bound to a console goes only
                 // to that console, and stays queued for it otherwise. An unbound event is
                 // about the machine and goes to whoever linked.
@@ -1080,6 +1133,10 @@ public sealed partial class AgentLink : IAsyncDisposable
                 await DeliverOverlayAsync(message.Overlay, outgoing, token);
                 break;
 
+            case ConsoleMessage.PayloadOneofCase.InternetPolicy:
+                await DeliverInternetPolicyAsync(message.InternetPolicy, outgoing, token);
+                break;
+
             default:
                 // A message this build does not know is logged and ignored, never fatal
                 // (PROTOCOL, "Versioning").
@@ -1187,6 +1244,47 @@ public sealed partial class AgentLink : IAsyncDisposable
         catch (Exception ex)
         {
             _log.LogWarning(ex, "{Pc}: the overlay handler failed on {Kind}: {Message}", Name, overlay.Kind, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// The same ownership gate for <c>InternetPolicy</c> (D-69 item 7, D-73): fails closed when
+    /// the link is unbound, answers a refusal with <c>InternetState.problem</c> and the mode
+    /// unspecified, and never touches the enforcer's latest state. A link with no handler
+    /// answers the same way, so a console never waits on a PC that cannot enforce a policy.
+    /// </summary>
+    private async Task DeliverInternetPolicyAsync(InternetPolicy policy, ChannelWriter<AgentMessage> outgoing, CancellationToken token)
+    {
+        var instanceId = LinkedInstanceId;
+        var refusal = OwnershipGate.Refusal(instanceId, BoundInstanceId, _linkedConsoleSerial, _revocations);
+        if (refusal is not null || instanceId is null)
+        {
+            _log.LogWarning("{Pc}: internet policy {Mode} refused — {Reason}", Name, policy.Mode, refusal ?? PolicyEvents.RefusedUnbound);
+            await outgoing.WriteAsync(new AgentMessage
+            {
+                InternetState = new InternetState { Mode = InternetPolicy.Types.Mode.Unspecified, Problem = refusal ?? PolicyEvents.RefusedUnbound },
+            }, token);
+            return;
+        }
+
+        var handler = InternetPolicyReceived;
+        if (handler is null)
+        {
+            _log.LogDebug("{Pc}: internet policy {Mode} arrived but nothing here enforces one", Name, policy.Mode);
+            await outgoing.WriteAsync(new AgentMessage
+            {
+                InternetState = new InternetState { Mode = InternetPolicy.Types.Mode.Unspecified, Problem = PolicyEvents.Text("NotInThisBuild", PolicyEvents.Text("KindInternet")) },
+            }, token);
+            return;
+        }
+
+        try
+        {
+            handler(policy, instanceId);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "{Pc}: the internet policy handler failed on {Mode}: {Message}", Name, policy.Mode, ex.Message);
         }
     }
 

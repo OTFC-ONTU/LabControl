@@ -48,4 +48,7 @@ public sealed class BackupPayload
 
     /// <summary><c>scripts.json</c>: the script library (D-31 item 4). Null in backups from before M4.</summary>
     public ScriptsDocument? Scripts { get; set; }
+
+    /// <summary><c>internet-presets.json</c>: the named whitelist presets (D-73). Null in backups from before M6.</summary>
+    public InternetPresetsDocument? InternetPresets { get; set; }
 }

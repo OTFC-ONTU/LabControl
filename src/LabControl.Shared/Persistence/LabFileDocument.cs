@@ -124,6 +124,9 @@ public sealed class LabFilePayload
 
     /// <summary>The script library; imported only into a profile that has no <c>scripts.json</c> yet.</summary>
     public ScriptsDocument? Scripts { get; set; }
+
+    /// <summary>The named whitelist presets (D-73); imported only into a profile that has no <c>internet-presets.json</c> yet. Null in lab files from before M6.</summary>
+    public InternetPresetsDocument? InternetPresets { get; set; }
 }
 
 /// <summary>What a <c>.lcreq</c> carries (D-56 item 4).</summary>

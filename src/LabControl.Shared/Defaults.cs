@@ -203,6 +203,8 @@ public static class Defaults
     public const int PackageCatalogSchemaVersion = 1;
     public const int BackupSchemaVersion = 1;
     public const int ScriptsSchemaVersion = 1;
+    /// <summary><c>internet-presets.json</c>, the teacher's named whitelist presets (M6, D-73).</summary>
+    public const int InternetPresetsSchemaVersion = 1;
     public const int SetupPayloadSchemaVersion = 1;
     public const int InstallationSchemaVersion = 1;
     public const int SetupSettingsSchemaVersion = 1;
@@ -229,6 +231,8 @@ public static class Defaults
     public const string PackagesDirectoryName = "packages";
     /// <summary>The script library (D-31 item 4): beside <c>lab.json</c>, inside the backup.</summary>
     public const string ScriptsFileName = "scripts.json";
+    /// <summary>The named whitelist presets (M6, D-73): beside <c>lab.json</c>, inside the backup and the lab file.</summary>
+    public const string InternetPresetsFileName = "internet-presets.json";
     public const string LogsDirectoryName = "logs";
 
     // ---------------------------------------------------------------- saved labs (M5, D-55)
@@ -1033,8 +1037,30 @@ public static class Defaults
     public const string WhitelistResolverAddress = "127.0.0.1";
     public const int WhitelistResolverPort = 53;
 
-    /// <summary>Allow rules learned from the resolver outlive the DNS record's TTL by this much.</summary>
-    public static readonly TimeSpan WhitelistRuleGrace = TimeSpan.FromMinutes(5);
+    /// <summary>The same resolver on the IPv6 loopback, so an interface whose IPv6 DNS points at <c>::1</c> is served too (D-74).</summary>
+    public const string WhitelistResolverAddressV6 = "::1";
+
+    /// <summary>
+    /// How many learned addresses the whitelist's allow rule holds (D-74). An address stays
+    /// for the whole session — a CDN answer that changes under a long download must not cut
+    /// it — and the least recently admitted one makes room past this many.
+    /// </summary>
+    public const int WhitelistAddressCap = 1000;
+
+    /// <summary>How long the whitelist resolver waits for one upstream server before trying the next (D-74).</summary>
+    public static readonly TimeSpan WhitelistUpstreamTimeout = TimeSpan.FromSeconds(2);
+
+    /// <summary>The refused names the console sees: those refused within this window (D-74).</summary>
+    public static readonly TimeSpan WhitelistRefusedWindow = TimeSpan.FromMinutes(10);
+
+    /// <summary>At most this many refused names are kept and reported, the most recent first (D-74).</summary>
+    public const int WhitelistRefusedMax = 50;
+
+    /// <summary>Queries the whitelist resolver answers at once; past this a query is dropped and the client retries (D-74).</summary>
+    public const int WhitelistMaxInFlight = 256;
+
+    /// <summary>An <c>InternetState</c> carrying only new refused names is sent at most this often per PC (D-74).</summary>
+    public static readonly TimeSpan InternetStateRefusedInterval = TimeSpan.FromSeconds(2);
 
     // ---------------------------------------------------------------- handouts
 

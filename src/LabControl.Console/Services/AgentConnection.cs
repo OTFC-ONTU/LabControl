@@ -147,6 +147,53 @@ public sealed class AgentConnection
     }
 
     /// <summary>
+    /// The internet policy the PC enforces, from its last <c>InternetState</c> (M6 portion 3,
+    /// D-73): its own word, never an echo of what this console asked. <c>null</c> until the agent
+    /// said anything. A refusal — <c>problem</c> set, mode unspecified — is kept in
+    /// <see cref="InternetProblem"/> and does not replace the last state that described the PC.
+    /// </summary>
+    public InternetState? InternetState { get; private set; }
+
+    /// <summary>Why the last <c>InternetPolicy</c> was refused or failed, until the next state without a problem; <c>null</c> otherwise.</summary>
+    public string? InternetProblem { get; private set; }
+
+    /// <summary>The policy the PC enforces: <c>OPEN</c> when none or unknown.</summary>
+    public InternetPolicy.Types.Mode InternetMode =>
+        InternetState is { Mode: InternetPolicy.Types.Mode.Whitelist or InternetPolicy.Types.Mode.Blocked } state ? state.Mode : InternetPolicy.Types.Mode.Open;
+
+    /// <summary>Merges an <c>InternetState</c>; returns <c>true</c> when what the tile shows changed.</summary>
+    public bool ApplyInternetState(InternetState state)
+    {
+        var before = InternetState?.Clone();
+        var problemBefore = InternetProblem;
+        if (state.Problem.Length > 0 && state.Mode == InternetPolicy.Types.Mode.Unspecified && InternetState is not null)
+        {
+            InternetProblem = state.Problem;
+        }
+        else
+        {
+            InternetState = state;
+            InternetProblem = state.Problem.Length > 0 ? state.Problem : null;
+        }
+
+        // remaining_seconds moves with every send; it is not a change the tile needs to redraw for.
+        var after = InternetState?.Clone();
+        if (before is not null)
+        {
+            before.RemainingSeconds = 0;
+            before.Problem = string.Empty;
+        }
+
+        if (after is not null)
+        {
+            after.RemainingSeconds = 0;
+            after.Problem = string.Empty;
+        }
+
+        return problemBefore != InternetProblem || !Equals(before, after);
+    }
+
+    /// <summary>
     /// Reads the capture and input problems out of the agent's events; returns <c>true</c>
     /// when something the tile shows changed.
     /// </summary>

@@ -390,24 +390,40 @@ message ExamState {
 message InternetPolicy {
   enum Mode {
     MODE_UNSPECIFIED = 0;
-    OPEN             = 1;
+    OPEN             = 1;  // standalone: lift the standalone policy, whatever its session
     WHITELIST        = 2;
     BLOCKED          = 3;
   }
   string session_id             = 1;  // one per application, like an exam session
   Mode   mode                   = 2;
-  repeated string allowed_hosts = 3;  // WHITELIST only; hostnames, optional leading "*."
-  int64  until_unix             = 4;  // 0 = until lifted
-  int64  hard_limit_unix        = 5;  // always set; never more than InternetPolicyHardLimit out
-  string preset_name            = 6;  // for the tile badge and the student banner
+  repeated string allowed_hosts = 3;  // WHITELIST only; hostnames, optional leading "*." (which also matches the name itself)
+  // M6 portion 3 (D-73): both limits are DURATIONS from arrival, stamped on the PC's clock --
+  // the lab has no time source (D-70 item 6). No build ever sent the absolute fields these replace.
+  int64  until_seconds          = 4;  // 0 = until lifted; negative = refused
+  int64  hard_limit_seconds     = 5;  // a proposed duration; the agent clamps it to InternetPolicyHardLimit on its own clock; <= 0 = the ceiling
+  string preset_name            = 6;  // for the tile badge
+  // Change only allowed_hosts of the session `session_id` the PC holds, keeping its timing
+  // (the console's "Allow" on a refused name, D-74); refused when the PC holds no such session.
+  bool   amend_hosts            = 7;
 }
 
+// Agent -> console: the internet policy the PC enforces now, sent on every change, after every
+// Welcome, when the refused names change (at most every InternetStateRefusedInterval), and as
+// the answer to a refused InternetPolicy (M6 portion 3, D-73). `mode` is what is enforced --
+// OPEN for nothing -- and never echoes a request that was not applied.
 message InternetState {
   InternetPolicy.Mode mode         = 1;
   string session_id                = 2;
-  int64  until_unix                = 3;
+  int64  until_unix                = 3;  // the PC's own clock; 0 = until lifted
   bool   resolver_active           = 4;
-  repeated string refused_recently = 5;  // names the whitelist resolver refused lately
+  repeated string refused_recently = 5;  // names the whitelist resolver refused lately, most recent first
+  int64  hard_limit_unix           = 6;  // the limit the agent holds, after its own clamp
+  int64  remaining_seconds         = 7;  // seconds until the PC lifts it by itself, as of sending
+  string set_by_instance           = 8;  // the console instance whose policy this is
+  string preset_name               = 9;
+  repeated string allowed_hosts    = 10; // WHITELIST: the patterns enforced, normalized
+  string problem                   = 11; // why an InternetPolicy was refused or could not be applied; empty otherwise
+  string reason                    = 12; // stable codes (internet.restore_unconfirmed, ...), space-separated; empty when all is well
 }
 
 // ---------------------------------------------------------------------------

@@ -289,6 +289,21 @@ the screen on the first frame, clamps 30 min on its own clock and ends with its 
 a lock stays on top and <code>OverlayState</code> is composed lock-first. The helper shows it in
 <code>OverlayWindow</code>'s broadcast mode with the lock's hooks. Keep frames off <code>Link</code>, keep the
 broadcast out of the journal, and never await a pipe write from a read loop.</li>
+<li><strong>M6 portion 3 is built (2026-10-17, <code>D-73</code>, <code>D-74</code>) on the Mac and has not run on Windows.</strong>
+Internet control: every firewall profile's default outbound action to <em>Block</em> after the
+<code>LabControl Internet</code> group's <code>agent.exe</code>, local-subnet and loopback rules, other programs'
+outbound allow rules switched off by fingerprint (<em>Core Networking</em> kept), and for a whitelist
+the platform-neutral <code>Shared/Internet/LoopbackResolver</code> on <code>127.0.0.1:53</code>/<code>[::1]:53</code> with every
+interface's DNS pointed at it in both families; allowed answers' addresses join one allow rule
+before the answer leaves. <code>IMachineState.ApplyInternet</code> takes a <code>recordDisplaced</code> callback (the
+originals are saved before anything changes), <code>LiftInternet</code> the displaced block. The watchdog
+<code>--restore-policy</code> does nothing while the service runs and otherwise restores without
+re-applying (<code>D-73</code> item 7); <code>self_update</code> is refused while a policy is held. Console:
+<em>Internet…</em>, <code>InternetDialog</code>, <code>InternetPresetLibrary</code> (<code>internet-presets.json</code>, in the backup
+and the lab file), refused names with <em>Allow</em> (<code>amend_hosts</code>), a tile badge from <code>InternetState</code>
+alone. Keep the limits as durations, keep reasons as codes, never record a resolver-pointed DNS
+list as an original, and never re-apply a whitelist from a short-lived process. Next: the
+portion-3 VM drill (ROADMAP M6).</li>
 <li>The Windows student agent must survive reboots and must not let a failed Win32
 operation escape the service loop.</li>
 <li>Physical lab status (2026-09-08 evening): five PCs installed and linked from the
@@ -444,7 +459,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-17 22:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 23:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

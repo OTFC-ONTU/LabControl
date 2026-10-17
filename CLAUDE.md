@@ -361,7 +361,28 @@ reserved. `LabCloseStep.Broadcast` is the first release step; a target that reli
 again (`AgentLink.LinkEpoch`). Console: *Show my screen*, *Show my screen to all*, *Stop
 showing*, the macOS permission explanation, a status-bar line, the *WATCHING* badge; the
 toolbar wraps. Tests: 818 Shared + 251 Console (`BroadcastTests`, `BroadcastVideoTests`).
-Next: the portion-2 drill on one built `.app` and the ARM64 VM (ROADMAP M6), then portion 3.
+Remaining for portion 2: physical mouse refusal, the readability check and the lab (ROADMAP M6).
+
+**M6 portion 3 is built (2026-10-17, `D-73`, `D-74`), on the Mac; not yet run on Windows.**
+Owner decisions of 2026-10-17: nothing on the student's screen, one example preset (*Java
+docs*), the refused names listed in the *Internet* dialog with an *Allow* that acts at once,
+other programs' outbound allow rules switched off for the policy. `InternetPolicy` carries
+durations (`until_seconds`, `hard_limit_seconds`) and `amend_hosts`; `InternetState` the PC's
+stamps, `remaining_seconds`, `allowed_hosts`, `refused_recently`, `problem` and `reason` codes
+(`InternetReasons`). The journal's `SetInternet` / `InternetStateOf` / `RestoreOnly`;
+`IMachineState.ApplyInternet(session, displaced, recordDisplaced)` saves the originals before
+anything changes and `LiftInternet(displaced)` is a full restore. `AgentLink` gates
+`InternetPolicy` like `Overlay`. `Shared/Internet/` holds the platform-neutral resolver
+(`HostPattern`, `DnsMessage`, `RefusedNames`, `AllowedAddressSet`, `LoopbackResolver`); the agent's
+`WindowsInternetControl` drives `WindowsFirewall` (profiles' default outbound through
+`HNetCfg.FwPolicy2`, the `LabControl Internet` group with `agent.exe` removed last, foreign rules
+by fingerprint, *Core Networking* kept), `WindowsDns` (`SetInterfaceDnsSettings`, IPv4 and IPv6)
+and `PolicyRestoreTask`. `agent.exe --restore-policy` now does nothing while the service runs and
+otherwise restores without re-applying (`D-73` item 7); `self_update` is refused while a policy is
+held. Console: *Internet…* / *Internet for all…*, `InternetDialog`, `InternetPresetLibrary`
+(`internet-presets.json`, in the backup and the lab file), the tile badge from `InternetState`
+alone. Tests: 927 Shared + 262 Console (13 skipping). Next: the portion-3 drill on the ARM64 VM
+(ROADMAP M6), then portion 4.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

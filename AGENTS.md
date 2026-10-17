@@ -149,6 +149,21 @@ the documents relevant to the task:
   a lock stays on top and `OverlayState` is composed lock-first. The helper shows it in
   `OverlayWindow`'s broadcast mode with the lock's hooks. Keep frames off `Link`, keep the
   broadcast out of the journal, and never await a pipe write from a read loop.
+- **M6 portion 3 is built (2026-10-17, `D-73`, `D-74`) on the Mac and has not run on Windows.**
+  Internet control: every firewall profile's default outbound action to *Block* after the
+  `LabControl Internet` group's `agent.exe`, local-subnet and loopback rules, other programs'
+  outbound allow rules switched off by fingerprint (*Core Networking* kept), and for a whitelist
+  the platform-neutral `Shared/Internet/LoopbackResolver` on `127.0.0.1:53`/`[::1]:53` with every
+  interface's DNS pointed at it in both families; allowed answers' addresses join one allow rule
+  before the answer leaves. `IMachineState.ApplyInternet` takes a `recordDisplaced` callback (the
+  originals are saved before anything changes), `LiftInternet` the displaced block. The watchdog
+  `--restore-policy` does nothing while the service runs and otherwise restores without
+  re-applying (`D-73` item 7); `self_update` is refused while a policy is held. Console:
+  *Internet…*, `InternetDialog`, `InternetPresetLibrary` (`internet-presets.json`, in the backup
+  and the lab file), refused names with *Allow* (`amend_hosts`), a tile badge from `InternetState`
+  alone. Keep the limits as durations, keep reasons as codes, never record a resolver-pointed DNS
+  list as an original, and never re-apply a whitelist from a short-lived process. Next: the
+  portion-3 VM drill (ROADMAP M6).
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the

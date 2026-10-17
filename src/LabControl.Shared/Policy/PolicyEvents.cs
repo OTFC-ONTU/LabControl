@@ -80,6 +80,10 @@ public static class PolicyEvents
 
     public static string RefusedNoSession => Text("RefusedNoSession");
 
+    public static string RefusedNoInternetSession => Text("RefusedNoInternetSession");
+
+    public static string RefusedUnknownMode => Text("RefusedUnknownMode");
+
     /// <summary>The teacher's word for a session kind, for the event messages.</summary>
     public static string KindName(PolicySession session) => session switch
     {
@@ -135,4 +139,31 @@ public static class OverlayReasons
 
     /// <summary>Codes as one <c>reason</c> field.</summary>
     public static string Join(IEnumerable<string> codes) => string.Join(' ', codes.Where(c => !string.IsNullOrWhiteSpace(c)));
+}
+
+/// <summary>
+/// The stable codes <c>InternetState.reason</c> carries (M6 portion 3, D-73): why an internet
+/// policy is weaker than asked, or why the PC is not proven open. Words come from the console's
+/// resources, as for <see cref="OverlayReasons"/>.
+/// </summary>
+public static class InternetReasons
+{
+    /// <summary>The last restore or lift could not be confirmed by read-back: the PC is as open as possible, not proven open.</summary>
+    public const string RestoreUnconfirmed = "internet.restore_unconfirmed";
+
+    /// <summary>Windows Firewall is switched off for a network profile in use: a policy cannot be enforced there.</summary>
+    public const string FirewallOff = "internet.firewall_off";
+
+    /// <summary>A whitelist is held but its resolver is not listening: no name resolves, so nothing outside the lab loads.</summary>
+    public const string ResolverDown = "internet.resolver_down";
+
+    /// <summary>The whitelist found no DNS server to forward allowed names to.</summary>
+    public const string NoUpstream = "internet.no_upstream";
+
+    /// <summary>The exam's internet switch is in force; the standalone policy waits underneath it (D-22).</summary>
+    public const string ExamWins = "internet.exam_wins";
+
+    private static readonly string[] Known = [RestoreUnconfirmed, FirewallOff, ResolverDown, NoUpstream, ExamWins];
+
+    public static bool IsKnown(string code) => Array.IndexOf(Known, code) >= 0;
 }

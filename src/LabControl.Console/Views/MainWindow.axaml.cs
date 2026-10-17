@@ -74,6 +74,8 @@ public partial class MainWindow : Window, IDialogs
 
     public Task<LockAnswer?> LockScreensAsync(int pcCount) => _dialogs.LockScreensAsync(pcCount);
 
+    public Task<InternetAnswer?> InternetAsync(InternetDialogModel model) => _dialogs.InternetAsync(model);
+
     public Task<LabControl.Shared.Setup.AgentBuild?> PushAgentBuildAsync(int pcCount) => _dialogs.PushAgentBuildAsync(pcCount);
 
     public void ShowScreen(ScreenViewModel screen) => _dialogs.ShowScreen(screen);

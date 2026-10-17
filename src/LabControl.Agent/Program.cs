@@ -28,7 +28,7 @@ internal static class Program
         "                                             provision this PC from a USB payload (setup.json + ca.crt)\n" +
         $"       agent.exe {Defaults.AgentVersionSwitch}                    print the version\n" +
         $"       agent.exe {Defaults.RestartServiceSwitch}            stop the '{Defaults.ServiceName}' service and start it again (used by a push, D-33)\n" +
-        $"       agent.exe {Defaults.PolicyRestoreSwitch}             restore the PC's normal settings and re-apply what policy.json still holds (the watchdog task, D-69)\n" +
+        $"       agent.exe {Defaults.PolicyRestoreSwitch}             restore the PC's normal settings while the service is stopped (the watchdog task, D-69, D-73)\n" +
         "  --verbose                                  debug logging";
 
     public static string Version =>
@@ -93,9 +93,11 @@ internal static class Program
 
         if (args.Contains(Defaults.PolicyRestoreSwitch, StringComparer.OrdinalIgnoreCase))
         {
-            // The watchdog task's entry point (D-69 item 6) and a hand tool: the same pass the
-            // service runs at start, under the same mutex, with no service and no link. Exit 0
-            // only when the machine was proven open; the task retries a nonzero exit.
+            // The watchdog task's entry point (D-69 item 6) and a hand tool. A running service owns
+            // the policy and restores at its own start, so the task leaves it alone; otherwise it
+            // restores the machine and re-applies nothing — a process that exits cannot hold a
+            // whitelist (D-73 item 7). Exit 0 only when the machine was proven open (or the
+            // service owns it); the task retries a nonzero exit.
             using var restoreLog = ConfigureLogging(interactive: !asService, verbose);
             var restoreLogger = restoreLog.CreateLogger("restore-policy");
             try
@@ -201,6 +203,12 @@ internal static class Program
             return 2;
         }
 
+        if (ServiceControl.ServiceIsRunning())
+        {
+            log.LogInformation("The {Service} service is running and owns the policy; it restores at its own start. Nothing done — stop the service first to restore by hand.", Defaults.ServiceName);
+            return 0;
+        }
+
         try
         {
             using var lease = PolicyMutex.TryAcquire();
@@ -227,9 +235,9 @@ internal static class Program
                 _ => LogLevel.Information,
             }, "{Code}: {Message}", reported.Code, reported.Message);
 
-            var outcome = journal.Start(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-            log.LogInformation("policy restore: machine {Open}, {Reapplied} session(s) re-applied, {Dropped} dropped",
-                outcome.MachineOpen ? "open" : "NOT proven open", outcome.Reapplied.Count, outcome.Dropped.Count);
+            var outcome = journal.RestoreOnly(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            log.LogInformation("policy restore: machine {Open}; nothing re-applied — the service re-applies what is still valid at its next start",
+                outcome.MachineOpen ? "open" : "NOT proven open");
             return outcome.MachineOpen ? 0 : 1;
         }
         catch (Exception ex)

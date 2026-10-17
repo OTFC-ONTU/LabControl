@@ -396,33 +396,63 @@ are delivered without opening. FakeAgent saves real verified bytes under its own
 replaces an older file only after a successful pull; failures remove the partial file.
 One toolbar selection creates one batch for all file/PC pairs. No wire fields changed.
 
-## Internet policy
+## Internet policy (M6 portion 3, `D-73`, `D-74`)
 
 ```
-InternetPolicy {
-  string   session_id;            // one per policy application, like an exam session
-  Mode     mode;                  // OPEN | WHITELIST | BLOCKED
-  repeated string allowed_hosts;  // WHITELIST only: hostnames, optional leading "*."
-  int64    until_unix;            // 0 = until lifted; otherwise the agent restores itself here
-  int64    hard_limit_unix;       // always set; never more than 8 h out
-  string   preset_name;           // shown on the tile badge and in the student banner
-}
+InternetPolicy { session_id, mode: OPEN | WHITELIST | BLOCKED, allowed_hosts,
+                 until_seconds, hard_limit_seconds, preset_name, amend_hosts }   console → agent, on Link
+InternetState  { mode, session_id, until_unix, resolver_active, refused_recently,
+                 hard_limit_unix, remaining_seconds, set_by_instance, preset_name,
+                 allowed_hosts, problem, reason }                                  agent → console
 ```
 
-Sent as its own `ConsoleMessage` for a standalone policy (`docs/ARCHITECTURE.md` §6.2) and
-embedded in `ExamMode.internet` for an exam. The agent keeps at most one of each, persisted;
-the exam's wins while the exam is active and the standalone one is re-applied when the
-exam ends if it is still within its limits. `OPEN` with `until_unix = 0` lifts a standalone
-policy. The agent answers every change, and every service start, with:
+Sent as its own `ConsoleMessage` for a standalone policy (`docs/ARCHITECTURE.md` §6.2) and,
+from portion 4, embedded in `ExamMode.internet` for an exam. `WHITELIST` and `BLOCKED` start
+or replace the standalone policy; `OPEN` lifts it, whatever its session. `allowed_hosts` are
+hostnames with an optional leading `*.`, which also matches the name itself (`*.jetbrains.com`
+covers `jetbrains.com`); the agent normalizes each (a pasted URL keeps only its host, IDN
+becomes punycode) and drops one that does not normalize. **Both limits are durations from
+arrival**, stamped on the PC's own clock like `Overlay`'s (`D-70` item 6): `until_seconds`
+(0 = until lifted, negative = refused as already ended) and `hard_limit_seconds`, a proposal
+the agent clamps to `Defaults.InternetPolicyHardLimit` (8 h), 0 or less yielding the ceiling.
+`amend_hosts` changes only the host list of the session `session_id` the PC holds, keeping its
+timing — the console's *Allow* on a refused name; it is refused when the PC holds no such
+whitelist. No build ever sent the absolute `until_unix` / `hard_limit_unix` these fields
+replaced, so fields 4 and 5 were renamed in place.
 
-```
-InternetState { mode, session_id, until_unix, resolver_active,
-                repeated string refused_recently }   // names the whitelist resolver refused
-```
+**What the PC answers.** `InternetState`, on every change, after every `Welcome` (the latest
+one, re-sent like `OverlayState`), when the resolver's refused names change (at most every
+`Defaults.InternetStateRefusedInterval`, 2 s), and as the answer to a refused or failed
+`InternetPolicy`. `mode` is what the PC **enforces now** — `OPEN` for nothing — the exam's
+policy while one is in force (portion 4), else the standalone one; never an echo. The stamps
+are the agent's own, `remaining_seconds` is how long is left as of sending, `allowed_hosts`
+the normalized patterns enforced, `refused_recently` the names the whitelist resolver refused
+within `Defaults.WhitelistRefusedWindow` (10 min), most recent first, at most
+`Defaults.WhitelistRefusedMax` (50), noise such as single-label names, `wpad`, `.local` and
+Windows' connectivity probes left out. `problem` is why a policy was refused or could not be
+applied, in the agent's words; a refusal carries `mode` unspecified and does not replace the
+latest state. `reason` is zero or more stable codes the console puts into words —
+`internet.restore_unconfirmed` (the last restore could not be proven by read-back),
+`internet.firewall_off` (Windows Firewall is off for a profile in use: cannot enforce),
+`internet.resolver_down`, `internet.no_upstream`, `internet.exam_wins` (the standalone policy
+waits under the exam's).
 
-`refused_recently` is what lets the teacher see which CDN hostname a site needs.
-Enforcement (firewall rule group, loopback resolver, DNS restore) is described in
-`docs/ARCHITECTURE.md` §6.2; the fail-safe rules are those of exam mode below.
+**Who may send it.** The ownership gate of `Overlay` (`D-69` item 7), in the same read loop,
+failing closed when the link is unbound; a refusal answers `InternetState { mode: MODE_UNSPECIFIED,
+problem }`. Any console of the lab may lift a policy it can see; a `teacher`-access console may
+set one. While a policy is applied — or its originals are not yet proven restored — the agent
+answers `self_update` with a refusal (`D-69` item 6): the `agent.exe` exemption is pinned to
+its version directory.
+
+**How it ends.** On the PC's own clock at `until_unix` or the clamped hard limit, on `OPEN`,
+and never on lab departure in this portion (portion 6 sets the departure contract). Persisted
+in `policy.json`: after a restart the PC comes back **open** before anything is re-applied,
+then re-applies a policy still within its limits with the limit re-clamped. The watchdog task
+`LabControl Policy Restore` restores a PC whose service is not running and re-applies nothing
+(`D-73` item 7). Events: `policy.reapplied`, `policy.apply_failed`, `policy.restore_failed`,
+`policy.expired`, `policy.unreadable`, `policy.busy`, `policy.failed`. An agent from before
+portion 3 answers `problem` "cannot enforce internet policy yet"; one from before M6 ignores the
+message.
 
 ## Exam mode
 

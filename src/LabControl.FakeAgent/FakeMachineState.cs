@@ -1,3 +1,4 @@
+using LabControl.Shared.Internet;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
@@ -21,6 +22,8 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
     private readonly Lock _lock = new();
     private OverlaySession? _overlay;
     private BroadcastSession? _broadcast;
+    private InternetSession? _internet;
+    private readonly RefusedNames _refused = new();
 
     /// <param name="desktop">The desktop being drawn right now, or <c>null</c> while nobody watches; a desktop created later is told by <see cref="Overlay"/>.</param>
     public FakeMachineState(Func<FakeScreen?> desktop, ILogger log)
@@ -115,10 +118,69 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
         return MachineResult.Done;
     }
 
-    public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced) =>
-        MachineResult.NotInThisBuild(PolicyEvents.KindName(session));
+    /// <summary>The internet policy in force, for the status line and the tests (M6 portion 3).</summary>
+    public InternetSession? Internet
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _internet;
+            }
+        }
+    }
 
-    public MachineResult LiftInternet() => MachineResult.Done;
+    /// <summary>
+    /// A simulated PC has no firewall to change: the policy is only held, and a whitelist's
+    /// "student" asks for a few well-known names now and then (<see cref="Browse"/>), so the
+    /// console's refused-names list and its <i>Allow</i> button can be developed on a Mac.
+    /// </summary>
+    public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced, Action recordDisplaced)
+    {
+        lock (_lock)
+        {
+            _internet = session;
+        }
+
+        return MachineResult.Done;
+    }
+
+    public MachineResult LiftInternet(DisplacedSettings displaced)
+    {
+        lock (_lock)
+        {
+            _internet = null;
+        }
+
+        return MachineResult.Done;
+    }
+
+    public InternetRuntime InternetRuntime()
+    {
+        lock (_lock)
+        {
+            var whitelist = _internet is { Mode: InternetPolicy.Types.Mode.Whitelist };
+            return whitelist
+                ? new InternetRuntime(true, _refused.Recent(DateTimeOffset.UtcNow), _refused.Version, string.Empty)
+                : Shared.Policy.InternetRuntime.None;
+        }
+    }
+
+    /// <summary>
+    /// One simulated request from the student's browser: under a whitelist, a name the list
+    /// does not cover is refused and noted, as the real resolver would. Called by the
+    /// simulator's own timer; a no-op otherwise.
+    /// </summary>
+    public void Browse(string name)
+    {
+        lock (_lock)
+        {
+            if (_internet is { Mode: InternetPolicy.Types.Mode.Whitelist } whitelist && !HostPattern.AnyMatches(whitelist.AllowedHosts, name))
+            {
+                _refused.Note(name, DateTimeOffset.UtcNow);
+            }
+        }
+    }
 
     public MachineResult ApplyExam(ExamSession session) =>
         MachineResult.NotInThisBuild(PolicyEvents.KindName(session));

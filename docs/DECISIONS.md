@@ -3353,6 +3353,8 @@ Decisions:
    documents the two `netsh` lines rather than implying coverage. **`self_update` is
    refused while a policy is applied**: the `agent.exe` allow rule is pinned to
    `app\<version>\`, and a replaced binary would be the one program the firewall blocks.
+   *Amended by `D-73` item 7 (portion 3): the task does nothing while the service runs, and
+   otherwise restores without re-applying — a process that exits cannot hold a whitelist.*
 
 7. **The ownership gate** (`Policy/OwnershipGate`) for `Overlay`, `ExamMode` and
    `InternetPolicy` is judged **before** the enforcer sees the message, on the same read
@@ -3800,6 +3802,168 @@ Rejected: ScreenCaptureKit now (an Objective-C/Swift bridge for what one C funct
 does); a NuGet screen-capture package (`D-03`'s "no second product", and every dependency
 needs its line here); scaling in the producer (would change the code every PC runs for a
 console-only need); encoding per PC (thirty encodes on a laptop).
+
+## D-73 — Internet control is the profiles' default outbound action plus an owned rule group; other programs' outbound allow rules are switched off for the policy; the watchdog task restores and re-applies nothing (M6 portion 3)
+
+Context (2026-10-17): `D-22` chose Windows Firewall for every internet mode and `D-69` built
+the journal that keeps a PC from staying restricted. Portion 3 makes it real on Windows. Block
+beats allow in Windows Firewall, so a whitelist cannot be a block rule with allow exceptions;
+and the teacher's MacBook on Wi-Fi may not be in the wired PCs' subnet, so `LocalSubnet` alone
+would cut the console link.
+
+Decisions:
+
+1. **The block is every profile's default outbound action**, set to *Block* only after the
+   ways that stay open exist: the `agent.exe` exemption (all protocols, every address, the
+   running executable's `app\<version>\` path — the console link, the file channel, the
+   resolver's upstream queries), `LocalSubnet` for every program (shares, the printer), and the
+   loopback. All live in the group `LabControl Internet`. *Blocked* and *whitelist* differ only
+   by the resolver and the learned-address rule (`D-74`). Profiles are `NET_FW_PROFILE_TYPE2`
+   1/2/4, read and written through `HNetCfg.FwPolicy2`'s indexed properties by late-bound
+   `InvokeMember`; rules through the same object like Setup's firewall store.
+2. **Restore order** (`D-69` item 2, the resolver moved forward): every profile's default
+   outbound to *Allow* first, the resolver stopped — a late answer would otherwise put the sites
+   rule back after the group was removed — the group's rules removed with the exemption last,
+   DNS on any resolver-pointed interface back to DHCP, the watchdog task deleted, the DNS cache
+   flushed. Rules are only ever added if missing, never removed and re-added, so a change of
+   policy under a block never drops the exemption for a moment. The refine puts
+   back a genuinely block-all profile, static DNS lists and the switched-off rules.
+3. **Apply order**: originals recorded into the displaced block and **saved by the journal
+   before anything changes** (`IMachineState.ApplyInternet` gained a `recordDisplaced` callback —
+   the `D-47` discipline; portion 1 saved only afterwards), then the watchdog armed, then the
+   exemption, subnet and loopback rules, the foreign rules switched off, and only then the
+   default outbound block; a whitelist then starts the resolver and points DNS at it. Read back
+   (every profile *Block*, the exemption present, no foreign rule enabled) before it reports
+   done. A failed apply may leave the machine half-changed, so the journal immediately lifts
+   with the same displaced block; the previous standalone policy goes with it (an unknown state
+   is opened, never guessed at). If that lift fails too, the session is kept so the clock and the
+   hard limit retry, and `MachineOpen` stays false. `IMachineState.LiftInternet` takes the
+   displaced block and is a full restore — unconditional, refined, confirmed.
+4. **Other programs' outbound allow rules are switched off for the policy** (owner decision
+   2026-10-17): under a default outbound block an allow rule is a way out — Windows ships
+   enabled outbound rules for packaged apps, and installers add their own. Every enabled
+   outbound allow rule outside the group is switched off except the *Core Networking* group
+   (`@FirewallAPI.dll,-25000`: DHCP, DNS, neighbour discovery — without it a PC loses its lease
+   during an eight-hour policy) and rules whose remote addresses are only local keywords or
+   private, link-local or multicast addresses. Rule names are not unique, so each is recorded as
+   a fingerprint (name, program, service, package, protocol, ports, addresses, profiles, group)
+   and the refine switches matching rules back on. The unconditional restore cannot know them
+   and leaves them off — harmless while outbound is allowed, which is the state it restores.
+5. **A firewall that is off for a profile in use is "cannot enforce"**: the apply fails with
+   that reason and `InternetState.reason` carries `internet.firewall_off`.
+6. **The journal's internet entry points**: `SetInternet` (standalone `WHITELIST` / `BLOCKED`,
+   `OPEN` to lift, `amend_hosts` for the host list only), `InternetStateOf`, `HoldsNetworkPolicy`.
+   Limits arrive as durations (`D-70` item 6) and are clamped to 8 h on the PC's clock. While
+   the exam's internet policy is in force the standalone one is kept, never applied, and comes
+   back when the exam's ends; a restart processes the exam first so a standalone policy is never
+   left waiting under an exam that did not come back.
+7. **The watchdog task restores and re-applies nothing.** `D-69` item 6 had
+   `agent.exe --restore-policy` run the same pass as the service. With a whitelist that is
+   wrong twice over: a short-lived process would start a resolver that dies with it, leaving
+   every name unresolvable, and at boot it would race the service for port 53 and undo the
+   service's own policy. So the task does nothing while the service is running or starting
+   (the service owns the policy and restores at its own start), and otherwise runs
+   `PolicyJournal.RestoreOnly` — restore, refine from the document, confirm — keeping the
+   sessions in the document for the service's next start and dropping the displaced block only
+   once the restore is confirmed. The task has a boot trigger and a time trigger at the hard
+   limit plus five minutes, and is replaced on every apply.
+8. **`self_update` is refused while a policy is held** or its originals are not yet proven
+   restored (`D-69` item 6, now enforced in `WindowsAgentBehaviour`), with a plain refusal the
+   console shows on the job.
+9. **The simulator holds the policy** and its "student" asks for a few CDN and font names now
+   and then, so the refused-names list and *Allow* can be developed on the Mac.
+10. **Lab departure does not end a policy in this portion**; it has its own limit like a lock.
+    Portion 6 sets the departure contract for every policy.
+
+Rejected: a block rule with allow exceptions (block beats allow); a dynamic WFP session whose
+filters vanish when the process dies (a better fail-safe, but outside the settled plan of
+2026-09-16, which binds this portion to Windows Firewall and the watchdog task — a candidate to
+put to the owner if the drill shows the firewall approach failing); leaving foreign allow rules
+alone and documenting the hole (owner chose otherwise); switching off *Core Networking* as well
+(DHCP renewal and IPv6 neighbour discovery would break mid-lesson); identifying foreign rules by
+name (not unique); the watchdog re-applying sessions (see item 7); `netsh` for the profiles
+(a parser to maintain, and `D-59`'s `netsh` lesson).
+
+Validation (2026-10-17, on the Mac): `InternetPolicyTests` — the 8 h clamp and duration stamps,
+originals saved before the machine changes, the lift with the displaced block, amend keeping
+the timing, the refused amend, the undo after a failed apply and the kept session after a failed
+undo, the clock, the restart with the limit re-clamped, the exam's precedence and the
+standalone policy coming back after it, the watchdog's restore-only pass, refused names only
+under a whitelist, an old document without `disabled_rules`. The Windows half compiles for
+`win-x64`; nothing of it has run on Windows yet — the VM drill is the next step.
+
+## D-74 — The whitelist resolver: names in, addresses admitted to one rule before the answer leaves; DNS pointed at it in both families (M6 portion 3)
+
+Context (2026-10-17): `D-22` and ARCHITECTURE §6.2 sketched a resolver on the loopback that
+turns allowed names into allow rules. Portion 3 fixes the details that decide whether a lesson
+works: which DNS settings are changed, what happens to names a browser resolves another way,
+how long an address stays allowed, and what the teacher sees of what was refused.
+
+Decisions:
+
+1. **`LabControl.Shared.Internet.LoopbackResolver`**, platform-neutral managed sockets, UDP and
+   TCP on `127.0.0.1:53` and `[::1]:53` (`ExclusiveAddressUse`, `SIO_UDP_CONNRESET` off, IPv6
+   sockets not dual-mode). A port already in use fails the apply with `resolver.port_in_use` —
+   Internet Connection Sharing is the usual culprit — and the journal undoes the policy.
+2. **Per query**: malformed → dropped (never FORMERR: nothing on Windows sends one, and answering
+   garbage could feed a reflection loop); reverse zones → forwarded, nothing admitted; a name not
+   allowed → `REFUSED`, noted unless it is noise (no dot, `wpad`, `.local`, `.lan`, `.home.arpa`,
+   Windows' `msftconnecttest.com` / `msftncsi.com` probes); an allowed name asking `HTTPS`/`SVCB`
+   → NODATA, so a browser falls back to A/AAAA and never connects to an `ipv4hint`/ECH address
+   the firewall has not admitted; any other allowed query → the upstream servers in order, a
+   fresh random id and source port per attempt, an answer accepted only when id and question
+   match, `TC` retried over TCP, only NOERROR and NXDOMAIN relayed, the next server on anything
+   else, SERVFAIL when none answers. At most `WhitelistMaxInFlight` (256) at once.
+3. **Admission before the answer**: every A/AAAA in an allowed answer, CNAME targets included,
+   goes through `Admit` *before* the reply is sent; the Windows side adds them to the one rule
+   `LabControl Internet (sites)` synchronously, so the browser's connection that follows is
+   already allowed. An admission that fails answers SERVFAIL. The rule is removed when the list
+   is empty — an empty remote-address list means *any*.
+4. **An admitted address stays for the whole session**, least recently admitted first out past
+   `WhitelistAddressCap` (1000). ARCHITECTURE §6.2 had "a little longer than the TTL": a CDN that
+   rotates addresses under a long download would cut it, and a set that only grows inside one
+   lesson is small. TTLs are parsed and not used.
+5. **Wildcards**: `*.example.com` matches `example.com` itself and any subdomain, never
+   `evilexample.com`; a wildcard over a single label (`*.com`) or anywhere but the front is
+   refused, as are IP literals and single-label names. A pasted URL keeps only its host; IDN
+   becomes punycode. The agent normalizes again and drops what does not normalize; the console
+   explains each problem in words before sending.
+6. **DNS is pointed at the resolver with `SetInterfaceDnsSettings`** (Windows 10 2004 and later;
+   it notifies the DNS client itself) on every up, non-loopback, non-tunnel interface, **in both
+   families** — an interface whose IPv6 DNS kept pointing at the router would resolve allowed
+   names past the resolver, and the firewall would then refuse the sites the teacher allowed. An
+   interface without IPv6 DNS may refuse the IPv6 write. The originals are recorded per interface
+   and family, DHCP or the exact static list; a list that already points at the resolver (a
+   restore that did not finish) is never recorded as an original. The upstream servers are the
+   interfaces' effective DNS servers read before the switch, plus any static original. The DNS
+   cache is flushed (`ipconfig /flushdns` — `DnsFlushResolverCache` has no metadata entry) after
+   every apply and restore.
+7. **What the teacher sees**: `InternetState.refused_recently`, re-sent at most every 2 s when
+   it changed; the console merges the PCs' lists, most widespread first, in the *Internet*
+   dialog, each with an *Allow* that sends every whitelist that refused it an `amend_hosts`
+   with its own list plus the name (owner decision 2026-10-17); saving the list as a preset is
+   separate.
+8. **Nothing on the student's screen** (owner decision 2026-10-17): the browser shows its own
+   "can't reach this site"; the policy is visible only on the teacher's tile.
+
+Accepted limits: a NIC that comes up after the apply keeps its own DNS — names resolve past the
+resolver and the sites it reaches stay blocked by the firewall (lab PCs are wired, one NIC); a
+program with its own resolver gains nothing, since the firewall is the gate; Teredo and IP-HTTPS
+in *Core Networking* stay allowed (defunct on a non-domain PC); Windows 10 before 2004 cannot
+run a whitelist (the apply fails, *Blocked* still works).
+
+Rejected: a hosts file (no wildcards, no DoH defence); expiring addresses by TTL (item 4);
+answering HTTPS records with the upstream's answer (their address hints bypass admission);
+forwarding refused names upstream (the point is that they do not resolve); a NuGet DNS library
+(the wire format needed is a few hundred lines and testable).
+
+Validation (2026-10-17, on the Mac): 85 `InternetResolverTests` — the pattern table, the wire
+format with compression, a 2000-message fuzz, the address set and the refused-names store, and
+the resolver end to end against a fake upstream (admission before the reply, SERVFAIL on a
+failed admission, refusal and noise, NODATA for HTTPS, TCP retry on truncation, fall-through
+across silent and failing servers, a spoofed id ignored, reverse zones, several queries on one
+TCP connection, live whitelist and upstream changes, a taken port). Windows (`SetInterfaceDnsSettings`,
+the real DNS client, browsers with DoH) is the VM drill.
 
 ## D-80 — Public repository: MIT, a README that is a project page, links that work in the mirror
 

@@ -80,3 +80,12 @@ SHGetKnownFolderPath
 USER_INFO_23
 NERR_UserNotFound
 GetUserProfileDirectory
+
+// Internet control: pointing an interface's DNS at the whitelist resolver and back (WindowsDns, D-74)
+GetInterfaceDnsSettings
+SetInterfaceDnsSettings
+FreeInterfaceDnsSettings
+DNS_INTERFACE_SETTINGS
+DNS_SETTING_IPV6
+DNS_SETTING_NAMESERVER
+DNS_INTERFACE_SETTINGS_VERSION1

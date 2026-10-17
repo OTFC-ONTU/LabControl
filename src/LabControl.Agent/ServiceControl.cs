@@ -87,6 +87,36 @@ internal static class ServiceControl
     }
 
     /// <summary>
+    /// True when the agent service is running or on its way up or down — anything but
+    /// <i>stopped</i> or absent. The watchdog task asks this first (D-73 item 7): a service that
+    /// is there owns the policy and restores at its own start, so the task must not touch it.
+    /// An SCM that cannot be asked counts as "not running": the task then restores.
+    /// </summary>
+    public static bool ServiceIsRunning()
+    {
+        try
+        {
+            using var manager = PInvoke.OpenSCManager(null, null, PInvoke.SC_MANAGER_CONNECT);
+            if (manager.IsInvalid)
+            {
+                return false;
+            }
+
+            using var service = PInvoke.OpenService(manager, Defaults.ServiceName, PInvoke.SERVICE_QUERY_STATUS);
+            if (service.IsInvalid)
+            {
+                return false;
+            }
+
+            return QueryState(service) is { } state && state != SERVICE_STATUS_CURRENT_STATE.SERVICE_STOPPED;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// <c>agent.exe --restart-service</c>: stop the service, wait for <i>stopped</i>, start
     /// it. Run by the outgoing agent's own executable, which is known to work on this PC.
     /// </summary>

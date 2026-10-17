@@ -421,6 +421,11 @@ installation on any student PC.</p>
 <td>inside the backup (<code>D-38</code>); seeded from the console's built-in scripts on a first run that has no backup</td>
 </tr>
 <tr>
+<td>Internet presets (<code>internet-presets.json</code>)</td>
+<td>that machine only</td>
+<td>inside the backup and the lab file, like the script library (<code>D-73</code>); one example preset on a first run</td>
+</tr>
+<tr>
 <td>Logs, job results</td>
 <td>that machine only</td>
 <td>never</td>
@@ -668,6 +673,8 @@ enrollment.json   outstanding single-use enrollment codes and which ones were bu
 scripts.json      the script library (D-31, D-38): name, description, shell, run-as,
                   timeout and text per script; seeded from the console's built-in
                   scripts/library/ on the first run, inside the backup
+internet-presets.json  named whitelists (M6 portion 3, D-73): name and host patterns;
+                  one example on the first run, inside the backup and the lab file
 packages/         package catalog: &lt;name&gt;.yaml + cached installer binaries
 logs/             per-day console log + per-command result bundles
 </code></pre>
@@ -696,6 +703,7 @@ labs/
                   MachineRecord.RevocationSerialsSeen, MachineRecord.LastInstanceObservedUnix
     enrollment.json  administrator profiles only; codes imported from a backup are dormant (D-60)
     scripts.json
+    internet-presets.json  M6 portion 3 (D-73)
     access.json   teacher profiles: pending request / grant metadata (D-56)
     packages/
     logs/         events-*, jobs-*, batches/ — per lab
@@ -725,8 +733,8 @@ itself rather than silently dropping the fields it does not understand (<code>D-
 what keeps §3.6 working a year from now, when the backup being restored was written by an
 older build than the console restoring it.</p>
 <p>Created on first launch by the setup wizard. <strong>Backup</strong> = <code>lab-key.lck</code> + <code>lab.json</code> +
-<code>enrollment.json</code> + <code>scripts.json</code> + the catalog (<code>BackupPayload</code>: Lab, Catalog,
-Enrollment, Scripts), exported as one file (<code>&lt;lab&gt; &lt;date&gt;.lcbak</code>): the key document as it is —
+<code>enrollment.json</code> + <code>scripts.json</code> + <code>internet-presets.json</code> + the catalog (<code>BackupPayload</code>:
+Lab, Catalog, Enrollment, Scripts, InternetPresets), exported as one file (<code>&lt;lab&gt; &lt;date&gt;.lcbak</code>): the key document as it is —
 already encrypted under its holders and the recovery code — and the rest sealed with
 AES-256-GCM under the same master key, so whoever can open the lab key can open the backup
 and nobody else can read even the machine list (<code>D-26</code>). It is what makes §3.6 a
@@ -882,7 +890,7 @@ limitation. Source files must remain unchanged and available until all jobs comp
 </tr>
 <tr>
 <td>Internet control</td>
-<td>Three modes per PC — <em>open</em>, <em>whitelist</em> (named sites only), <em>blocked</em> — as a standalone action on one PC or the whole lab, and as the exam mode's internet switch. Enforcement is always Windows Firewall: outbound blocked in a LabControl rule group, exempting the lab's own subnet (so the console, the file channel and the printer keep working) and, in whitelist mode, the addresses of allowed sites. Names become addresses through a small resolver the agent runs on the loopback interface while a whitelist is active: it forwards allowed names upstream, records the answers as allow rules, and refuses everything else; encrypted-DNS bypasses fail on the firewall anyway. Fail-safe exactly like exam mode: the policy carries an expiry and a hard limit, is removed on service start before anything is re-applied, and a crashed agent can never leave a PC offline (§6.2, <code>D-22</code>).</td>
+<td><strong>Built (M6 portion 3), not yet run on Windows.</strong> Three modes per PC — <em>open</em>, <em>whitelist</em> (named sites only), <em>blocked</em> — as a standalone action on one PC or the whole lab, and (portion 4) as the exam mode's internet switch. Enforcement is Windows Firewall: every profile's default outbound action set to <em>Block</em>, after the rule group <code>LabControl Internet</code> opened the ways that stay open — <code>agent.exe</code> (pinned to its version directory: the console link, the file channel), the lab's own subnet for every program, the loopback — and after every other program's outbound allow rule outside <em>Core Networking</em> was switched off for the policy (<code>D-73</code>). In whitelist mode a resolver the agent runs on <code>127.0.0.1:53</code> and <code>[::1]:53</code>, with every interface's DNS pointed at it in both families, forwards allowed names upstream and admits the answer's addresses to one allow rule before the answer leaves; everything else is refused, and DoH gains nothing because the firewall is the gate (<code>D-74</code>). Fail-safe exactly like exam mode: durations stamped on the PC's clock, an 8 h hard limit, the originals saved before anything changes, restore first on service start, a watchdog task for a dead service (§6.2, <code>D-22</code>, <code>D-69</code>, <code>D-73</code>).</td>
 </tr>
 <tr>
 <td>— collect work</td>
@@ -972,27 +980,41 @@ switch is the same mechanism with the exam's lifetime.</p>
 </tr>
 </tbody>
 </table></div>
-<p>Lists are saved as named presets (<em>Java docs</em>, <em>Nothing but the college site</em>) and
-reused in exam presets. A standalone policy always has a duration — <em>this lesson</em>
+<p>Lists are saved as named presets (<em>Java docs</em>, <em>Nothing but the college site</em>), kept beside
+<code>lab.json</code> in <code>internet-presets.json</code>, carried in the backup and the lab file like the script
+library, and reused in exam presets; a new console starts with one example, <em>Java docs</em>. The
+student's screen shows nothing: the browser says the site cannot be reached, and the policy is
+visible on the teacher's tile (owner decision 2026-10-17). A standalone policy always has a duration — <em>this lesson</em>
 (default 90 min), <em>N minutes</em>, or <em>until I lift it</em> — and, like an exam, an absolute hard
 limit (<code>Defaults.InternetPolicyHardLimit</code>, 8 h) past which the agent restores the
 machine on its own. If an exam starts while a standalone policy is in force, the exam's
 policy wins; when the exam ends, the standalone one is re-applied if it is still within
 its limits, so a &quot;no internet today&quot; is not silently cancelled by a test.</p>
-<p>How the whitelist is enforced, because this is the part that can go wrong:</p>
+<p>How the whitelist is enforced, because this is the part that can go wrong (<code>D-73</code>, <code>D-74</code>):</p>
 <ol>
-<li>The agent installs the outbound block rules and the subnet exemption (same as
-<em>Blocked</em>), plus a rule allowing UDP/TCP 53 to the loopback interface only.</li>
-<li>It starts a resolver on <code>127.0.0.1:53</code> and points the NIC's DNS at it, remembering the
-previous DNS servers in the persisted policy state so they can be put back.</li>
-<li>For an allowed name the resolver forwards to the previous upstream, returns the real
-answer, and adds every address in it (following CNAMEs) to the allow rule set with an
-expiry a little longer than the record's TTL. For any other name it answers <code>REFUSED</code>.</li>
-<li>A browser that ignores the system resolver (DNS-over-HTTPS) still resolves only through
-addresses the firewall lets it reach — which, for an unlisted site, it cannot. The
-result is a blocked page, not a bypass.</li>
-<li>Restore = remove the rule group, stop the resolver, put the NIC's DNS back. This runs on
-policy end, at the hard limit, and <strong>first thing on every service start</strong>.</li>
+<li>The agent records the originals — each profile's default outbound action, each interface's
+DNS per address family (DHCP or the exact static list), the other programs' outbound allow
+rules it is about to switch off — and the journal saves them <strong>before</strong> anything changes.
+It arms the watchdog task, creates the <code>agent.exe</code>, local-subnet and loopback allow rules,
+switches the other programs' outbound allow rules off (all but <em>Core Networking</em> and rules
+that only reach the local network), and only then sets every profile's default outbound
+action to <em>Block</em>. <em>Blocked</em> stops here.</li>
+<li>It starts a resolver on <code>127.0.0.1:53</code> and <code>[::1]:53</code> and points every interface's DNS at
+it, in both families, with <code>SetInterfaceDnsSettings</code>; the previous servers are the upstream.</li>
+<li>For an allowed name the resolver forwards to the upstream, adds every address in the answer
+(following CNAMEs) to the rule <code>LabControl Internet (sites)</code> <strong>before</strong> returning the answer,
+and keeps it for the session (the least recently used goes past 1000 addresses). For any
+other name it answers <code>REFUSED</code> and notes the name for the teacher; an <code>HTTPS</code>/<code>SVCB</code> query
+for an allowed name gets an empty answer, so browsers use the A/AAAA addresses that were
+admitted.</li>
+<li>A browser that ignores the system resolver (DNS-over-HTTPS) still reaches only addresses the
+firewall lets through — which, for an unlisted site, it cannot. The result is a blocked page,
+not a bypass.</li>
+<li>Restore = every profile's default outbound back to <em>Allow</em>, the resolver stopped, the rule
+group removed with the <code>agent.exe</code> rule last, resolver-pointed DNS back to DHCP, the watchdog
+deleted; then the originals put back exactly — static DNS, a block-all profile, the switched-off
+rules. This runs on policy end, at the hard limit, <strong>first thing on every service start</strong>,
+and from the watchdog task when the service is not running (which re-applies nothing).</li>
 </ol>
 <p>Known limits, accepted: a site behind a large CDN may need its CDN hostnames listed too
 (the console shows the resolver's refused names for the last minutes, so the missing one
@@ -1188,7 +1210,7 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-10-17 22:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 23:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#separate-identities">3.1 Separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl3"><a href="#saved-labs-and-one-active-room-m5-d-53.d-60-designed-being-implemented">3.9 Saved labs and one active room (M5, D-53…D-60 — designed, being implemented)</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>

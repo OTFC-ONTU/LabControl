@@ -557,4 +557,59 @@ LabControl uses it only while you show your screen, and sends the picture only t
   <data name="Event.BroadcastStopped" xml:space="preserve"><value>Stopped showing this screen.</value></data>
   <data name="Event.BroadcastExpired" xml:space="preserve"><value>The screen broadcast ended at its {0}-minute limit; start it again to go on.</value></data>
   <data name="Event.BroadcastDeparture" xml:space="preserve"><value>The screen broadcast ended because the console left the lab.</value></data>
+  <data name="Action.Internet" xml:space="preserve"><value>Internet…</value></data>
+  <data name="Action.InternetForAll" xml:space="preserve"><value>Internet for all…</value></data>
+  <data name="Event.InternetBlockSent" xml:space="preserve"><value>“No internet” sent to {0} PC(s), {1} skipped (offline or outdated).</value></data>
+  <data name="Event.InternetWhitelistSent" xml:space="preserve"><value>“Only these sites” ({2}) sent to {0} PC(s), {1} skipped (offline or outdated).</value></data>
+  <data name="Event.InternetLiftSent" xml:space="preserve"><value>Internet opened on {0} PC(s), {1} skipped (offline or outdated).</value></data>
+  <data name="Event.InternetAllowSent" xml:space="preserve"><value>{0} allowed on {1} PC(s), {2} skipped.</value></data>
+  <data name="Event.InternetRefused" xml:space="preserve"><value>{0}: the internet request was not applied — {1}</value></data>
+  <data name="Event.InternetOpened" xml:space="preserve"><value>{0}: internet open again.</value></data>
+  <data name="Event.InternetBlocked" xml:space="preserve"><value>{0}: internet blocked by {1}.</value></data>
+  <data name="Event.InternetWhitelisted" xml:space="preserve"><value>{0}: internet limited to the allowed sites by {1}.</value></data>
+  <data name="Tile.InternetBlockedBadge" xml:space="preserve"><value>NO INTERNET</value></data>
+  <data name="Tile.InternetWhitelistBadge" xml:space="preserve"><value>SITES ONLY</value></data>
+  <data name="Tile.InternetWhitelistBadgeNamed" xml:space="preserve"><value>SITES: {0}</value></data>
+  <data name="Tile.InternetBlockedBy" xml:space="preserve"><value>internet blocked by {0}, {1} min left</value></data>
+  <data name="Tile.InternetWhitelistBy" xml:space="preserve"><value>only {0} allowed site pattern(s), set by {1}, {2} min left</value></data>
+  <data name="Tile.InternetRefused" xml:space="preserve"><value>{0} name(s) refused lately — see Internet…</value></data>
+  <data name="Tile.InternetProblemFormat" xml:space="preserve"><value>internet: {0}</value></data>
+  <data name="Internet.restore_unconfirmed" xml:space="preserve"><value>the last restore could not be confirmed; the PC is as open as possible, not proven open</value></data>
+  <data name="Internet.firewall_off" xml:space="preserve"><value>Windows Firewall is off for a network profile in use; a policy cannot be enforced</value></data>
+  <data name="Internet.resolver_down" xml:space="preserve"><value>the whitelist resolver is not running, so no site resolves</value></data>
+  <data name="Internet.no_upstream" xml:space="preserve"><value>the PC has no DNS server to ask, so no allowed site resolves</value></data>
+  <data name="Internet.exam_wins" xml:space="preserve"><value>an exam's internet policy is in force; this one waits underneath it</value></data>
+  <data name="Internet.Title" xml:space="preserve"><value>Internet</value></data>
+  <data name="Internet.Targets" xml:space="preserve"><value>Internet for {0} PC(s)</value></data>
+  <data name="Internet.ModeOpen" xml:space="preserve"><value>Open — the PCs as they were (lifts the policy)</value></data>
+  <data name="Internet.ModeWhitelist" xml:space="preserve"><value>Only these sites:</value></data>
+  <data name="Internet.ModeBlocked" xml:space="preserve"><value>No internet</value></data>
+  <data name="Internet.BlockedKeepsLab" xml:space="preserve"><value>In every mode the lab's own network keeps working: this console, sending files and installing packages, shared folders, the printer.</value></data>
+  <data name="Internet.HostsPlaceholder" xml:space="preserve"><value>one site per line: *.jetbrains.com, docs.oracle.com</value></data>
+  <data name="Internet.HostsOnly" xml:space="preserve"><value>Site names only: a rule cannot allow one page of a site and not another. “*.jetbrains.com” also allows jetbrains.com itself.</value></data>
+  <data name="Internet.PresetNamePlaceholder" xml:space="preserve"><value>preset name</value></data>
+  <data name="Internet.SavePreset" xml:space="preserve"><value>Save as preset</value></data>
+  <data name="Internet.DeletePreset" xml:space="preserve"><value>Delete preset</value></data>
+  <data name="Internet.UnsavedList" xml:space="preserve"><value>(unsaved list)</value></data>
+  <data name="Internet.ForLesson" xml:space="preserve"><value>This lesson ({0} minutes)</value></data>
+  <data name="Internet.UntilLifted" xml:space="preserve"><value>Until I open it again</value></data>
+  <data name="Internet.Ceiling" xml:space="preserve"><value>Every PC opens the internet by itself after {0} hours at the latest, even if this console is closed.</value></data>
+  <data name="Internet.RefusedHeading" xml:space="preserve"><value>Names the allowed-sites list refused lately (a site may need one of these to load):</value></data>
+  <data name="Internet.NothingRefused" xml:space="preserve"><value>Nothing refused lately.</value></data>
+  <data name="Internet.RefusedRow" xml:space="preserve"><value>{0} — {1} PC(s)</value></data>
+  <data name="Internet.Allow" xml:space="preserve"><value>Allow</value></data>
+  <data name="Internet.Apply" xml:space="preserve"><value>Apply</value></data>
+  <data name="Internet.Offline" xml:space="preserve"><value>A PC that is offline or too old to know internet control is skipped; the policy is not queued for it.</value></data>
+  <data name="Internet.NoHosts" xml:space="preserve"><value>Add at least one site, or choose “No internet”.</value></data>
+  <data name="Internet.HostProblemFormat" xml:space="preserve"><value>“{0}”: {1}</value></data>
+  <data name="Internet.Host.empty" xml:space="preserve"><value>empty</value></data>
+  <data name="Internet.Host.invalid" xml:space="preserve"><value>not a valid site name</value></data>
+  <data name="Internet.Host.ip_literal" xml:space="preserve"><value>an address, not a site name — list the site's name</value></data>
+  <data name="Internet.Host.wildcard_too_broad" xml:space="preserve"><value>too broad — name at least the site, like *.example.com</value></data>
+  <data name="Internet.Host.wildcard_misplaced" xml:space="preserve"><value>“*.” may only start a name, like *.example.com</value></data>
+  <data name="Internet.Host.single_label" xml:space="preserve"><value>a single word is not a site on the internet</value></data>
+  <data name="Internet.Sent" xml:space="preserve"><value>Internet policy sent to {0} of {1} PC(s); each tile shows what the PC reports.</value></data>
+  <data name="Internet.LiftSent" xml:space="preserve"><value>Internet opened on {0} of {1} PC(s).</value></data>
+  <data name="Internet.Preset.name_empty" xml:space="preserve"><value>Give the preset a name.</value></data>
+  <data name="Internet.Preset.name_taken" xml:space="preserve"><value>Another preset already has that name.</value></data>
 </root>

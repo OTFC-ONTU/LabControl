@@ -53,9 +53,9 @@ internal sealed class FakeMachine : IMachineState
         return result;
     }
 
-    public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced) => Answer(nameof(ApplyInternet));
+    public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced, Action recordDisplaced) => Answer(nameof(ApplyInternet));
 
-    public MachineResult LiftInternet() => Answer(nameof(LiftInternet));
+    public MachineResult LiftInternet(DisplacedSettings displaced) => Answer(nameof(LiftInternet));
 
     public MachineResult ApplyExam(ExamSession session) => Answer(nameof(ApplyExam));
 

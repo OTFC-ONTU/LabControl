@@ -72,6 +72,7 @@ internal static class TestLabHost
         string? reuseRoot = null;
         var dataName = "console";
         var teacherLeaf = false;
+        var broadcastSource = "synthetic";
         var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < args.Length; i++)
         {
@@ -87,6 +88,7 @@ internal static class TestLabHost
                 // Presents a teacher-access leaf (D-56 item 5) while still holding the key, so the
                 // agent's refusal can be observed. No production console is ever built this way.
                 case "--teacher-leaf": teacherLeaf = bool.Parse(args[i]); break;
+                case "--broadcast-source": broadcastSource = args[i] is "synthetic" or "screen" ? args[i] : throw new ArgumentException("Invalid option."); break;
                 default: throw new ArgumentException("Unknown option.");
             }
         }
@@ -149,6 +151,7 @@ internal static class TestLabHost
         {
             DataDirectory = data, BindAddress = bind, Port = port, BeaconPort = beaconPort,
         }, store, vault, instance, instance.Document, NullLoggerFactory.Instance);
+        if (broadcastSource == "synthetic") session.BroadcastSource = () => new SyntheticBroadcastSource();
         await session.StartAsync();
         if (session.Port == Defaults.ConsolePort) throw new IOException("An ephemeral port matched production.");
         var usb = Path.Combine(root, "usb");
@@ -320,6 +323,35 @@ internal static class TestLabHost
                                         ? LabControl.Shared.Control.InputMessages.Text("M6_REMOTE_INPUT_OK")
                                         : LabControl.Shared.Control.InputMessages.CtrlAltDel()) };
                                 break;
+                            case "broadcast-start":
+                                if (command.AgentId is null || !session.IsLinked(command.AgentId))
+                                    throw new InvalidOperationException("Choose a linked fixture agent.");
+                                result = new { ok = session.StartBroadcast([command.AgentId]) == 1, source = broadcastSource };
+                                break;
+                            case "broadcast-stop":
+                                await session.StopBroadcastAsync();
+                                result = new { ok = true };
+                                break;
+                            case "save-screen":
+                                if (command.AgentId is null || !IsFixtureName(command.Instance)) throw new InvalidDataException("Choose an agent and a short name.");
+                                using (var snapshot = session.Screens.Find(command.AgentId)?.Full.Snapshot())
+                                {
+                                    if (snapshot is null) { result = new { ok = false, error = "no full frame" }; break; }
+                                    Directory.CreateDirectory(Path.Combine(root, "shots"));
+                                    var shotPath = Path.Combine(root, "shots", command.Instance + ".png");
+                                    using var encoded = snapshot.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                                    using (var output = File.Create(shotPath)) encoded.SaveTo(output);
+                                    result = new { ok = true, path = shotPath, width = snapshot.Width, height = snapshot.Height };
+                                }
+                                break;
+                            case "broadcast-freeze":
+                            case "broadcast-thaw":
+                                SyntheticBroadcastSource.Frozen = command.Action == "broadcast-freeze";
+                                result = new { ok = true, frozen = SyntheticBroadcastSource.Frozen };
+                                break;
+                            case "broadcast-access":
+                                result = new { ok = true, access = LabControl.Shared.Video.ConsoleScreen.Access().ToString() };
+                                break;
                             case "unlock":
                                 result = new { ok = vault.IsUnlocked || passphrase is not null && vault.TryUnlock(passphrase), action = "unlock" };
                                 break;
@@ -338,6 +370,7 @@ internal static class TestLabHost
                     lab_id = session.LabId, instance = dataName, instance_id = instance.InstanceId,
                     host = bind.ToString(), port = session.Port, beacon_port = beaconPort,
                     lab_key_unlocked = vault.IsUnlocked,
+                    broadcast_targets = session.BroadcastTargets.ToArray(), broadcasting = session.Broadcast is not null,
                     events = session.Events.Recent.TakeLast(25)
                         .Select(e => new { at = e.AtUnix, severity = e.Severity.ToString(), code = e.Code, message = Trim(e.Message) }).ToArray(),
                     agents = session.Linked.Select(pc => new { agent_id = pc.AgentId, number = pc.Number, version = pc.Hello.AgentVersion,

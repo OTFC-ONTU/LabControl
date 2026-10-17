@@ -117,6 +117,18 @@ deliberate fixture-only mismatch — it still holds the lab key, which a real te
 never does — and exists only so an agent can be offered a signed `self_update` from a
 console whose certificate says teacher and be seen refusing it (`job.refused_by_role`).
 
+For the M6 broadcast drill, `broadcast-start` (`agent_id`) and `broadcast-stop` drive
+`LabSession.StartBroadcast` / `StopBroadcastAsync`; `broadcast-access` reports
+`ConsoleScreen.Access()`; `broadcast-freeze` / `broadcast-thaw` make the synthetic
+source fail every capture, as a console whose own screen locked. By default the "teacher's screen" is `SyntheticBroadcastSource` —
+large Ukrainian text, a clock with tenths and a moving square, so a frozen or torn picture
+shows — and `--broadcast-source screen` captures the Mac's real display instead (the
+*Screen Recording* grant then belongs to whatever started the fixture). `save-screen`
+(`agent_id`, `instance` as a short file name) writes the PC's current full-mode picture as
+`shots/<name>.png` under the fixture root — the agent's own capture, the one the teacher
+sees; switch the PC to full mode with `full-screen` first. It cannot see Winlogon.
+The status file carries `broadcasting` and `broadcast_targets`.
+
 Copy only the reported `usb/LabControl` directory into the fixture media. Never copy its
 `console` directory. When using read-only ISO media, copy the USB payload to a writable
 fixture directory in the guest before running Setup: enrollment consumes a one-use code.

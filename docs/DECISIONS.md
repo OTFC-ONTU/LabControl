@@ -3683,6 +3683,31 @@ Decisions:
    PCs that have already let go; the teacher starts it again to go on.
 8. **The console's toolbar wraps** instead of clipping: with the lock and broadcast actions
    it no longer fits one line on a laptop, and an action that cannot be seen cannot be used.
+9. **The helper resets the picture where the frames arrive** (review fix, 2026-10-17). A
+   `BROADCAST_START` or `BROADCAST_STOP` is queued to the overlay's control thread, while the
+   frames behind it on the pipe go straight to `BroadcastPicture` from the read loop; a
+   reset done on the control thread could therefore throw away the first keyframe — and,
+   since every delta then waits for a keyframe, leave the students looking at black for up
+   to `KeyframeInterval`. The reset now runs in `OverlayController.Offer`, on the read loop,
+   in pipe order (a new session's start, or a stop naming the broadcast held), and
+   `BroadcastPicture` stamps every queued frame with a generation that `Clear` advances, so a
+   frame of the broadcast that ended, still being decoded at that moment, never stays on the
+   screen. The service writes the start before the first frame under the pipe's one write
+   lock, so the order holds.
+10. **A broadcast that brings no frame for `BroadcastStallTimeout` (15 s) is over on the PC**
+   (`broadcast.stalled`, Warning). A console that still captures sends a keyframe at least
+   every `KeyframeInterval` (5 s); one whose capture stopped — its own screen locked or
+   asleep, the permission revoked — keeps the stream up but sends nothing, and without this
+   the students would face a frozen picture with their input blocked until the 30-minute
+   limit while only the teacher's status line shows the problem. Three missed keyframes is
+   the margin; the timer runs on the PC's own clock and is pushed back by every frame.
+11. **A stream that ends with its connection is `LinkEnded`, not `Failed`.** The connection
+   to the console usually breaks before the link notices (the console's process dies, its
+   lid closes, a reset), and `PullBroadcast` then ends with `Unavailable` or a transport
+   exception while the link session is still open. Those are now reported as the
+   connection ending — logged, with no event — and only an answer from the console (a
+   refusal: `NotFound`, `PermissionDenied`…) is a `broadcast.failed` warning; the PC used to
+   queue a spurious `broadcast.failed` for whichever console linked next.
 
 Rejected: frames on `Link` (the unbounded queue, above); UDP multicast (Wi-Fi multicast is
 slow and lossy, and the lab's switch and the teacher's router are not ours to configure;
@@ -3697,8 +3722,11 @@ joins again; the PC's own limit ending it with the console still streaming; the 
 limit ending it everywhere; `PullBroadcast` refused to a PC that was not chosen and for a
 wrong session; lab departure ending it as its first step; the stream cap; a slow PC skipping
 to the next keyframe while the fast one sees every frame in order. `BroadcastVideoTests`
-(Shared) cover the helper's decoding rule. **Not yet run on Windows**: the helper's
-broadcast window, the pipe relay and the frame rate on a real PC wait for the VM.
+(Shared) cover the helper's decoding rule. The review fixes added a stalled broadcast (the
+console's capture frozen mid-broadcast: the PC gives the screen back with `broadcast.stalled`
+while the link stays up), a console cut off by a TCP reset (the PC gives the screen back,
+joins again on relink and reports no `broadcast.failed`) and a frame of a broadcast that is
+over never staying on the screen; the last two fail against the code before the fix.
 
 ## D-72 — Console capture: CoreGraphics on macOS, GDI on Windows; one encode shared by every PC; the downscale inside the screen source (M6 portion 2)
 

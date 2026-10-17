@@ -132,7 +132,10 @@ the documents relevant to the task:
   `Overlay`/`OverlayState`, the ownership gate in `AgentLink` is judged before the
   enforcer sees the message and fails closed; keep `LeaveIfConsoleRevoked` as it is, keep
   the limits as durations, and keep every teacher-facing reason a code.
-- **M6 portion 2 is built (2026-10-17, `D-71`, `D-72`), not yet run natively.** The
+- **M6 portion 2 is built (2026-10-17, `D-71`, `D-72`), review-fixed (`D-71` items 9–11:
+  picture reset on the helper's pipe read loop, `broadcast.stalled` after
+  `Defaults.BroadcastStallTimeout`, a cut connection is `LinkEnded`) and partly verified in
+  the ARM64 VM; physical input, the Mac's real display and the lab remain (ROADMAP M6).** The
   console's screen (CoreGraphics on macOS after the *Screen Recording* permission, GDI on
   Windows, none on Linux) is scaled to 1280 wide inside `ScaledScreenSource`, encoded once
   by `BroadcastHub` and served over the server-streaming `PullBroadcast` with a latest-wins
@@ -198,8 +201,8 @@ the documents relevant to the task:
   Account-off touches neither setting. Do not change UAC security policy to bypass
   native administrator-maintenance acceptance (`D-52`).
 - Do not invent features outside `docs/ROADMAP.md`; propose the scope there first.
-- M6 portion 1 has passed ARM64 VM acceptance; portion 2 (broadcast) is built and waits
-  for its VM drill; portions 3–6 remain. Its owner decisions
+- M6 portion 1 has passed ARM64 VM acceptance; portion 2 (broadcast) is built and has
+  passed a partial VM drill; portions 3–6 remain. Its owner decisions
   (2026-09-09) and corrected six-portion plan are settled in ROADMAP M6, *Settled before implementation*; follow them and use the
   reserved `D-69`…`D-79`.
 - The README is the public project page with one line of status per milestone; put long

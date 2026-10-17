@@ -13,7 +13,9 @@ namespace LabControl.Shared.Policy;
 /// <c>policy.json</c> — it ends when its stream ends (the teacher stopped, the console left,
 /// the link dropped), on <c>BROADCAST_STOP</c>, when a newer broadcast replaces it, and at
 /// the latest at <see cref="Defaults.BroadcastHardLimit"/> on this PC's own clock, whatever
-/// the console proposed. Nothing survives a service restart; nothing here throws.
+/// the console proposed — and when the stream brings no frame for
+/// <see cref="Defaults.BroadcastStallTimeout"/> (D-71 item 10). Nothing survives a service
+/// restart; nothing here throws.
 /// </summary>
 public sealed class BroadcastReceiver : IAsyncDisposable
 {
@@ -22,6 +24,7 @@ public sealed class BroadcastReceiver : IAsyncDisposable
     private readonly ILogger _log;
     private readonly Func<DateTimeOffset> _clock;
     private readonly TimeSpan _ceiling;
+    private readonly TimeSpan _stallTimeout;
     private readonly Lock _lock = new();
 
     // Held around every show/stop on the machine, so a broadcast that ends never takes down
@@ -36,8 +39,10 @@ public sealed class BroadcastReceiver : IAsyncDisposable
     private bool _disposed;
 
     /// <param name="ceiling"><see cref="Defaults.BroadcastHardLimit"/> unless a test wants it sooner.</param>
-    public BroadcastReceiver(AgentLink link, IMachineState machine, ILogger log, Func<DateTimeOffset> clock, TimeSpan? ceiling = null)
+    /// <param name="stallTimeout"><see cref="Defaults.BroadcastStallTimeout"/> unless a test wants it sooner.</param>
+    public BroadcastReceiver(AgentLink link, IMachineState machine, ILogger log, Func<DateTimeOffset> clock, TimeSpan? ceiling = null, TimeSpan? stallTimeout = null)
     {
+        _stallTimeout = stallTimeout ?? Defaults.BroadcastStallTimeout;
         _link = link;
         _machine = machine;
         _log = log;
@@ -171,16 +176,21 @@ public sealed class BroadcastReceiver : IAsyncDisposable
     private async Task RunAsync(BroadcastSession session, int generation, CancellationTokenSource running)
     {
         var limitReached = false;
+        var stalled = false;
         var taken = false;
         (BroadcastPullEnd End, string Detail) outcome = (BroadcastPullEnd.Cancelled, string.Empty);
         try
         {
             var left = TimeSpan.FromSeconds(Math.Max(0, session.HardLimitUnix - _clock().ToUnixTimeSeconds()));
             using var limit = new CancellationTokenSource(left);
-            using var both = CancellationTokenSource.CreateLinkedTokenSource(running.Token, limit.Token);
+
+            // Pushed back by every frame; a stream that brings none for this long is over.
+            using var stall = new CancellationTokenSource(_stallTimeout);
+            using var both = CancellationTokenSource.CreateLinkedTokenSource(running.Token, limit.Token, stall.Token);
             var first = true;
             outcome = await _link.PullBroadcastAsync(session.SessionId, async (frame, token) =>
             {
+                stall.CancelAfter(_stallTimeout);
                 if (first)
                 {
                     first = false;
@@ -195,6 +205,7 @@ public sealed class BroadcastReceiver : IAsyncDisposable
                 await _machine.BroadcastFrameAsync(frame, token);
             }, both.Token);
             limitReached = limit.IsCancellationRequested && !running.IsCancellationRequested;
+            stalled = stall.IsCancellationRequested && !limitReached && !running.IsCancellationRequested;
         }
         catch (Exception ex)
         {
@@ -210,12 +221,17 @@ public sealed class BroadcastReceiver : IAsyncDisposable
         {
             Report(Event.Types.Severity.Info, PolicyEvents.BroadcastExpired, PolicyEvents.Text("BroadcastExpired"));
         }
+        else if (stalled)
+        {
+            Report(Event.Types.Severity.Warning, PolicyEvents.BroadcastStalled,
+                PolicyEvents.Text("BroadcastStalled", (int)Math.Round(_stallTimeout.TotalSeconds)));
+        }
         else if (outcome.End is BroadcastPullEnd.Failed or BroadcastPullEnd.Unsupported)
         {
             Report(Event.Types.Severity.Warning, PolicyEvents.BroadcastFailed, PolicyEvents.Text("BroadcastFailed", outcome.Detail));
         }
 
-        _log.LogInformation("broadcast {Session} over: {End}{Detail}", session.SessionId, limitReached ? "hard limit" : outcome.End.ToString(),
+        _log.LogInformation("broadcast {Session} over: {End}{Detail}", session.SessionId, limitReached ? "hard limit" : stalled ? "stalled" : outcome.End.ToString(),
             outcome.Detail.Length > 0 ? $" ({outcome.Detail})" : string.Empty);
     }
 

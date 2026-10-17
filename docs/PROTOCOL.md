@@ -675,15 +675,20 @@ stream — when the teacher stops (`BROADCAST_STOP` to every PC, then every stre
 the console leaves the lab (the first step of `LabSession.CloseAsync`, before the links
 close), when the link drops, when a newer `BROADCAST_START` replaces it — and at the latest
 at the agent's own `BroadcastHardLimit` (30 min), clamped on the PC's clock at arrival like
-a lock's limit (`hard_limit_seconds` is a proposal). The console ends the whole broadcast at
+a lock's limit (`hard_limit_seconds` is a proposal). A stream that brings no frame for
+`BroadcastStallTimeout` (15 s; a capturing console sends a keyframe at least every
+`KeyframeInterval`) is over on the PC as well — the console's capture stopped while the
+connection stayed up (`D-71` item 10). The console ends the whole broadcast at
 the same limit by its own clock and says so; the teacher starts it again to go on. A PC
 that relinks while the broadcast runs is sent `BROADCAST_START` again and dials again.
 Nothing survives a service restart.
 
 **Events.** `broadcast.started` / `broadcast.stopped` / `broadcast.expired` on the console;
-from a PC, `broadcast.expired` (it ended at the PC's own limit) and `broadcast.failed` (the
-console refused the stream, it is too old to have `PullBroadcast`, or the machine could not
-take the screen). The console's capture reports `capture.permission` (macOS has not granted
+from a PC, `broadcast.expired` (it ended at the PC's own limit), `broadcast.stalled` (no
+frame for `BroadcastStallTimeout`) and `broadcast.failed` (the console refused the stream,
+it is too old to have `PullBroadcast`, or the machine could not take the screen). A stream
+that ends with its connection — `Unavailable`, or a transport exception — is the link
+ending, not a failure, and raises no event (`D-71` item 11). The console's capture reports `capture.permission` (macOS has not granted
 *Screen Recording*), `capture.unsupported`, `capture.no_display`, `capture.gdi_failed`,
 `capture.capture_failed` and `capture.recovered`. An agent from before portion 2 answers
 `BROADCAST_START` with a `problem`; a console from before it answers `PullBroadcast` with
@@ -774,7 +779,10 @@ when the broadcast ends. The service re-asserts a running broadcast to a freshly
 helper like a lock; that helper's picture starts at the next keyframe (within
 `KeyframeInterval`). The helper decodes frames on a thread of its own into one picture
 (`BroadcastPicture`): at most `BroadcastHelperQueueLength` (8) wait, beyond that the deltas
-are dropped until the next keyframe, so a delta is never patched onto the wrong picture. The
+are dropped until the next keyframe, so a delta is never patched onto the wrong picture.
+The helper resets that picture on its read loop, in pipe order, when a new broadcast's
+`BROADCAST_START` or a `BROADCAST_STOP` for the one held arrives — not on its control
+thread, which could run after the first keyframe and throw it away (`D-71` item 9). The
 same `OverlayWindow` shows it, repainted on every decoded frame, and follows the input
 desktop like the lock. `overlay_state` says `BROADCAST_START` while the broadcast window is
 up and no lock is held; the service tells a helper that shows a broadcast nobody is

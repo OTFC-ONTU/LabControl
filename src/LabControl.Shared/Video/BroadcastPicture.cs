@@ -11,16 +11,23 @@ namespace LabControl.Shared.Video;
 /// read loop and the input hooks never wait on JPEG decoding (D-70 item 3). At most
 /// <see cref="Defaults.BroadcastHelperQueueLength"/> frames wait; beyond that the deltas are
 /// dropped and the picture waits for the next keyframe rather than ever being patched out
-/// of order. Shared by the session helper and the simulator.
+/// of order. <see cref="Clear"/> belongs to the same ordered stream as <see cref="Offer"/> —
+/// called from the thread that offers the frames, at the point a broadcast starts or stops —
+/// so a keyframe offered right after it is never thrown away, and a frame of the previous
+/// broadcast still being decoded when it runs never stays on the screen (D-71 item 9).
+/// Shared by the session helper and the simulator.
 /// </summary>
 public sealed class BroadcastPicture : IDisposable
 {
     private readonly ILogger _log;
-    private readonly BlockingCollection<VideoFrame> _queue = new(Defaults.BroadcastHelperQueueLength);
+    private readonly BlockingCollection<(VideoFrame Frame, int Generation)> _queue = new(Defaults.BroadcastHelperQueueLength);
     private readonly Thread _thread;
     private readonly Lock _lock = new();
     private bool _awaitingKeyframe = true;
     private bool _disposed;
+
+    // Grows on every Clear: a frame offered before it is never applied after it.
+    private int _generation;
 
     public BroadcastPicture(ILogger log)
     {
@@ -61,7 +68,7 @@ public sealed class BroadcastPicture : IDisposable
                 return;
             }
 
-            if (_queue.TryAdd(frame))
+            if (_queue.TryAdd((frame, _generation)))
             {
                 return;
             }
@@ -82,8 +89,17 @@ public sealed class BroadcastPicture : IDisposable
             {
             }
 
+            _generation++;
             _awaitingKeyframe = true;
             Image.Clear();
+        }
+    }
+
+    private bool IsCurrent(int generation)
+    {
+        lock (_lock)
+        {
+            return generation == _generation;
         }
     }
 
@@ -91,8 +107,13 @@ public sealed class BroadcastPicture : IDisposable
     {
         try
         {
-            foreach (var frame in _queue.GetConsumingEnumerable())
+            foreach (var (frame, generation) in _queue.GetConsumingEnumerable())
             {
+                if (!IsCurrent(generation))
+                {
+                    continue;
+                }
+
                 FrameOutcome outcome;
                 try
                 {
@@ -102,6 +123,18 @@ public sealed class BroadcastPicture : IDisposable
                 {
                     _log.LogDebug(ex, "decoding broadcast frame {Seq} failed: {Message}", frame.Seq, ex.Message);
                     continue;
+                }
+
+                lock (_lock)
+                {
+                    if (generation != _generation)
+                    {
+                        // Cleared while this frame was being decoded: it belongs to a broadcast
+                        // that is over. Only the picture goes; the next broadcast's keyframe is
+                        // already behind it in the queue, so the wait for one is not reset.
+                        Image.Clear();
+                        continue;
+                    }
                 }
 
                 if (outcome != FrameOutcome.Applied)

@@ -10,7 +10,7 @@ public enum BroadcastPullEnd
     /// <summary>The console ended the stream: the teacher stopped, or the console left the lab.</summary>
     Ended = 0,
 
-    /// <summary>There was no link, or the link it ran on ended.</summary>
+    /// <summary>There was no link, or the connection it ran on ended — the console vanished, closed it or was taken over.</summary>
     LinkEnded = 1,
 
     /// <summary>This PC stopped it: a <c>BROADCAST_STOP</c>, a newer broadcast, or its own hard limit.</summary>
@@ -25,6 +25,16 @@ public enum BroadcastPullEnd
 
 public sealed partial class AgentLink
 {
+    /// <summary>
+    /// The stream ended because the connection did — <c>Unavailable</c> (the console's process
+    /// or network went, a reset, a disposed channel), or <c>Internal</c>/<c>Unknown</c> caused
+    /// by the transport — rather than because the console answered with a refusal.
+    /// </summary>
+    private static bool IsConnectionLost(RpcException ex) =>
+        ex.StatusCode == StatusCode.Unavailable
+        || (ex.StatusCode is StatusCode.Internal or StatusCode.Unknown
+            && ex.Status.DebugException is IOException or HttpRequestException or ObjectDisposedException);
+
     /// <summary>
     /// Grows by one for every link attempt: a message that arrived on one link and a stream
     /// opened on another can be told apart even when they name the same broadcast (a PC that
@@ -109,17 +119,24 @@ public sealed partial class AgentLink
             _log.LogWarning("{Pc}: the console has no PullBroadcast; update the console", Name);
             return (BroadcastPullEnd.Unsupported, "the console does not offer a broadcast; update the console");
         }
+        catch (RpcException ex) when (sessionToken.IsCancellationRequested || IsConnectionLost(ex))
+        {
+            // The connection to the console went — it vanished, was closed or was taken over —
+            // usually before the link itself notices (D-71 item 11). The link reports its own
+            // end; this is not a broadcast that failed.
+            _log.LogInformation("{Pc}: broadcast {Session} ended with the connection: {Status} {Detail}", Name, sessionId, ex.StatusCode, ex.Status.Detail);
+            return (BroadcastPullEnd.LinkEnded, "the connection to the console ended");
+        }
         catch (RpcException ex)
         {
             _log.LogWarning("{Pc}: broadcast {Session} stream failed: {Status} {Detail}", Name, sessionId, ex.StatusCode, ex.Status.Detail);
-            return sessionToken.IsCancellationRequested
-                ? (BroadcastPullEnd.LinkEnded, "the link ended")
-                : (BroadcastPullEnd.Failed, ex.Status.Detail.Length > 0 ? ex.Status.Detail : ex.StatusCode.ToString());
+            return (BroadcastPullEnd.Failed, ex.Status.Detail.Length > 0 ? ex.Status.Detail : ex.StatusCode.ToString());
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or HttpRequestException or ObjectDisposedException)
         {
-            _log.LogWarning("{Pc}: broadcast {Session} stream failed: {Message}", Name, sessionId, ex.Message);
-            return sessionToken.IsCancellationRequested ? (BroadcastPullEnd.LinkEnded, "the link ended") : (BroadcastPullEnd.Failed, ex.Message);
+            // Transport, not an answer from the console: the connection is what ended.
+            _log.LogInformation("{Pc}: broadcast {Session} ended with the connection: {Message}", Name, sessionId, ex.Message);
+            return (BroadcastPullEnd.LinkEnded, "the connection to the console ended");
         }
     }
 }

@@ -337,7 +337,7 @@ The README is the public project page and keeps only a one-line status per miles
 longer working notes belong in <code>docs/DEVELOPMENT.md</code>. Local scratch (plans, logs, dev
 lab data, USB payloads) never goes into git — <code>.gitignore</code> covers <code>.claude/m6-plan/</code>,
 <code>*.log</code>, <code>*.lock</code>, <code>devlab-data/</code>, <code>payload/</code> and lab documents.</p>
-<p><strong>M6 portion 1 verified, portion 2 built (not yet run natively); portions 3–6 remain:</strong> the owner decisions of 2026-09-09 (lock hard limit 1 h,
+<p><strong>M6 portion 1 verified, portion 2 built and partly VM-verified; portions 3–6 remain:</strong> the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, <em>Settled before implementation</em>; M6 reserves <code>D-69</code>…<code>D-79</code>.</p>
@@ -459,8 +459,11 @@ the raw Win32 window thread out of STA. Physical Windows x64/fleet acceptance st
 ROADMAP M6 records the exact evidence and final validation. The ownership gate for
 <code>Overlay</code> fails closed when the link is unbound and answers a refusal with <code>problem</code> and
 no <code>kind</code>; the console never lets such an answer clear a lock the PC still shows.</p>
-<p><strong>M6 portion 2 is built (2026-10-17, <code>D-71</code>, <code>D-72</code>), in a Linux container; nothing native
-run yet.</strong> The teacher's screen: <code>Shared/Video/ScaledScreenSource</code> (the downscale to
+<p><strong>M6 portion 2 is built (2026-10-17, <code>D-71</code>, <code>D-72</code>), review-fixed and partly verified in the
+ARM64 VM the same day</strong> (<code>D-71</code> items 9–11: the helper resets the picture on its pipe read
+loop, a broadcast with no frame for <code>Defaults.BroadcastStallTimeout</code> = 15 s ends with
+<code>broadcast.stalled</code>, a stream cut with its connection is <code>LinkEnded</code>; ROADMAP M6 records the
+drill and what it did not cover — physical input, the Mac's real display, the lab). The teacher's screen: <code>Shared/Video/ScaledScreenSource</code> (the downscale to
 <code>Defaults.BroadcastWidth</code> = 1280 inside the source, <code>TileDiff</code>, the pointer drawn in) with
 <code>CoreGraphicsScreenSource</code> (macOS, <code>DllImport</code>, <em>Screen Recording</em> preflight and request)
 and <code>GdiDisplayScreenSource</code> (Windows), chosen by <code>ConsoleScreen</code> (Linux: unsupported);
@@ -714,7 +717,7 @@ ROADMAP's <em>Physical lab</em> row and the on-site checklist. Do not describe W
 working in this lab until the vendor-driver rerun proves it.</p>
 
 </article>
-<footer>Generated 2026-10-17 16:49 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 21:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

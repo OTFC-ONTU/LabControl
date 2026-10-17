@@ -298,20 +298,82 @@ public class BroadcastTests
         await Task.WhenAll(fastTask, slowTask);
     }
 
+    [Fact]
+    public async Task A_broadcast_that_brings_no_picture_any_more_gives_the_screen_back()
+    {
+        // D-71 item 10: the console's capture stops (its screen locked, the permission gone);
+        // the stream stays up but carries nothing, and the PC must not hold a frozen picture
+        // with the input blocked until the hard limit.
+        await using var console = await TestConsole.CreateLabAsync();
+        var screen = new FreezableScreen();
+        console.Session.BroadcastSource = () => screen;
+        var (machines, _) = await StartMachinesAsync(console, 1, broadcastStallTimeout: TimeSpan.FromSeconds(2));
+        var machine = machines[0];
+        try
+        {
+            console.Session.StartBroadcast([machine.AgentId]);
+            Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(machine.AgentId)?.OverlayBroadcasting == true, TimeSpan.FromSeconds(15)));
+
+            screen.Frozen = true;
+            Assert.True(await Wait.UntilAsync(() => machine.Broadcast is null, TimeSpan.FromSeconds(15)));
+            Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(machine.AgentId)?.OverlayBroadcasting == false, TimeSpan.FromSeconds(10)));
+            Assert.True(await Wait.UntilAsync(() => console.Session.Events.Recent.Any(e => e.Code == "broadcast.stalled" && e.AgentId == machine.AgentId), TimeSpan.FromSeconds(10)));
+            Assert.DoesNotContain(console.Session.Events.Recent, e => e.Code == "broadcast.failed");
+            Assert.True(console.Session.FindLinked(machine.AgentId) is not null, "the link itself stays up");
+        }
+        finally
+        {
+            await DisposeAllAsync(machines);
+        }
+    }
+
+    [Fact]
+    public async Task A_console_that_vanishes_ends_the_broadcast_as_a_lost_connection_not_a_failure()
+    {
+        // D-71 item 11: the connection is cut without a goodbye (a reset, as when the
+        // console's process dies or its lid closes); the PC gives the screen back and does not
+        // tell the next console that the broadcast "could not be shown".
+        await using var console = await TestConsole.CreateLabAsync();
+        console.Session.BroadcastSource = TeacherScreen;
+        await using var relay = new CuttableRelay(console.Port);
+        var (machines, _) = await StartMachinesAsync(console, 1, port: relay.Port);
+        var machine = machines[0];
+        try
+        {
+            console.Session.StartBroadcast([machine.AgentId]);
+            Assert.True(await Wait.UntilAsync(() => machine.Broadcast is not null, TimeSpan.FromSeconds(15)));
+
+            relay.Cut();
+            Assert.True(await Wait.UntilAsync(() => machine.Broadcast is null, TimeSpan.FromSeconds(15)), "the PC gives the screen back with the connection");
+
+            // It links again through the relay, joins the broadcast again, and has nothing to
+            // report about the one that was cut off.
+            Assert.True(await Wait.UntilAsync(() => machine.Broadcast is not null, TimeSpan.FromSeconds(30)), "the PC joins the broadcast again when it relinks");
+            await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+            Assert.DoesNotContain(console.Session.Events.Recent, e => e.Code == "broadcast.failed" && e.AgentId == machine.AgentId);
+        }
+        finally
+        {
+            await DisposeAllAsync(machines);
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /// <summary>The teacher's screen in the tests: a drawn 1280×720 desktop that changes every tick.</summary>
     private static IScreenSource TeacherScreen() => new FakeScreen(90, 1280, 720, idle: false);
 
-    private static async Task<(List<FakeMachine> Machines, string Root)> StartMachinesAsync(TestConsole console, int count, TimeSpan? broadcastCeiling = null)
+    private static async Task<(List<FakeMachine> Machines, string Root)> StartMachinesAsync(TestConsole console, int count, TimeSpan? broadcastCeiling = null,
+        TimeSpan? broadcastStallTimeout = null, int? port = null)
     {
         var payload = SetupPayload.Open(console.Session.WritePayload(TestConsole.TempDirectory(), pcCount: count));
         var root = TestConsole.TempDirectory();
         var machines = new List<FakeMachine>();
         for (var n = 1; n <= count; n++)
         {
-            var store = FakeMachine.Install(Path.Combine(root, $"PC-{n:00}"), n, payload, System.Net.IPAddress.Loopback.ToString(), console.Port, burnedCode: false);
-            var machine = new FakeMachine(store, null, TestLogging.Factory.CreateLogger($"PC-{n:00}"), broadcastCeiling: broadcastCeiling);
+            var store = FakeMachine.Install(Path.Combine(root, $"PC-{n:00}"), n, payload, System.Net.IPAddress.Loopback.ToString(), port ?? console.Port, burnedCode: false);
+            var machine = new FakeMachine(store, null, TestLogging.Factory.CreateLogger($"PC-{n:00}"), broadcastCeiling: broadcastCeiling,
+                broadcastStallTimeout: broadcastStallTimeout);
             machines.Add(machine);
             machine.Start();
         }
@@ -337,6 +399,135 @@ public class BroadcastTests
         tile.Refresh(machine, connection, connection is null ? console.Session.Ownership(machine) : null, console.Session.Now, false,
             console.Session.Instance.InstanceId, console.Session.NameOfInstance);
         return tile;
+    }
+
+    /// <summary>The teacher's screen until <see cref="Frozen"/>: then every capture fails, as a locked or asleep display does.</summary>
+    private sealed class FreezableScreen : IScreenSource
+    {
+        private readonly FakeScreen _screen = new(90, 1280, 720, idle: false);
+
+        public volatile bool Frozen;
+
+        public string Kind => "freezable";
+
+        public IScreenFrame? Acquire(TimeSpan timeout)
+        {
+            if (Frozen)
+            {
+                Thread.Sleep(timeout);
+                throw new ScreenCaptureException("access_lost", "the test froze the screen");
+            }
+
+            return _screen.Acquire(timeout);
+        }
+
+        public void Dispose()
+        {
+            // The hub reopens the source after a failure; this one lives for the whole test.
+        }
+    }
+
+    /// <summary>
+    /// A TCP relay between the PC and the console; <see cref="Cut"/> resets every connection
+    /// through it — what the PC sees when the console's process dies — and keeps accepting.
+    /// </summary>
+    private sealed class CuttableRelay : IAsyncDisposable
+    {
+        private readonly System.Net.Sockets.TcpListener _listener = new(System.Net.IPAddress.Loopback, 0);
+        private readonly int _target;
+        private readonly CancellationTokenSource _stop = new();
+        private readonly List<System.Net.Sockets.TcpClient> _open = [];
+        private readonly Task _accepting;
+
+        public CuttableRelay(int target)
+        {
+            _target = target;
+            _listener.Start();
+            _accepting = AcceptAsync();
+        }
+
+        public int Port => ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
+
+        public void Cut()
+        {
+            lock (_open)
+            {
+                foreach (var client in _open)
+                {
+                    try
+                    {
+                        client.LingerState = new System.Net.Sockets.LingerOption(true, 0);
+                        client.Close();
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+
+                _open.Clear();
+            }
+        }
+
+        private async Task AcceptAsync()
+        {
+            try
+            {
+                while (!_stop.IsCancellationRequested)
+                {
+                    var inbound = await _listener.AcceptTcpClientAsync(_stop.Token);
+                    var outbound = new System.Net.Sockets.TcpClient();
+                    await outbound.ConnectAsync(System.Net.IPAddress.Loopback, _target, _stop.Token);
+                    lock (_open)
+                    {
+                        _open.Add(inbound);
+                        _open.Add(outbound);
+                    }
+
+                    _ = PumpAsync(inbound, outbound);
+                    _ = PumpAsync(outbound, inbound);
+                }
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        private async Task PumpAsync(System.Net.Sockets.TcpClient from, System.Net.Sockets.TcpClient to)
+        {
+            try
+            {
+                await from.GetStream().CopyToAsync(to.GetStream(), _stop.Token);
+            }
+            catch (Exception)
+            {
+            }
+
+            try
+            {
+                to.LingerState = new System.Net.Sockets.LingerOption(true, 0);
+                to.Close();
+                from.Close();
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            _stop.Cancel();
+            _listener.Stop();
+            Cut();
+            try
+            {
+                await _accepting;
+            }
+            catch (Exception)
+            {
+            }
+
+            _stop.Dispose();
+        }
     }
 
     /// <summary>A PC's stream: keeps every frame; with a gate, each write waits for it, like a PC that reads slowly.</summary>

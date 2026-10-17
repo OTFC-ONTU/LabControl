@@ -902,6 +902,16 @@ public static class Defaults
     public static readonly TimeSpan BroadcastHardLimit = TimeSpan.FromMinutes(30);
 
     /// <summary>
+    /// A broadcast whose stream brings no frame for this long is over on the PC (D-71 item
+    /// 15): a console that captures nothing any more — its screen locked or asleep, the
+    /// capture permission revoked — still sends nothing, not even keyframes, and the students
+    /// must not stare at a frozen picture with their input blocked until the hard limit. A
+    /// console that does capture sends a keyframe at least every <see cref="KeyframeInterval"/>,
+    /// so three missed keyframes is the margin.
+    /// </summary>
+    public static readonly TimeSpan BroadcastStallTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
     /// The width the console's screen is scaled to before it is encoded for a broadcast
     /// (D-72): 14 pt editor text stays legible on a 1366×768 student panel, and one picture
     /// this size, encoded once, is what every PC receives. Downscaled inside the screen

@@ -60,6 +60,9 @@ internal sealed class OverlayController : IDisposable
     private long _broadcastHardLimitUnix;
     private readonly BroadcastPicture _picture;
 
+    // The broadcast the picture belongs to; touched only by the pipe's read loop (Offer).
+    private string? _pictureSession;
+
     /// <param name="report">Sends an <c>overlay_state</c> up the pipe, fire-and-forget.</param>
     /// <param name="pcName">The PC's own name for the picture (<c>PC-07</c>).</param>
     public OverlayController(ILogger log, Action<OverlayState> report, string pcName)
@@ -72,13 +75,21 @@ internal sealed class OverlayController : IDisposable
         _thread.Start();
     }
 
-    /// <summary>From the pipe's read loop: queued in order, never waited for; a full queue drops the oldest, the newest request is what counts.</summary>
+    /// <summary>
+    /// From the pipe's read loop: queued in order, never waited for; a full queue drops the
+    /// oldest, the newest request is what counts. A broadcast's start or stop also resets
+    /// the picture here, on the read loop, so the reset keeps its place among the frames —
+    /// the control thread may run the start only after the first keyframe has arrived, and
+    /// must not throw it away (D-71 item 9).
+    /// </summary>
     public void Offer(Overlay overlay)
     {
         if (_queue.IsAddingCompleted)
         {
             return;
         }
+
+        ResetPicture(overlay);
 
         try
         {
@@ -90,6 +101,29 @@ internal sealed class OverlayController : IDisposable
         catch (InvalidOperationException)
         {
             // Completed underneath us: the helper is exiting.
+        }
+    }
+
+    private void ResetPicture(Overlay overlay)
+    {
+        try
+        {
+            switch (overlay.Kind)
+            {
+                case Overlay.Types.Kind.BroadcastStart when !string.Equals(_pictureSession, overlay.SessionId, StringComparison.Ordinal):
+                    _picture.Clear();
+                    _pictureSession = overlay.SessionId;
+                    break;
+
+                case Overlay.Types.Kind.BroadcastStop when overlay.SessionId.Length == 0 || string.Equals(_pictureSession, overlay.SessionId, StringComparison.Ordinal):
+                    _picture.Clear();
+                    _pictureSession = null;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "resetting the broadcast picture failed: {Message}", ex.Message);
         }
     }
 
@@ -419,7 +453,6 @@ internal sealed class OverlayController : IDisposable
         if (!restated)
         {
             Volatile.Write(ref _broadcastSinceUnix, now);
-            _picture.Clear();
         }
 
         // The service clamped it already; this only guards against a malformed message.
@@ -456,7 +489,6 @@ internal sealed class OverlayController : IDisposable
         }
 
         _broadcast = null;
-        _picture.Clear();
         _log.LogInformation("broadcast stopped");
         if (_current is not null)
         {

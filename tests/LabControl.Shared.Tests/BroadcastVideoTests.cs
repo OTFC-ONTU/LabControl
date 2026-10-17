@@ -119,6 +119,36 @@ public class BroadcastVideoTests
         Assert.Equal(2, picture.Dropped);
     }
 
+    [Fact]
+    public async Task A_frame_of_a_broadcast_that_is_over_never_stays_on_the_screen()
+    {
+        // D-71 item 9: Clear runs on the thread that offers the frames, at the point the
+        // broadcast ends; a frame of it still in the queue or being decoded must not be
+        // applied after it — and a keyframe offered right after it must not be lost.
+        using var picture = new BroadcastPicture(NullLogger.Instance);
+        using var blue = Solid(64, 64, SKColors.Blue);
+        using var red = Solid(64, 64, SKColors.Red);
+        for (var round = 0; round < 25; round++)
+        {
+            picture.Offer(Keyframe(blue, (ulong)(round * 2 + 1)));
+            picture.Clear();
+            await Task.Delay(40, TestContext.Current.CancellationToken);
+            Assert.Null(picture.Image.Snapshot());
+
+            var applied = picture.Applied;
+            picture.Clear();
+            picture.Offer(Keyframe(red, (ulong)(round * 2 + 2)));
+            for (var i = 0; i < 100 && picture.Applied == applied; i++)
+            {
+                await Task.Delay(10, TestContext.Current.CancellationToken);
+            }
+
+            Assert.InRange(picture.Image.PixelAt(10, 10).Red, 247, 255);
+            Assert.InRange(picture.Image.PixelAt(10, 10).Blue, 0, 8);
+            picture.Clear();
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static SKColor Pixel(IScreenFrame frame, int x, int y)

@@ -272,7 +272,10 @@ acceptance remain open; see ROADMAP M6. When touching
 <code>Overlay</code>/<code>OverlayState</code>, the ownership gate in <code>AgentLink</code> is judged before the
 enforcer sees the message and fails closed; keep <code>LeaveIfConsoleRevoked</code> as it is, keep
 the limits as durations, and keep every teacher-facing reason a code.</li>
-<li><strong>M6 portion 2 is built (2026-10-17, <code>D-71</code>, <code>D-72</code>), not yet run natively.</strong> The
+<li><strong>M6 portion 2 is built (2026-10-17, <code>D-71</code>, <code>D-72</code>), review-fixed (<code>D-71</code> items 9–11:
+picture reset on the helper's pipe read loop, <code>broadcast.stalled</code> after
+<code>Defaults.BroadcastStallTimeout</code>, a cut connection is <code>LinkEnded</code>) and partly verified in
+the ARM64 VM; physical input, the Mac's real display and the lab remain (ROADMAP M6).</strong> The
 console's screen (CoreGraphics on macOS after the <em>Screen Recording</em> permission, GDI on
 Windows, none on Linux) is scaled to 1280 wide inside <code>ScaledScreenSource</code>, encoded once
 by <code>BroadcastHub</code> and served over the server-streaming <code>PullBroadcast</code> with a latest-wins
@@ -338,8 +341,8 @@ CredUI <code>EnumerateAdministrators=0</code>; restore the tile before restoring
 Account-off touches neither setting. Do not change UAC security policy to bypass
 native administrator-maintenance acceptance (<code>D-52</code>).</li>
 <li>Do not invent features outside <code>docs/ROADMAP.md</code>; propose the scope there first.</li>
-<li>M6 portion 1 has passed ARM64 VM acceptance; portion 2 (broadcast) is built and waits
-for its VM drill; portions 3–6 remain. Its owner decisions
+<li>M6 portion 1 has passed ARM64 VM acceptance; portion 2 (broadcast) is built and has
+passed a partial VM drill; portions 3–6 remain. Its owner decisions
 (2026-09-09) and corrected six-portion plan are settled in ROADMAP M6, <em>Settled before implementation</em>; follow them and use the
 reserved <code>D-69</code>…<code>D-79</code>.</li>
 <li>The README is the public project page with one line of status per milestone; put long
@@ -437,7 +440,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-17 16:49 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 21:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

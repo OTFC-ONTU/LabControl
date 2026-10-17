@@ -54,8 +54,10 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     /// </param>
     /// <param name="mutexWait">How long a pass waits for the mutex; <see cref="Defaults.PolicyMutexWait"/> when <c>null</c>.</param>
     /// <param name="broadcastCeiling"><see cref="Defaults.BroadcastHardLimit"/> unless a test wants it sooner.</param>
+    /// <param name="broadcastStallTimeout"><see cref="Defaults.BroadcastStallTimeout"/> unless a test wants it sooner.</param>
     public PolicyEnforcer(AgentLink link, IMachineState machine, string dataDirectory, string labId, ILogger log,
-        Func<DateTimeOffset>? clock = null, string? mutexName = null, TimeSpan? mutexWait = null, TimeSpan? broadcastCeiling = null)
+        Func<DateTimeOffset>? clock = null, string? mutexName = null, TimeSpan? mutexWait = null, TimeSpan? broadcastCeiling = null,
+        TimeSpan? broadcastStallTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(link);
         ArgumentNullException.ThrowIfNull(machine);
@@ -72,7 +74,7 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         Journal.Reported += OnReported;
         _timer = new Timer(_ => Tick(), null, Timeout.Infinite, Timeout.Infinite);
         _onOverlay = OnOverlay;
-        Broadcast = new BroadcastReceiver(link, machine, log, _clock, broadcastCeiling);
+        Broadcast = new BroadcastReceiver(link, machine, log, _clock, broadcastCeiling, broadcastStallTimeout);
         Broadcast.Changed += () => Safe("broadcast", () => Publish(Journal.OverlayStateOf(_clock().ToUnixTimeSeconds())));
     }
 

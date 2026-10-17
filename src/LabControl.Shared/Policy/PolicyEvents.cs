@@ -44,6 +44,9 @@ public static class PolicyEvents
     /// <summary>A broadcast could not be shown: the console refused the stream, or the machine could not take the screen.</summary>
     public const string BroadcastFailed = "broadcast.failed";
 
+    /// <summary>A broadcast's stream brought no frame for <see cref="Defaults.BroadcastStallTimeout"/>, and the PC gave its screen back (D-71 item 10).</summary>
+    public const string BroadcastStalled = "broadcast.stalled";
+
     private static readonly ResourceManager Resources = new("LabControl.Shared.Policy.PolicyStrings", typeof(PolicyEvents).Assembly);
 
     /// <summary>A resource string, formatted with the invariant culture; the name itself if the resource is missing, never an exception.</summary>

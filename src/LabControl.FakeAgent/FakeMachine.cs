@@ -39,7 +39,9 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     /// <param name="policyMutexWait">How long a policy pass waits for this PC's mutex; the product default when <c>null</c> — a test that holds the mutex on purpose passes a short one.</param>
     /// <param name="broadcastCeiling">This PC's own broadcast limit; <see cref="Defaults.BroadcastHardLimit"/> when <c>null</c> — a test that wants to see it end passes a short one.</param>
-    public FakeMachine(DirectoryAgentStore store, FailureSpec? failure, ILogger log, TimeSpan? policyMutexWait = null, TimeSpan? broadcastCeiling = null)
+    /// <param name="broadcastStallTimeout">How long this PC waits for a broadcast frame; <see cref="Defaults.BroadcastStallTimeout"/> when <c>null</c>.</param>
+    public FakeMachine(DirectoryAgentStore store, FailureSpec? failure, ILogger log, TimeSpan? policyMutexWait = null, TimeSpan? broadcastCeiling = null,
+        TimeSpan? broadcastStallTimeout = null)
     {
         _store = store;
         _failure = failure;
@@ -71,7 +73,8 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         // per PC so thirty of them in one process never queue behind one another.
         _machineState = new FakeMachineState(() => _desktop, log);
         _policy = new PolicyEnforcer(Link, _machineState, store.Directory, store.Config.LabId, log,
-            mutexName: PolicyMutexName(store.Config.AgentId), mutexWait: policyMutexWait, broadcastCeiling: broadcastCeiling);
+            mutexName: PolicyMutexName(store.Config.AgentId), mutexWait: policyMutexWait, broadcastCeiling: broadcastCeiling,
+            broadcastStallTimeout: broadcastStallTimeout);
 
         // A real PC's supervisor publishes this at start and on every change (M2); the
         // simulator pretends the helper is up and the student is at the desk.

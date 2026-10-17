@@ -81,14 +81,66 @@ internal sealed class OverlayController : IDisposable
     {
         try
         {
-            foreach (var overlay in _queue.GetConsumingEnumerable())
+            while (!_queue.IsCompleted)
             {
-                Apply(overlay);
+                if (_queue.TryTake(out var overlay, (int)Defaults.OverlayRepaintInterval.TotalMilliseconds))
+                {
+                    Apply(overlay);
+                }
+
+                FollowDesktop();
             }
         }
         catch (ObjectDisposedException)
         {
         }
+    }
+
+    private void FollowDesktop()
+    {
+        lock (_lock)
+        {
+            if (_disposed || _current is not { } current || _window is not { } window)
+            {
+                return;
+            }
+
+            try
+            {
+                var desktop = DesktopAccess.InputDesktopName();
+                if (desktop.StartsWith('?') || string.Equals(desktop, window.DesktopName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                // HWNDs and hooks cannot move between desktops. Recreate both on fresh
+                // threads, preserving the existing deadlines rather than granting more time.
+                _log.LogInformation("lock following input desktop {Desktop}", desktop);
+                _window = null;
+                window.Dispose();
+                _block?.Dispose();
+                _block = null;
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var until = Volatile.Read(ref _untilUnix);
+                var hardLimit = Volatile.Read(ref _hardLimitUnix);
+                if (hardLimit <= now || until > 0 && until <= now)
+                {
+                    Lift();
+                    return;
+                }
+
+                var restated = current.Clone();
+                restated.UntilSeconds = until > 0 ? until - now : 0;
+                restated.HardLimitSeconds = hardLimit - now;
+                Show(restated, until, hardLimit);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "following the input desktop failed: {Message}", ex.Message);
+            }
+        }
+
+        Report();
     }
 
     /// <summary>On the controller's own thread: shows or lifts, then reports. The lock here is against <see cref="Dispose"/> only; <see cref="State"/> never takes it.</summary>
@@ -179,7 +231,7 @@ internal sealed class OverlayController : IDisposable
         }
     }
 
-    private void Show(Overlay overlay)
+    private void Show(Overlay overlay, long? existingUntil = null, long? existingHardLimit = null)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var restated = _current is { } current && current.SessionId == overlay.SessionId;
@@ -188,8 +240,8 @@ internal sealed class OverlayController : IDisposable
         // ceiling here is only a guard against a malformed message, since the service is
         // what lifts the lock and this only counts down.
         var ceiling = (long)Defaults.LockHardLimit.TotalSeconds;
-        var until = overlay.UntilSeconds > 0 ? now + overlay.UntilSeconds : 0;
-        var hardLimit = now + (overlay.HardLimitSeconds > 0 ? Math.Min(overlay.HardLimitSeconds, ceiling) : ceiling);
+        var until = existingUntil ?? (overlay.UntilSeconds > 0 ? now + overlay.UntilSeconds : 0);
+        var hardLimit = existingHardLimit ?? (now + (overlay.HardLimitSeconds > 0 ? Math.Min(overlay.HardLimitSeconds, ceiling) : ceiling));
         if (!restated)
         {
             Volatile.Write(ref _sinceUnix, now);

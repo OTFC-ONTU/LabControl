@@ -312,9 +312,13 @@ the second-half review's fixes (795 + 236 after the foundation review's, 782 + 2
 built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full
 run and passed alone) (`LockTests`, `OverlayLinkTests`, `PolicyEnforcerTests`, the UI
 renders). `dotnet publish -r win-x64` and `-r win-arm64` of the helper and the agent
-succeed. **Not yet run on Windows**: the window, the hooks and their re-arm, the
-injected-input pass-through under the click-through window, the re-assert after logoff and
-`--restore-policy` wait for the VM (the drill is in ROADMAP M6). The ownership gate for
+succeed. **Windows 11 ARM64 VM acceptance passed on 2026-10-17** (`D-80`): physical
+input refusal with a positive control, injected input under the lock, Ctrl+Alt+Del,
+ten-minute clock skew, expiry without the console, service restart, `--restore-policy`,
+sign-out/reboot/autologon and corrupt-policy recovery. Native defects fixed: recreate
+window and hooks on the new input desktop with unchanged absolute deadlines, and keep
+the raw Win32 window thread out of STA. Physical Windows x64/fleet acceptance stays open;
+ROADMAP M6 records the exact evidence and final validation. The ownership gate for
 `Overlay` fails closed when the link is unbound and answers a refusal with `problem` and
 no `kind`; the console never lets such an answer clear a lock the PC still shows.
 

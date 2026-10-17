@@ -234,8 +234,8 @@ console packaging on Windows (Explorer's double-click, a real elevation prompt,
 on Linux, portion 5 on Windows with two consoles and skewed clocks against a real agent,
 the Avalonia quit hook by hand, and the milestone in the physical lab. The <code>Welcome.console_access</code>
 <code>.proto</code> change landed with portion 5 and <code>docs/PROTOCOL.md</code> was updated in that commit.</li>
-<li><strong>M6 portion 1 is built (2026-09-16, <code>D-69</code>, <code>D-70</code>), all on the Mac, not yet run on
-Windows.</strong> The policy journal (<code>Shared/Policy/</code>, <code>policy.json</code>) restores the machine
+<li><strong>M6 portion 1 is built (2026-09-16, <code>D-69</code>, <code>D-70</code>) and verified in an isolated
+Windows 11 ARM64 VM (2026-10-17, <code>D-80</code>).</strong> The policy journal (<code>Shared/Policy/</code>, <code>policy.json</code>) restores the machine
 first and re-applies second, under the named mutex <code>Global\LabControl.Policy</code>, with the
 hard limit re-clamped on every pass; a lock has its own 1 h ceiling
 (<code>Defaults.LockHardLimit</code>) clamped on the agent's clock and does <strong>not</strong> end on lab
@@ -256,7 +256,12 @@ by the PC's <code>OverlayState</code>, never by the request. Tests: 796 Shared +
 the second-half review's fixes (795 + 236 after the foundation review's, 782 + 232 when
 built, 778 + 228 before the portion; one load-sensitive beacon test failed under the
 full run and passed alone). <code>dotnet publish -r win-x64</code> and <code>-r win-arm64</code> of the helper
-and the agent succeed; the VM drill is in ROADMAP M6. When touching
+and the agent succeed. Native acceptance found and fixed desktop following: the window
+and hooks are recreated on fresh threads when the input desktop changes, preserving
+absolute deadlines; the raw window thread must not use STA. The VM verified physical
+input refusal, injected input, Ctrl+Alt+Del, clock skew, offline expiry, service restart,
+sign-out/reboot/autologon and corrupt-policy recovery. Physical Windows x64 and fleet
+acceptance remain open; see ROADMAP M6. When touching
 <code>Overlay</code>/<code>OverlayState</code>, the ownership gate in <code>AgentLink</code> is judged before the
 enforcer sees the message and fails closed; keep <code>LeaveIfConsoleRevoked</code> as it is, keep
 the limits as durations, and keep every teacher-facing reason a code.</li>
@@ -404,7 +409,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-17 12:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 12:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

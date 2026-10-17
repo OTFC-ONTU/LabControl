@@ -54,6 +54,7 @@ internal sealed class OverlayWindow : IDisposable
     private readonly Lock _lock = new();
     private HWND _hwnd;
     private uint _threadId;
+    private nint _desktopHandle;
     private OverlayContent _content;
     private long _untilUnix;
     private long _hardLimitUnix;
@@ -69,13 +70,16 @@ internal sealed class OverlayWindow : IDisposable
         _untilUnix = untilUnix;
         _hardLimitUnix = hardLimitUnix;
         _thread = new Thread(Run) { Name = "overlay", IsBackground = true };
-        _thread.SetApartmentState(ApartmentState.STA);
+        // Raw Win32/GDI needs no COM apartment. STA initialization can create an OLE
+        // window before Run, making SetThreadDesktop fail with ERROR_BUSY on Winlogon.
         _thread.Start();
         _shown.Wait(TimeSpan.FromSeconds(5));
     }
 
     /// <summary>The window is up on the input desktop.</summary>
     public bool IsShowing => !_hwnd.IsNull && Problem is null;
+
+    public string? DesktopName { get; private set; }
 
     /// <summary>Why the window is not up, or <c>null</c>.</summary>
     public string? Problem { get; private set; }
@@ -106,7 +110,8 @@ internal sealed class OverlayWindow : IDisposable
             // Windows are created on the desktop the thread belongs to: join the input desktop
             // first (the student's Default, or Winlogon at the lock screen), as the capture
             // and input threads do (D-35 item 3).
-            var desktop = DesktopAccess.AttachToInputDesktop();
+            var desktop = DesktopAccess.AttachToInputDesktop(out _desktopHandle);
+            DesktopName = desktop;
             _threadId = PInvoke.GetCurrentThreadId();
             var module = PInvoke.GetModuleHandle(default(PCWSTR));
 
@@ -425,6 +430,11 @@ internal sealed class OverlayWindow : IDisposable
         if (!_thread.Join(TimeSpan.FromSeconds(3)))
         {
             _log.LogDebug("the overlay thread did not finish in time; it is a background thread and dies with the process");
+        }
+        else
+        {
+            DesktopAccess.CloseExitedThreadDesktop(_desktopHandle);
+            _desktopHandle = 0;
         }
 
         _shown.Dispose();

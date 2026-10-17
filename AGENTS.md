@@ -101,8 +101,8 @@ the documents relevant to the task:
   on Linux, portion 5 on Windows with two consoles and skewed clocks against a real agent,
   the Avalonia quit hook by hand, and the milestone in the physical lab. The `Welcome.console_access`
   `.proto` change landed with portion 5 and `docs/PROTOCOL.md` was updated in that commit.
-- **M6 portion 1 is built (2026-09-16, `D-69`, `D-70`), all on the Mac, not yet run on
-  Windows.** The policy journal (`Shared/Policy/`, `policy.json`) restores the machine
+- **M6 portion 1 is built (2026-09-16, `D-69`, `D-70`) and verified in an isolated
+  Windows 11 ARM64 VM (2026-10-17, `D-80`).** The policy journal (`Shared/Policy/`, `policy.json`) restores the machine
   first and re-applies second, under the named mutex `Global\LabControl.Policy`, with the
   hard limit re-clamped on every pass; a lock has its own 1 h ceiling
   (`Defaults.LockHardLimit`) clamped on the agent's clock and does **not** end on lab
@@ -123,7 +123,12 @@ the documents relevant to the task:
   the second-half review's fixes (795 + 236 after the foundation review's, 782 + 232 when
   built, 778 + 228 before the portion; one load-sensitive beacon test failed under the
   full run and passed alone). `dotnet publish -r win-x64` and `-r win-arm64` of the helper
-  and the agent succeed; the VM drill is in ROADMAP M6. When touching
+  and the agent succeed. Native acceptance found and fixed desktop following: the window
+  and hooks are recreated on fresh threads when the input desktop changes, preserving
+  absolute deadlines; the raw window thread must not use STA. The VM verified physical
+  input refusal, injected input, Ctrl+Alt+Del, clock skew, offline expiry, service restart,
+  sign-out/reboot/autologon and corrupt-policy recovery. Physical Windows x64 and fleet
+  acceptance remain open; see ROADMAP M6. When touching
   `Overlay`/`OverlayState`, the ownership gate in `AgentLink` is judged before the
   enforcer sees the message and fails closed; keep `LeaveIfConsoleRevoked` as it is, keep
   the limits as durations, and keep every teacher-facing reason a code.

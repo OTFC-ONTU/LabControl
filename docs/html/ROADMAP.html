@@ -193,7 +193,7 @@ implement.</p>
 <tr>
 <td><strong>M6</strong></td>
 <td>Classroom control: broadcast, lock, exam mode</td>
-<td>**in progress — plan settled 2026-09-16 (<code>D-69</code>…<code>D-79</code>, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, <em>Lock screens</em> in the console, the simulator's lock; cross-compiled for <code>win-x64</code>, <strong>not yet run on Windows</strong></td>
+<td><strong>in progress — plan settled 2026-09-16 (<code>D-69</code>…<code>D-79</code>, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, <em>Lock screens</em> in the console, the simulator's lock; <strong>portion 1 verified in an isolated Windows 11 ARM64 VM on 2026-10-17</strong>, desktop-following defects fixed (<code>D-80</code>); physical Windows x64/fleet acceptance remains open. Next: portion 2, teacher-screen broadcast</strong></td>
 <td>M5</td>
 </tr>
 <tr>
@@ -2222,9 +2222,8 @@ limit, a second console of the lab seeing whose lock it is and ending it, a torn
 <code>policy.json</code> and a machine whose every call throws still linking with the reason on the
 console, <code>policy.busy</code> on the wire, and the skipped path for an unlinked or outdated PC.
 <code>dotnet publish -r win-arm64</code> of the helper and the agent succeed too.
-<strong>Not yet run on Windows:</strong> the window, the hooks and their re-arm, the injected-input
-pass-through, the re-assert after logoff and <code>--restore-policy</code> wait for the VM. <em>The VM
-drill</em> (ARM64 VM: publish <code>win-arm64</code>; the lab PCs need <code>win-x64</code>): push (or
+<strong>Native acceptance completed on Windows 11 ARM64, 2026-10-17 (<code>D-80</code>); see the record
+below.</strong> <em>The repeatable VM drill</em> (ARM64 VM: publish <code>win-arm64</code>; the lab PCs need <code>win-x64</code>): push (or
 <code>scripts/dev-install.ps1</code>) the agent and helper; <strong>set the VM's clock ten minutes ahead of
 the console's</strong> — the lock must still take, and the badge's countdown must agree with
 the picture's (durations, not stamps); lock the PC from the console with a Ukrainian
@@ -2246,6 +2245,56 @@ unlock itself with the console silent and <code>overlay.expired</code> in the ev
 service — the PC must link and the console must show <code>policy.unreadable</code>; finally check
 <code>policy.json</code> and the tile badge after each step.</li>
 </ul>
+<p><strong>Portion 1 native acceptance — 2026-10-17.</strong> New UTM clone
+<em>M6 isolated lock acceptance 2026-10-17</em> (<code>9F5777F2-23F8-4C2B-8814-054173E71739</code>),
+Windows 11 ARM64, host-only networking, no shared folders, real standard <code>student</code>
+session. The original VM remained stopped. Both executables were SHA-256 compared on
+host and guest before use; a fresh disposable TLS lab was used, never the physical lab.</p>
+<ul>
+<li>Ukrainian lock message/countdown displayed; physical typing and Alt+Tab, Alt+F4,
+Ctrl+Esc and Win+R refused. Before locking, HID keystrokes visibly wrote <code>base</code> in
+Notepad; under the lock the physical test character did not appear, while the
+production remote-input path appended <code>M6_REMOTE_INPUT_OK</code>. The opaque window is
+click-through and non-activating as intended.</li>
+<li>The first Ctrl+Alt+Del run exposed that the window/hooks stayed on Default.
+Recreating them then exposed an STA thread that could not join Winlogon. Both fixed
+(<code>D-80</code>): fresh MTA window/hook threads follow Default → Winlogon → Default, keeping
+the original session and deadlines; the teacher's injected Escape returned from the
+secure desktop while the lock stayed up.</li>
+<li>A two-minute lock accepted with the guest clock ten minutes ahead, counted down and
+expired after the fixture console stopped. A later persistent lock retained its id and
+exact hard deadline across service stop/start; <code>--restore-policy</code> exited 0 and kept it.</li>
+<li>Sign-out replaced the helper and the lock reappeared on Winlogon; the console reported
+<code>overlay.helper_down</code> during the gap. Reboot signed the real student back in and
+restored the same lock. UTM reset the guest clock on boot, so the agent correctly
+re-clamped the saved hard limit against its current clock rather than keeping a limit
+more than an hour ahead.</li>
+<li>Truncated <code>policy.json</code> after stopping the service: on restart the agent linked,
+the helper ran, the screen was unrestricted and the console received <code>policy.unreadable</code>.
+The previous fixture journal was preserved inside the protected data directory.</li>
+</ul>
+<p>The branch before integrating October's main changes passed all <strong>1037 tests, no skips</strong>.
+The final merged build (<code>1.0.0</code>, fixture directory <code>1.0.0-m6-lock</code>) repeated the
+Default → Winlogon → Default drill with exactly unchanged deadlines. More than a minute
+in full video mode retained working hooks and the helper, with no rejected video frames;
+explicit unlock removed both the picture and the persisted overlay. After adding desktop
+handle cleanup, three further Default → Winlogon → Default rounds on the final helper
+retained working hooks and exactly the same session/deadlines. This is functional
+acceptance; the hour-long capture/GPU/handle measurements remain M3 close-out work.
+Final ARM64 hashes
+(host and guest identical):</p>
+<pre><code class="language-text">agent.exe   083f9813e3639f542e10effe09dcba6138da335cf9c5dbc185ab0283794632d0
+session.exe 11f05654df2b32c8887956734a962b7e2fc9a5a46ed1962a4a09406c3af1d293
+</code></pre>
+<p>The guest clock was back in sync after reboot. The fixture was unlocked; the temporary
+console/file server were stopped and the clone was shut down. Final merged-tree build,
+test and publish validation: <code>dotnet build</code> passed with the two existing Avalonia
+constructor warnings; <strong>1050 tests passed, no failures or skips</strong>; self-contained,
+single-file Agent/Session published for Windows ARM64/x64 and Console for macOS ARM64,
+Windows x64 and Linux x64. The parser's vulnerable transitive PKCS dependency is pinned
+to the patched version (<code>D-80</code>), with NuGet audit enabled. This closes
+portion 1's VM gate; it does not close the whole M6 milestone, physical Windows x64,
+fleet lock acceptance, broadcast, internet policies, exam mode, collection or reset.</p>
 <hr />
 <h2 id="m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish<a class="anchor" href="#m7-software-catalog-localization-polish" aria-label="Link to this section">#</a></h2>
 <p><strong>Goal.</strong> Everything that makes the system pleasant to own for one person with no IT
@@ -2456,7 +2505,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-17 12:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 12:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

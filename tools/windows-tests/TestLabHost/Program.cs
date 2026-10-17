@@ -289,6 +289,37 @@ internal static class TestLabHost
                                 });
                                 result = new { ok = sent, action = "pointer-smoke", x = 0.25, y = 0.75 };
                                 break;
+                            case "lock-screens":
+                            case "unlock-screens":
+                            case "full-screen":
+                            case "input-text":
+                            case "secure-attention":
+                            case "escape-key":
+                                if (command.AgentId is null || !session.IsLinked(command.AgentId))
+                                    throw new InvalidOperationException("Choose a linked fixture agent.");
+                                if (command.Action == "lock-screens")
+                                {
+                                    if (command.Seconds is < 0 or > 3600) throw new ArgumentException("Invalid lock duration.");
+                                    result = new { ok = session.Lock([command.AgentId], "Перевірка блокування — зачекайте", command.Seconds is > 0 ? TimeSpan.FromSeconds(command.Seconds.Value) : null) == 1 };
+                                }
+                                else if (command.Action == "unlock-screens")
+                                    result = new { ok = session.Unlock([command.AgentId]) == 1 };
+                                else if (command.Action == "full-screen")
+                                {
+                                    session.SetScreenMode(command.AgentId, LabControl.Shared.Protocol.VideoMode.Full);
+                                    result = new { ok = true };
+                                }
+                                else if (command.Action == "escape-key")
+                                {
+                                    var down = session.SendInput(command.AgentId, LabControl.Shared.Control.InputMessages.Key(LabControl.Shared.Control.InputMessages.VkEscape, 0, true));
+                                    var up = session.SendInput(command.AgentId, LabControl.Shared.Control.InputMessages.Key(LabControl.Shared.Control.InputMessages.VkEscape, 0, false));
+                                    result = new { ok = down && up };
+                                }
+                                else
+                                    result = new { ok = session.SendInput(command.AgentId, command.Action == "input-text"
+                                        ? LabControl.Shared.Control.InputMessages.Text("M6_REMOTE_INPUT_OK")
+                                        : LabControl.Shared.Control.InputMessages.CtrlAltDel()) };
+                                break;
                             case "unlock":
                                 result = new { ok = vault.IsUnlocked || passphrase is not null && vault.TryUnlock(passphrase), action = "unlock" };
                                 break;
@@ -314,6 +345,9 @@ internal static class TestLabHost
                         probation_ends_unix = pc.UpdateState.ProbationEndsUnix, heartbeat = pc.LastHeartbeat,
                         helper_alive = pc.HelperAlive, session_id = pc.SessionId, session_locked = pc.SessionLocked,
                         no_session = pc.NoSession, capture_problem_reported = pc.CaptureProblem is not null,
+                        overlay = pc.OverlayState is { } overlay ? new { kind = overlay.Kind.ToString(), overlay.SessionId,
+                            overlay.InputBlocked, overlay.Reason, overlay.Problem, overlay.RemainingSeconds,
+                            overlay.SetByInstance, overlay.SinceUnix, overlay.UntilUnix, overlay.HardLimitUnix } : null,
                         readiness_codes = pc.Machine.SetupReadinessCodes,
                         screen = ScreenStatus(session.Screens.Find(pc.AgentId)) }).ToArray(),
                     jobs = session.Jobs.All().Select(job => new { id = job.Id, agent_id = job.AgentId, state = job.State.ToString(),

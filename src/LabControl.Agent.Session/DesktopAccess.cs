@@ -61,8 +61,15 @@ internal static class DesktopAccess
     /// returns that desktop's name. Throws when the input desktop cannot be opened or joined
     /// — there is no session to capture, or the thread owns windows.
     /// </summary>
-    public static unsafe string AttachToInputDesktop()
+    public static string AttachToInputDesktop() => AttachToInputDesktop(out _);
+
+    /// <summary>
+    /// Like the capture path, but returns the opened handle to a short-lived native worker's
+    /// owner. Close it only after that worker has exited, never while it owns windows/hooks.
+    /// </summary>
+    public static unsafe string AttachToInputDesktop(out nint openedHandle)
     {
+        openedHandle = 0;
         var input = PInvoke.OpenInputDesktop(default, false, (DESKTOP_ACCESS_FLAGS)0x10000000 /* GENERIC_ALL */);
         if (input.IsNull)
         {
@@ -87,7 +94,16 @@ internal static class DesktopAccess
             throw new Win32Exception(error, $"the capture thread cannot join desktop {name}");
         }
 
+        openedHandle = (nint)input.Value;
         return name;
+    }
+
+    public static void CloseExitedThreadDesktop(nint handle)
+    {
+        if (handle != 0)
+        {
+            PInvoke.CloseDesktop(new HDESK(handle));
+        }
     }
 
     private static unsafe string? NameOf(HANDLE desktop)

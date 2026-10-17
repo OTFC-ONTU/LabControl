@@ -20,7 +20,7 @@ implement.
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — `1.0.0` is the physical-lab release candidate (owner decision 2026-09-08); script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
 | **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the `app.manifest` double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the `group=` argument that made the printed `netsh` line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest `PC-27`) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three `--remove-data` answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`; on Linux, the `SO_PEERCRED` path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
-| **M6** | Classroom control: broadcast, lock, exam mode | **in progress — plan settled 2026-09-16 (`D-69`…`D-79`, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, *Lock screens* in the console, the simulator's lock; cross-compiled for `win-x64`, **not yet run on Windows** | M5 |
+| **M6** | Classroom control: broadcast, lock, exam mode | **in progress — plan settled 2026-09-16 (`D-69`…`D-79`, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, *Lock screens* in the console, the simulator's lock; **portion 1 verified in an isolated Windows 11 ARM64 VM on 2026-10-17**, desktop-following defects fixed (`D-80`); physical Windows x64/fleet acceptance remains open. Next: portion 2, teacher-screen broadcast** | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
 Update the **State** column (`not started` / `in progress` / `done <date>`) in the same
@@ -2038,9 +2038,8 @@ the corrupt `policy.json` one (`D-79`). Portions 2 and 3 could swap; 4 needs 3, 
   `policy.json` and a machine whose every call throws still linking with the reason on the
   console, `policy.busy` on the wire, and the skipped path for an unlinked or outdated PC.
   `dotnet publish -r win-arm64` of the helper and the agent succeed too.
-  **Not yet run on Windows:** the window, the hooks and their re-arm, the injected-input
-  pass-through, the re-assert after logoff and `--restore-policy` wait for the VM. *The VM
-  drill* (ARM64 VM: publish `win-arm64`; the lab PCs need `win-x64`): push (or
+  **Native acceptance completed on Windows 11 ARM64, 2026-10-17 (`D-80`); see the record
+  below.** *The repeatable VM drill* (ARM64 VM: publish `win-arm64`; the lab PCs need `win-x64`): push (or
   `scripts/dev-install.ps1`) the agent and helper; **set the VM's clock ten minutes ahead of
   the console's** — the lock must still take, and the badge's countdown must agree with
   the picture's (durations, not stamps); lock the PC from the console with a Ukrainian
@@ -2061,6 +2060,61 @@ the corrupt `policy.json` one (`D-79`). Portions 2 and 3 could swap; 4 needs 3, 
   (still within its limit); corrupt `policy.json` by hand (truncate it) and restart the
   service — the PC must link and the console must show `policy.unreadable`; finally check
   `policy.json` and the tile badge after each step.
+
+
+**Portion 1 native acceptance — 2026-10-17.** New UTM clone
+*M6 isolated lock acceptance 2026-10-17* (`9F5777F2-23F8-4C2B-8814-054173E71739`),
+Windows 11 ARM64, host-only networking, no shared folders, real standard `student`
+session. The original VM remained stopped. Both executables were SHA-256 compared on
+host and guest before use; a fresh disposable TLS lab was used, never the physical lab.
+
+- Ukrainian lock message/countdown displayed; physical typing and Alt+Tab, Alt+F4,
+  Ctrl+Esc and Win+R refused. Before locking, HID keystrokes visibly wrote `base` in
+  Notepad; under the lock the physical test character did not appear, while the
+  production remote-input path appended `M6_REMOTE_INPUT_OK`. The opaque window is
+  click-through and non-activating as intended.
+- The first Ctrl+Alt+Del run exposed that the window/hooks stayed on Default.
+  Recreating them then exposed an STA thread that could not join Winlogon. Both fixed
+  (`D-80`): fresh MTA window/hook threads follow Default → Winlogon → Default, keeping
+  the original session and deadlines; the teacher's injected Escape returned from the
+  secure desktop while the lock stayed up.
+- A two-minute lock accepted with the guest clock ten minutes ahead, counted down and
+  expired after the fixture console stopped. A later persistent lock retained its id and
+  exact hard deadline across service stop/start; `--restore-policy` exited 0 and kept it.
+- Sign-out replaced the helper and the lock reappeared on Winlogon; the console reported
+  `overlay.helper_down` during the gap. Reboot signed the real student back in and
+  restored the same lock. UTM reset the guest clock on boot, so the agent correctly
+  re-clamped the saved hard limit against its current clock rather than keeping a limit
+  more than an hour ahead.
+- Truncated `policy.json` after stopping the service: on restart the agent linked,
+  the helper ran, the screen was unrestricted and the console received `policy.unreadable`.
+  The previous fixture journal was preserved inside the protected data directory.
+
+The branch before integrating October's main changes passed all **1037 tests, no skips**.
+The final merged build (`1.0.0`, fixture directory `1.0.0-m6-lock`) repeated the
+Default → Winlogon → Default drill with exactly unchanged deadlines. More than a minute
+in full video mode retained working hooks and the helper, with no rejected video frames;
+explicit unlock removed both the picture and the persisted overlay. After adding desktop
+handle cleanup, three further Default → Winlogon → Default rounds on the final helper
+retained working hooks and exactly the same session/deadlines. This is functional
+acceptance; the hour-long capture/GPU/handle measurements remain M3 close-out work.
+Final ARM64 hashes
+(host and guest identical):
+
+```text
+agent.exe   083f9813e3639f542e10effe09dcba6138da335cf9c5dbc185ab0283794632d0
+session.exe 11f05654df2b32c8887956734a962b7e2fc9a5a46ed1962a4a09406c3af1d293
+```
+
+The guest clock was back in sync after reboot. The fixture was unlocked; the temporary
+console/file server were stopped and the clone was shut down. Final merged-tree build,
+test and publish validation: `dotnet build` passed with the two existing Avalonia
+constructor warnings; **1050 tests passed, no failures or skips**; self-contained,
+single-file Agent/Session published for Windows ARM64/x64 and Console for macOS ARM64,
+Windows x64 and Linux x64. The parser's vulnerable transitive PKCS dependency is pinned
+to the patched version (`D-80`), with NuGet audit enabled. This closes
+portion 1's VM gate; it does not close the whole M6 milestone, physical Windows x64,
+fleet lock acceptance, broadcast, internet policies, exam mode, collection or reset.
 
 ---
 

@@ -47,6 +47,7 @@ internal sealed class InputBlock : IDisposable
     private readonly ManualResetEventSlim _ready = new(false);
     private readonly ManualResetEventSlim _applied = new(false);
     private uint _threadId;
+    private nint _desktopHandle;
 
     // Hook-thread state: only ever touched on the hook thread.
     private HHOOK _keyboard;
@@ -162,6 +163,9 @@ internal sealed class InputBlock : IDisposable
     {
         try
         {
+            // Hooks are desktop-scoped, just like the overlay window. A fresh pair after
+            // a desktop change must join that desktop before creating its message queue.
+            DesktopAccess.AttachToInputDesktop(out _desktopHandle);
             _threadId = PInvoke.GetCurrentThreadId();
             // A thread has no message queue until it asks for one; PostThreadMessage to a
             // thread without a queue fails with ERROR_INVALID_THREAD_ID.
@@ -374,6 +378,11 @@ internal sealed class InputBlock : IDisposable
         if (!_thread.Join(TimeSpan.FromSeconds(2)))
         {
             _log.LogDebug("the hook thread did not finish in time; it is a background thread and dies with the process");
+        }
+        else
+        {
+            DesktopAccess.CloseExitedThreadDesktop(_desktopHandle);
+            _desktopHandle = 0;
         }
 
         _ready.Dispose();

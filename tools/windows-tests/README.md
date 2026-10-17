@@ -161,3 +161,22 @@ is the acceptance check, not successful XML parsing on macOS.
 
 The native acceptance results and remaining physical-lab checks are recorded in
 `docs/ROADMAP.md`. Generated executables, ISOs and local result JSON are ignored.
+
+## M6 lock drill
+
+The disposable host also accepts `lock-screens` (`agent_id`, `seconds` 1…3600,
+or 0/absent for until lifted), `unlock-screens`, `full-screen`, `input-text`,
+`secure-attention` and `escape-key`. The last four use the production video/input
+paths; text is a fixed inert marker, never arbitrary executable input. Status includes
+the agent's `OverlayState`, including session identity, enforcement reason and deadlines.
+Use the real standard-user desktop for physical-input checks, with a positive control
+before locking; synthetic `SendInput` is deliberately allowed and cannot stand in for
+physical input. In UTM, `pressKey` produces HID input, while Unicode `typeText` may not;
+verify the positive control visibly before claiming a blocked key.
+
+Run in a new disposable clone with host-only networking and shared folders disabled.
+Keep the original VM stopped. Transfer only the build and the explicitly authorized
+test USB payload; do not expose a real lab directory through a file server. Compare both
+executable hashes on host and guest. Check desktop switching, remote input, the shifted
+clock, console loss, service restart, sign-out/sign-in and a corrupt policy journal as
+recorded in ROADMAP M6. Restore the guest clock, unlock and stop the fixture afterwards.

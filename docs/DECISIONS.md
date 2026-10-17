@@ -3626,6 +3626,42 @@ the stale-lock re-lift in the supervisor does not compare session ids (a one-sta
 flicker at worst), a modifier held at `Block()` stays down in the OS until tapped, the
 window is recreated on every 3 s re-assert while creation keeps failing.
 
+## D-80 — A lock follows the input desktop with fresh native threads (M6 portion 1)
+
+Context (2026-10-17): the first native lock drill ran in a new Windows 11 ARM64
+clone, with one host-only NIC and no shared folders. Ctrl+Alt+Del exposed two defects
+that Mac tests could not exercise: the window and hooks stayed on Default when Windows
+changed to Winlogon; creating a replacement window on an STA thread then failed to join
+Winlogon. Raw Win32/GDI does not need an STA, whose initialization may create an OLE
+window before `SetThreadDesktop` can run.
+
+Decision: `OverlayController` checks the input desktop on its existing worker, once per
+`Defaults.OverlayRepaintInterval`. An HWND and its hooks cannot move between desktops,
+so it disposes both and creates fresh threads on the new input desktop. The hook thread
+joins before creating its message queue; the window thread uses the default MTA. The
+existing session id, start and absolute deadlines are retained: a desktop change never
+restarts the timer. Short-lived workers return their opened desktop handles to their owner,
+which closes each only after the worker has exited; repeated switches must not leak two
+handles per transition. Unknown/unavailable desktops are retried; native failures stay inside
+the worker and the helper continues answering status. Ctrl+Alt+Del remains a Windows
+secure attention sequence; the lock picture and hooks follow the resulting desktop.
+The teacher can still send injected input or unlock over the authenticated link.
+
+Native evidence: a visible Ukrainian message and countdown; physical keyboard shortcuts
+and typing refused after a positive control in Notepad; network-delivered text present
+under the opaque lock without the physical test character; Default → Winlogon and a
+lock initially created on Winlogon; a two-minute duration with the guest clock ten
+minutes ahead, expiring after the fixture console was stopped; service stop/start
+retaining the session id and hard deadline; `agent.exe --restore-policy` exit 0 retaining
+the lock. Later steps and final validation are in ROADMAP M6's native acceptance record.
+This is ARM64 VM evidence, not physical Windows x64 or full M6 acceptance.
+
+The same run found that NuGet audit now refuses the PowerShell parser's transitive
+`System.Security.Cryptography.Pkcs` 10.0.5. The console directly pins 10.0.13, the patched
+10.x release for [Microsoft's advisory](https://github.com/advisories/GHSA-846f-f764-76mx),
+without disabling audit or changing the offline parser's role. This adds no student-PC
+dependency. D-71…D-79 remain reserved by the six-portion M6 plan.
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the
@@ -3746,6 +3782,7 @@ project cannot notice on its own).
 | CommunityToolkit.Mvvm | Console | MVVM source generators |
 | Avalonia.AvaloniaEdit | Console | Script editor with line numbers, undo and token coloring (D-39) |
 | System.Management.Automation | Console | Offline PowerShell syntax parsing/tokenization only; no execution or per-PC runtime (D-39) |
+| System.Security.Cryptography.Pkcs | Console | Direct 10.0.13 security pin for the parser's transitive dependency; NuGet audit remains enabled (D-80) |
 | Grpc.AspNetCore | Console | gRPC server |
 | Grpc.Net.Client, Grpc.Tools, Google.Protobuf | Shared/Agent | gRPC client + codegen |
 | System.Security.Cryptography.ProtectedData | Shared | Windows DPAPI for the console instance key; the BCL dropped it from the shared framework (D-24) |

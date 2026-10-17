@@ -29,6 +29,8 @@
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.AvaloniaEdit" />
     <PackageReference Include="System.Management.Automation" />
+    <!-- Patch the parser's transitive dependency; see DECISIONS dependency ledger. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Serilog.Extensions.Logging" />

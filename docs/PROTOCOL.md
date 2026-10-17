@@ -667,6 +667,10 @@ prompt. A helper silent for `HelperSilenceTimeout` (10 s) is killed and restarte
 `Event` from the helper is relayed to the console unchanged. When the pipe closes the helper
 exits at once; when the helper exits the service respawns it (D-30).
 
+The native lock follows input-desktop changes (`D-80`): the helper recreates its
+window and hooks on fresh threads for Default/Winlogon, retaining the same session id
+and absolute deadlines. This changes no message fields or ownership rules.
+
 **Overlay over the pipe (M6 portion 1, `D-70`).** The service is the policy owner: it
 judges the ownership gate, keeps the lock in `policy.json`, clamps its hard limit and ends
 it on its own clock; the helper only shows it. Every `Overlay` the journal applied is

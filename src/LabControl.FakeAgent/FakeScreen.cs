@@ -57,6 +57,9 @@ public sealed class FakeScreen : IScreenSource
     private string _overlayCountdown = string.Empty;
     private bool _overlayDrawn;
 
+    private BroadcastPicture? _broadcast;
+    private long _broadcastDrawn = -1;
+
     private string _clock = string.Empty;
     private int _typed;
     private int _sentence;
@@ -135,6 +138,23 @@ public sealed class FakeScreen : IScreenSource
         }
     }
 
+    /// <summary>
+    /// The teacher's screen to show, or <c>null</c> for the desktop (M6 portion 2). A lock
+    /// stays on top of it. From any thread; the next <see cref="Advance"/> draws it.
+    /// </summary>
+    public void SetBroadcast(BroadcastPicture? broadcast)
+    {
+        lock (this)
+        {
+            _broadcast = broadcast;
+            _broadcastDrawn = -1;
+            if (broadcast is null)
+            {
+                _drawn = false;
+            }
+        }
+    }
+
     /// <summary>The lock this desktop is showing right now, for the tests.</summary>
     public OverlaySession? Overlay
     {
@@ -204,6 +224,7 @@ public sealed class FakeScreen : IScreenSource
             // and it is redrawn from scratch once the lock lifts. The teacher's pointer still
             // shows on top — remote control works under a lock on a real PC too, where the window is click-through (D-70 item 7).
             _drawn = false;
+            _broadcastDrawn = -1;
             var remaining = OverlayText.Remaining(overlay.UntilUnix, overlay.HardLimitUnix, now.ToUnixTimeSeconds());
             var countdown = OverlayText.CountdownText(remaining);
             if (!_overlayDrawn || countdown != _overlayCountdown)
@@ -212,6 +233,34 @@ public sealed class FakeScreen : IScreenSource
                 _canvas.DrawBitmap(picture.Bitmap, 0, 0);
                 _overlayDrawn = true;
                 _overlayCountdown = countdown;
+                _pointerRect = null;
+                _ring = null;
+                dirty.Add(VideoGeometry.Whole(Width, Height));
+            }
+        }
+        else if (_broadcast is { } broadcast)
+        {
+            // The teacher's screen covers the desktop, fitted with black bars like the real
+            // helper's window, redrawn whenever a new frame was decoded.
+            _drawn = false;
+            _overlayDrawn = false;
+            var version = broadcast.Image.Version;
+            if (version != _broadcastDrawn)
+            {
+                using var picture = broadcast.Image.Snapshot();
+                _paint.Color = SKColors.Black;
+                _canvas.DrawRect(0, 0, Width, Height, _paint);
+                if (picture is not null)
+                {
+                    var scale = Math.Min((float)Width / picture.Width, (float)Height / picture.Height);
+                    var width = picture.Width * scale;
+                    var height = picture.Height * scale;
+                    var target = SKRect.Create((Width - width) / 2, (Height - height) / 2, width, height);
+                    using var image = SKImage.FromBitmap(picture);
+                    _canvas.DrawImage(image, target, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+                }
+
+                _broadcastDrawn = version;
                 _pointerRect = null;
                 _ring = null;
                 dirty.Add(VideoGeometry.Whole(Width, Height));
@@ -227,13 +276,13 @@ public sealed class FakeScreen : IScreenSource
         }
 
         var clock = now.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-        if (clock != _clock && _overlay is null)
+        if (clock != _clock && _overlay is null && _broadcast is null)
         {
             _clock = clock;
             dirty.Add(DrawClock());
         }
 
-        if (!_idle && _overlay is null)
+        if (!_idle && _overlay is null && _broadcast is null)
         {
             dirty.Add(DrawTyping());
             dirty.Add(MoveBox());

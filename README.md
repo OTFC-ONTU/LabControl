@@ -48,7 +48,7 @@ machines on and off, and watch what students are doing.
 - **Scripts and files on all PCs in parallel** — a PowerShell / cmd script library and
   file handouts over the LAN, with a separate result and log for every PC; the installer
   catalog for silent software installs is planned for M7.
-- **Broadcast, lock and exam mode** *(planned, M6)* — show the teacher's screen on every
+- **Broadcast, lock and exam mode** *(in progress, M6)* — show the teacher's screen on every
   PC, lock screens with a message, and an exam mode built from four independent switches
   (timer, allowed programs, internet block, collect work) that always restores the PC by
   itself.
@@ -138,7 +138,7 @@ more are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | **M3** | Screens: mosaic, full view, remote control | ✅ built and verified on a lab PC; close-out measurements remain |
 | **M4** | Deployment: USB installer, files, self-update | 🔨 in progress — `1.0.0` release candidate in the first lab |
 | **M5** | Lab files, teacher access, fast switching between rooms | 🔨 in progress — all portions built, field acceptance remains |
-| **M6** | Classroom control: broadcast, lock, exam mode | 🔨 in progress — lock verified on an ARM64 VM; broadcast next |
+| **M6** | Classroom control: broadcast, lock, exam mode | 🔨 in progress — lock verified on an ARM64 VM; broadcast built, not yet run on Windows |
 | **M7** | Software catalog, localization (uk / en / ru), polish | 📋 planned |
 
 The detailed acceptance criteria and verification ledger are in the

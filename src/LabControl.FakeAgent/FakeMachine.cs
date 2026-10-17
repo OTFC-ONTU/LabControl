@@ -38,7 +38,8 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     private string? _previousVersion;
 
     /// <param name="policyMutexWait">How long a policy pass waits for this PC's mutex; the product default when <c>null</c> — a test that holds the mutex on purpose passes a short one.</param>
-    public FakeMachine(DirectoryAgentStore store, FailureSpec? failure, ILogger log, TimeSpan? policyMutexWait = null)
+    /// <param name="broadcastCeiling">This PC's own broadcast limit; <see cref="Defaults.BroadcastHardLimit"/> when <c>null</c> — a test that wants to see it end passes a short one.</param>
+    public FakeMachine(DirectoryAgentStore store, FailureSpec? failure, ILogger log, TimeSpan? policyMutexWait = null, TimeSpan? broadcastCeiling = null)
     {
         _store = store;
         _failure = failure;
@@ -68,9 +69,9 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         // The policy journal (M6, D-69) is the real one over policy.json in this PC's own
         // directory; only what the machine does with a lock is simulated. The mutex name is
         // per PC so thirty of them in one process never queue behind one another.
-        _machineState = new FakeMachineState(() => _desktop);
+        _machineState = new FakeMachineState(() => _desktop, log);
         _policy = new PolicyEnforcer(Link, _machineState, store.Directory, store.Config.LabId, log,
-            mutexName: PolicyMutexName(store.Config.AgentId), mutexWait: policyMutexWait);
+            mutexName: PolicyMutexName(store.Config.AgentId), mutexWait: policyMutexWait, broadcastCeiling: broadcastCeiling);
 
         // A real PC's supervisor publishes this at start and on every change (M2); the
         // simulator pretends the helper is up and the student is at the desk.
@@ -88,6 +89,12 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     /// <summary>The lock this PC holds right now, from its own journal; <c>null</c> when none.</summary>
     public OverlaySession? Lock => _machineState.Overlay;
 
+    /// <summary>The broadcast this PC shows right now (M6 portion 2); <c>null</c> when none.</summary>
+    public BroadcastSession? Broadcast => _machineState.Broadcast;
+
+    /// <summary>The teacher's screen as this PC decoded it, for the tests.</summary>
+    public BroadcastPicture BroadcastPicture => _machineState.Picture;
+
     /// <summary>
     /// A simulated desktop (M3): odd numbers are 1080p, even ones 1366×768 like the older lab
     /// PCs; every third PC sits idle so the mosaic shows screens that do not change. It is
@@ -99,6 +106,11 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         var number = Number;
         var desktop = number % 2 == 1 ? new FakeScreen(number, 1920, 1080, idle: number % 3 == 0) : new FakeScreen(number, 1366, 768, idle: number % 3 == 0);
         desktop.SetOverlay(_machineState.Overlay);
+        if (_machineState.Broadcast is not null)
+        {
+            desktop.SetBroadcast(_machineState.Picture);
+        }
+
         _desktop = desktop;
         return desktop;
     }
@@ -532,6 +544,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         Link.InputReceived -= OnInput;
         // The OnStop restore (D-69 item 5): the machine is opened, the document is kept.
         await _policy.DisposeAsync();
+        _machineState.Dispose();
         await _screen.DisposeAsync();
         await Link.DisposeAsync();
         _store.Dispose();

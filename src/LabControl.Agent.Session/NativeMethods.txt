@@ -106,3 +106,12 @@ MSLLHOOKSTRUCT
 KBDLLHOOKSTRUCT_FLAGS
 LLMHF_INJECTED
 WINDOWS_HOOK_ID
+
+// The broadcast in the same overlay window (M6 portion 2, D-71): the teacher's picture
+// stretched to fit with HALFTONE, black bars around it
+SetStretchBltMode
+STRETCH_BLT_MODE
+SetBrushOrgEx
+FillRect
+GetStockObject
+GET_STOCK_OBJECT_FLAGS

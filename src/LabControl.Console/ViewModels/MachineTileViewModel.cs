@@ -105,6 +105,13 @@ public sealed partial class MachineTileViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(LockText))]
     public partial string LockReason { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The PC shows the teacher's screen — its own word, from <c>OverlayState</c> (M6 portion 2,
+    /// D-71). A lock over a broadcast reads as a lock; the broadcast badge comes back when it lifts.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsBroadcasting { get; set; }
+
     /// <summary>Why the PC refused or could not apply the last lock or unlock; empty otherwise.</summary>
     [ObservableProperty]
     public partial string LockProblem { get; set; } = string.Empty;
@@ -234,6 +241,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
     {
         var state = connection?.OverlayState;
         IsLocked = connection?.OverlayLocked == true;
+        IsBroadcasting = connection?.OverlayBroadcasting == true;
         LockProblem = connection?.OverlayProblem ?? string.Empty;
         if (!IsLocked || state is null)
         {

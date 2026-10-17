@@ -336,6 +336,7 @@ rpc PushVideo(stream VideoFrame) returns (VideoAck);              // opened on d
 rpc PullFile(FileRequest) returns (stream FileChunk);             // agent downloads from console
 rpc PushFile(stream FileChunk) returns (FileAck);                 // agent uploads results/logs
 rpc GetUploadStatus(FileRequest) returns (FileAck);               // committed upload offset
+rpc PullBroadcast(BroadcastRequest) returns (stream VideoFrame);  // teacher's screen, agent dials (M6, D-71)
 </code></pre>
 <p>The console validates the agent certificate against the lab CA <strong>and</strong> against the
 revocation list before accepting the stream; the agent validates the console leaf against
@@ -412,7 +413,10 @@ console holds revoked, and <code>console_access</code> — informational, see <e
 <code>thumbnail|full</code>, fps, quality), <code>Input</code> (mouse move/button/wheel, key down/up, unicode
 text), <code>Overlay</code> (lock / unlock / broadcast start / broadcast stop, message text),
 <code>ExamMode</code> (see below), <code>InternetPolicy</code> (see below), <code>Revocation</code> (signed revocation entries — the console sends the
-ones the agent's <code>RevocationState</code> was missing, the agent keeps the union), <code>UpdateAgent</code>.</p>
+ones the agent's <code>RevocationState</code> was missing, the agent keeps the union), <code>UpdateAgent</code>.
+Field 10 (<code>VideoFrame broadcast</code>) is <strong>reserved</strong> since M6 portion 2: it was never sent by
+any build, and the teacher's screen travels on its own <code>PullBroadcast</code> stream (<em>Broadcast</em>
+below, <code>D-71</code>).</p>
 <h3 id="revocation-entries">Revocation entries<a class="anchor" href="#revocation-entries" aria-label="Link to this section">#</a></h3>
 <pre><code>RevocationEntry { serial, revoked_at_unix, reason, signature }
 </code></pre>
@@ -803,8 +807,8 @@ last (0 = until lifted; a negative value is refused as already ended); <code>har
 is a <strong>proposal</strong> — the agent stamps both onto <strong>its own clock at arrival</strong> and clamps
 the limit to <code>min(now + proposed, now + Defaults.LockHardLimit)</code> (1 h, owner decision),
 0 or less meaning &quot;none given&quot; and yielding the ceiling, and reports what it actually
-holds. <code>BROADCAST_START</code> / <code>BROADCAST_STOP</code> belong to portion 2 (<code>D-71</code>) and are answered
-with a <code>problem</code> until it lands.</p>
+holds. <code>BROADCAST_START</code> / <code>BROADCAST_STOP</code> start and end a broadcast of the teacher's
+screen; they pass the same gate but are not sessions in <code>policy.json</code> (see <em>Broadcast</em>).</p>
 <p><strong>What the PC answers.</strong> <code>OverlayState</code>, on every change, after every <code>Welcome</code> (the
 latest one, re-sent like <code>SessionState</code>), and as the answer to a refused or failed
 <code>Overlay</code>. <code>kind</code> is what is <strong>on the screen now</strong> — <code>LOCK</code>, <code>BROADCAST_START</code>, or
@@ -846,11 +850,59 @@ held the policy mutex), <code>policy.failed</code> (the enforcer itself threw wh
 throw; logged, reported, the pass abandoned — the link dials and stays up regardless),
 <code>overlay.expired</code>. An agent from before M6 logs the message and ignores it; the console
 greys <em>Lock</em> out for an outdated agent.</p>
-<h2 id="broadcast-teacher-students">Broadcast (teacher → students)<a class="anchor" href="#broadcast-teacher-students" aria-label="Link to this section">#</a></h2>
-<p>Console captures its own screen into the same <code>VideoFrame</code> format and sends it in
-<code>ConsoleMessage.Broadcast</code> frames to every selected agent (multicast is <em>not</em> used —
-up to 30 unicast streams at ~1–2 Mbit/s are fine on a switched LAN). Helper renders in the
-full-screen overlay. Frame drop policy on the agent: always show the latest.</p>
+<h2 id="broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, <code>D-71</code>, <code>D-72</code>)<a class="anchor" href="#broadcast-teacher-students-m6-portion-2-d-71-d-72" aria-label="Link to this section">#</a></h2>
+<pre><code>Overlay { kind: BROADCAST_START, session_id, message, hard_limit_seconds }   console → agent, on Link
+Overlay { kind: BROADCAST_STOP, session_id }                                 console → agent, on Link
+rpc PullBroadcast(BroadcastRequest { session_id }) returns (stream VideoFrame)  agent → console
+OverlayState { kind: BROADCAST_START, session_id, since_unix, hard_limit_unix,
+               remaining_seconds, input_blocked, reason, set_by_instance }   agent → console
+</code></pre>
+<p><strong>The picture.</strong> The console captures <strong>its own primary display</strong> — CoreGraphics
+(<code>CGDisplayCreateImage</code>) on macOS, a <code>StretchBlt</code> with <code>HALFTONE</code> on Windows; Linux has no
+capture in this build and says so — scaled <strong>inside the screen source</strong> to at most
+<code>Defaults.BroadcastWidth</code> (1280) pixels wide with the aspect ratio kept, the mouse pointer
+drawn in (neither capture includes it). The same <code>ScreenProducer</code> the PCs use encodes it
+<strong>once</strong> as <code>VideoFrame</code>s in <code>FULL</code> mode — a keyframe, then dirty-rectangle deltas found by
+<code>TileDiff</code>, a keyframe every <code>KeyframeInterval</code> — at <code>BroadcastFramesPerSecond</code> (12) with
+auto quality (<code>D-37</code>). <code>agent_id</code> is empty; <code>seq</code> and <code>at_unix_ms</code> are the console's.</p>
+<p><strong>One stream per PC.</strong> <code>BROADCAST_START</code> goes on the <code>Link</code> like a lock and passes the same
+ownership gate; the agent then dials <code>PullBroadcast</code> with the <code>session_id</code>. The console
+serves it only to a PC the teacher chose (<code>PermissionDenied</code> otherwise) and only for the
+session it is running (<code>NotFound</code> otherwise), and fans the one encoded stream out to every
+PC: each PC has a <strong>one-frame, latest-wins slot</strong> on its own HTTP/2 stream, so gRPC flow
+control holds a slow PC back and nobody else. A keyframe replaces whatever the slot holds;
+a delta that finds the slot still full breaks that PC's chain, and it skips deltas until
+the next keyframe, which the console asks its encoder for at most every
+<code>BroadcastKeyframeRequestInterval</code> (1 s). Multicast is not used. The stream's bandwidth
+cap is <code>min(BroadcastBitsPerSecond, BroadcastTotalBitsPerSecond / watching PCs)</code> — 8 Mbit/s
+for a few PCs, 24 Mbit/s shared across a full room — retuned whenever a PC joins or leaves;
+a PC that joins gets a keyframe at once. Frames are never put on <code>Link</code>: its outgoing queue
+is unbounded.</p>
+<p><strong>What the PC does.</strong> On the <strong>first frame</strong> — so a refused or failed stream never blanks a
+screen — the agent takes the screen: the helper shows the picture full screen, stretched to
+fit with black bars, topmost, with input blocked by the same hooks as a lock (injected input
+still passes). A <strong>lock wins</strong>: it is shown over a running broadcast, <code>OverlayState</code> says
+<code>LOCK</code> while it is held, and the broadcast comes back when it lifts. <code>OverlayState</code> says
+<code>BROADCAST_START</code> while the PC shows the broadcast and no lock, with <code>set_by_instance</code>, the
+<code>since_unix</code> and <code>hard_limit_unix</code> stamped on the PC's own clock and <code>remaining_seconds</code>;
+<code>input_blocked</code> and <code>reason</code> mean what they mean for a lock.</p>
+<p><strong>How it ends.</strong> A broadcast is <strong>not</strong> a session in <code>policy.json</code> (<code>D-71</code>): it dies with its
+stream — when the teacher stops (<code>BROADCAST_STOP</code> to every PC, then every stream ends), when
+the console leaves the lab (the first step of <code>LabSession.CloseAsync</code>, before the links
+close), when the link drops, when a newer <code>BROADCAST_START</code> replaces it — and at the latest
+at the agent's own <code>BroadcastHardLimit</code> (30 min), clamped on the PC's clock at arrival like
+a lock's limit (<code>hard_limit_seconds</code> is a proposal). The console ends the whole broadcast at
+the same limit by its own clock and says so; the teacher starts it again to go on. A PC
+that relinks while the broadcast runs is sent <code>BROADCAST_START</code> again and dials again.
+Nothing survives a service restart.</p>
+<p><strong>Events.</strong> <code>broadcast.started</code> / <code>broadcast.stopped</code> / <code>broadcast.expired</code> on the console;
+from a PC, <code>broadcast.expired</code> (it ended at the PC's own limit) and <code>broadcast.failed</code> (the
+console refused the stream, it is too old to have <code>PullBroadcast</code>, or the machine could not
+take the screen). The console's capture reports <code>capture.permission</code> (macOS has not granted
+<em>Screen Recording</em>), <code>capture.unsupported</code>, <code>capture.no_display</code>, <code>capture.gdi_failed</code>,
+<code>capture.capture_failed</code> and <code>capture.recovered</code>. An agent from before portion 2 answers
+<code>BROADCAST_START</code> with a <code>problem</code>; a console from before it answers <code>PullBroadcast</code> with
+<code>Unimplemented</code>, which the agent reports once as <code>broadcast.failed</code>.</p>
 <h2 id="agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)<a class="anchor" href="#agent-session-helper-named-pipe-length-prefixed-protobuf" aria-label="Link to this section">#</a></h2>
 <p>Same message types (<code>VideoControl</code>, <code>Input</code>, <code>Overlay</code>, <code>VideoFrame</code>) re-used; the service
 is a dumb relay for video/input and the policy owner for everything else. The helper never
@@ -864,7 +916,7 @@ at most <code>SessionPipeMaxMessageBytes</code> (16 MiB); a frame cut short or o
 protocol error and ends the connection. <code>LabControl.Shared/Session/PipeFraming.cs</code> is the
 one implementation both sides use.</p>
 <p><strong>Envelopes.</strong></p>
-<pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay }                        service → helper
+<pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame }       service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
 HelperHello  { session_id, process_id, version }         first message after connecting
@@ -918,6 +970,20 @@ so <code>input_blocked</code> reports the most recent install, never a handle. I
 never activated, so the teacher's remote control works under a lock; every physical
 keyboard and mouse event is swallowed by the hooks alone — Alt+Tab, Alt+Esc, Ctrl+Esc, the
 Windows keys and Alt+F4 among them. Ctrl+Alt+Del never reaches a hook.</p>
+<p><strong>Broadcast over the pipe (M6 portion 2, <code>D-71</code>).</strong> The service's broadcast receiver writes
+<code>Overlay BROADCAST_START</code> (with what is left of its hard limit as <code>hard_limit_seconds</code>) down
+the pipe when the first frame arrives, then <strong>every frame as <code>ServiceMessage.broadcast_frame</code>,
+awaiting each write</strong> — not from the pipe's read loop — so a helper that reads slowly holds
+the <code>PullBroadcast</code> stream back rather than piling frames up in the service; <code>BROADCAST_STOP</code>
+when the broadcast ends. The service re-asserts a running broadcast to a freshly connected
+helper like a lock; that helper's picture starts at the next keyframe (within
+<code>KeyframeInterval</code>). The helper decodes frames on a thread of its own into one picture
+(<code>BroadcastPicture</code>): at most <code>BroadcastHelperQueueLength</code> (8) wait, beyond that the deltas
+are dropped until the next keyframe, so a delta is never patched onto the wrong picture. The
+same <code>OverlayWindow</code> shows it, repainted on every decoded frame, and follows the input
+desktop like the lock. <code>overlay_state</code> says <code>BROADCAST_START</code> while the broadcast window is
+up and no lock is held; the service tells a helper that shows a broadcast nobody is
+running to stop, and re-asserts one the helper does not show.</p>
 <p><strong>Input over the pipe (M3 portion 3, <code>D-36</code>).</strong> Every <code>Input</code> from the console except
 <code>CTRL_ALT_DEL</code> is written down the pipe as it is (fire-and-forget, like the controls); the
 helper queues it (<code>Defaults.InputQueueLength</code>, the newest dropped when full) for an input
@@ -1285,9 +1351,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-17 13:02 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 16:49 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students">Broadcast (teacher → students)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy">Internet policy</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>
 </body>
 </html>

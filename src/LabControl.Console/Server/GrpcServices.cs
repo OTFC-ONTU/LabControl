@@ -57,6 +57,10 @@ public sealed class AgentGrpcService : AgentService.AgentServiceBase
     public override Task<VideoAck> PushVideo(IAsyncStreamReader<VideoFrame> requestStream, ServerCallContext context) =>
         _session.ReceiveVideoAsync(context.GetHttpContext().Connection.ClientCertificate, requestStream, context.CancellationToken);
 
+    /// <summary>The teacher's screen (PROTOCOL <i>Broadcast</i>, M6, D-71): one server stream per PC, for as long as the broadcast lasts.</summary>
+    public override Task PullBroadcast(BroadcastRequest request, IServerStreamWriter<VideoFrame> responseStream, ServerCallContext context) =>
+        _session.ServeBroadcastAsync(context.GetHttpContext().Connection.ClientCertificate, request, responseStream, context.CancellationToken);
+
     public override Task<FileAck> PushFile(IAsyncStreamReader<FileChunk> requestStream, ServerCallContext context) =>
         _session.ReceiveFileAsync(context.GetHttpContext().Connection.ClientCertificate, requestStream, context.CancellationToken);
 

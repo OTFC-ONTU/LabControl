@@ -178,6 +178,29 @@ public sealed class ScreenImage : IDisposable
         }
     }
 
+    /// <summary>Receives the picture's pixels: BGRA, premultiplied, top-down, <paramref name="rowBytes"/> apart.</summary>
+    public delegate void PixelReader(ReadOnlySpan<byte> pixels, int width, int height, int rowBytes);
+
+    /// <summary>
+    /// Hands the picture to <paramref name="reader"/> under the image's lock, without a copy —
+    /// a window painting the broadcast blits straight from it (M6 portion 2). The reader must
+    /// not keep the span. Returns <c>false</c> before the first frame.
+    /// </summary>
+    public bool Read(PixelReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        lock (_lock)
+        {
+            if (_bitmap is null)
+            {
+                return false;
+            }
+
+            reader(_bitmap.GetPixelSpan(), _bitmap.Width, _bitmap.Height, _bitmap.RowBytes);
+            return true;
+        }
+    }
+
     /// <summary>A copy of the picture, for tests and for scaling into a thumbnail; <c>null</c> before the first frame.</summary>
     public SKBitmap? Snapshot()
     {

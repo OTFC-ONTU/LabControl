@@ -43,6 +43,15 @@ public sealed class OverlaySession : PolicySession
     public string Message { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// The teacher's screen on this PC (M6 portion 2, D-71). Not a <see cref="PolicySession"/>
+/// and never in <c>policy.json</c>: it lives exactly as long as its <c>PullBroadcast</c>
+/// stream, and <see cref="HardLimitUnix"/> — <see cref="Defaults.BroadcastHardLimit"/> on
+/// this PC's clock at most — only matters if the stream somehow stays up.
+/// </summary>
+/// <param name="ConsoleName">The name of the teacher machine whose screen it is, for a caption.</param>
+public sealed record BroadcastSession(string SessionId, string SetByInstance, long SinceUnix, long HardLimitUnix, string ConsoleName);
+
 /// <summary>An exam (M6 portion 4); the fields portion 1 needs to persist and re-apply it are here, the rest arrives with the portion.</summary>
 public sealed class ExamSession : PolicySession
 {

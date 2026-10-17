@@ -38,6 +38,11 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     private bool _stopped;
     private bool _mutexUnavailableLogged;
 
+    // The helper's last word on its enforcement, kept here too: the journal only folds it
+    // into a lock's state, and a broadcast needs it as much (D-71).
+    private bool _inputBlocked;
+    private string _enforcementReason = string.Empty;
+
     /// <param name="link">The link the enforcer answers on; it subscribes to <see cref="AgentLink.OverlayReceived"/> on <see cref="Start"/>.</param>
     /// <param name="machine">What the PC does with a session — Windows, or the simulator.</param>
     /// <param name="dataDirectory">Where <c>policy.json</c> lives (<see cref="Defaults.PolicyFileName"/>).</param>
@@ -48,8 +53,9 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     /// tests, never queue behind one another or a real agent.
     /// </param>
     /// <param name="mutexWait">How long a pass waits for the mutex; <see cref="Defaults.PolicyMutexWait"/> when <c>null</c>.</param>
+    /// <param name="broadcastCeiling"><see cref="Defaults.BroadcastHardLimit"/> unless a test wants it sooner.</param>
     public PolicyEnforcer(AgentLink link, IMachineState machine, string dataDirectory, string labId, ILogger log,
-        Func<DateTimeOffset>? clock = null, string? mutexName = null, TimeSpan? mutexWait = null)
+        Func<DateTimeOffset>? clock = null, string? mutexName = null, TimeSpan? mutexWait = null, TimeSpan? broadcastCeiling = null)
     {
         ArgumentNullException.ThrowIfNull(link);
         ArgumentNullException.ThrowIfNull(machine);
@@ -66,7 +72,17 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         Journal.Reported += OnReported;
         _timer = new Timer(_ => Tick(), null, Timeout.Infinite, Timeout.Infinite);
         _onOverlay = OnOverlay;
+        Broadcast = new BroadcastReceiver(link, machine, log, _clock, broadcastCeiling);
+        Broadcast.Changed += () => Safe("broadcast", () => Publish(Journal.OverlayStateOf(_clock().ToUnixTimeSeconds())));
     }
+
+    /// <summary>
+    /// The teacher's screen on this PC (M6 portion 2, D-71): driven by the same
+    /// <c>Overlay</c> messages as the lock, but outside the journal — a broadcast never
+    /// reaches <c>policy.json</c> and dies with its stream. A lock stays on top of it, and the
+    /// <c>OverlayState</c> this enforcer publishes says LOCK while one is held.
+    /// </summary>
+    public BroadcastReceiver Broadcast { get; }
 
     /// <summary>The journal, for a caller that needs its snapshot (the simulator's status line, the tests).</summary>
     public PolicyJournal Journal { get; }
@@ -126,6 +142,7 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     public void ReassertOverlay()
     {
         Safe("reassert", () => Guarded("reassert", () => Publish(Journal.ReassertOverlay(_clock().ToUnixTimeSeconds()))));
+        Safe("reassert", Broadcast.Reassert);
     }
 
     /// <summary>
@@ -153,7 +170,13 @@ public sealed class PolicyEnforcer : IAsyncDisposable
                 }
             }
 
-            var state = Journal.NoteEnforcement(inputBlocked, reason, _clock().ToUnixTimeSeconds());
+            lock (_lock)
+            {
+                _inputBlocked = inputBlocked;
+                _enforcementReason = reason;
+            }
+
+            var state = Compose(Journal.NoteEnforcement(inputBlocked, reason, _clock().ToUnixTimeSeconds()));
             var last = _link.LatestOverlayState;
             if (last is not null && last.Kind == state.Kind && last.InputBlocked == state.InputBlocked
                 && string.Equals(last.Reason, state.Reason, StringComparison.Ordinal) && last.Problem.Length == 0)
@@ -182,6 +205,15 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         }
 
         Safe("stop", () => _link.OverlayReceived -= _onOverlay);
+        try
+        {
+            await Broadcast.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "ending the broadcast failed: {Message}", ex.Message);
+        }
+
         try
         {
             await _timer.DisposeAsync();
@@ -226,6 +258,24 @@ public sealed class PolicyEnforcer : IAsyncDisposable
             }
 
             var now = _clock().ToUnixTimeSeconds();
+            if (overlay.Kind is Overlay.Types.Kind.BroadcastStart or Overlay.Types.Kind.BroadcastStop)
+            {
+                // Not a session (D-71): no mutex, no document. The receiver publishes again
+                // when the picture actually appears or goes.
+                var refused = overlay.Kind == Overlay.Types.Kind.BroadcastStart ? Broadcast.Start(overlay, setByInstance) : null;
+                if (overlay.Kind == Overlay.Types.Kind.BroadcastStop)
+                {
+                    Broadcast.Stop(overlay.SessionId);
+                }
+
+                if (refused is not null)
+                {
+                    Publish(new OverlayState { Kind = Overlay.Types.Kind.Unspecified, Problem = refused }, remember: false);
+                }
+
+                return;
+            }
+
             var outcome = Guarded("overlay", () => Publish(Journal.SetOverlay(overlay, setByInstance, now)));
             if (outcome != PassOutcome.Ran)
             {
@@ -334,7 +384,7 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         {
             if (remember)
             {
-                _link.PublishOverlayState(state);
+                _link.PublishOverlayState(Compose(state));
             }
             else
             {
@@ -345,6 +395,41 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         {
             _log.LogDebug(ex, "could not publish the overlay state: {Message}", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// What the screen shows, lock first (D-71): the journal's state when it holds a lock or
+    /// answers a problem; otherwise the broadcast the receiver shows, if any, with the
+    /// helper's last word on the input hooks. Idempotent — a state that already describes
+    /// something is returned as it is.
+    /// </summary>
+    private OverlayState Compose(OverlayState state)
+    {
+        if (state.Kind != Overlay.Types.Kind.Unspecified || state.Problem.Length > 0 || Broadcast.Showing is not { } broadcast)
+        {
+            return state;
+        }
+
+        var now = _clock().ToUnixTimeSeconds();
+        bool blocked;
+        string reason;
+        lock (_lock)
+        {
+            blocked = _inputBlocked;
+            reason = _enforcementReason;
+        }
+
+        return new OverlayState
+        {
+            Kind = Overlay.Types.Kind.BroadcastStart,
+            SessionId = broadcast.SessionId,
+            SinceUnix = broadcast.SinceUnix,
+            HardLimitUnix = broadcast.HardLimitUnix,
+            RemainingSeconds = Math.Max(0, broadcast.HardLimitUnix - now),
+            SetByInstance = broadcast.SetByInstance,
+            InputBlocked = blocked,
+            Reason = reason,
+        };
     }
 
     private enum PassOutcome

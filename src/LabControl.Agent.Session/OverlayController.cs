@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using LabControl.Shared;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
+using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.Agent.Session;
@@ -16,6 +17,13 @@ namespace LabControl.Agent.Session;
 /// only shows it. Requests are queued for a thread of its own, like input (D-36): creating
 /// the window and the hooks waits on their threads, and the pipe's read loop never waits on
 /// Windows. Nothing here throws out.
+/// <para>
+/// <b>The broadcast</b> (M6 portion 2, D-71) is shown by the same window and the same hooks:
+/// <c>BROADCAST_START</c> / <c>BROADCAST_STOP</c> arrive like a lock, the frames separately
+/// (<see cref="OfferFrame"/>) into a <see cref="BroadcastPicture"/> that decodes them on its
+/// own thread. A lock always wins — it is shown over a running broadcast, and lifting it
+/// brings the broadcast back. The service ends the broadcast; this only shows it.
+/// </para>
 /// <para>
 /// The limits arrive as <b>durations</b> and are stamped onto this clock at arrival (D-70
 /// item 6) — the service is on the same machine, so the countdown here agrees with the
@@ -45,6 +53,13 @@ internal sealed class OverlayController : IDisposable
     private long _hardLimitUnix;
     private bool _disposed;
 
+    // The broadcast asked for (null when none) and its hard limit on this clock; the picture
+    // is decoded whether or not the window shows it, so lifting a lock shows the latest one.
+    private volatile Overlay? _broadcast;
+    private long _broadcastSinceUnix;
+    private long _broadcastHardLimitUnix;
+    private readonly BroadcastPicture _picture;
+
     /// <param name="report">Sends an <c>overlay_state</c> up the pipe, fire-and-forget.</param>
     /// <param name="pcName">The PC's own name for the picture (<c>PC-07</c>).</param>
     public OverlayController(ILogger log, Action<OverlayState> report, string pcName)
@@ -52,6 +67,7 @@ internal sealed class OverlayController : IDisposable
         _log = log;
         _report = report;
         _pcName = pcName;
+        _picture = new BroadcastPicture(log);
         _thread = new Thread(Run) { Name = "overlay-control", IsBackground = true };
         _thread.Start();
     }
@@ -74,6 +90,19 @@ internal sealed class OverlayController : IDisposable
         catch (InvalidOperationException)
         {
             // Completed underneath us: the helper is exiting.
+        }
+    }
+
+    /// <summary>A broadcast frame from the pipe's read loop: decoded on the picture's own thread, never waited for.</summary>
+    public void OfferFrame(VideoFrame frame)
+    {
+        try
+        {
+            _picture.Offer(frame);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "a broadcast frame was dropped: {Message}", ex.Message);
         }
     }
 
@@ -100,8 +129,14 @@ internal sealed class OverlayController : IDisposable
     {
         lock (_lock)
         {
-            if (_disposed || _current is not { } current || _window is not { } window)
+            if (_disposed || _window is not { } window)
             {
+                return;
+            }
+
+            if (_current is not { } current)
+            {
+                FollowDesktopWithBroadcast(window);
                 return;
             }
 
@@ -143,6 +178,42 @@ internal sealed class OverlayController : IDisposable
         Report();
     }
 
+    /// <summary>The broadcast window on a new input desktop: recreated there, like the lock's; ended here too if its limit passed.</summary>
+    private void FollowDesktopWithBroadcast(OverlayWindow window)
+    {
+        try
+        {
+            if (_broadcast is null)
+            {
+                return;
+            }
+
+            if (Volatile.Read(ref _broadcastHardLimitUnix) <= DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            {
+                _log.LogInformation("broadcast past its limit on this clock; giving the screen back");
+                StopBroadcast();
+                return;
+            }
+
+            var desktop = DesktopAccess.InputDesktopName();
+            if (desktop.StartsWith('?') || string.Equals(desktop, window.DesktopName, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _log.LogInformation("broadcast following input desktop {Desktop}", desktop);
+            _window = null;
+            window.Dispose();
+            _block?.Dispose();
+            _block = null;
+            ShowBroadcastWindow();
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "following the input desktop with the broadcast failed: {Message}", ex.Message);
+        }
+    }
+
     /// <summary>On the controller's own thread: shows or lifts, then reports. The lock here is against <see cref="Dispose"/> only; <see cref="State"/> never takes it.</summary>
     internal void Apply(Overlay overlay)
     {
@@ -165,8 +236,19 @@ internal sealed class OverlayController : IDisposable
                         Lift();
                         break;
 
+                    case Overlay.Types.Kind.BroadcastStart:
+                        StartBroadcast(overlay);
+                        break;
+
+                    case Overlay.Types.Kind.BroadcastStop:
+                        if (overlay.SessionId.Length == 0 || _broadcast is not { } running || running.SessionId == overlay.SessionId)
+                        {
+                            StopBroadcast();
+                        }
+
+                        break;
+
                     default:
-                        // BROADCAST_START / STOP belong to portion 2 (D-71).
                         _log.LogWarning("overlay {Kind} is not something this helper build shows", overlay.Kind);
                         break;
                 }
@@ -186,12 +268,12 @@ internal sealed class OverlayController : IDisposable
         var current = _current;
         if (current is null)
         {
-            return new OverlayState { Kind = Overlay.Types.Kind.Unspecified };
+            return BroadcastState();
         }
 
         var window = _window;
         var block = _block;
-        var showing = window is { IsShowing: true };
+        var showing = window is { IsShowing: true, IsBroadcast: false };
         var hooks = block is { HooksInPlace: true };
         var reasons = new List<string>(3);
         if (!showing)
@@ -214,6 +296,42 @@ internal sealed class OverlayController : IDisposable
             UntilUnix = until,
             HardLimitUnix = hardLimit,
             RemainingSeconds = OverlayText.Remaining(until, hardLimit, DateTimeOffset.UtcNow.ToUnixTimeSeconds()) ?? 0,
+            InputBlocked = hooks,
+            Reason = OverlayReasons.Join(reasons),
+        };
+    }
+
+    /// <summary>What a broadcast without a lock looks like on the screen; nothing when there is none.</summary>
+    private OverlayState BroadcastState()
+    {
+        if (_broadcast is not { } broadcast)
+        {
+            return new OverlayState { Kind = Overlay.Types.Kind.Unspecified };
+        }
+
+        var window = _window;
+        var block = _block;
+        var showing = window is { IsShowing: true, IsBroadcast: true };
+        var hooks = block is { HooksInPlace: true };
+        var reasons = new List<string>(3);
+        if (!showing)
+        {
+            reasons.Add(OverlayReasons.WindowFailed);
+        }
+
+        if (!hooks)
+        {
+            reasons.AddRange(block is { Reason.Length: > 0 } ? OverlayReasons.Split(block.Reason) : [OverlayReasons.HookRefused]);
+        }
+
+        var hardLimit = Volatile.Read(ref _broadcastHardLimitUnix);
+        return new OverlayState
+        {
+            Kind = showing ? Overlay.Types.Kind.BroadcastStart : Overlay.Types.Kind.Unspecified,
+            SessionId = broadcast.SessionId,
+            SinceUnix = Volatile.Read(ref _broadcastSinceUnix),
+            HardLimitUnix = hardLimit,
+            RemainingSeconds = Math.Max(0, hardLimit - DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
             InputBlocked = hooks,
             Reason = OverlayReasons.Join(reasons),
         };
@@ -255,7 +373,7 @@ internal sealed class OverlayController : IDisposable
         block.Block();
 
         var window = _window;
-        if (window is { IsShowing: true })
+        if (window is { IsShowing: true, IsBroadcast: false })
         {
             window.Update(overlay.Message, until, hardLimit);
         }
@@ -273,16 +391,82 @@ internal sealed class OverlayController : IDisposable
 
     private void Lift()
     {
-        if (_current is null && _window is null)
+        if (_current is null && (_window is null || _window.IsBroadcast))
         {
             return;
         }
 
         _current = null;
-        _block?.Unblock();
         _window?.Dispose();
         _window = null;
         _log.LogInformation("lock lifted");
+
+        if (_broadcast is not null)
+        {
+            // The broadcast was running under the lock: it takes the screen back.
+            ShowBroadcastWindow();
+            return;
+        }
+
+        _block?.Unblock();
+    }
+
+    private void StartBroadcast(Overlay overlay)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var ceiling = (long)Defaults.BroadcastHardLimit.TotalSeconds;
+        var restated = _broadcast is { } running && running.SessionId == overlay.SessionId;
+        if (!restated)
+        {
+            Volatile.Write(ref _broadcastSinceUnix, now);
+            _picture.Clear();
+        }
+
+        // The service clamped it already; this only guards against a malformed message.
+        Volatile.Write(ref _broadcastHardLimitUnix, now + (overlay.HardLimitSeconds > 0 ? Math.Min(overlay.HardLimitSeconds, ceiling) : ceiling));
+        _broadcast = overlay;
+        _log.LogInformation("broadcast {Session} {What}", overlay.SessionId, restated ? "re-stated" : "started");
+
+        if (_current is not null)
+        {
+            // A lock is on the screen and stays there; the broadcast shows when it lifts.
+            return;
+        }
+
+        if (_window is not { IsShowing: true, IsBroadcast: true })
+        {
+            ShowBroadcastWindow();
+        }
+    }
+
+    private void ShowBroadcastWindow()
+    {
+        var block = _block ??= new InputBlock(_log);
+        block.Block();
+        _window?.Dispose();
+        _window = new OverlayWindow(_log, _picture, _pcName);
+        _log.LogInformation("broadcast shown, hooks {Hooks}", block.HooksInPlace ? "in place" : "NOT in place");
+    }
+
+    private void StopBroadcast()
+    {
+        if (_broadcast is null)
+        {
+            return;
+        }
+
+        _broadcast = null;
+        _picture.Clear();
+        _log.LogInformation("broadcast stopped");
+        if (_current is not null)
+        {
+            // The lock stays as it is.
+            return;
+        }
+
+        _window?.Dispose();
+        _window = null;
+        _block?.Unblock();
     }
 
     public void Dispose()
@@ -301,6 +485,7 @@ internal sealed class OverlayController : IDisposable
             }
 
             _disposed = true;
+            _broadcast = null; // or lifting the lock would show the broadcast again on the way out
             try
             {
                 Lift();
@@ -314,6 +499,7 @@ internal sealed class OverlayController : IDisposable
             _block = null;
         }
 
+        _picture.Dispose();
         _queue.Dispose();
     }
 }

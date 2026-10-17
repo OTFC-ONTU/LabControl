@@ -500,6 +500,24 @@ exit 0
   <data name="Action.LockAll" xml:space="preserve"><value>Lock all…</value></data>
   <data name="Action.UnlockAll" xml:space="preserve"><value>Unlock all</value></data>
   <data name="Tile.LockedBadge" xml:space="preserve"><value>LOCKED</value></data>
+  <data name="Tile.BroadcastBadge" xml:space="preserve"><value>WATCHING</value></data>
+  <data name="Tile.BroadcastTip" xml:space="preserve"><value>Shows this console's screen; the student's keyboard and mouse are blocked.</value></data>
+  <data name="Action.ShowScreen" xml:space="preserve"><value>Show my screen</value></data>
+  <data name="Action.ShowScreenToAll" xml:space="preserve"><value>Show my screen to all</value></data>
+  <data name="Action.StopShowingScreen" xml:space="preserve"><value>Stop showing</value></data>
+  <data name="Broadcast.Title" xml:space="preserve"><value>Show my screen</value></data>
+  <data name="Broadcast.Sent" xml:space="preserve"><value>Showing this screen: {0} of {1} PC(s) asked; the others join when they come online.</value></data>
+  <data name="Broadcast.Status" xml:space="preserve"><value>Showing this screen to {0} PC(s) · {1} fps · {2:0.0} Mbit/s each · ends by itself in {3} min</value></data>
+  <data name="Broadcast.StatusProblem" xml:space="preserve"><value>Showing this screen — but it cannot be captured: {0}</value></data>
+  <data name="Broadcast.Unsupported" xml:space="preserve"><value>This console cannot show its screen on this system yet. Showing the screen works on macOS and Windows.</value></data>
+  <data name="Broadcast.PermissionExplain" xml:space="preserve"><value>To show your screen to the students, macOS must allow LabControl to record the screen.
+
+Press "Ask macOS" and then turn LabControl on in System Settings → Privacy &amp; Security → Screen &amp; System Audio Recording. Quit and start LabControl again afterwards — macOS applies the permission only on restart.
+
+LabControl uses it only while you show your screen, and sends the picture only to the lab's PCs.</value></data>
+  <data name="Broadcast.PermissionAsk" xml:space="preserve"><value>Ask macOS</value></data>
+  <data name="Broadcast.PermissionGranted" xml:space="preserve"><value>macOS allows LabControl to record the screen. Press "Show my screen" again.</value></data>
+  <data name="Broadcast.PermissionRestart" xml:space="preserve"><value>Turn LabControl on in System Settings → Privacy &amp; Security → Screen &amp; System Audio Recording, then quit and start LabControl again.</value></data>
   <data name="Tile.LockedBy" xml:space="preserve"><value>locked by {0}</value></data>
   <data name="Tile.LockedByWeak" xml:space="preserve"><value>locked by {0} — input not fully blocked: {1}</value></data>
   <data name="Tile.LockProblemFormat" xml:space="preserve"><value>lock: {0}</value></data>
@@ -530,4 +548,9 @@ exit 0
   <data name="Event.OverlayRefused" xml:space="preserve"><value>{0}: the lock request was not applied — {1}</value></data>
   <data name="Event.Locked" xml:space="preserve"><value>{0}: screen locked by {1}.</value></data>
   <data name="Event.Unlocked" xml:space="preserve"><value>{0}: screen unlocked.</value></data>
+  <data name="Event.BroadcastStarted" xml:space="preserve"><value>Showing this screen: sent to {0} PC(s), {1} skipped for now (offline or outdated; an offline PC joins when it links).</value></data>
+  <data name="Event.BroadcastAdded" xml:space="preserve"><value>Added to the screen broadcast: {0} PC(s), {1} skipped for now (offline or outdated).</value></data>
+  <data name="Event.BroadcastStopped" xml:space="preserve"><value>Stopped showing this screen.</value></data>
+  <data name="Event.BroadcastExpired" xml:space="preserve"><value>The screen broadcast ended at its {0}-minute limit; start it again to go on.</value></data>
+  <data name="Event.BroadcastDeparture" xml:space="preserve"><value>The screen broadcast ended because the console left the lab.</value></data>
 </root>

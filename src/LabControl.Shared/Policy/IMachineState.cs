@@ -1,3 +1,5 @@
+using LabControl.Shared.Protocol;
+
 namespace LabControl.Shared.Policy;
 
 /// <summary>How a machine call ended, without an exception ever leaving it.</summary>
@@ -54,10 +56,28 @@ public interface IMachineState
     /// <summary>Step 4: read the machine back and say whether it is as open as steps 1 and 3 meant it to be.</summary>
     MachineResult Confirm();
 
-    /// <summary>Show the lock (or, in portion 2, the broadcast) — to the helper, which may not be there yet; then the reason says so.</summary>
+    /// <summary>Show the lock — to the helper, which may not be there yet; then the reason says so.</summary>
     MachineResult ApplyOverlay(OverlaySession session);
 
     MachineResult LiftOverlay();
+
+    /// <summary>
+    /// Take the screen for the teacher's broadcast (M6 portion 2, D-71): full-screen picture,
+    /// input blocked like a lock, and a lock — if one is held — stays on top. Called by the
+    /// <see cref="BroadcastReceiver"/>, not the journal: a broadcast is never in
+    /// <c>policy.json</c>. Called again with the same session to re-assert it to a new helper.
+    /// </summary>
+    MachineResult ShowBroadcast(BroadcastSession session) => MachineResult.NotInThisBuild(PolicyEvents.Text("KindBroadcast"));
+
+    /// <summary>
+    /// One frame of the broadcast, as <c>PullBroadcast</c> delivered it — a keyframe or a
+    /// delta on the one before. Awaited, so a machine that shows frames slowly holds the
+    /// stream back rather than piling frames up; never throws.
+    /// </summary>
+    ValueTask BroadcastFrameAsync(VideoFrame frame, CancellationToken token) => ValueTask.CompletedTask;
+
+    /// <summary>Give the screen back after a broadcast; a held lock stays.</summary>
+    MachineResult StopBroadcast() => MachineResult.Done;
 
     /// <summary>
     /// Enforce an internet policy (portion 3), recording what it displaces into

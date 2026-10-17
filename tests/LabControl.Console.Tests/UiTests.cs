@@ -264,6 +264,17 @@ public sealed class UiTests
                 await Render(window, "main-lab-unlocked");
                 Assert.False(locked4.IsLocked);
 
+                // The broadcast badge (M6 portion 2) follows the PC's word the same way.
+                agents[3].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.BroadcastStart, SessionId = "b4", SetByInstance = console.Session.Instance.InstanceId, InputBlocked = true });
+                Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[3].AgentId)?.OverlayBroadcasting == true));
+                await Render(window, "main-lab-broadcast");
+                Assert.True(locked4.IsBroadcasting);
+                Assert.False(locked4.IsLocked);
+                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "WATCHING" && t.IsVisible);
+                Assert.False(vm.StopShowingScreenCommand.CanExecute(null));
+                agents[3].Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Unspecified });
+                Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[3].AgentId)?.OverlayBroadcasting == false));
+
 
                 Assert.Equal(7, vm.Machines.Count(m => m.HasPicture));
                 Assert.False(vm.Machines.Single(m => m.Number == 3).HasPicture);

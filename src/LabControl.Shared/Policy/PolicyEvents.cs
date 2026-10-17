@@ -38,6 +38,12 @@ public static class PolicyEvents
     /// <summary>The enforcer itself threw where nothing may throw (a bug, a disposed handle); logged, reported, and the pass abandoned — never the service loop.</summary>
     public const string EnforcerFailed = "policy.failed";
 
+    /// <summary>A broadcast reached this PC's own <see cref="Defaults.BroadcastHardLimit"/> and was taken down (D-71).</summary>
+    public const string BroadcastExpired = "broadcast.expired";
+
+    /// <summary>A broadcast could not be shown: the console refused the stream, or the machine could not take the screen.</summary>
+    public const string BroadcastFailed = "broadcast.failed";
+
     private static readonly ResourceManager Resources = new("LabControl.Shared.Policy.PolicyStrings", typeof(PolicyEvents).Assembly);
 
     /// <summary>A resource string, formatted with the invariant culture; the name itself if the resource is missing, never an exception.</summary>
@@ -68,6 +74,8 @@ public static class PolicyEvents
     public static string RefusedUnknownKind => Text("RefusedUnknownKind");
 
     public static string RefusedStopped => Text("RefusedStopped");
+
+    public static string RefusedNoSession => Text("RefusedNoSession");
 
     /// <summary>The teacher's word for a session kind, for the event messages.</summary>
     public static string KindName(PolicySession session) => session switch

@@ -218,7 +218,7 @@ internal static class Program
             }
 
             var path = Path.Combine(Defaults.AgentDataDirectory, Defaults.PolicyFileName);
-            var machine = new WindowsMachineState(_ => false, log);
+            var machine = new WindowsMachineState(_ => false, _ => ValueTask.FromResult(false), log);
             var journal = new PolicyJournal(machine, labId, PolicyJournal.FileReader(path), PolicyJournal.FileWriter(path));
             journal.Reported += reported => log.Log(reported.Severity switch
             {

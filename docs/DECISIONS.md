@@ -3626,6 +3626,128 @@ the stale-lock re-lift in the supervisor does not compare session ids (a one-sta
 flicker at worst), a modifier held at `Block()` stays down in the OS until tapped, the
 window is recreated on every 3 s re-assert while creation keeps failing.
 
+## D-71 — Broadcast is a server-streaming `PullBroadcast` the agent dials, not frames on `Link`; it is not a session in `policy.json` and dies with its stream (M6 portion 2)
+
+Context (2026-10-17): the teacher's screen has to reach up to thirty PCs at once, over the
+console's Wi-Fi, readable from the back of the room, without the student being able to
+leave it, and without a laptop lid that closes mid-broadcast leaving a room of blanked
+screens. The proto has carried `ConsoleMessage.broadcast = 10` since M0, a `VideoFrame` on
+the `Link` stream; no build ever sent it.
+
+Decisions:
+
+1. **Frames never go on `Link`.** `AgentConnection`'s outgoing queue is unbounded, and a
+   PC that reads slowly would pile up seconds of video in the console and delay its jobs
+   and pings behind them. The agent dials a new server-streaming
+   `rpc PullBroadcast(BroadcastRequest { session_id }) returns (stream VideoFrame)` instead,
+   mirroring `PushVideo` the other way round: its own HTTP/2 stream with its own flow
+   control per PC, opened on the link's session token so it dies with the link.
+   `ConsoleMessage.broadcast = 10` becomes `reserved 10; reserved "broadcast";` — in the
+   message body, because protoc refuses `reserved` inside a `oneof`.
+2. **`Overlay BROADCAST_START` / `BROADCAST_STOP` on `Link` start and end it**, through the
+   same ownership gate as a lock (`D-69`; any console of the lab may stop one it can see,
+   owner decision 4; a `teacher` console may broadcast, owner decision 3). The start carries
+   a `session_id` and `hard_limit_seconds`, a duration the agent clamps on its own clock to
+   `Defaults.BroadcastHardLimit` (30 min). The console serves `PullBroadcast` only to the PCs
+   the teacher chose and only for the session it runs (`PermissionDenied` / `NotFound`).
+3. **Not a session in `policy.json`.** A broadcast lives exactly as long as its stream: the
+   teacher stops it, the console leaves the lab (`LabCloseStep.Broadcast`, the first step
+   after `Cancel`, while the links are still up to carry `BROADCAST_STOP`), the link drops,
+   a newer broadcast replaces it, or the PC's own limit passes. Nothing is re-applied after
+   a restart: a broadcast with no console behind it is a frozen picture, not a policy. The
+   journal stays the lock's (`D-69`); the broadcast lives in a `BroadcastReceiver` the
+   `PolicyEnforcer` owns, and `IMachineState` gains `ShowBroadcast` / `BroadcastFrameAsync` /
+   `StopBroadcast` with default implementations, so a machine that predates them answers
+   "not in this build".
+4. **The screen is taken on the first frame**, not on `BROADCAST_START`: a stream the
+   console refuses, or that fails before a picture exists, never blanks a student's screen.
+5. **Fan-out is latest-wins without ever breaking a picture.** Each PC has a one-frame slot
+   in the console's `BroadcastHub`. A keyframe replaces whatever waits; a delta that finds
+   the slot still full is dropped and that PC skips deltas until the next keyframe, which
+   the hub asks the encoder for at most once a second (`BroadcastKeyframeRequestInterval`),
+   so one slow PC never turns the whole stream into keyframes and never holds the others.
+   The helper keeps the same rule on its side (`BroadcastPicture`, at most
+   `BroadcastHelperQueueLength` frames waiting to be decoded), and the service awaits each
+   pipe write from the receiver — never from a read loop (`D-35` item 8) — so a slow helper
+   holds its own stream back instead of piling frames up in the service.
+6. **A lock wins.** The helper shows a lock over a running broadcast and the broadcast again
+   when the lock lifts; `OverlayState` reports `LOCK` while one is held and `BROADCAST_START`
+   otherwise, so the tile shows exactly one badge — *LOCKED* or *WATCHING* — and both follow
+   the PC's word, never the request. The same `OverlayWindow` (click-through, never
+   activated, following the input desktop, `D-70`, `D-81`) and the same hooks show it; the
+   picture is stretched to fit with `HALFTONE` and black bars.
+7. **A PC that relinks joins again.** The console remembers whom it is showing the screen
+   to, and a target that links while the broadcast runs is sent `BROADCAST_START` again —
+   the receiver ended with the old link's stream. The console also ends the whole broadcast
+   at `BroadcastHardLimit` by its own clock (`broadcast.expired`) rather than streaming to
+   PCs that have already let go; the teacher starts it again to go on.
+8. **The console's toolbar wraps** instead of clipping: with the lock and broadcast actions
+   it no longer fits one line on a laptop, and an action that cannot be seen cannot be used.
+
+Rejected: frames on `Link` (the unbounded queue, above); UDP multicast (Wi-Fi multicast is
+slow and lossy, and the lab's switch and the teacher's router are not ours to configure;
+thirty unicast streams at the shared cap fit); persisting the broadcast like a lock (it
+would come back after a reboot with nobody broadcasting); a per-PC encode at each PC's
+pace (thirty encodes of one picture on a laptop — `D-72`).
+
+Tests: `BroadcastTests` (Console) over the real link — twenty-nine simulated PCs and one
+without an enforcer receive one encoded picture, report `BROADCAST_START`, and give the
+screen back on *Stop*; a lock on top and the broadcast back after it; a PC that relinks
+joins again; the PC's own limit ending it with the console still streaming; the console's
+limit ending it everywhere; `PullBroadcast` refused to a PC that was not chosen and for a
+wrong session; lab departure ending it as its first step; the stream cap; a slow PC skipping
+to the next keyframe while the fast one sees every frame in order. `BroadcastVideoTests`
+(Shared) cover the helper's decoding rule. **Not yet run on Windows**: the helper's
+broadcast window, the pipe relay and the frame rate on a real PC wait for the VM.
+
+## D-72 — Console capture: CoreGraphics on macOS, GDI on Windows; one encode shared by every PC; the downscale inside the screen source (M6 portion 2)
+
+Context (2026-10-17): the console must capture its own screen on the teacher's MacBook
+today and on a Windows desk PC tomorrow (hard requirement 1), with no extra product and no
+NuGet package for something two system calls do.
+
+Decisions:
+
+1. **macOS: `CGDisplayCreateImage` through `DllImport`** from CoreGraphics, drawn by
+   `CGContextDrawImage` into a bitmap context over the source's own BGRA picture
+   (`kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little`) at the broadcast size
+   with high-quality interpolation — capture, scale and pixel order in one step. One
+   `CGDisplayCreateImage` per frame. The *Screen Recording* permission is checked with
+   `CGPreflightScreenCaptureAccess` before every open (without it macOS returns the
+   wallpaper only) and requested with `CGRequestScreenCaptureAccess` after a first-run
+   explanation in the console; the grant reaches a running process only after a restart,
+   and an ad-hoc-signed bundle is a new identity after every rebuild, so the drill runs
+   against one built `.app` (and `dotnet run` attaches the grant to the terminal).
+   `CGDisplayCreateImage` is deprecated in recent SDKs but still exported; when a macOS
+   drops it the source reports `capture.unsupported` and ScreenCaptureKit becomes the
+   follow-up — not before a measurement or a removal says so.
+2. **Windows: one `StretchBlt` with `HALFTONE`** from the screen DC into a top-down 32-bit
+   DIB section at the broadcast size — capture and scale in a single GDI call — through
+   plain `DllImport`, so the console stays one `net10.0` project. DXGI waits for numbers
+   that say GDI is too slow; the helper's DXGI source is not reused because it lives in a
+   Windows-only project and runs in a service session.
+3. **The downscale happens inside the screen source** (`ScaledScreenSource`, at most
+   `Defaults.BroadcastWidth` = 1280 wide, both sides even): `VideoSettings` has no width and
+   only thumbnails scale, so the `ScreenProducer` the PCs use encodes the broadcast unchanged.
+   1280 wide keeps 14 pt editor text legible on a 1366×768 student panel — the definition
+   of "readable from the back of the room" the acceptance drill uses.
+4. **One encode for every PC**, `FULL` mode with dirty rectangles from `TileDiff` (neither
+   capture says what changed) and auto quality (`D-37`) driven by the stream's cap:
+   `min(BroadcastBitsPerSecond, BroadcastTotalBitsPerSecond / watching)` — 8 Mbit/s for a
+   few PCs, 24 Mbit/s in total across a full room, the same total one full-view stream may
+   take (`D-36` item 11), retuned when a PC joins or leaves. 12 frames a second.
+5. **The pointer is drawn into the picture** (an arrow at the position `CGEventGetLocation`
+   or `GetCursorInfo` reports), since neither capture includes it and a teacher points.
+6. **The primary display only.** A second monitor or a mirrored projector is the teacher's
+   own arrangement; choosing a display is a later refinement if the owner asks for it.
+7. **Linux has no capture in this build** and says so in the console; X11/Wayland capture
+   is not part of M6.
+
+Rejected: ScreenCaptureKit now (an Objective-C/Swift bridge for what one C function still
+does); a NuGet screen-capture package (`D-03`'s "no second product", and every dependency
+needs its line here); scaling in the producer (would change the code every PC runs for a
+console-only need); encoding per PC (thirty encodes on a laptop).
+
 ## D-80 — Public repository: MIT, a README that is a project page, links that work in the mirror
 
 Context (2026-10-09): the repository is being prepared to become public. The README had
@@ -3705,7 +3827,8 @@ The same run found that NuGet audit now refuses the PowerShell parser's transiti
 `System.Security.Cryptography.Pkcs` 10.0.5. The console directly pins 10.0.13, the patched
 10.x release for [Microsoft's advisory](https://github.com/advisories/GHSA-846f-f764-76mx),
 without disabling audit or changing the offline parser's role. This adds no student-PC
-dependency. D-71…D-79 remain reserved by the six-portion M6 plan.
+dependency. D-71…D-79 remain reserved by the six-portion M6 plan (`D-71` and `D-72` were
+written with portion 2).
 
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 

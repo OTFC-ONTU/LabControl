@@ -14,6 +14,11 @@ namespace LabControl.Agent;
 /// Portion 3 fills <see cref="RestoreDefaults"/>, <see cref="RefineRestore"/> and
 /// <see cref="Confirm"/> with the firewall, DNS and watchdog-task work; the hooks are marked.
 /// <para>
+/// Since portion 2 the broadcast goes the same way (D-71): <c>BROADCAST_START</c> and
+/// <c>BROADCAST_STOP</c> as <c>Overlay</c>s, every frame as <c>ServiceMessage.broadcast_frame</c>,
+/// awaited so a slow helper holds the stream back.
+/// </para>
+/// <para>
 /// Nothing here throws: a pipe that is not there is "not shown yet", which the helper's own
 /// report and the supervisor's re-assert (D-70 item 4) turn into a lock the moment it connects.
 /// </para>
@@ -21,12 +26,15 @@ namespace LabControl.Agent;
 internal sealed class WindowsMachineState : IMachineState
 {
     private readonly Func<ServiceMessage, bool> _sendToHelper;
+    private readonly Func<ServiceMessage, ValueTask<bool>> _sendToHelperAsync;
     private readonly ILogger _log;
 
     /// <param name="sendToHelper">Writes a message down the helper pipe, fire-and-forget; <c>false</c> when no helper is connected.</param>
-    public WindowsMachineState(Func<ServiceMessage, bool> sendToHelper, ILogger log)
+    /// <param name="sendToHelperAsync">The same, waiting until it is written — for broadcast frames, so a slow helper holds the stream back.</param>
+    public WindowsMachineState(Func<ServiceMessage, bool> sendToHelper, Func<ServiceMessage, ValueTask<bool>> sendToHelperAsync, ILogger log)
     {
         _sendToHelper = sendToHelper;
+        _sendToHelperAsync = sendToHelperAsync;
         _log = log;
     }
 
@@ -79,6 +87,42 @@ internal sealed class WindowsMachineState : IMachineState
     public MachineResult LiftOverlay()
     {
         _sendToHelper(new ServiceMessage { Overlay = new Overlay { Kind = Overlay.Types.Kind.Unlock } });
+        return MachineResult.Done;
+    }
+
+    /// <summary>
+    /// The broadcast goes down the pipe like the lock (M6 portion 2, D-71): the helper takes
+    /// the screen, blocks input with the same hooks, and keeps a held lock on top. The hard
+    /// limit travels as what is left of it; the receiver here is what ends the broadcast.
+    /// </summary>
+    public MachineResult ShowBroadcast(BroadcastSession session)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var overlay = new Overlay
+        {
+            Kind = Overlay.Types.Kind.BroadcastStart,
+            SessionId = session.SessionId,
+            Message = session.ConsoleName,
+            HardLimitSeconds = Math.Max(1, session.HardLimitUnix - now),
+        };
+
+        if (!_sendToHelper(new ServiceMessage { Overlay = overlay }))
+        {
+            _log.LogInformation("broadcast {Session} received; no session helper is connected yet, it is shown when one connects", session.SessionId);
+        }
+
+        return MachineResult.Done;
+    }
+
+    public async ValueTask BroadcastFrameAsync(VideoFrame frame, CancellationToken token)
+    {
+        // A helper that is not there misses the frame; the next keyframe brings the picture back.
+        await _sendToHelperAsync(new ServiceMessage { BroadcastFrame = frame });
+    }
+
+    public MachineResult StopBroadcast()
+    {
+        _sendToHelper(new ServiceMessage { Overlay = new Overlay { Kind = Overlay.Types.Kind.BroadcastStop } });
         return MachineResult.Done;
     }
 

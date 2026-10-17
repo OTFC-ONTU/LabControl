@@ -82,6 +82,7 @@ public sealed partial class AgentLink : IAsyncDisposable
 
     private Task? _loop;
     private CancellationTokenSource? _session;
+    private long _linkEpoch;
     private string? _pendingEndpoint;
     private string? _pendingReason;
     private string? _previousInstanceId;
@@ -659,6 +660,7 @@ public sealed partial class AgentLink : IAsyncDisposable
         lock (_gateLock)
         {
             _session = session;
+            _linkEpoch++;
         }
 
         try

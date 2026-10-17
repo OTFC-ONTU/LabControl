@@ -92,9 +92,9 @@ public class VideoTests
 
         // The keyframe lands, and the mosaic thumbnail is refreshed from it while the PC no longer sends thumbnails.
         Assert.True(await Wait.UntilAsync(() => pc.Link.TryPushVideo(Full(640, 384, Paint(640, 384, SKColors.Blue), keyframe: true))));
-        Assert.True(await Wait.UntilAsync(() => screen.Full.Version == 1));
+        // The full picture is applied before the thumbnail is scaled from it (ScreenStore.ApplyFull): wait for both.
+        Assert.True(await Wait.UntilAsync(() => screen.Full.Version == 1 && screen.Thumbnail.HasFrame));
         Assert.Equal((640, 384), (screen.Full.Width, screen.Full.Height));
-        Assert.True(screen.Thumbnail.HasFrame);
         Assert.Equal((320, 192), (screen.Thumbnail.Width, screen.Thumbnail.Height));
         Assert.True(screen.Thumbnail.PixelAt(5, 5).Blue > 200);
 

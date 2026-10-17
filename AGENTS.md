@@ -132,6 +132,16 @@ the documents relevant to the task:
   `Overlay`/`OverlayState`, the ownership gate in `AgentLink` is judged before the
   enforcer sees the message and fails closed; keep `LeaveIfConsoleRevoked` as it is, keep
   the limits as durations, and keep every teacher-facing reason a code.
+- **M6 portion 2 is built (2026-10-17, `D-71`, `D-72`), not yet run natively.** The
+  console's screen (CoreGraphics on macOS after the *Screen Recording* permission, GDI on
+  Windows, none on Linux) is scaled to 1280 wide inside `ScaledScreenSource`, encoded once
+  by `BroadcastHub` and served over the server-streaming `PullBroadcast` with a latest-wins
+  slot per PC; `ConsoleMessage.broadcast = 10` is reserved and frames never go on `Link`.
+  On the PC, `BroadcastReceiver` (owned by `PolicyEnforcer`, never in `policy.json`) takes
+  the screen on the first frame, clamps 30 min on its own clock and ends with its stream;
+  a lock stays on top and `OverlayState` is composed lock-first. The helper shows it in
+  `OverlayWindow`'s broadcast mode with the lock's hooks. Keep frames off `Link`, keep the
+  broadcast out of the journal, and never await a pipe write from a read loop.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the
@@ -188,7 +198,8 @@ the documents relevant to the task:
   Account-off touches neither setting. Do not change UAC security policy to bypass
   native administrator-maintenance acceptance (`D-52`).
 - Do not invent features outside `docs/ROADMAP.md`; propose the scope there first.
-- M6 portion 1 has passed ARM64 VM acceptance; portions 2–6 remain. Its owner decisions
+- M6 portion 1 has passed ARM64 VM acceptance; portion 2 (broadcast) is built and waits
+  for its VM drill; portions 3–6 remain. Its owner decisions
   (2026-09-09) and corrected six-portion plan are settled in ROADMAP M6, *Settled before implementation*; follow them and use the
   reserved `D-69`…`D-79`.
 - The README is the public project page with one line of status per milestone; put long

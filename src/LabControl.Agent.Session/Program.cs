@@ -214,6 +214,10 @@ internal static class Program
                         overlay.Offer(message.Overlay);
                         break;
 
+                    case ServiceMessage.PayloadOneofCase.BroadcastFrame:
+                        overlay.OfferFrame(message.BroadcastFrame);
+                        break;
+
                     default:
                         // A message this build does not know; say so once per message.
                         log.LogWarning("the service sent {What}, which this build does not do yet", message.PayloadCase);

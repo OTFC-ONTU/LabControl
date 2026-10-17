@@ -113,6 +113,9 @@ public sealed class AgentConnection
     /// <summary>The PC holds a lock (its own word, from <see cref="OverlayState"/>).</summary>
     public bool OverlayLocked => OverlayState is { Kind: Overlay.Types.Kind.Lock };
 
+    /// <summary>The PC shows the teacher's screen (its own word, M6 portion 2, D-71); a lock on top of it reads as a lock.</summary>
+    public bool OverlayBroadcasting => OverlayState is { Kind: Overlay.Types.Kind.BroadcastStart };
+
     /// <summary>
     /// Merges an <c>OverlayState</c>; returns <c>true</c> when what the tile shows changed.
     /// A refused request carries no picture of the screen (PROTOCOL <i>Overlay</i>), so only
@@ -121,6 +124,7 @@ public sealed class AgentConnection
     public bool ApplyOverlayState(OverlayState state)
     {
         var lockedBefore = OverlayLocked;
+        var kindBefore = OverlayState?.Kind;
         var problemBefore = OverlayProblem;
         var setByBefore = OverlayState?.SetByInstance;
         var sessionBefore = OverlayState?.SessionId;
@@ -137,7 +141,7 @@ public sealed class AgentConnection
         }
 
         // The weakness line on the badge follows input_blocked and reason too, not only the lock itself.
-        return lockedBefore != OverlayLocked || problemBefore != OverlayProblem
+        return lockedBefore != OverlayLocked || kindBefore != OverlayState?.Kind || problemBefore != OverlayProblem
             || setByBefore != OverlayState?.SetByInstance || sessionBefore != OverlayState?.SessionId
             || blockedBefore != OverlayState?.InputBlocked || !string.Equals(reasonBefore, OverlayState?.Reason, StringComparison.Ordinal);
     }

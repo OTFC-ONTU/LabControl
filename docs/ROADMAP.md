@@ -20,7 +20,7 @@ implement.
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — `1.0.0` is the physical-lab release candidate (owner decision 2026-09-08); script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
 | **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the `app.manifest` double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the `group=` argument that made the printed `netsh` line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest `PC-27`) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three `--remove-data` answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`; on Linux, the `SO_PEERCRED` path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
-| **M6** | Classroom control: broadcast, lock, exam mode | **in progress — plan settled 2026-09-16 (`D-69`…`D-79`, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, *Lock screens* in the console, the simulator's lock; **portion 1 verified in an isolated Windows 11 ARM64 VM on 2026-10-17**, desktop-following defects fixed (`D-81`); physical Windows x64/fleet acceptance remains open. Next: portion 2, teacher-screen broadcast** | M5 |
+| **M6** | Classroom control: broadcast, lock, exam mode | **in progress — plan settled 2026-09-16 (`D-69`…`D-79`, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, *Lock screens* in the console, the simulator's lock; **portion 1 verified in an isolated Windows 11 ARM64 VM on 2026-10-17**, desktop-following defects fixed (`D-81`); physical Windows x64/fleet acceptance remains open. **Portion 2 built on 2026-10-17** (`D-71`, `D-72`): the teacher's screen captured by CoreGraphics on macOS or GDI on Windows, scaled to 1280 wide inside the source, encoded once and fanned out over a new server-streaming `PullBroadcast` with a latest-wins slot per PC; the helper shows it in the lock's window with input blocked, a lock on top; it ends with its stream and at 30 min on the PC's own clock; *Show my screen* / *Stop showing* in the console and a *WATCHING* tile badge. Not yet run on Windows or on the Mac's real display. Next: the portion-2 VM drill, then portion 3, internet control** | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
 Update the **State** column (`not started` / `in progress` / `done <date>`) in the same
@@ -1985,7 +1985,8 @@ for the implementation; do not re-open it without the owner. Where it is more sp
 the deliverables above — the whitelist enforced in the **service** rather than the helper,
 profile reset through `DeleteProfile` rather than `Win32_UserProfile.Delete` — this
 subsection wins, and ARCHITECTURE §6 is amended when portion 5 lands. Portion 1 is
-built and has passed ARM64 VM acceptance; portions 2–6 remain to be implemented.
+built and has passed ARM64 VM acceptance; portion 2 is built and waits for its VM drill;
+portions 3–6 remain to be implemented.
 
 #### Owner decisions (2026-09-09, binding)
 
@@ -2310,6 +2311,55 @@ Windows x64 and Linux x64. The parser's vulnerable transitive PKCS dependency is
 to the patched version (`D-81`), with NuGet audit enabled. This closes
 portion 1's VM gate; it does not close the whole M6 milestone, physical Windows x64,
 fleet lock acceptance, broadcast, internet policies, exam mode, collection or reset.
+
+- *Portion 2 built (2026-10-17), in a Linux container; nothing native run yet* (`D-71`, `D-72`).
+  Wire: `rpc PullBroadcast(BroadcastRequest { session_id }) returns (stream VideoFrame)`,
+  `ConsoleMessage.broadcast = 10` reserved, `ServiceMessage.broadcast_frame = 5`; `Overlay
+  BROADCAST_START` / `BROADCAST_STOP` pass the portion-1 ownership gate; PROTOCOL
+  *Broadcast* and *Broadcast over the pipe*. Console: `Shared/Video/ScaledScreenSource`
+  (scale inside the source, `TileDiff`, the pointer drawn in) with
+  `CoreGraphicsScreenSource` (macOS, `DllImport`, the *Screen Recording* preflight/request)
+  and `GdiDisplayScreenSource` (Windows), `ConsoleScreen` choosing between them (Linux:
+  unsupported, said in words); `Services/BroadcastHub` — one `ScreenProducer`, one encode,
+  a one-frame latest-wins slot per PC that skips to the next keyframe when it falls behind,
+  the cap `min(8, 24 / watching)` Mbit/s retuned on join and leave, its own 30-minute limit;
+  `LabSession.StartBroadcast` / `StopBroadcastAsync` / `ServeBroadcastAsync`, a target that
+  relinks joining again, `LabCloseStep.Broadcast` as the first release step; *Show my
+  screen*, *Show my screen to all*, *Stop showing*, the macOS permission explanation, the
+  status-bar line and the *WATCHING* badge; the toolbar now wraps instead of clipping.
+  Agent: `AgentLink.PullBroadcastAsync` on the link's session token;
+  `Shared/Policy/BroadcastReceiver` owned by the `PolicyEnforcer` — not in `policy.json`,
+  the screen taken on the first frame, the PC's own 30-minute clamp, `broadcast.expired` /
+  `broadcast.failed` — and `OverlayState` composed lock-first; `IMachineState` gains
+  `ShowBroadcast` / `BroadcastFrameAsync` / `StopBroadcast`; `WindowsMachineState` and
+  `SessionSupervisor` relay the start, every frame (awaited, never from a read loop) and the
+  stop, re-assert a running broadcast to a new helper and correct a helper that shows the
+  wrong one; the helper's `OverlayController` shows it in `OverlayWindow`'s new broadcast
+  mode (`HALFTONE`, black bars) with the same hooks, a lock on top, following the input
+  desktop, decoded by `Shared/Video/BroadcastPicture` on its own thread; the simulator draws
+  it on `FakeScreen` so the mosaic shows it. Tests: `BroadcastTests` (Console, 9) over the
+  real link with twenty-nine simulated PCs and one without an enforcer, `BroadcastVideoTests`
+  (Shared, 10), the main-window render with the badge, `LabSwitchTests` with the new step.
+  `dotnet build` of every project, the Windows helper and agent included, passes, and
+  `dotnet publish -r win-x64` of the agent and the helper succeeds. Full runs: 818 Shared,
+  251 Console (13 macOS bundle tests skipped); in this container each full Console run lost
+  one or two *different* load-sensitive tests (beacon take-over, thirty-PC enrolment, job
+  ownership) that pass alone, as on the base commit. Two pre-existing test races were fixed
+  on the way: `LabSwitchTests` and `VideoTests` read a frame counter or the mosaic thumbnail
+  in the instant after the picture was applied but before it was counted or scaled.
+  **Readable from the back of the room** is defined for the drill as: 14 pt editor text on
+  the console, broadcast at 1280 wide, legible at 5 m on a 1366×768 student panel.
+  *The portion-2 drill* (one built `.app` on the Mac — an ad-hoc signature is a new identity
+  after every rebuild, and `dotnet run` attaches the grant to the terminal; the ARM64 VM;
+  later the physical room): first *Show my screen* explains and asks for *Screen Recording*,
+  the grant works after a restart; the picture appears on the PC within a second and follows
+  the Mac at a readable frame rate with the pointer visible; Alt+Tab, Win, Alt+F4, clicks and
+  typing do nothing on the PC while the teacher's *Control* still reaches its desktop; a lock
+  over the broadcast, then unlock — the broadcast is back; sign the student out and in — the
+  broadcast is back within a keyframe; Ctrl+Alt+Del and *Cancel* — back; *Stop showing* —
+  every PC gives the screen back at once; close the Mac's lid mid-broadcast — every PC gives
+  the screen back when the link drops; the readability check above on a real panel; the
+  helper and service logs free of `session.exe has been silent`.
 
 ---
 

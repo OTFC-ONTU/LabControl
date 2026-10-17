@@ -317,7 +317,9 @@ public sealed class PolicyJournal
 
                 case Overlay.Types.Kind.BroadcastStart:
                 case Overlay.Types.Kind.BroadcastStop:
-                    // Portion 2 (D-71): a broadcast is not a session and never reaches the document.
+                    // A broadcast is not a session and never reaches the document (D-71): the
+                    // enforcer hands it to its BroadcastReceiver before the journal sees it, so
+                    // only a journal driven on its own (a test) gets here.
                     return OverlayStateLocked(PolicyEvents.Text("NotInThisBuild", PolicyEvents.Text("KindBroadcast")), nowUnix);
 
                 default:

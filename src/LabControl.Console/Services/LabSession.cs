@@ -70,15 +70,16 @@ public sealed record PendingWake(string AgentId, int Number, DateTimeOffset Star
 public enum LabCloseStep
 {
     Cancel = 0,
-    Beacons = 1,
-    Links = 2,
-    Listener = 3,
-    Server = 4,
-    Housekeeping = 5,
-    Save = 6,
-    Screens = 7,
-    Vault = 8,
-    Instance = 9,
+    Broadcast = 1,
+    Beacons = 2,
+    Links = 3,
+    Listener = 4,
+    Server = 5,
+    Housekeeping = 6,
+    Save = 7,
+    Screens = 8,
+    Vault = 9,
+    Instance = 10,
 }
 
 /// <summary>
@@ -129,6 +130,8 @@ public sealed class LabSession : IAsyncDisposable
 
     private ConsoleServer? _server;
     private BeaconBroadcaster? _broadcaster;
+    private BroadcastHub? _broadcast;
+    private readonly HashSet<string> _broadcastTargets = new(StringComparer.OrdinalIgnoreCase);
     private BeaconListener? _listener;
     private Task? _housekeeping;
 
@@ -328,6 +331,11 @@ public sealed class LabSession : IAsyncDisposable
         try
         {
             Step(LabCloseStep.Cancel, () => _stopping.Cancel());
+
+            // 0. The broadcast ends before anything else (M6, D-71): every PC is told while
+            // the links are still up, and the streams end with the hub. A lock does not end
+            // here — it has its own limit (D-70).
+            await StepAsync(LabCloseStep.Broadcast, () => StopBroadcastAsync(BroadcastEnd.Departure)).ConfigureAwait(false);
 
             // 1. Beacons first: a PC that hears nothing from this instance stops considering it.
             Step(LabCloseStep.Beacons, () => _broadcaster?.Dispose());
@@ -1005,6 +1013,13 @@ public sealed class LabSession : IAsyncDisposable
             screen.RequestedMode = wanted.Mode;
             connection.RequestedVideo = wanted.Mode;
             connection.TrySend(new ConsoleMessage { VideoControl = wanted });
+
+            // A PC the teacher is showing the screen to, back from a dropped link, joins the
+            // broadcast again (D-71): it ended on the PC with the link's stream.
+            if (BroadcastStartFor(hello.AgentId) is { } start)
+            {
+                connection.TrySend(new ConsoleMessage { Overlay = start });
+            }
         }
 
         AgentLinked?.Invoke(connection);
@@ -1820,6 +1835,218 @@ public sealed class LabSession : IAsyncDisposable
         }
 
         return (sent, skipped);
+    }
+
+    // ------------------------------------------------------------------ broadcast (M6 portion 2)
+
+    /// <summary>
+    /// Opens the console's own screen for a broadcast; <see cref="ConsoleScreen.Open"/> unless
+    /// a test draws one. Called on the producer's thread whenever the capture (re)opens.
+    /// </summary>
+    public Func<IScreenSource> BroadcastSource { get; set; } = () => ConsoleScreen.Open(Defaults.BroadcastWidth);
+
+    /// <summary><see cref="Defaults.BroadcastHardLimit"/> unless a test wants it sooner.</summary>
+    public TimeSpan BroadcastLimit { get; set; } = Defaults.BroadcastHardLimit;
+
+    /// <summary>The broadcast in progress, or <c>null</c>.</summary>
+    public BroadcastHub? Broadcast
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _broadcast;
+            }
+        }
+    }
+
+    /// <summary>The PCs the teacher chose to show the screen to, linked or not.</summary>
+    public IReadOnlyCollection<string> BroadcastTargets
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _broadcastTargets.ToArray();
+            }
+        }
+    }
+
+    /// <summary>A broadcast started, ended or changed what it shows; the lab view refreshes its status line.</summary>
+    public event Action? BroadcastChanged;
+
+    /// <summary>
+    /// Shows this console's screen on the given PCs (PROTOCOL <i>Broadcast</i>, D-71): one
+    /// <see cref="BroadcastHub"/> captures and encodes it once, and each linked PC is sent an
+    /// <c>Overlay BROADCAST_START</c> naming the session; the PC dials <c>PullBroadcast</c>
+    /// for the picture and takes it full-screen with input blocked, for as long as the stream
+    /// lasts and never past its own <see cref="Defaults.BroadcastHardLimit"/>. Called while a
+    /// broadcast is running, it adds PCs to the same one. A PC that is not linked now joins
+    /// when it links; one too old to know the message is skipped. Returns how many PCs were
+    /// asked; the tiles follow what each PC reports in <c>OverlayState</c>.
+    /// </summary>
+    public int StartBroadcast(IEnumerable<string> agentIds)
+    {
+        ArgumentNullException.ThrowIfNull(agentIds);
+        var ids = agentIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        BroadcastHub? started = null;
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_closed == 1, this);
+            if (_broadcast is null)
+            {
+                started = new BroadcastHub(Guid.NewGuid().ToString("n"), BroadcastSource, _loggers.CreateLogger<BroadcastHub>(), _clock,
+                    (severity, code, message) => Events.Add(severity switch
+                    {
+                        Event.Types.Severity.Error => EventSeverity.Error,
+                        Event.Types.Severity.Warning => EventSeverity.Warning,
+                        _ => EventSeverity.Info,
+                    }, code, message), BroadcastLimit);
+                started.Expired += OnBroadcastExpired;
+                started.Changed += () => BroadcastChanged?.Invoke();
+                _broadcast = started;
+            }
+
+            foreach (var id in ids)
+            {
+                _broadcastTargets.Add(id);
+            }
+        }
+
+        started?.Start();
+
+        var sent = 0;
+        var skipped = 0;
+        foreach (var id in ids)
+        {
+            var connection = FindLinked(id);
+            if (connection is null || connection.IsOutdated || BroadcastStartFor(id) is not { } start
+                || !connection.TrySend(new ConsoleMessage { Overlay = start }))
+            {
+                skipped++;
+                continue;
+            }
+
+            sent++;
+        }
+
+        Events.Info("broadcast.started", Localization.Strings.Format(started is null ? "Event.BroadcastAdded" : "Event.BroadcastStarted", sent, skipped));
+        BroadcastChanged?.Invoke();
+        return sent;
+    }
+
+    /// <summary>Why a broadcast ended, for the event the teacher sees.</summary>
+    public enum BroadcastEnd
+    {
+        Teacher = 0,
+        Limit = 1,
+        Departure = 2,
+    }
+
+    /// <summary>
+    /// Ends the broadcast: every linked PC that was shown it is sent <c>BROADCAST_STOP</c>, and
+    /// the hub ends every stream, which ends the overlay on a PC that missed the message. A
+    /// no-op without a broadcast.
+    /// </summary>
+    public async Task StopBroadcastAsync(BroadcastEnd why = BroadcastEnd.Teacher)
+    {
+        BroadcastHub? hub;
+        string[] targets;
+        lock (_gate)
+        {
+            hub = _broadcast;
+            _broadcast = null;
+            targets = _broadcastTargets.ToArray();
+            _broadcastTargets.Clear();
+        }
+
+        if (hub is null)
+        {
+            return;
+        }
+
+        hub.Expired -= OnBroadcastExpired;
+        var stop = new Overlay { Kind = Overlay.Types.Kind.BroadcastStop, SessionId = hub.SessionId };
+        foreach (var id in targets)
+        {
+            if (FindLinked(id) is { IsOutdated: false } connection)
+            {
+                connection.TrySend(new ConsoleMessage { Overlay = stop.Clone() });
+            }
+        }
+
+        await hub.DisposeAsync().ConfigureAwait(false);
+        var key = why switch
+        {
+            BroadcastEnd.Limit => "Event.BroadcastExpired",
+            BroadcastEnd.Departure => "Event.BroadcastDeparture",
+            _ => "Event.BroadcastStopped",
+        };
+        Events.Info(why == BroadcastEnd.Limit ? "broadcast.expired" : "broadcast.stopped",
+            Localization.Strings.Format(key, (int)Math.Round(hub.Limit.TotalMinutes)));
+        BroadcastChanged?.Invoke();
+    }
+
+    /// <summary>The <c>Overlay</c> that tells one PC to join the running broadcast, or <c>null</c> when it is not shown it.</summary>
+    private Overlay? BroadcastStartFor(string agentId)
+    {
+        lock (_gate)
+        {
+            if (_broadcast is not { } hub || !_broadcastTargets.Contains(agentId))
+            {
+                return null;
+            }
+
+            // A duration, like a lock's (D-70 item 6): what is left of this console's limit,
+            // which the PC clamps again to its own ceiling on its own clock.
+            var left = (long)Math.Ceiling((hub.Deadline - _clock()).TotalSeconds);
+            return left <= 0
+                ? null
+                : new Overlay
+                {
+                    Kind = Overlay.Types.Kind.BroadcastStart,
+                    SessionId = hub.SessionId,
+                    Message = Instance.InstanceName,
+                    HardLimitSeconds = left,
+                };
+        }
+    }
+
+    private void OnBroadcastExpired(BroadcastHub hub)
+    {
+        if (ReferenceEquals(Broadcast, hub))
+        {
+            _ = StopBroadcastAsync(BroadcastEnd.Limit);
+        }
+    }
+
+    /// <summary>
+    /// A PC's <c>PullBroadcast</c> (PROTOCOL <i>Broadcast</i>): the peer certificate says which
+    /// PC it is; it must be one the teacher is showing the screen to, asking for the session
+    /// that is running. Served until the broadcast ends or the PC hangs up.
+    /// </summary>
+    public async Task ServeBroadcastAsync(X509Certificate2? peer, BroadcastRequest request, IServerStreamWriter<VideoFrame> outgoing, CancellationToken token)
+    {
+        var name = RequireAgent(peer);
+        BroadcastHub? hub;
+        bool target;
+        lock (_gate)
+        {
+            hub = _broadcast;
+            target = _broadcastTargets.Contains(name.Id);
+        }
+
+        if (hub is null || !string.Equals(hub.SessionId, request.SessionId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, "this console is not broadcasting that session"));
+        }
+
+        if (!target)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "this PC is not one the broadcast is shown to"));
+        }
+
+        await hub.ServeAsync(name.Id, outgoing, token).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -34,6 +34,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly Action<AgentScreen, FrameOutcome> _onScreenUpdated;
     private readonly NetworkReadiness _network;
     private readonly Action _onNetworkChanged;
+    private readonly Action _onBroadcastChanged;
     private int _refreshPending;
     private volatile bool _detached;
 
@@ -81,7 +82,9 @@ public sealed partial class MainViewModel : ObservableObject
         _onVaultChanged = () => Post(() => { RefreshBanners(); Settings.Refresh(); });
         _onScreenUpdated = (screen, _) => OnFrame(screen.AgentId);
         _onNetworkChanged = () => Post(RefreshBanners);
+        _onBroadcastChanged = () => Post(RefreshBroadcast);
         _network.Changed += _onNetworkChanged;
+        session.BroadcastChanged += _onBroadcastChanged;
         session.MachinesChanged += _onMachinesChanged;
         session.OtherConsolesChanged += _onOtherConsolesChanged;
         session.Events.Added += _onEventAdded;
@@ -172,11 +175,26 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial string KeyStatus { get; set; } = string.Empty;
 
+    /// <summary>A broadcast of this console's screen is running (M6 portion 2); the toolbar offers <i>Stop showing</i>.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StopShowingScreenCommand))]
+    public partial bool IsBroadcasting { get; set; }
+
+    /// <summary>"Showing this screen to 12 PCs · 9 fps · 2.1 Mbit/s each · ends in 28 min", or the capture's problem; empty without a broadcast.</summary>
+    [ObservableProperty]
+    public partial string BroadcastStatus { get; set; } = string.Empty;
+
+    /// <summary>Whether this console can capture its screen; the platform's answer unless a test says otherwise.</summary>
+    public Func<ConsoleScreenAccess> ScreenAccess { get; set; } = ConsoleScreen.Access;
+
+    /// <summary>Asks the platform for screen access (the macOS prompt); a test replaces it.</summary>
+    public Func<bool> RequestScreenAccess { get; set; } = ConsoleScreen.RequestAccess;
+
     [ObservableProperty]
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand), nameof(LockScreensCommand), nameof(UnlockScreensCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand), nameof(LockScreensCommand), nameof(UnlockScreensCommand), nameof(ShowScreenCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
@@ -245,6 +263,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         _session.Screens.Updated -= _onScreenUpdated;
         _network.Changed -= _onNetworkChanged;
+        _session.BroadcastChanged -= _onBroadcastChanged;
         Scripts.Detach();
 
         foreach (var screen in _openScreens.Values.ToArray())
@@ -323,6 +342,76 @@ public sealed partial class MainViewModel : ObservableObject
         var online = _session.Linked.Count;
         var total = _session.Registry.Document.Machines.Count;
         StatusLine = Strings.Format("Main.Status", online, total, _session.Instance.InstanceName, _session.Port, _session.Screens.TotalBytesPerSecond * 8 / 1024.0);
+        RefreshBroadcast();
+    }
+
+    // ------------------------------------------------------------------ broadcast (M6 portion 2)
+
+    /// <summary>The selected PCs see this console's screen (D-71); a PC not linked now joins when it links.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private Task ShowScreenAsync() => ShowScreenToAsync(Selected.Select(t => t.AgentId).ToArray());
+
+    /// <summary>Every PC in the lab sees this console's screen.</summary>
+    [RelayCommand]
+    private Task ShowScreenToAllAsync() => ShowScreenToAsync(Machines.Select(t => t.AgentId).ToArray());
+
+    [RelayCommand(CanExecute = nameof(IsBroadcasting))]
+    private async Task StopShowingScreenAsync()
+    {
+        await _session.StopBroadcastAsync();
+        RefreshBroadcast();
+    }
+
+    private async Task ShowScreenToAsync(IReadOnlyList<string> targets)
+    {
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        switch (ScreenAccess())
+        {
+            case ConsoleScreenAccess.Unsupported:
+                await _dialogs.ShowMessageAsync(Strings.Get("Broadcast.Title"), Strings.Get("Broadcast.Unsupported"));
+                return;
+
+            case ConsoleScreenAccess.NeedsPermission:
+                // macOS shows other apps' windows only with Screen Recording (D-72): explain it
+                // first, then let the system ask; the grant takes effect after a restart.
+                if (await _dialogs.ConfirmAsync(Strings.Get("Broadcast.Title"), Strings.Get("Broadcast.PermissionExplain"), Strings.Get("Broadcast.PermissionAsk")))
+                {
+                    var granted = RequestScreenAccess();
+                    await _dialogs.ShowMessageAsync(Strings.Get("Broadcast.Title"),
+                        Strings.Get(granted ? "Broadcast.PermissionGranted" : "Broadcast.PermissionRestart"));
+                }
+
+                return;
+        }
+
+        var sent = _session.StartBroadcast(targets);
+        StatusLine = Strings.Format("Broadcast.Sent", sent, targets.Count);
+        RefreshBroadcast();
+    }
+
+    private void RefreshBroadcast()
+    {
+        var hub = _session.Broadcast;
+        IsBroadcasting = hub is not null;
+        if (hub is null)
+        {
+            BroadcastStatus = string.Empty;
+            return;
+        }
+
+        if (hub.CaptureProblem is { } problem)
+        {
+            BroadcastStatus = Strings.Format("Broadcast.StatusProblem", problem);
+            return;
+        }
+
+        var left = hub.Deadline - _session.Now;
+        BroadcastStatus = Strings.Format("Broadcast.Status", hub.Watching, hub.FramesPerSecond, hub.BytesPerSecond * 8 / 1024.0 / 1024.0,
+            Math.Max(0, (int)Math.Ceiling(left.TotalMinutes)));
     }
 
     // ------------------------------------------------------------------ screens (M3)

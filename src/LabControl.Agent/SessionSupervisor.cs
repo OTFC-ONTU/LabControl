@@ -93,6 +93,24 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         return true;
     }
 
+    /// <summary>
+    /// Writes a message down the pipe and waits until it is written (M6 portion 2): a
+    /// broadcast frame is offered this way, so a helper that reads slowly holds the
+    /// broadcast stream back instead of piling frames up in this process. Never from the
+    /// pipe's read loop (D-35 item 8). <c>false</c> when no helper is connected.
+    /// </summary>
+    public async ValueTask<bool> SendToHelperAsync(ServiceMessage message)
+    {
+        var helper = _helper;
+        if (helper is not { Connected: true })
+        {
+            return false;
+        }
+
+        await helper.SendAsync(message, _log);
+        return true;
+    }
+
     /// <summary>The helper is connected and has spoken recently.</summary>
     public bool HelperAlive
     {
@@ -758,6 +776,22 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                 // restart): the enforcer's truth wins, so tell the helper again.
                 _log.LogInformation("the helper still shows lock {Session}; lifting it again", reported.SessionId);
                 SendToHelper(new ServiceMessage { Overlay = new Overlay { Kind = Overlay.Types.Kind.Unlock } });
+            }
+
+            // The broadcast (D-71) the same way, below a held lock: the helper must show what the
+            // receiver shows, and nothing it no longer does.
+            var broadcast = policy.Broadcast.Showing;
+            if (held is null && broadcast is not null && reported.Kind != Overlay.Types.Kind.BroadcastStart)
+            {
+                policy.NoteEnforcement(false, reported.Reason.Length > 0 ? reported.Reason : OverlayReasons.NotShownYet);
+                ReassertOverlay("the helper shows no broadcast while one is running");
+                return;
+            }
+
+            if (broadcast is null && reported.Kind == Overlay.Types.Kind.BroadcastStart)
+            {
+                _log.LogInformation("the helper still shows broadcast {Session}; stopping it again", reported.SessionId);
+                SendToHelper(new ServiceMessage { Overlay = new Overlay { Kind = Overlay.Types.Kind.BroadcastStop, SessionId = reported.SessionId } });
             }
 
             policy.NoteEnforcement(reported.InputBlocked, reported.Reason);

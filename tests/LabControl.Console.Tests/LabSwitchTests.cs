@@ -228,7 +228,7 @@ public sealed class LabSwitchTests
         Assert.False(sessionA.Vault!.IsUnlocked);
         Assert.True(sessionA.Screens.IsDisposed);
         Assert.Equal(
-            [LabCloseStep.Cancel, LabCloseStep.Beacons, LabCloseStep.Links, LabCloseStep.Listener, LabCloseStep.Server, LabCloseStep.Housekeeping,
+            [LabCloseStep.Cancel, LabCloseStep.Broadcast, LabCloseStep.Beacons, LabCloseStep.Links, LabCloseStep.Listener, LabCloseStep.Server, LabCloseStep.Housekeeping,
                 LabCloseStep.Save, LabCloseStep.Screens, LabCloseStep.Vault, LabCloseStep.Instance, LabCloseStep.Cancel],
             visited);
 
@@ -817,7 +817,9 @@ public sealed class LabSwitchTests
         Assert.True(await Wait.UntilAsync(() => watched.Link.VideoControl is { Mode: VideoMode.Full, Active: true }));
         var screenA = sessionA.Screens.Get(watched.AgentId);
         Assert.True(await Wait.UntilAsync(() => watched.Link.TryPushVideo(Keyframe())));
-        Assert.True(await Wait.UntilAsync(() => screenA.Full.HasFrame));
+        // The picture is applied before the frame is counted (ScreenStore.Apply), so wait for
+        // both: reading the count between the two would leave the frame "arriving late".
+        Assert.True(await Wait.UntilAsync(() => screenA.Full.HasFrame && screenA.FramesReceived > 0));
         var framesBefore = screenA.FramesReceived;
 
         Assert.True(sessionA.SendInput(watched.AgentId, InputMessages.Text("hello")));

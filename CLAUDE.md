@@ -209,7 +209,7 @@ longer working notes belong in `docs/DEVELOPMENT.md`. Local scratch (plans, logs
 lab data, USB payloads) never goes into git — `.gitignore` covers `.claude/m6-plan/`,
 `*.log`, `*.lock`, `devlab-data/`, `payload/` and lab documents.
 
-**M6 portion 1 verified; portions 2–6 remain:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
+**M6 portion 1 verified, portion 2 built (not yet run natively); portions 3–6 remain:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, *Settled before implementation*; M6 reserves `D-69`…`D-79`.
@@ -334,6 +334,27 @@ the raw Win32 window thread out of STA. Physical Windows x64/fleet acceptance st
 ROADMAP M6 records the exact evidence and final validation. The ownership gate for
 `Overlay` fails closed when the link is unbound and answers a refusal with `problem` and
 no `kind`; the console never lets such an answer clear a lock the PC still shows.
+
+**M6 portion 2 is built (2026-10-17, `D-71`, `D-72`), in a Linux container; nothing native
+run yet.** The teacher's screen: `Shared/Video/ScaledScreenSource` (the downscale to
+`Defaults.BroadcastWidth` = 1280 inside the source, `TileDiff`, the pointer drawn in) with
+`CoreGraphicsScreenSource` (macOS, `DllImport`, *Screen Recording* preflight and request)
+and `GdiDisplayScreenSource` (Windows), chosen by `ConsoleScreen` (Linux: unsupported);
+`Console/Services/BroadcastHub` encodes once with the PCs' own `ScreenProducer` and fans out
+over the new server-streaming `PullBroadcast` — never on `Link` — with a one-frame
+latest-wins slot per PC that skips to the next keyframe when it falls behind and a cap of
+`min(8, 24 / watching)` Mbit/s. `Overlay BROADCAST_START` / `BROADCAST_STOP` pass the
+portion-1 gate; on the PC `Shared/Policy/BroadcastReceiver` (owned by `PolicyEnforcer`,
+**not** in `policy.json`) dials on the first-frame rule, clamps 30 min on its own clock and
+dies with its stream; `OverlayState` is composed lock-first (a lock stays on top). The
+service relays start, every frame (`ServiceMessage.broadcast_frame`, awaited, never from a
+read loop) and stop; the helper decodes with `Shared/Video/BroadcastPicture` and shows it in
+`OverlayWindow`'s broadcast mode with the lock's hooks. `ConsoleMessage.broadcast = 10` is
+reserved. `LabCloseStep.Broadcast` is the first release step; a target that relinks joins
+again (`AgentLink.LinkEpoch`). Console: *Show my screen*, *Show my screen to all*, *Stop
+showing*, the macOS permission explanation, a status-bar line, the *WATCHING* badge; the
+toolbar wraps. Tests: 818 Shared + 251 Console (`BroadcastTests`, `BroadcastVideoTests`).
+Next: the portion-2 drill on one built `.app` and the ARM64 VM (ROADMAP M6), then portion 3.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

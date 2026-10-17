@@ -902,6 +902,45 @@ public static class Defaults
     public static readonly TimeSpan BroadcastHardLimit = TimeSpan.FromMinutes(30);
 
     /// <summary>
+    /// The width the console's screen is scaled to before it is encoded for a broadcast
+    /// (D-72): 14 pt editor text stays legible on a 1366×768 student panel, and one picture
+    /// this size, encoded once, is what every PC receives. Downscaled inside the screen
+    /// source, so <c>ScreenProducer</c> is the same one the PCs use.
+    /// </summary>
+    public const int BroadcastWidth = 1280;
+
+    /// <summary>The broadcast's capture rate; the bandwidth caps below lower what actually goes out.</summary>
+    public const double BroadcastFramesPerSecond = 12;
+
+    /// <summary>
+    /// The most one PC's copy of the broadcast may take (D-72). Every PC receives the same
+    /// bytes, so the stream itself is capped at
+    /// <c>min(BroadcastBitsPerSecond, BroadcastTotalBitsPerSecond / watching PCs)</c>.
+    /// </summary>
+    public const int BroadcastBitsPerSecond = 8 * 1024 * 1024;
+
+    /// <summary>
+    /// Everything a broadcast may put on the console's network at once, across every PC —
+    /// the same 24 Mbit/s one full-view stream may take (D-36 item 11), because the console
+    /// sends what a full view receives.
+    /// </summary>
+    public const int BroadcastTotalBitsPerSecond = 24 * 1024 * 1024;
+
+    /// <summary>
+    /// A PC that fell behind the broadcast skips deltas until the next keyframe; the console
+    /// asks the encoder for one at most this often, so one slow PC never turns the whole
+    /// stream into keyframes.
+    /// </summary>
+    public static readonly TimeSpan BroadcastKeyframeRequestInterval = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Broadcast frames the session helper holds for decoding before it drops the deltas
+    /// and waits for the next keyframe (D-71): decoding is milliseconds, so this is a stall,
+    /// never a lesson.
+    /// </summary>
+    public const int BroadcastHelperQueueLength = 8;
+
+    /// <summary>
     /// <c>policy.json</c> beside <c>agent.json</c> (D-69): the sessions the agent enforces —
     /// at most one overlay, one exam, one standalone internet policy, one exam internet
     /// policy — and the original machine settings each displaced. Read only <i>after</i> the

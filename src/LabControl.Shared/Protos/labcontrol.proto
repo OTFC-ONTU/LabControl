@@ -54,6 +54,7 @@ service AgentService {
   rpc PushFile  (stream FileChunk)    returns (FileAck);               // agent uploads
   rpc GetUploadStatus (FileRequest)  returns (FileAck);               // committed upload offset
   rpc Renew     (RenewRequest)        returns (RenewResponse);         // certificate renewal (D-25)
+  rpc PullBroadcast (BroadcastRequest) returns (stream VideoFrame);    // teacher's screen, agent dials (M6, D-71)
 }
 
 // Certificate renewal over the existing mutual-TLS link (D-25). The agent's identity --
@@ -99,9 +100,13 @@ message ConsoleMessage {
     ExamMode     exam_mode     = 7;
     Revocation   revocation    = 8;
     UpdateAgent  update_agent  = 9;
-    VideoFrame   broadcast     = 10;  // teacher screen, console -> agent
     InternetPolicy internet_policy = 11;  // standalone internet control (D-22)
   }
+  // Was `VideoFrame broadcast = 10`, never sent by any build: the teacher's screen travels on
+  // its own server-streaming PullBroadcast call with per-PC flow control, never on Link,
+  // whose outgoing queue is unbounded (M6, D-71).
+  reserved 10;
+  reserved "broadcast";
 }
 
 message Hello {
@@ -271,6 +276,17 @@ message VideoFrame {
 }
 
 message VideoAck { uint64 last_seq = 1; }
+
+// Agent -> console (M6 portion 2, D-71): the agent asks for the broadcast an Overlay
+// BROADCAST_START named, and receives the teacher's screen as VideoFrames in FULL mode --
+// one keyframe first, then dirty-rectangle deltas, at most BroadcastWidth pixels wide -- for
+// as long as the console broadcasts it. The call ends when the teacher stops, the console
+// leaves the lab, the link ends, or the agent's own BroadcastHardLimit passes; the agent
+// takes the overlay down whenever it ends. Not a session in policy.json: nothing about it
+// survives a restart.
+message BroadcastRequest {
+  string session_id = 1;  // from Overlay.session_id of the BROADCAST_START
+}
 
 message VideoControl {
   bool      active               = 1;
@@ -487,7 +503,8 @@ message ServiceMessage {
     Ping         ping          = 1;  // the helper answers with a HelperStatus
     VideoControl video_control = 2;  // M3
     Input        input         = 3;  // M3
-    Overlay      overlay       = 4;  // M6: LOCK / UNLOCK; re-asserted to every fresh helper
+    Overlay      overlay       = 4;  // M6: LOCK / UNLOCK / BROADCAST_START / BROADCAST_STOP; re-asserted to every fresh helper
+    VideoFrame   broadcast_frame = 5;  // M6 portion 2: the teacher's screen, as PullBroadcast delivered it (D-71)
   }
 }
 

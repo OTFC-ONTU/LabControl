@@ -162,6 +162,7 @@ rpc PushVideo(stream VideoFrame) returns (VideoAck);              // opened on d
 rpc PullFile(FileRequest) returns (stream FileChunk);             // agent downloads from console
 rpc PushFile(stream FileChunk) returns (FileAck);                 // agent uploads results/logs
 rpc GetUploadStatus(FileRequest) returns (FileAck);               // committed upload offset
+rpc PullBroadcast(BroadcastRequest) returns (stream VideoFrame);  // teacher's screen, agent dials (M6, D-71)
 ```
 
 The console validates the agent certificate against the lab CA **and** against the
@@ -224,6 +225,9 @@ console holds revoked, and `console_access` — informational, see *M5 additions
 text), `Overlay` (lock / unlock / broadcast start / broadcast stop, message text),
 `ExamMode` (see below), `InternetPolicy` (see below), `Revocation` (signed revocation entries — the console sends the
 ones the agent's `RevocationState` was missing, the agent keeps the union), `UpdateAgent`.
+Field 10 (`VideoFrame broadcast`) is **reserved** since M6 portion 2: it was never sent by
+any build, and the teacher's screen travels on its own `PullBroadcast` stream (*Broadcast*
+below, `D-71`).
 
 ### Revocation entries
 
@@ -576,8 +580,8 @@ last (0 = until lifted; a negative value is refused as already ended); `hard_lim
 is a **proposal** — the agent stamps both onto **its own clock at arrival** and clamps
 the limit to `min(now + proposed, now + Defaults.LockHardLimit)` (1 h, owner decision),
 0 or less meaning "none given" and yielding the ceiling, and reports what it actually
-holds. `BROADCAST_START` / `BROADCAST_STOP` belong to portion 2 (`D-71`) and are answered
-with a `problem` until it lands.
+holds. `BROADCAST_START` / `BROADCAST_STOP` start and end a broadcast of the teacher's
+screen; they pass the same gate but are not sessions in `policy.json` (see *Broadcast*).
 
 **What the PC answers.** `OverlayState`, on every change, after every `Welcome` (the
 latest one, re-sent like `SessionState`), and as the answer to a refused or failed
@@ -624,12 +628,66 @@ throw; logged, reported, the pass abandoned — the link dials and stays up rega
 `overlay.expired`. An agent from before M6 logs the message and ignores it; the console
 greys *Lock* out for an outdated agent.
 
-## Broadcast (teacher → students)
+## Broadcast (teacher → students; M6 portion 2, `D-71`, `D-72`)
 
-Console captures its own screen into the same `VideoFrame` format and sends it in
-`ConsoleMessage.Broadcast` frames to every selected agent (multicast is *not* used —
-up to 30 unicast streams at ~1–2 Mbit/s are fine on a switched LAN). Helper renders in the
-full-screen overlay. Frame drop policy on the agent: always show the latest.
+```
+Overlay { kind: BROADCAST_START, session_id, message, hard_limit_seconds }   console → agent, on Link
+Overlay { kind: BROADCAST_STOP, session_id }                                 console → agent, on Link
+rpc PullBroadcast(BroadcastRequest { session_id }) returns (stream VideoFrame)  agent → console
+OverlayState { kind: BROADCAST_START, session_id, since_unix, hard_limit_unix,
+               remaining_seconds, input_blocked, reason, set_by_instance }   agent → console
+```
+
+**The picture.** The console captures **its own primary display** — CoreGraphics
+(`CGDisplayCreateImage`) on macOS, a `StretchBlt` with `HALFTONE` on Windows; Linux has no
+capture in this build and says so — scaled **inside the screen source** to at most
+`Defaults.BroadcastWidth` (1280) pixels wide with the aspect ratio kept, the mouse pointer
+drawn in (neither capture includes it). The same `ScreenProducer` the PCs use encodes it
+**once** as `VideoFrame`s in `FULL` mode — a keyframe, then dirty-rectangle deltas found by
+`TileDiff`, a keyframe every `KeyframeInterval` — at `BroadcastFramesPerSecond` (12) with
+auto quality (`D-37`). `agent_id` is empty; `seq` and `at_unix_ms` are the console's.
+
+**One stream per PC.** `BROADCAST_START` goes on the `Link` like a lock and passes the same
+ownership gate; the agent then dials `PullBroadcast` with the `session_id`. The console
+serves it only to a PC the teacher chose (`PermissionDenied` otherwise) and only for the
+session it is running (`NotFound` otherwise), and fans the one encoded stream out to every
+PC: each PC has a **one-frame, latest-wins slot** on its own HTTP/2 stream, so gRPC flow
+control holds a slow PC back and nobody else. A keyframe replaces whatever the slot holds;
+a delta that finds the slot still full breaks that PC's chain, and it skips deltas until
+the next keyframe, which the console asks its encoder for at most every
+`BroadcastKeyframeRequestInterval` (1 s). Multicast is not used. The stream's bandwidth
+cap is `min(BroadcastBitsPerSecond, BroadcastTotalBitsPerSecond / watching PCs)` — 8 Mbit/s
+for a few PCs, 24 Mbit/s shared across a full room — retuned whenever a PC joins or leaves;
+a PC that joins gets a keyframe at once. Frames are never put on `Link`: its outgoing queue
+is unbounded.
+
+**What the PC does.** On the **first frame** — so a refused or failed stream never blanks a
+screen — the agent takes the screen: the helper shows the picture full screen, stretched to
+fit with black bars, topmost, with input blocked by the same hooks as a lock (injected input
+still passes). A **lock wins**: it is shown over a running broadcast, `OverlayState` says
+`LOCK` while it is held, and the broadcast comes back when it lifts. `OverlayState` says
+`BROADCAST_START` while the PC shows the broadcast and no lock, with `set_by_instance`, the
+`since_unix` and `hard_limit_unix` stamped on the PC's own clock and `remaining_seconds`;
+`input_blocked` and `reason` mean what they mean for a lock.
+
+**How it ends.** A broadcast is **not** a session in `policy.json` (`D-71`): it dies with its
+stream — when the teacher stops (`BROADCAST_STOP` to every PC, then every stream ends), when
+the console leaves the lab (the first step of `LabSession.CloseAsync`, before the links
+close), when the link drops, when a newer `BROADCAST_START` replaces it — and at the latest
+at the agent's own `BroadcastHardLimit` (30 min), clamped on the PC's clock at arrival like
+a lock's limit (`hard_limit_seconds` is a proposal). The console ends the whole broadcast at
+the same limit by its own clock and says so; the teacher starts it again to go on. A PC
+that relinks while the broadcast runs is sent `BROADCAST_START` again and dials again.
+Nothing survives a service restart.
+
+**Events.** `broadcast.started` / `broadcast.stopped` / `broadcast.expired` on the console;
+from a PC, `broadcast.expired` (it ended at the PC's own limit) and `broadcast.failed` (the
+console refused the stream, it is too old to have `PullBroadcast`, or the machine could not
+take the screen). The console's capture reports `capture.permission` (macOS has not granted
+*Screen Recording*), `capture.unsupported`, `capture.no_display`, `capture.gdi_failed`,
+`capture.capture_failed` and `capture.recovered`. An agent from before portion 2 answers
+`BROADCAST_START` with a `problem`; a console from before it answers `PullBroadcast` with
+`Unimplemented`, which the agent reports once as `broadcast.failed`.
 
 ## Agent ↔ Session helper (named pipe, length-prefixed protobuf)
 
@@ -649,7 +707,7 @@ one implementation both sides use.
 **Envelopes.**
 
 ```
-ServiceMessage { oneof: Ping | VideoControl | Input | Overlay }                        service → helper
+ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame }       service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
 HelperHello  { session_id, process_id, version }         first message after connecting
@@ -706,6 +764,21 @@ so `input_blocked` reports the most recent install, never a handle. Injected inp
 never activated, so the teacher's remote control works under a lock; every physical
 keyboard and mouse event is swallowed by the hooks alone — Alt+Tab, Alt+Esc, Ctrl+Esc, the
 Windows keys and Alt+F4 among them. Ctrl+Alt+Del never reaches a hook.
+
+**Broadcast over the pipe (M6 portion 2, `D-71`).** The service's broadcast receiver writes
+`Overlay BROADCAST_START` (with what is left of its hard limit as `hard_limit_seconds`) down
+the pipe when the first frame arrives, then **every frame as `ServiceMessage.broadcast_frame`,
+awaiting each write** — not from the pipe's read loop — so a helper that reads slowly holds
+the `PullBroadcast` stream back rather than piling frames up in the service; `BROADCAST_STOP`
+when the broadcast ends. The service re-asserts a running broadcast to a freshly connected
+helper like a lock; that helper's picture starts at the next keyframe (within
+`KeyframeInterval`). The helper decodes frames on a thread of its own into one picture
+(`BroadcastPicture`): at most `BroadcastHelperQueueLength` (8) wait, beyond that the deltas
+are dropped until the next keyframe, so a delta is never patched onto the wrong picture. The
+same `OverlayWindow` shows it, repainted on every decoded frame, and follows the input
+desktop like the lock. `overlay_state` says `BROADCAST_START` while the broadcast window is
+up and no lock is held; the service tells a helper that shows a broadcast nobody is
+running to stop, and re-asserts one the helper does not show.
 
 **Input over the pipe (M3 portion 3, `D-36`).** Every `Input` from the console except
 `CTRL_ALT_DEL` is written down the pipe as it is (fire-and-forget, like the controls); the

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using LabControl.Shared;
 using LabControl.Shared.Policy;
+using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -29,6 +30,13 @@ namespace LabControl.Agent.Session;
 /// alpha 255. So the teacher's injected input — which the hooks pass — lands on the
 /// student's desktop as if the picture were not there, and the student's physical input is
 /// swallowed by the hooks alone: the window blocks nothing, and must not.
+/// </para>
+/// <para>
+/// <b>The same window shows a broadcast</b> (M6 portion 2, D-71) when it is created over a
+/// <see cref="BroadcastPicture"/>: no composing then — every decoded frame posts a repaint,
+/// and the paint stretches the teacher's picture to fit with <c>HALFTONE</c>, black bars
+/// keeping its aspect ratio. Everything else — topmost, click-through, never activated,
+/// following the input desktop — is the lock's.
 /// </para>
 /// <para>
 /// Nothing here throws out: a window that cannot be created is reported through
@@ -62,6 +70,30 @@ internal sealed class OverlayWindow : IDisposable
     private OverlayBitmap? _picture;
     private int _x, _y, _width, _height;
     private bool _disposed;
+    private readonly BroadcastPicture? _broadcast;
+    private readonly Action? _onFrame;
+
+    /// <summary>A broadcast window: the teacher's screen from <paramref name="broadcast"/>, repainted on every decoded frame.</summary>
+    public OverlayWindow(ILogger log, BroadcastPicture broadcast, string pcName)
+    {
+        _log = log;
+        _broadcast = broadcast;
+        _content = new OverlayContent(string.Empty, pcName, null);
+        _onFrame = () =>
+        {
+            if (!_hwnd.IsNull)
+            {
+                PInvoke.PostMessage(_hwnd, WmUpdate, default, default);
+            }
+        };
+        broadcast.Updated += _onFrame;
+        _thread = new Thread(Run) { Name = "overlay", IsBackground = true };
+        _thread.Start();
+        _shown.Wait(TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>This window shows a broadcast, not a lock.</summary>
+    public bool IsBroadcast => _broadcast is not null;
 
     public OverlayWindow(ILogger log, string message, string pcName, long untilUnix, long hardLimitUnix)
     {
@@ -252,6 +284,13 @@ internal sealed class OverlayWindow : IDisposable
     /// <summary>On the window thread: a new picture when the countdown text changed (or on demand), then a repaint.</summary>
     private void Recompose(bool force)
     {
+        if (_broadcast is not null)
+        {
+            // Nothing to compose: the decoded picture is painted as it is.
+            PInvoke.InvalidateRect(_hwnd, (RECT?)null, false);
+            return;
+        }
+
         OverlayContent content;
         string countdown;
         lock (_lock)
@@ -292,6 +331,12 @@ internal sealed class OverlayWindow : IDisposable
         var hdc = PInvoke.BeginPaint(_hwnd, out var ps);
         try
         {
+            if (_broadcast is not null)
+            {
+                PaintBroadcast(hdc);
+                return;
+            }
+
             lock (_lock)
             {
                 if (_picture is not { } picture)
@@ -316,6 +361,71 @@ internal sealed class OverlayWindow : IDisposable
         {
             PInvoke.EndPaint(_hwnd, ps);
         }
+    }
+
+    /// <summary>
+    /// The teacher's picture, scaled to fit the virtual desktop with its aspect ratio kept;
+    /// the bars are black, and so is the whole window until the first keyframe arrives.
+    /// </summary>
+    private unsafe void PaintBroadcast(HDC hdc)
+    {
+        var black = new HBRUSH(PInvoke.GetStockObject(GET_STOCK_OBJECT_FLAGS.BLACK_BRUSH).Value);
+        var (width, height) = (_width, _height);
+        var drawn = _broadcast!.Image.Read((pixels, pictureWidth, pictureHeight, rowBytes) =>
+        {
+            var scale = Math.Min((double)width / pictureWidth, (double)height / pictureHeight);
+            var destinationWidth = Math.Max(1, (int)Math.Round(pictureWidth * scale));
+            var destinationHeight = Math.Max(1, (int)Math.Round(pictureHeight * scale));
+            var left = (width - destinationWidth) / 2;
+            var top = (height - destinationHeight) / 2;
+
+            FillBars(hdc, black, width, height, left, top, destinationWidth, destinationHeight);
+
+            var info = new BITMAPINFO();
+            info.bmiHeader.biSize = (uint)sizeof(BITMAPINFOHEADER);
+            info.bmiHeader.biWidth = rowBytes / 4;
+            info.bmiHeader.biHeight = -pictureHeight; // top-down
+            info.bmiHeader.biPlanes = 1;
+            info.bmiHeader.biBitCount = 32;
+            info.bmiHeader.biCompression = (uint)BI_COMPRESSION.BI_RGB;
+            PInvoke.SetStretchBltMode(hdc, STRETCH_BLT_MODE.HALFTONE);
+            PInvoke.SetBrushOrgEx(hdc, 0, 0, null);
+            fixed (byte* bits = pixels)
+            {
+                PInvoke.StretchDIBits(hdc, left, top, destinationWidth, destinationHeight, 0, 0, pictureWidth, pictureHeight, bits, &info, DIB_USAGE.DIB_RGB_COLORS, ROP_CODE.SRCCOPY);
+            }
+        });
+
+        if (!drawn)
+        {
+            FillRect(hdc, black, 0, 0, width, height);
+        }
+    }
+
+    private static void FillBars(HDC hdc, HBRUSH brush, int width, int height, int left, int top, int pictureWidth, int pictureHeight)
+    {
+        if (top > 0)
+        {
+            FillRect(hdc, brush, 0, 0, width, top);
+            FillRect(hdc, brush, 0, top + pictureHeight, width, height);
+        }
+
+        if (left > 0)
+        {
+            FillRect(hdc, brush, 0, 0, left, height);
+            FillRect(hdc, brush, left + pictureWidth, 0, width, height);
+        }
+    }
+
+    private static unsafe void FillRect(HDC hdc, HBRUSH brush, int left, int top, int right, int bottom)
+    {
+        if (right <= left || bottom <= top)
+        {
+            return;
+        }
+
+        var rect = new RECT { left = left, top = top, right = right, bottom = bottom };
+        PInvoke.FillRect(hdc, &rect, brush);
     }
 
     private void Tick()
@@ -418,6 +528,11 @@ internal sealed class OverlayWindow : IDisposable
         }
 
         _disposed = true;
+        if (_broadcast is not null && _onFrame is not null)
+        {
+            _broadcast.Updated -= _onFrame;
+        }
+
         if (!_hwnd.IsNull)
         {
             PInvoke.PostMessage(_hwnd, WmStop, default, default);

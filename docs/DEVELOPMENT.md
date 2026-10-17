@@ -279,6 +279,15 @@ portions are built and reviewed; what is still unverified on Windows, on Linux a
 physical lab is listed in M5 in [the roadmap](ROADMAP.md). Classroom control is M6 and
 catalog/localization/polish M7.
 
+**M6 — trying the broadcast on the Mac** (portion 2, `D-71`, `D-72`). *Show my screen*
+needs macOS's *Screen Recording* permission. Under `dotnet run` the grant belongs to the
+terminal (Terminal, iTerm, Rider) that started the console, not to LabControl; a built,
+ad-hoc-signed `.app` is a new identity after every rebuild and asks again. So build the
+`.app` once (`tools/package-mac.sh`), grant it, restart it, and drill against that one
+build. `FakeAgent` draws the received picture onto its simulated desktops, so the mosaic
+shows the broadcast on every simulated tile without a Windows machine; Linux consoles have
+no capture yet and say so.
+
 **Languages.** The product UI is English today. M7 must ship the complete product-facing
 experience in **Ukrainian, English and Russian**, including the teacher console, Windows
 Setup/removal, stock student-facing text and generated USB instructions. The console will

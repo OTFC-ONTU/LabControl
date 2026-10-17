@@ -107,7 +107,11 @@ Removal restores only a confirmed change whose current value still matches Setup
 applied value. It journals restoration intent first and can resume interrupted restoration.
 An interrupted apply with no completion record is ambiguous if the value changed: neither
 repair nor removal adopts it merely because it matches the desired value. Preserve it and
-report a conflict. Retry is possible while the value still matches the saved original.
+report a conflict. The one explicit exception is an additive value marked safe to preserve
+as pre-existing: when its original was absent and its desired value is now present, repair
+drops only the unconfirmed ownership intent and leaves the native value in place. Defender's
+fixed installation-directory exclusion uses this recovery; uninstall consequently does not
+remove an exclusion recovered this way. Retry is possible while the value still matches the saved original.
 Changing a recorded desired value or reapplying after restoration also requires a future
 explicit migration/reinstall flow, not silently replacing the original baseline.
 
@@ -168,6 +172,40 @@ battery values unchanged, switch/delete scheme conflicts, missing settings, nati
 and activation failures, apply/repair/remove from a VM snapshot, interrupted restoration,
 and actual idle behavior after activation. Hibernation and NIC/WoL adapters
 are implemented for integration in D-52; Windows verification remains pending.
+
+Physical Windows showed that a successful `powercfg /hibernate off` may represent the
+disabled state by removing `HibernateEnabled` and `HiberFileType` and setting
+`HiberFileSizePercent=0`, rather than retaining the requested pre-command tuple. The
+journal now accepts a bounded setting-specific resolved post-state only after read-back,
+records its exact bytes on a completed apply, and therefore still detects later edits.
+If the command completed but its journal completion did not, Repair preserves the safe
+disabled state without claiming ownership. A normally completed owned installation restores
+the saved file type and size through `powercfg` and exact registry read-back. With no
+hibernation file, native and registry file-type fields may contain an OS sentinel and do
+not decide whether the result is disabled; file absence, the enable value and bounded size
+do. The exact tuple is nevertheless retained for later conflict detection (`D-62`). Setup
+prints its version and module build identifier before work begins for unambiguous field
+verification.
+
+The append-only log may therefore show several complete prefixes after repeated Repair
+runs; they are separate attempts, not duplicated steps within one run. The version/build
+line marks each new attempt. If the hibernation file is already absent, Setup probes that
+fixed OS-volume path and does not require the native power-capabilities call merely to
+obtain a meaningless file type. An existing file still requires native capabilities so
+its full/reduced type can be restored. If that successful native query reports no active
+hibernation file despite a visible protected/residual path object, the native state is
+authoritative. Failures use fixed value-free stage codes in the console/log; arbitrary
+native messages remain suppressed (`D-63`). When a native provider returns a numeric
+status (the Defender `Add` return value), the code is followed by `status 0x…`. A
+nonzero Defender status is retried up to three times, three seconds apart, before it
+stops the installation, because a physical PC accepted the same call on its second run
+(`D-64` addendum). A factory-fresh PC keeps hibernation enabled
+without any `HibernateEnabled` value (`HibernateEnabledDefault=1`); Setup treats that
+absent value as enabled, disables normally, and on removal recreates the file and deletes
+the value that `powercfg /hibernate on` wrote, so the original bytes come back exactly.
+Only an explicit value contradicting the native file state is reported as
+`HibernationStateInconsistent` (`D-65`). Do not use `Get-Item`/`Test-Path` on
+`C:\hiberfil.sys` as evidence: PowerShell reports the exclusively opened file as missing.
 
 ### Windows Update active hours (D-50)
 
@@ -247,7 +285,14 @@ adapter); repair updates an older generic MAC with the owned agent stopped. Ambi
 reported instead of selecting a virtual or wireless wake target. Setup logs NIC name,
 interface GUID, PNP identity, MAC and available driver provider/version. Hibernation metadata behavior must be
 verified on the target Windows build. Third-party antivirus names produce a warning naming
-the directory to exclude. Account-on privacy/Edge/OneDrive notification policies also affect other users and are
+the directory to exclude. Defender access remains additive and double-read; its WMI bridge
+accepts the provider's declared string array plus a singleton string and accepts a zero
+return code from any CLR integral representation. If the exclusion appeared before a failed
+completion record, repair preserves it without claiming ownership (`D-61`). After a
+successful native `Add`/`Remove`, Setup allows up to ten seconds for a stable exact WMI
+read-back because provider visibility may lag the completed mutation. The wait is bounded
+and failures retain the journal; fixed value-free stage codes identify read/call/result/
+read-back failures without exposing native text (`D-64`). Account-on privacy/Edge/OneDrive notification policies also affect other users and are
 disclosed before installation; account-off skips them. OneDrive `DisableNewAccountDetection` suppresses existing-credential sign-in toast/activity
 notifications without disabling manual sync; it does not suppress every OneDrive prompt. The original administrator SID is recorded for restoration by a different
 operator, and hiding follows student activation. Before hiding, Setup journals and sets
@@ -264,7 +309,10 @@ directory. It contains fixed antivirus/network advisory codes, not arbitrary mes
 credentials. The agent publishes a snapshot on reconnect and within ten seconds of a
 repair changing it. The teacher console caches these advisories for offline tiles, shows
 actionable issues in amber and renders plain-language details in the tooltip/event list.
-Unverified physical wake remains an informational advisory. The installer's green result
+Unverified physical wake and a network driver that exposes no Wake-on-LAN settings
+(the Microsoft in-box Realtek driver, for one) remain informational advisories: tooltip
+only, one event line when the snapshot changes, no amber (`D-66`). Wake-on-LAN on such a
+PC needs the vendor's NIC driver followed by a USB repair. The installer's green result
 certifies local files, identity and service checks; it does not assert that the teacher
 console is reachable or that BIOS/UEFI and the physical LAN can wake the PC.
 
@@ -316,7 +364,8 @@ Console → Settings → *Write USB payload* writes `ca.crt` and `setup.json` (a
                         enrollment_codes: ["...", ...],    // single-use, one per PC + spares
                         used_enrollment_codes: ["..."],    // moved here by Setup as it spends them
                         written_by, written_at }           // which console, when
-   INSTALL.txt        3-line human instructions (in Ukrainian)
+   INSTALL.txt        human instructions (English today; generated in the console's
+                      selected Ukrainian, English or Russian language in M7, D-67)
 ```
 
 **The stick carries no secret.** `ca.crt` is public by nature and the enrollment codes
@@ -569,9 +618,11 @@ XML forbids `--` there, and the consequence is not a build error: the compiler e
 manifest happily, and Windows then refuses to build the activation context, so the
 installer will not start at all — *"The application has failed to start because its
 side-by-side configuration is incorrect"*, with an invalid-manifest-XML entry in the event
-log. This is why the file names the `--firewall` switch in prose rather than spelling it,
-and why a build of this executable is not finished until it has been started once on a
-Windows machine (found on the first Windows run, 2026-09-09; `D-59` item 1).
+log. This is why `app.manifest`'s own comment calls it *the firewall switch* instead of
+writing the two leading hyphens out, and why a build of this executable is not finished
+until it has been started once on a Windows machine — the Mac's compiler, tests and
+packaging script cannot see a defect only the loader reports (found on the first Windows
+run, 2026-09-09; `D-59` item 1).
 
 The payload is the published console, zipped by `tools/package-windows.sh` and embedded
 as a resource. The project deliberately compiles without it, so a plain `dotnet build`

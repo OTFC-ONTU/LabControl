@@ -124,6 +124,54 @@ public sealed class SetupSettingsJournalTests : IDisposable
         Assert.Equal(Bytes("new"), setting.Value);
     }
 
+    [Fact]
+    public void Interrupted_preservable_additive_value_is_dropped_from_ownership_and_left_in_place()
+    {
+        var setting = new PreservableSetting();
+        Assert.Throws<IOException>(() => Open().Apply(setting, Bytes("present")));
+
+        Assert.Equal(SetupStepStatus.Needed, Open().Check(setting, _ => Bytes("present")).Status);
+        Assert.Equal(SettingChangeResult.Unchanged, Open().Apply(setting, Bytes("present")));
+        Assert.Equal(SettingChangeResult.Untracked, Open().Restore(setting));
+        Assert.Equal(Bytes("present"), setting.Value);
+        Assert.Equal(1, setting.Writes);
+    }
+
+    [Fact]
+    public void Removal_preserves_an_interrupted_preservable_additive_value_without_adopting_it()
+    {
+        var setting = new PreservableSetting();
+        Assert.Throws<IOException>(() => Open().Apply(setting, Bytes("present")));
+
+        Assert.Equal(SettingChangeResult.Untracked, Open().Restore(setting));
+        Assert.Equal(Bytes("present"), setting.Value);
+        Assert.Equal(1, setting.Writes);
+    }
+
+    [Fact]
+    public void Native_resolved_apply_is_journaled_exactly_and_later_edits_conflict()
+    {
+        var setting = new ResolvedSetting();
+        Assert.Equal(SettingChangeResult.Applied, Open().Apply(setting, Bytes("requested")));
+        Assert.Equal(SettingChangeResult.AlreadyApplied, Open().Apply(setting, setting.Value));
+
+        setting.Value = Bytes("later-edit");
+        Assert.Equal(SettingChangeResult.Conflict, Open().Restore(setting));
+    }
+
+    [Fact]
+    public void Interrupted_native_resolved_apply_is_preserved_without_ownership()
+    {
+        var setting = new ResolvedSetting { FailAfterWrite = true };
+        Assert.Throws<IOException>(() => Open().Apply(setting, Bytes("requested")));
+
+        setting.FailAfterWrite = false;
+        Assert.Equal(SetupStepStatus.Needed, Open().Check(setting, _ => Bytes("requested")).Status);
+        Assert.Equal(SettingChangeResult.Unchanged, Open().Apply(setting, Bytes("requested")));
+        Assert.Equal(SettingChangeResult.Untracked, Open().Restore(setting));
+        Assert.Equal(Bytes("resolved"), setting.Value);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -254,6 +302,34 @@ public sealed class SetupSettingsJournalTests : IDisposable
             Value = value?.ToArray();
             if (++Writes == 1) throw new IOException("Crash after atomic native creation.");
         }
+    }
+
+    private sealed class PreservableSetting : ISetupSetting, ISetupPreservableExistingValue
+    {
+        public string Id => "test.preservable-resource";
+        public byte[]? Value { get; private set; }
+        public int Writes { get; private set; }
+        public byte[]? Read() => Value?.ToArray();
+        public void Write(byte[]? value)
+        {
+            Value = value?.ToArray();
+            if (++Writes == 1) throw new IOException("Crash after the additive value appeared.");
+        }
+    }
+
+    private sealed class ResolvedSetting : ISetupSetting, ISetupResolvedAppliedValue
+    {
+        public string Id => "test.resolved-resource";
+        public byte[]? Value { get; set; } = Bytes("original");
+        public bool FailAfterWrite { get; set; }
+        public byte[]? Read() => Value?.ToArray();
+        public void Write(byte[]? value)
+        {
+            Value = Bytes("resolved");
+            if (FailAfterWrite) throw new IOException();
+        }
+        public bool AcceptsResolvedAppliedValue(byte[]? requested, byte[]? actual) =>
+            requested.AsSpan().SequenceEqual(Bytes("requested")) && actual.AsSpan().SequenceEqual(Bytes("resolved"));
     }
 
     private static byte[]? Bytes(string? value) => value is null ? null : Encoding.UTF8.GetBytes(value);

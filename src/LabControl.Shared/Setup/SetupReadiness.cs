@@ -15,7 +15,15 @@ public sealed class SetupReadiness : ISchemaVersioned
         "antivirus.inventory_unavailable" or "network.wol_unverified" or
         "network.configuration_warning" or "report.unavailable";
 
-    public static bool NeedsAttention(string code) => IsKnown(code) && code != "network.wol_unverified";
+    /// <summary>Codes that stay informational: the wake test is still to be done, or the
+    /// network driver simply does not expose Wake-on-LAN settings (D-66). They are shown in
+    /// the tooltip, never as an amber tile line.</summary>
+    public static bool IsInformational(string code) => code is "network.wol_unverified" or "network.configuration_warning";
+
+    public static bool NeedsAttention(string code) => IsKnown(code) && !IsInformational(code);
+
+    /// <summary>The severity a readiness snapshot deserves in the event log.</summary>
+    public static bool AnyNeedsAttention(IEnumerable<string> codes) => codes.Any(NeedsAttention);
 
     public static SetupReadiness Create(IEnumerable<string> codes)
     {

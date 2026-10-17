@@ -2603,8 +2603,8 @@ Decisions:
 
 1. **Windows: a C# per-user self-installer, no third-party toolchain.**
    `src/LabControl.ConsoleSetup/` is a single-file, self-contained `asInvoker` exe;
-   `tools/package-windows.sh` publishes the console for `win-x64` and embeds it as a
-   resource. It installs to `%LOCALAPPDATA%\Programs\LabControl\Console\`, creates the
+   `tools/package-windows.sh` publishes the console for the chosen runtime and embeds it
+   as a resource. It installs to `%LOCALAPPDATA%\Programs\LabControl\Console\`, creates the
    Start-menu `.lnk` (`IShellLinkW` via CsWin32) and an optional desktop shortcut, writes
    `HKCU\…\Uninstall\LabControl Console`, registers the `HKCU\Software\Classes` ProgIds
    `LabControl.LabFile` (`.lclab`) and `LabControl.Backup` (`.lcbak`) with an OpenWith
@@ -2865,6 +2865,282 @@ tests import a backup and see the codes dormant. Implemented 2026-09-08 (M5 port
 `EnrollmentOutcome.DormantCode`, *Settings → Enrollment → Use codes from the imported
 backup* activates them, and `Supersede` voids dormant codes together with the active
 ones, so a fresh batch is always the whole truth. Status in ROADMAP M5.
+
+## D-61 — Preserve a completed Defender addition after interrupted verification
+
+Context (2026-09-08): the `1.0.0` physical-lab candidate stopped at *Defender
+exclusion* on both a previously used PC and a clean PC. An elevated independent
+`Add-MpPreference` call returned success and read-back confirmed the exact exclusion,
+but Repair still stopped: the write-ahead journal correctly retained `PendingApply`,
+and the generic D-47 rule treated the now-present desired value as ambiguous.
+
+Decisions:
+
+1. Additive settings may explicitly opt into **preserve-as-existing** recovery. Only
+   when a pending apply recorded an absent original, the exact desired value is now
+   present, and the setting carries the marker, repair removes the unconfirmed journal
+   entry and treats the value as pre-existing. It does not convert the entry to owned.
+   Removal uses the same rule and leaves the value in place.
+2. Defender's one fixed parent-directory exclusion is the first marked setting. Leaving
+   an already useful exclusion is safe; deleting a value that may have been added by an
+   administrator is not. Registry tuples, power settings, accounts and other ordinary
+   settings retain D-47's conflict rule.
+3. The Defender WMI bridge continues to use only native additive `Add`/`Remove`, exact
+   path validation, two reads and post-write verification. For compatibility it accepts
+   both the declared string array and a singleton string, and accepts a successful zero
+   returned in any CLR integral representation. Other values and duplicate matching
+   exclusions remain failures.
+
+Rejected: marking the pending exclusion owned because its bytes match (could make
+uninstall delete an administrator's rule); clearing the entire protected settings
+journal (would lose unrelated restoration ownership); replacing the full Defender
+exclusion list; asking the owner to repair every PC manually.
+
+Validation: 41 focused Shared journal/Defender tests pass on macOS, including failed
+post-write completion followed by repair and removal. The full post-change suites pass
+594 Shared + 111 Console tests. Rebuilt Windows `Setup.exe` still requires the physical-PC
+rerun; this decision does not claim that native result yet.
+
+## D-62 — Journal Windows' resolved hibernation-off representation
+
+Context (2026-09-08): after the `D-61` Setup reached the next physical step,
+*Hibernation* failed on the classroom PC. Read-only inspection after the failure showed
+that the hibernation file was absent, `HibernateEnabled` and `HiberFileType` were absent,
+and `HiberFileSizePercent` was `0`. This is a successful `powercfg /hibernate off`
+result, but the adapter had requested DWORD `0` plus the original type/size metadata and
+therefore rejected Windows' normalized representation. Microsoft documents `powercfg
+/hibernate off` as the supported disable operation and `powercfg` type/size commands as
+the supported configuration surface ([command reference](https://learn.microsoft.com/windows-hardware/design/device-experiences/powercfg-command-line-options),
+[disable/re-enable procedure](https://learn.microsoft.com/troubleshoot/windows-client/setup-upgrade-and-drivers/disable-and-re-enable-hibernation)).
+
+Decisions:
+
+1. A setting may explicitly validate an OS-resolved post-state. The journal still saves
+   the bounded requested intent before mutation, reads the exact result afterward, and
+   records those exact result bytes as `Applied` only after the setting accepts them.
+   Later changes are compared with that exact resolved value and remain conflicts.
+2. Hibernation accepts only a disabled result with no hibernation file,
+   `HibernateEnabled` absent or zero, and size absent or 0…100. Native and registry
+   file-type fields are deliberately ignored only while the file is absent: Windows may
+   expose an undefined/default sentinel there after disabling, and a type cannot make a
+   nonexistent hibernation file active. The exact returned tuple is still journaled, so
+   later file-type edits remain conflicts for an owned installation.
+3. If an accepted resolved result exists with only `PendingApply`, Repair/removal drops
+   the unconfirmed intent and preserves the disabled state without ownership. This is
+   conservative: an interrupted installation cannot later re-enable hibernation during
+   uninstall as though it proved who disabled it.
+4. A completed fresh apply owns the exact normalized result. Restoration uses
+   `powercfg /hibernate on`, the documented `/size` and `/type` forms, then restores the
+   exact nullable type/size registry metadata and verifies the complete saved tuple.
+
+Rejected: treating absent and zero as globally equivalent (would hide later edits in
+ordinary registry settings); hard-coding the one observed tuple as the only Windows
+result; clearing the settings journal; manually disabling hibernation on every PC.
+
+The first rebuilt binary still stopped at Hibernation on its physical rerun. Exact local
+and USB size/hash comparison plus embedded-symbol inspection proved that the PC received
+that rebuild rather than a stale copy. The remaining validator was therefore narrowed as
+above, and Setup now prints its semantic version and module build identifier at startup so
+field evidence can identify the running binary directly.
+
+Validation: 45 focused journal/Defender/Hibernation tests pass, including exact resolved
+state journaling, later-edit conflict, interrupted repair without ownership, and exact
+original restoration. Full post-change suites pass 598 Shared + 111 Console tests.
+The rebuilt Setup and restoration path still require physical Windows reruns.
+
+## D-63 — Probe an absent hibernation file without requiring power capabilities
+
+Context (2026-09-08): the physical rerun with the hash-verified `D-62` binary still
+reported the generic Hibernation failure. The append-only `setup.log` contained three
+attempts but no ownership-conflict detail. In `SetupPipeline`, that result can only come
+from an exception during the step, so the remaining failure is in native state reading,
+before journal comparison or `powercfg`. The affected machines independently reported
+that `C:\hiberfil.sys` and `HibernateEnabled` were absent.
+
+Decisions:
+
+1. Probe the fixed OS-volume `hiberfil.sys` path using an attribute read that distinguishes
+   not-found from access/I/O failure. When the file is absent, return canonical native type
+   zero and do not require `GetPwrCapabilities`: there is no native file type to preserve.
+2. When the path exists, continue to require `GetPwrCapabilities` and retain its type for
+   exact restoration when Windows reports an active file. A protected or residual path
+   object does not override a successful native "no active hibernation file" result;
+   that native answer is authoritative. Registry values remain typed and bounded, and
+   both complete reads must still match.
+3. Native setup failures remain value-free. A small fixed enum identifies the safe
+   Hibernation failure stage in the console and `setup.log`; arbitrary exception messages
+   are still suppressed. Setup also writes semantic version plus module build identifier
+   into the append-only log, separating attempts without exposing configuration values.
+
+Rejected: treating the repeated append-only log lines as one execution; exposing native
+exception text; ignoring file-probe access errors; requiring a power-capability query to
+describe a file already proved absent.
+
+The first D-63 physical rerun, build `96756f3f`, returned the new fixed
+`HibernationStateInconsistent` code. Together with the earlier absent enable-value
+evidence, that uniquely exposed the over-strict path/native disagreement above rather
+than a journal or command failure.
+
+Validation: 599 Shared tests pass, including fixed-code disclosure without disclosure of
+the native exception message. Setup compiles for `net10.0-windows` with zero warnings.
+The adjusted native precedence requires another physical Windows rerun.
+
+## D-64 — Allow bounded Defender WMI convergence after additive mutation
+
+Context (2026-09-08): a different physical classroom PC reproduced the original generic
+Defender failure on its first Setup run. The earlier PC had independently shown that the
+fixed exclusion was present immediately after Setup reported failure. The adapter invoked
+the documented additive `MSFT_MpPreference.Add` method successfully but required an
+immediate double-read match, so provider convergence could turn a successful additive
+operation into a failed installation; delayed visibility is the working explanation, not
+yet independently proved on the second PC. Microsoft defines `Add`/`Remove` as the WMI
+counterparts of the additive PowerShell commands and returns a `uint32` status
+([WMI Add method](https://learn.microsoft.com/previous-versions/windows/desktop/defender/add-msft-mppreference),
+[Defender exclusion configuration](https://learn.microsoft.com/defender-endpoint/configure-exclusions-microsoft-defender-antivirus)).
+
+Decisions:
+
+1. Keep the exact pre-mutation double-read, additive `Add`/`Remove`, fixed path and
+   successful zero return-code requirements. Never replace the exclusion list.
+2. After a confirmed successful mutation, wait for a stable exact read-back for at most
+   ten seconds, polling every 250 ms. A timeout still fails with journal intent retained;
+   Repair can conservatively preserve an already-present exclusion as unowned under D-61.
+3. Emit only fixed, value-free Defender stage codes for read failure/instability, invalid
+   provider data, concurrent change, call failure, nonzero result and read-back timeout.
+   Arbitrary provider exceptions remain absent from console and log output.
+
+Rejected: accepting a successful return code without read-back; unbounded waiting;
+replacing all exclusions; requiring a manual Defender command on each classroom PC.
+
+Validation: 600 Shared tests pass, including safe Defender and Hibernation diagnostic-code
+reporting. Setup builds for `net10.0-windows` with zero warnings. Native first-run
+convergence still requires the physical rerun.
+
+Addendum (2026-09-08): a third physical PC (ASUS `SUBSYS_859E1043`, build `39573d12`)
+stopped at Defender with `DefenderProviderRejected`: the provider's `Add` returned a
+nonzero status. The fixed code alone cannot separate a disabled/passive Defender (another
+antivirus, policy) from tamper protection or a transient service state, so
+`SetupDiagnosticException` now carries the provider's numeric status and the pipeline
+prints it as `DefenderProviderRejected, status 0x…`. A return value or HRESULT is a
+number, not configuration data; the value-free rule for messages is unchanged.
+The owner's Repair on that PC then succeeded at once with the identical call, which
+confirms a transient provider state rather than a disabled or third-party-shadowed
+Defender. Because the USB installer must be one-shot (CLAUDE.md requirement 3), Setup
+now retries the additive call itself: up to `SetupDefenderMutationAttempts` (3) attempts,
+`SetupDefenderMutationRetryDelay` (3 s) apart, re-reading before each attempt so a call
+that was applied despite its status is recognised instead of repeated, and reporting
+the last status only when all attempts fail. The additive method, the exact pre-mutation
+double-read and the read-back window are unchanged.
+
+## D-65 — An absent `HibernateEnabled` value is the OS default, not an inconsistency
+
+Context (2026-09-08): the hash-verified `D-63` rebuild (`09f13b86`, identical on the USB
+stick and in `artifacts/release-1.0.0`) still stopped at Hibernation on the physical PC
+with `HibernationStateInconsistent`, exactly like `96756f3f`. Elevated read-back on that
+PC: `powercfg /a` lists *Hibernate* as available, `HibernateEnabled` is absent,
+`HibernateEnabledDefault=1`, `HiberFileType` is absent, `HiberFileSizePercent=0`, and
+`Get-Item C:\hiberfil.sys -Force` reports *not found*. Windows keeps hibernation enabled on
+a factory-fresh PC without ever writing `HibernateEnabled`; the value only appears after
+`powercfg /hibernate on|off`. The adapter required the value to be exactly `1` whenever the
+native power capabilities reported an active file, so the OS-default representation was
+rejected before the journal was consulted. The PowerShell *not found* answer is not
+evidence of absence: the kernel holds the file open exclusively and the provider reports
+that as missing, whereas `GetFileAttributesEx` and `GetPwrCapabilities` see the file. The
+earlier "file absent" reports (`D-63`) came from the same PowerShell probe and are
+therefore unreliable; the residual/protected-path precedence stays because it is harmless.
+
+Decisions:
+
+1. `HibernateEnabled` may be absent in both directions. With an active file it means the
+   `HibernateEnabledDefault` state; with no file it is the normalized off state (`D-62`).
+   Only an explicit contradiction is inconsistent: `0` with an active file, `1` without
+   one, or any value above `1`.
+2. Disabling accepts an original absent value like `1`; the journal still records the
+   exact original tuple (absent enable, absent type, size `0`) and the resolved disabled
+   post-state, so later edits remain conflicts.
+3. Restoration recreates the file with `powercfg /hibernate on` (which writes
+   `HibernateEnabled=1`), restores type/size as before, then removes `HibernateEnabled`
+   again when the original had none, so the PC returns to its exact OS-default bytes.
+   Windows keeps hibernation enabled through `HibernateEnabledDefault`.
+
+Rejected: writing `HibernateEnabled=1` on a fresh PC before reading (mutates an unowned
+value); treating absent as `0` (would refuse to disable an enabled PC and skip the
+Wake-on-LAN prerequisite); trusting the PowerShell path probe over the native answer.
+
+Validation: 602 Shared tests pass, including the OS-default tuple disabled and restored
+exactly and an explicit `0` next to an active file refused without a write. Setup builds
+for `net10.0-windows` with zero warnings. The rebuilt Setup requires the physical rerun.
+
+## D-66 — A network driver without Wake-on-LAN settings is a fact, not an alarm
+
+Context (2026-09-08): the first two physical PCs (ASUS boards, Realtek RTL8168 with the
+Microsoft in-box driver 9.1.410.2015) installed cleanly, but all six `Network …` steps were
+skipped: the driver publishes neither the `*WakeOnMagicPacket`/`*WakeOnPattern`/`*EEE`
+advanced properties nor the `MSPower_*` power-management instances, and
+`powercfg /devicequery wake_armed` lists no NIC. A magic packet from a wired neighbour did
+not wake either PC, so this is the driver, not the Wi-Fi console. Setup reported it as
+`network.configuration_warning`, which the console rendered in amber on the tile and as a
+warning line on every reconnect. The owner's verdict: it is not an error, and a
+permanent amber line on every PC teaches the teacher to ignore amber.
+
+Decisions:
+
+1. `network.configuration_warning` joins `network.wol_unverified` as an *informational*
+   code: shown in the tile tooltip, never as the amber attention line. Antivirus and
+   unreadable-report codes still need attention.
+2. The console logs a readiness snapshot only when it differs from the cached one for
+   that PC. The agent repeats the snapshot on every reconnect; an unchanged one is not
+   news. The event's severity follows the codes: *Warning* if any needs attention,
+   *Info* otherwise. An unreadable snapshot is still logged as a warning and never clears
+   the cache.
+3. The teacher-facing text names the cause and the remedy: the NIC vendor's driver plus a
+   USB repair, after which the skipped `Network …` steps run and the code disappears.
+   Setup itself is unchanged: it still refuses to guess driver keywords it cannot see.
+
+Rejected: a per-PC "dismiss" button (state to maintain, and the code would come back on
+the next repair anyway); dropping the code (the tooltip is the only place that tells the
+teacher why *Wake* does nothing on this PC); writing the vendor keywords blindly.
+
+Validation: 112 Console tests pass, including the new silent-reconnect and
+informational-severity test; 602 Shared tests pass. The vendor-driver + repair path is
+still to be verified on the physical PCs.
+
+## D-67 — Ukrainian, English and Russian are required product languages
+
+Context (2026-09-09): M0 deliberately created an English `Strings.resx` seam and the
+roadmap later named only Ukrainian localization. The owner has now fixed the required
+language set as Ukrainian, English and Russian. A classroom product used without an IT
+department cannot leave Setup, removal or student-facing stock text in a different
+language from the teacher console, and relying only on the host OS language gives a
+multilingual teacher no dependable way to choose the interface.
+
+Decisions:
+
+1. M7 ships three complete product locales: Ukrainian (`uk`), neutral English and Russian
+   (`ru`). English remains the source/fallback resource so a missing satellite resource
+   never makes the product unusable. Translation is maintained in reviewed resource files;
+   no runtime machine translation or network service is introduced.
+2. The localized product surface includes the teacher console, its dialogs and visible
+   events, Windows Setup and standalone removal, stock student-facing overlay/message text,
+   and the generated `INSTALL.txt`. Teacher-authored lab names, script content, job output,
+   filenames and messages are data and are never translated. Developer documentation,
+   protocol identifiers, diagnostic/readiness codes and technical logs remain English.
+3. The console provides an explicit language selector labelled in each language's own
+   name: `Українська`, `English`, `Русский`. The choice is stored per user and survives
+   restart. With no stored choice, a supported OS UI culture is used; any other culture
+   falls back to English. Setup follows the same supported-culture/fallback rule from the
+   Windows display language. `INSTALL.txt` uses the language selected in the console that
+   generated it.
+4. Completeness is tested by comparing keys across the three resource sets, formatting
+   every parameterized string, and rendering representative windows/dialogs in each
+   language. M7 acceptance also checks clipping and wrapping, not merely resource lookup.
+
+Rejected: Ukrainian plus English only (does not meet the owner's required set); choosing
+language solely from the OS (prevents an explicit teacher preference); translating stable
+wire/log codes (breaks diagnostics and compatibility); online automatic translation (the
+lab must work without internet and generated wording would be unreviewed).
+
+Status: approved planning scope; implementation remains in M7.
 
 ## D-68 — The M5 acceptance drills and the gaps they found: a combined picker filter, batched authorization, one departure flow, a beacon that shortens a stale backoff, events bound to their console (M5 portion 8)
 

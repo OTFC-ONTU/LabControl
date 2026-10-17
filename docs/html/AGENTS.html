@@ -228,10 +228,11 @@ selection possible, batched authorization written into one folder, the departure
 <em>Disconnect</em>, the window close and quit all ask, the beacon-resume step-over that relinks
 thirty refused PCs in 2.7 s instead of 30.3 s, and agent events bound to the console that
 delivered their job while machine events stay unbound; main stands at 984 tests, 755
-Shared + 229 Console, run twice on the merged tree). Still unverified: the Windows and
-Linux runs of the console packaging, portion 5 on Windows with two consoles and skewed
-clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the
-physical lab. The <code>Welcome.console_access</code>
+Shared + 229 Console, run twice on the merged tree). Still unverified: the rest of the
+console packaging on Windows (Explorer's double-click, a real elevation prompt,
+<code>win-x64</code>, an ordinary interactive profile, the unsigned-download warning) and all of it
+on Linux, portion 5 on Windows with two consoles and skewed clocks against a real agent,
+the Avalonia quit hook by hand, and the milestone in the physical lab. The <code>Welcome.console_access</code>
 <code>.proto</code> change landed with portion 5 and <code>docs/PROTOCOL.md</code> was updated in that commit.</li>
 <li><strong>M6 portion 1 is built (2026-09-16, <code>D-69</code>, <code>D-70</code>), all on the Mac, not yet run on
 Windows.</strong> The policy journal (<code>Shared/Policy/</code>, <code>policy.json</code>) restores the machine
@@ -261,6 +262,33 @@ enforcer sees the message and fails closed; keep <code>LeaveIfConsoleRevoked</co
 the limits as durations, and keep every teacher-facing reason a code.</li>
 <li>The Windows student agent must survive reboots and must not let a failed Win32
 operation escape the service loop.</li>
+<li>Physical lab status (2026-09-08 evening): five PCs installed and linked from the
+<code>1.0.0</code> media; the owner declared the baseline established and moved development on
+to M5. Remaining PCs, the vendor Realtek driver and the wake test continue alongside
+(ROADMAP <em>Physical lab</em> row and on-site checklist). Never claim Wake-on-LAN works here.</li>
+<li><code>1.0.0</code> is the current physical-lab release candidate (owner decision 2026-09-08).
+Do not call it released until the remaining M4 physical acceptance checks pass; the
+later additive M5 portion-5 <code>Welcome.console_access</code> field preserves the frozen
+update subset and does not require reinstalling this agent.</li>
+<li>The first physical runs exposed a Defender WMI/completion-journal failure (<code>D-61</code>).
+Repair may preserve only the explicitly marked additive exclusion as pre-existing;
+it must not claim ownership or clear unrelated history. After a successful provider
+mutation, allow only the bounded stable read-back convergence window and fixed safe
+stage codes from <code>D-64</code>. A nonzero <code>Add</code> status is retried three times, three seconds
+apart, and printed as <code>status 0x…</code>; the numeric status is the only value a diagnostic
+may carry (<code>D-64</code> addendum).</li>
+<li>The next physical step showed Windows normalizing successful hibernation-off to absent
+enable/type values and size zero (<code>D-62</code>). Record an accepted exact resolved post-state
+only after read-back; interrupted results remain unowned. With no hibernation file,
+native/registry type fields are undefined metadata and do not reject the disabled state.
+An absent fixed-path file also bypasses the native capabilities query, while an existing
+path still requires it for exact restoration; a successful native &quot;no active file&quot;
+answer overrides a residual/protected path object (<code>D-63</code>). Setup logs version/build
+identity and fixed value-free diagnostic codes for field verification. An absent
+<code>HibernateEnabled</code> value is the OS default (<code>HibernateEnabledDefault</code>), accepted as
+enabled next to an active file and restored as absent on removal (<code>D-65</code>); never treat
+a PowerShell <code>Get-Item</code>/<code>Test-Path</code> miss on <code>hiberfil.sys</code> as proof the file is absent.
+Native rerun is pending.</li>
 <li>Student PCs may have no internet. Do not introduce a cloud or per-PC runtime
 dependency.</li>
 <li>Never log or persist secrets outside their designed stores. In particular, do
@@ -312,8 +340,10 @@ or the generated HTML stale is not finished.</p>
 <h2 id="engineering-conventions">Engineering conventions<a class="anchor" href="#engineering-conventions" aria-label="Link to this section">#</a></h2>
 <ul>
 <li>Code, identifiers, comments, and commit messages are English.</li>
-<li>UI strings are resources, not hard-coded text. English is the primary locale;
-Ukrainian localization is planned.</li>
+<li>UI strings are resources, not hard-coded text. English is the neutral source and
+fallback locale. M7 must ship Ukrainian, English and Russian for every ordinary
+product-facing surface, with an explicit persistent console language choice (<code>D-67</code>).
+Stable protocol identifiers, diagnostic codes and developer logs remain English.</li>
 <li>Prefer simple, well-supported libraries. Record every new NuGet dependency and
 its reason in <code>docs/DECISIONS.md</code>.</li>
 <li>Preserve protocol compatibility rules documented in <code>docs/PROTOCOL.md</code>,
@@ -368,10 +398,13 @@ never an arbitrary active virtual adapter. Apply dependent NIC power controls in
 restore in reverse dependency order. Report unsupported capabilities; a local settings
 read-back is not proof of network reachability or physical wake from shutdown.
 Keep installer advisories bounded to the fixed readiness-code schema; translate them in
-the console, retain valid cached warnings offline and never display arbitrary report JSON.</p>
+the console, retain valid cached warnings offline and never display arbitrary report JSON.
+<code>network.wol_unverified</code> and <code>network.configuration_warning</code> are informational (tooltip,
+no amber, logged only when the snapshot changes, <code>D-66</code>); do not promote them back to
+attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-09-16 18:25 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 12:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

@@ -348,7 +348,7 @@ exit 0
   <data name="Readiness.antivirus.third_party" xml:space="preserve"><value>Other antivirus detected. If commands or updates fail, check its permissions for LabControl.</value></data>
   <data name="Readiness.antivirus.inventory_unavailable" xml:space="preserve"><value>Setup could not check installed antivirus. Check protection settings if commands or updates fail.</value></data>
   <data name="Readiness.network.wol_unverified" xml:space="preserve"><value>Wake-on-LAN still needs a shutdown and wake test on this PC; firmware and wired network support are required.</value></data>
-  <data name="Readiness.network.configuration_warning" xml:space="preserve"><value>Setup could not confirm all network adapter settings. Check this PC before relying on Wake-on-LAN.</value></data>
+  <data name="Readiness.network.configuration_warning" xml:space="preserve"><value>This PC's network driver does not expose Wake-on-LAN settings, so Setup left them alone. Wake-on-LAN needs the NIC vendor's driver and a USB repair; everything else works.</value></data>
   <data name="Readiness.report.unavailable" xml:space="preserve"><value>Installation readiness report could not be read. Run USB repair to check this PC.</value></data>
   <data name="Readiness.NoWarnings" xml:space="preserve"><value>Setup reports no installation warnings. This is not a network or Wake-on-LAN test.</value></data>
   <data name="Readiness.InvalidReport" xml:space="preserve"><value>The PC sent an unreadable installation readiness report. Previous warnings were retained.</value></data>

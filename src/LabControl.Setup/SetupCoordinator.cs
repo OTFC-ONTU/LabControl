@@ -119,6 +119,9 @@ internal static class SetupCoordinator
         else templatePath = null;
         using var log = new StreamWriter(Path.Combine(Defaults.AgentDataDirectory, Defaults.SetupLogFileName), append: true) { AutoFlush = true };
         void Report(string text) { log.WriteLine(text); Console.WriteLine(text); }
+        var setupVersion = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+        var setupBuild = typeof(Program).Module.ModuleVersionId.ToString("N")[..8];
+        Report($"[Setup] LabControl {setupVersion} build {setupBuild}");
         var readinessWarnings = new HashSet<string>(StringComparer.Ordinal) { "network.wol_unverified" };
         var nicSystem = new WindowsNicSettingsSystem();
         IReadOnlyList<NicIdentity> adapters = [];

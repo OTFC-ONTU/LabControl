@@ -21,7 +21,7 @@ public class SetupReadinessTests
         Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(pc.AgentId)!.Machine.SetupReadinessCodes
             .Contains("network.configuration_warning")));
         Assert.Contains(console.Session.Events.Recent, entry => entry.Code == SetupReadiness.EventCode
-            && entry.Message.Contains("network adapter settings") && !entry.Message.Contains("schema_version"));
+            && entry.Message.Contains("Wake-on-LAN settings") && !entry.Message.Contains("schema_version"));
         Assert.True(await Wait.UntilAsync(() => new LabStore(console.Directory).LoadLab("unused", "unused")?.Machines
             .SingleOrDefault(machine => machine.AgentId == pc.AgentId)?.SetupReadinessCodes
             .Contains("network.configuration_warning") == true));
@@ -45,6 +45,38 @@ public class SetupReadinessTests
         Assert.True(connection.ApplyEvent(Report()));
         tile.Refresh(machine, null, null, DateTimeOffset.UtcNow);
         Assert.Empty(tile.ReadinessNote);
+    }
+
+    [Fact]
+    public async Task Unchanged_snapshot_on_reconnect_is_silent_and_driver_limit_is_informational()
+    {
+        await using var console = await TestConsole.CreateLabAsync();
+        await using var pc = TestAgent.Install(console, 5, console.IssueCodes(1)[0]).Start();
+        Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(pc.AgentId) is not null));
+        var snapshot = SetupReadiness.Create(["network.configuration_warning", "network.wol_unverified"]).Serialize();
+        pc.Link.Report(Event.Types.Severity.Warning, SetupReadiness.EventCode, snapshot);
+        Assert.True(await Wait.UntilAsync(() => console.Session.Events.Recent.Any(entry => entry.Code == SetupReadiness.EventCode)));
+        var first = console.Session.Events.Recent.Single(entry => entry.Code == SetupReadiness.EventCode);
+        Assert.Equal(EventSeverity.Info, first.Severity);
+
+        // The same snapshot again, as the agent does on every reconnect: no second line.
+        pc.Link.Report(Event.Types.Severity.Warning, SetupReadiness.EventCode, snapshot);
+        pc.Link.Report(Event.Types.Severity.Info, "test.marker", "after");
+        Assert.True(await Wait.UntilAsync(() => console.Session.Events.Recent.Any(entry => entry.Code == "test.marker")));
+        Assert.Single(console.Session.Events.Recent, entry => entry.Code == SetupReadiness.EventCode);
+
+        var machine = console.Session.FindLinked(pc.AgentId)!.Machine;
+        using var screen = new AgentScreen(machine.AgentId);
+        var tile = new MachineTileViewModel(machine, screen);
+        tile.Refresh(machine, null, null, DateTimeOffset.UtcNow);
+        Assert.Empty(tile.ReadinessAttention);
+        Assert.Contains("vendor's driver", tile.ReadinessNote);
+
+        // A real problem is still a warning line.
+        pc.Link.Report(Event.Types.Severity.Warning, SetupReadiness.EventCode,
+            SetupReadiness.Create(["antivirus.third_party"]).Serialize());
+        Assert.True(await Wait.UntilAsync(() => console.Session.Events.Recent.Count(entry => entry.Code == SetupReadiness.EventCode) == 2));
+        Assert.Equal(EventSeverity.Warning, console.Session.Events.Recent.Last(entry => entry.Code == SetupReadiness.EventCode).Severity);
     }
 
     [Theory]

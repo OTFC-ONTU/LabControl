@@ -4,6 +4,41 @@ public enum SetupStepStatus { Needed, AlreadyDone, Skipped, Conflict }
 public sealed record SetupCheck(SetupStepStatus Status, string Detail = "");
 public sealed record SetupStepResult(string Name, SetupStepStatus Status, bool Applied, string Detail);
 
+public enum SetupDiagnosticCode
+{
+    DefenderReadFailed,
+    DefenderReadUnstable,
+    DefenderProviderDataInvalid,
+    DefenderConcurrentChange,
+    DefenderProviderCallFailed,
+    DefenderProviderRejected,
+    DefenderReadBackTimeout,
+    HibernationFileProbeFailed,
+    HibernationCapabilitiesUnavailable,
+    HibernationRegistryReadFailed,
+    HibernationRegistryValueUnsupported,
+    HibernationStateInconsistent,
+    HibernationReadUnstable,
+    HibernationTransitionRejected,
+    HibernationConcurrentChange,
+    HibernationCommandFailed,
+    HibernationPostStateInvalid,
+}
+
+/// <summary>A fixed, value-free diagnostic that is safe to place in setup.log.</summary>
+public sealed class SetupDiagnosticException(SetupDiagnosticCode code, long? status = null) : IOException
+{
+    public SetupDiagnosticCode Code { get; } = code;
+
+    /// <summary>A numeric status the native provider returned (an HRESULT or WMI return
+    /// value), never configuration data. Printed as hex so the failing PC can be diagnosed
+    /// from setup.log alone.</summary>
+    public long? Status { get; } = status;
+
+    public string Describe() => Status is { } status
+        ? $"{Code}, status 0x{unchecked((uint)status):X8}" : Code.ToString();
+}
+
 public interface ISetupStep
 {
     string Name { get; }
@@ -35,6 +70,11 @@ public static class SetupPipeline
                         check = new(SetupStepStatus.Conflict, "Verification did not confirm the change.");
                 }
                 result = new(step.Name, check.Status, applied, check.Detail);
+            }
+            catch (SetupDiagnosticException error)
+            {
+                result = new(step.Name, SetupStepStatus.Conflict, false,
+                    $"The step failed ({error.Describe()}). No further steps were run; repair can retry from recorded history.");
             }
             catch (Exception)
             {

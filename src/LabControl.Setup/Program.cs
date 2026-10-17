@@ -9,6 +9,10 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        var version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+        var build = typeof(Program).Module.ModuleVersionId.ToString("N")[..8];
+        System.Console.WriteLine($"LabControl Setup {version} build {build}");
+
         var failureShown = false;
         var removing = args.Contains("--uninstall", StringComparer.OrdinalIgnoreCase)
             || string.Equals(Path.GetFileName(Environment.ProcessPath), Defaults.UninstallExecutableName, StringComparison.OrdinalIgnoreCase);

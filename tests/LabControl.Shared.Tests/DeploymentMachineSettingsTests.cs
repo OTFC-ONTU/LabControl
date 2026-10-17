@@ -43,6 +43,21 @@ public sealed class DeploymentMachineSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Interrupted_defender_add_is_preserved_without_ownership_on_repair()
+    {
+        var store = new Defender { FailAfterWrite = true };
+        var setting = new DefenderExclusionSetting(store);
+        Assert.Throws<IOException>(() => setting.Apply(_journal));
+
+        store.FailAfterWrite = false;
+        Assert.Equal(SetupStepStatus.Needed, setting.Check(_journal).Status);
+        Assert.Equal(SettingChangeResult.Unchanged, setting.Apply(_journal));
+        Assert.Equal(SettingChangeResult.Untracked, _journal.Restore(setting));
+        Assert.Equal(Defaults.AgentInstallDirectory, store.Value);
+        Assert.Equal(1, store.Writes);
+    }
+
+    [Fact]
     public void Later_exclusion_representation_edit_and_removal_are_conflicts()
     {
         var store = new Defender();
@@ -81,6 +96,29 @@ public sealed class DeploymentMachineSettingsTests : IDisposable
     }
 
     [Fact]
+    public void Hibernation_enabled_by_os_default_without_registry_value_is_disabled_and_restored()
+    {
+        // Factory-fresh classroom PC (D-65): active file, HibernateEnabled absent,
+        // HiberFileType absent, HiberFileSizePercent=0.
+        var original = new HibernationState(true, 2, null, null, 0);
+        var store = new Hibernation { Value = original, NormalizeDisabledState = true };
+        var setting = new HibernationSetting(store);
+        Assert.Equal(SettingChangeResult.Applied, setting.Apply(_journal));
+        Assert.Equal(new(false, 0, null, null, null), store.Value);
+        Assert.Equal(SettingChangeResult.AlreadyApplied, setting.Apply(_journal));
+        Assert.Equal(SettingChangeResult.Restored, _journal.Restore(setting));
+        Assert.Equal(original, store.Value);
+    }
+
+    [Fact]
+    public void Hibernation_explicitly_disabled_value_with_active_file_is_refused()
+    {
+        var store = new Hibernation { Value = new(true, 2, 0, 2, 50) };
+        Assert.Throws<InvalidDataException>(() => new HibernationSetting(store).Apply(_journal));
+        Assert.Equal(0, store.Writes);
+    }
+
+    [Fact]
     public void Hibernation_off_before_install_is_never_owned()
     {
         var store = new Hibernation { Value = new(false, 0, 0, null, null) };
@@ -88,6 +126,14 @@ public sealed class DeploymentMachineSettingsTests : IDisposable
         Assert.Equal(SettingChangeResult.Unchanged, setting.Apply(_journal));
         Assert.Equal(SettingChangeResult.Untracked, _journal.Restore(setting));
         Assert.Equal(0, store.Writes);
+    }
+
+    [Fact]
+    public void Disabled_hibernation_ignores_undefined_file_types_when_no_file_exists()
+    {
+        Assert.True(HibernationSetting.IsDisabled(new(false, byte.MaxValue, null, uint.MaxValue, 0)));
+        Assert.False(HibernationSetting.IsDisabled(new(true, byte.MaxValue, null, uint.MaxValue, 0)));
+        Assert.False(HibernationSetting.IsDisabled(new(false, byte.MaxValue, 1, uint.MaxValue, 0)));
     }
 
     [Fact]
@@ -103,12 +149,35 @@ public sealed class DeploymentMachineSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Unexpected_native_hibernation_side_effect_is_not_adopted_after_failure()
+    public void Windows_normalized_hibernation_off_state_is_journaled_and_restored()
     {
-        var store = new Hibernation { Value = new(true, 2, 1, 2, 50), ChangeMetadataAfterWrite = true };
+        var original = new HibernationState(true, 2, 1, 2, 50);
+        var store = new Hibernation { Value = original, NormalizeDisabledState = true };
+        var setting = new HibernationSetting(store);
+        Assert.Equal(SettingChangeResult.Applied, setting.Apply(_journal));
+        Assert.Equal(new(false, 0, null, null, null), store.Value);
+        Assert.Equal(SettingChangeResult.AlreadyApplied, setting.Apply(_journal));
+        Assert.Equal(SettingChangeResult.Restored, _journal.Restore(setting));
+        Assert.Equal(original, store.Value);
+    }
+
+    [Fact]
+    public void Interrupted_normalized_hibernation_off_is_preserved_without_ownership()
+    {
+        var store = new Hibernation
+        {
+            Value = new(true, 2, 1, 2, 50),
+            NormalizeDisabledState = true,
+            FailAfterWrite = true,
+        };
         var setting = new HibernationSetting(store);
         Assert.Throws<IOException>(() => setting.Apply(_journal));
-        Assert.Equal(SettingChangeResult.Conflict, _journal.Restore(setting));
+
+        store.FailAfterWrite = false;
+        Assert.Equal(SetupStepStatus.Needed, setting.Check(_journal).Status);
+        Assert.Equal(SettingChangeResult.Unchanged, setting.Apply(_journal));
+        Assert.Equal(SettingChangeResult.Untracked, _journal.Restore(setting));
+        Assert.Equal(new(false, 0, null, null, null), store.Value);
     }
 
     [Fact]
@@ -123,7 +192,7 @@ public sealed class DeploymentMachineSettingsTests : IDisposable
     {
         public string? Value;
         public int Writes;
-        public bool FailRead, ChangeBeforeWrite;
+        public bool FailRead, ChangeBeforeWrite, FailAfterWrite;
         public string? Read() => FailRead ? throw new IOException() : Value;
         public void Write(string? expected, string? value)
         {
@@ -131,13 +200,14 @@ public sealed class DeploymentMachineSettingsTests : IDisposable
             if (Value != expected) throw new IOException();
             Writes++;
             Value = value;
+            if (FailAfterWrite) throw new IOException();
         }
     }
 
     private sealed class Hibernation : IHibernationSystem
     {
         public required HibernationState Value;
-        public bool ChangeMetadataAfterWrite;
+        public bool NormalizeDisabledState, FailAfterWrite;
         public int Writes;
         public HibernationState Read() => Value;
         public void Write(HibernationState expected, HibernationState value)
@@ -145,11 +215,9 @@ public sealed class DeploymentMachineSettingsTests : IDisposable
             if (Value != expected) throw new IOException();
             Writes++;
             Value = value;
-            if (ChangeMetadataAfterWrite)
-            {
-                Value = value with { SizePercent = 0 };
-                throw new IOException();
-            }
+            if (NormalizeDisabledState && !value.FilePresent)
+                Value = new(false, 0, null, null, null);
+            if (FailAfterWrite) throw new IOException();
         }
     }
 

@@ -2655,8 +2655,8 @@ packages; the console has no document activation and no notion of a second launc
 <ol>
 <li><p><strong>Windows: a C# per-user self-installer, no third-party toolchain.</strong>
 <code>src/LabControl.ConsoleSetup/</code> is a single-file, self-contained <code>asInvoker</code> exe;
-<code>tools/package-windows.sh</code> publishes the console for <code>win-x64</code> and embeds it as a
-resource. It installs to <code>%LOCALAPPDATA%\Programs\LabControl\Console\</code>, creates the
+<code>tools/package-windows.sh</code> publishes the console for the chosen runtime and embeds it
+as a resource. It installs to <code>%LOCALAPPDATA%\Programs\LabControl\Console\</code>, creates the
 Start-menu <code>.lnk</code> (<code>IShellLinkW</code> via CsWin32) and an optional desktop shortcut, writes
 <code>HKCU\…\Uninstall\LabControl Console</code>, registers the <code>HKCU\Software\Classes</code> ProgIds
 <code>LabControl.LabFile</code> (<code>.lclab</code>) and <code>LabControl.Backup</code> (<code>.lcbak</code>) with an OpenWith
@@ -2914,6 +2914,250 @@ tests import a backup and see the codes dormant. Implemented 2026-09-08 (M5 port
 <code>EnrollmentOutcome.DormantCode</code>, <em>Settings → Enrollment → Use codes from the imported
 backup</em> activates them, and <code>Supersede</code> voids dormant codes together with the active
 ones, so a fresh batch is always the whole truth. Status in ROADMAP M5.</p>
+<h2 id="d-61-preserve-a-completed-defender-addition-after-interrupted-verification">D-61 — Preserve a completed Defender addition after interrupted verification<a class="anchor" href="#d-61-preserve-a-completed-defender-addition-after-interrupted-verification" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): the <code>1.0.0</code> physical-lab candidate stopped at <em>Defender
+exclusion</em> on both a previously used PC and a clean PC. An elevated independent
+<code>Add-MpPreference</code> call returned success and read-back confirmed the exact exclusion,
+but Repair still stopped: the write-ahead journal correctly retained <code>PendingApply</code>,
+and the generic D-47 rule treated the now-present desired value as ambiguous.</p>
+<p>Decisions:</p>
+<ol>
+<li>Additive settings may explicitly opt into <strong>preserve-as-existing</strong> recovery. Only
+when a pending apply recorded an absent original, the exact desired value is now
+present, and the setting carries the marker, repair removes the unconfirmed journal
+entry and treats the value as pre-existing. It does not convert the entry to owned.
+Removal uses the same rule and leaves the value in place.</li>
+<li>Defender's one fixed parent-directory exclusion is the first marked setting. Leaving
+an already useful exclusion is safe; deleting a value that may have been added by an
+administrator is not. Registry tuples, power settings, accounts and other ordinary
+settings retain D-47's conflict rule.</li>
+<li>The Defender WMI bridge continues to use only native additive <code>Add</code>/<code>Remove</code>, exact
+path validation, two reads and post-write verification. For compatibility it accepts
+both the declared string array and a singleton string, and accepts a successful zero
+returned in any CLR integral representation. Other values and duplicate matching
+exclusions remain failures.</li>
+</ol>
+<p>Rejected: marking the pending exclusion owned because its bytes match (could make
+uninstall delete an administrator's rule); clearing the entire protected settings
+journal (would lose unrelated restoration ownership); replacing the full Defender
+exclusion list; asking the owner to repair every PC manually.</p>
+<p>Validation: 41 focused Shared journal/Defender tests pass on macOS, including failed
+post-write completion followed by repair and removal. The full post-change suites pass
+594 Shared + 111 Console tests. Rebuilt Windows <code>Setup.exe</code> still requires the physical-PC
+rerun; this decision does not claim that native result yet.</p>
+<h2 id="d-62-journal-windows-resolved-hibernation-off-representation">D-62 — Journal Windows' resolved hibernation-off representation<a class="anchor" href="#d-62-journal-windows-resolved-hibernation-off-representation" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): after the <code>D-61</code> Setup reached the next physical step,
+<em>Hibernation</em> failed on the classroom PC. Read-only inspection after the failure showed
+that the hibernation file was absent, <code>HibernateEnabled</code> and <code>HiberFileType</code> were absent,
+and <code>HiberFileSizePercent</code> was <code>0</code>. This is a successful <code>powercfg /hibernate off</code>
+result, but the adapter had requested DWORD <code>0</code> plus the original type/size metadata and
+therefore rejected Windows' normalized representation. Microsoft documents <code>powercfg /hibernate off</code> as the supported disable operation and <code>powercfg</code> type/size commands as
+the supported configuration surface (<a href="https://learn.microsoft.com/windows-hardware/design/device-experiences/powercfg-command-line-options">command reference</a>,
+<a href="https://learn.microsoft.com/troubleshoot/windows-client/setup-upgrade-and-drivers/disable-and-re-enable-hibernation">disable/re-enable procedure</a>).</p>
+<p>Decisions:</p>
+<ol>
+<li>A setting may explicitly validate an OS-resolved post-state. The journal still saves
+the bounded requested intent before mutation, reads the exact result afterward, and
+records those exact result bytes as <code>Applied</code> only after the setting accepts them.
+Later changes are compared with that exact resolved value and remain conflicts.</li>
+<li>Hibernation accepts only a disabled result with no hibernation file,
+<code>HibernateEnabled</code> absent or zero, and size absent or 0…100. Native and registry
+file-type fields are deliberately ignored only while the file is absent: Windows may
+expose an undefined/default sentinel there after disabling, and a type cannot make a
+nonexistent hibernation file active. The exact returned tuple is still journaled, so
+later file-type edits remain conflicts for an owned installation.</li>
+<li>If an accepted resolved result exists with only <code>PendingApply</code>, Repair/removal drops
+the unconfirmed intent and preserves the disabled state without ownership. This is
+conservative: an interrupted installation cannot later re-enable hibernation during
+uninstall as though it proved who disabled it.</li>
+<li>A completed fresh apply owns the exact normalized result. Restoration uses
+<code>powercfg /hibernate on</code>, the documented <code>/size</code> and <code>/type</code> forms, then restores the
+exact nullable type/size registry metadata and verifies the complete saved tuple.</li>
+</ol>
+<p>Rejected: treating absent and zero as globally equivalent (would hide later edits in
+ordinary registry settings); hard-coding the one observed tuple as the only Windows
+result; clearing the settings journal; manually disabling hibernation on every PC.</p>
+<p>The first rebuilt binary still stopped at Hibernation on its physical rerun. Exact local
+and USB size/hash comparison plus embedded-symbol inspection proved that the PC received
+that rebuild rather than a stale copy. The remaining validator was therefore narrowed as
+above, and Setup now prints its semantic version and module build identifier at startup so
+field evidence can identify the running binary directly.</p>
+<p>Validation: 45 focused journal/Defender/Hibernation tests pass, including exact resolved
+state journaling, later-edit conflict, interrupted repair without ownership, and exact
+original restoration. Full post-change suites pass 598 Shared + 111 Console tests.
+The rebuilt Setup and restoration path still require physical Windows reruns.</p>
+<h2 id="d-63-probe-an-absent-hibernation-file-without-requiring-power-capabilities">D-63 — Probe an absent hibernation file without requiring power capabilities<a class="anchor" href="#d-63-probe-an-absent-hibernation-file-without-requiring-power-capabilities" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): the physical rerun with the hash-verified <code>D-62</code> binary still
+reported the generic Hibernation failure. The append-only <code>setup.log</code> contained three
+attempts but no ownership-conflict detail. In <code>SetupPipeline</code>, that result can only come
+from an exception during the step, so the remaining failure is in native state reading,
+before journal comparison or <code>powercfg</code>. The affected machines independently reported
+that <code>C:\hiberfil.sys</code> and <code>HibernateEnabled</code> were absent.</p>
+<p>Decisions:</p>
+<ol>
+<li>Probe the fixed OS-volume <code>hiberfil.sys</code> path using an attribute read that distinguishes
+not-found from access/I/O failure. When the file is absent, return canonical native type
+zero and do not require <code>GetPwrCapabilities</code>: there is no native file type to preserve.</li>
+<li>When the path exists, continue to require <code>GetPwrCapabilities</code> and retain its type for
+exact restoration when Windows reports an active file. A protected or residual path
+object does not override a successful native &quot;no active hibernation file&quot; result;
+that native answer is authoritative. Registry values remain typed and bounded, and
+both complete reads must still match.</li>
+<li>Native setup failures remain value-free. A small fixed enum identifies the safe
+Hibernation failure stage in the console and <code>setup.log</code>; arbitrary exception messages
+are still suppressed. Setup also writes semantic version plus module build identifier
+into the append-only log, separating attempts without exposing configuration values.</li>
+</ol>
+<p>Rejected: treating the repeated append-only log lines as one execution; exposing native
+exception text; ignoring file-probe access errors; requiring a power-capability query to
+describe a file already proved absent.</p>
+<p>The first D-63 physical rerun, build <code>96756f3f</code>, returned the new fixed
+<code>HibernationStateInconsistent</code> code. Together with the earlier absent enable-value
+evidence, that uniquely exposed the over-strict path/native disagreement above rather
+than a journal or command failure.</p>
+<p>Validation: 599 Shared tests pass, including fixed-code disclosure without disclosure of
+the native exception message. Setup compiles for <code>net10.0-windows</code> with zero warnings.
+The adjusted native precedence requires another physical Windows rerun.</p>
+<h2 id="d-64-allow-bounded-defender-wmi-convergence-after-additive-mutation">D-64 — Allow bounded Defender WMI convergence after additive mutation<a class="anchor" href="#d-64-allow-bounded-defender-wmi-convergence-after-additive-mutation" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): a different physical classroom PC reproduced the original generic
+Defender failure on its first Setup run. The earlier PC had independently shown that the
+fixed exclusion was present immediately after Setup reported failure. The adapter invoked
+the documented additive <code>MSFT_MpPreference.Add</code> method successfully but required an
+immediate double-read match, so provider convergence could turn a successful additive
+operation into a failed installation; delayed visibility is the working explanation, not
+yet independently proved on the second PC. Microsoft defines <code>Add</code>/<code>Remove</code> as the WMI
+counterparts of the additive PowerShell commands and returns a <code>uint32</code> status
+(<a href="https://learn.microsoft.com/previous-versions/windows/desktop/defender/add-msft-mppreference">WMI Add method</a>,
+<a href="https://learn.microsoft.com/defender-endpoint/configure-exclusions-microsoft-defender-antivirus">Defender exclusion configuration</a>).</p>
+<p>Decisions:</p>
+<ol>
+<li>Keep the exact pre-mutation double-read, additive <code>Add</code>/<code>Remove</code>, fixed path and
+successful zero return-code requirements. Never replace the exclusion list.</li>
+<li>After a confirmed successful mutation, wait for a stable exact read-back for at most
+ten seconds, polling every 250 ms. A timeout still fails with journal intent retained;
+Repair can conservatively preserve an already-present exclusion as unowned under D-61.</li>
+<li>Emit only fixed, value-free Defender stage codes for read failure/instability, invalid
+provider data, concurrent change, call failure, nonzero result and read-back timeout.
+Arbitrary provider exceptions remain absent from console and log output.</li>
+</ol>
+<p>Rejected: accepting a successful return code without read-back; unbounded waiting;
+replacing all exclusions; requiring a manual Defender command on each classroom PC.</p>
+<p>Validation: 600 Shared tests pass, including safe Defender and Hibernation diagnostic-code
+reporting. Setup builds for <code>net10.0-windows</code> with zero warnings. Native first-run
+convergence still requires the physical rerun.</p>
+<p>Addendum (2026-09-08): a third physical PC (ASUS <code>SUBSYS_859E1043</code>, build <code>39573d12</code>)
+stopped at Defender with <code>DefenderProviderRejected</code>: the provider's <code>Add</code> returned a
+nonzero status. The fixed code alone cannot separate a disabled/passive Defender (another
+antivirus, policy) from tamper protection or a transient service state, so
+<code>SetupDiagnosticException</code> now carries the provider's numeric status and the pipeline
+prints it as <code>DefenderProviderRejected, status 0x…</code>. A return value or HRESULT is a
+number, not configuration data; the value-free rule for messages is unchanged.
+The owner's Repair on that PC then succeeded at once with the identical call, which
+confirms a transient provider state rather than a disabled or third-party-shadowed
+Defender. Because the USB installer must be one-shot (CLAUDE.md requirement 3), Setup
+now retries the additive call itself: up to <code>SetupDefenderMutationAttempts</code> (3) attempts,
+<code>SetupDefenderMutationRetryDelay</code> (3 s) apart, re-reading before each attempt so a call
+that was applied despite its status is recognised instead of repeated, and reporting
+the last status only when all attempts fail. The additive method, the exact pre-mutation
+double-read and the read-back window are unchanged.</p>
+<h2 id="d-65-an-absent-hibernateenabled-value-is-the-os-default-not-an-inconsistency">D-65 — An absent <code>HibernateEnabled</code> value is the OS default, not an inconsistency<a class="anchor" href="#d-65-an-absent-hibernateenabled-value-is-the-os-default-not-an-inconsistency" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): the hash-verified <code>D-63</code> rebuild (<code>09f13b86</code>, identical on the USB
+stick and in <code>artifacts/release-1.0.0</code>) still stopped at Hibernation on the physical PC
+with <code>HibernationStateInconsistent</code>, exactly like <code>96756f3f</code>. Elevated read-back on that
+PC: <code>powercfg /a</code> lists <em>Hibernate</em> as available, <code>HibernateEnabled</code> is absent,
+<code>HibernateEnabledDefault=1</code>, <code>HiberFileType</code> is absent, <code>HiberFileSizePercent=0</code>, and
+<code>Get-Item C:\hiberfil.sys -Force</code> reports <em>not found</em>. Windows keeps hibernation enabled on
+a factory-fresh PC without ever writing <code>HibernateEnabled</code>; the value only appears after
+<code>powercfg /hibernate on|off</code>. The adapter required the value to be exactly <code>1</code> whenever the
+native power capabilities reported an active file, so the OS-default representation was
+rejected before the journal was consulted. The PowerShell <em>not found</em> answer is not
+evidence of absence: the kernel holds the file open exclusively and the provider reports
+that as missing, whereas <code>GetFileAttributesEx</code> and <code>GetPwrCapabilities</code> see the file. The
+earlier &quot;file absent&quot; reports (<code>D-63</code>) came from the same PowerShell probe and are
+therefore unreliable; the residual/protected-path precedence stays because it is harmless.</p>
+<p>Decisions:</p>
+<ol>
+<li><code>HibernateEnabled</code> may be absent in both directions. With an active file it means the
+<code>HibernateEnabledDefault</code> state; with no file it is the normalized off state (<code>D-62</code>).
+Only an explicit contradiction is inconsistent: <code>0</code> with an active file, <code>1</code> without
+one, or any value above <code>1</code>.</li>
+<li>Disabling accepts an original absent value like <code>1</code>; the journal still records the
+exact original tuple (absent enable, absent type, size <code>0</code>) and the resolved disabled
+post-state, so later edits remain conflicts.</li>
+<li>Restoration recreates the file with <code>powercfg /hibernate on</code> (which writes
+<code>HibernateEnabled=1</code>), restores type/size as before, then removes <code>HibernateEnabled</code>
+again when the original had none, so the PC returns to its exact OS-default bytes.
+Windows keeps hibernation enabled through <code>HibernateEnabledDefault</code>.</li>
+</ol>
+<p>Rejected: writing <code>HibernateEnabled=1</code> on a fresh PC before reading (mutates an unowned
+value); treating absent as <code>0</code> (would refuse to disable an enabled PC and skip the
+Wake-on-LAN prerequisite); trusting the PowerShell path probe over the native answer.</p>
+<p>Validation: 602 Shared tests pass, including the OS-default tuple disabled and restored
+exactly and an explicit <code>0</code> next to an active file refused without a write. Setup builds
+for <code>net10.0-windows</code> with zero warnings. The rebuilt Setup requires the physical rerun.</p>
+<h2 id="d-66-a-network-driver-without-wake-on-lan-settings-is-a-fact-not-an-alarm">D-66 — A network driver without Wake-on-LAN settings is a fact, not an alarm<a class="anchor" href="#d-66-a-network-driver-without-wake-on-lan-settings-is-a-fact-not-an-alarm" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-08): the first two physical PCs (ASUS boards, Realtek RTL8168 with the
+Microsoft in-box driver 9.1.410.2015) installed cleanly, but all six <code>Network …</code> steps were
+skipped: the driver publishes neither the <code>*WakeOnMagicPacket</code>/<code>*WakeOnPattern</code>/<code>*EEE</code>
+advanced properties nor the <code>MSPower_*</code> power-management instances, and
+<code>powercfg /devicequery wake_armed</code> lists no NIC. A magic packet from a wired neighbour did
+not wake either PC, so this is the driver, not the Wi-Fi console. Setup reported it as
+<code>network.configuration_warning</code>, which the console rendered in amber on the tile and as a
+warning line on every reconnect. The owner's verdict: it is not an error, and a
+permanent amber line on every PC teaches the teacher to ignore amber.</p>
+<p>Decisions:</p>
+<ol>
+<li><code>network.configuration_warning</code> joins <code>network.wol_unverified</code> as an <em>informational</em>
+code: shown in the tile tooltip, never as the amber attention line. Antivirus and
+unreadable-report codes still need attention.</li>
+<li>The console logs a readiness snapshot only when it differs from the cached one for
+that PC. The agent repeats the snapshot on every reconnect; an unchanged one is not
+news. The event's severity follows the codes: <em>Warning</em> if any needs attention,
+<em>Info</em> otherwise. An unreadable snapshot is still logged as a warning and never clears
+the cache.</li>
+<li>The teacher-facing text names the cause and the remedy: the NIC vendor's driver plus a
+USB repair, after which the skipped <code>Network …</code> steps run and the code disappears.
+Setup itself is unchanged: it still refuses to guess driver keywords it cannot see.</li>
+</ol>
+<p>Rejected: a per-PC &quot;dismiss&quot; button (state to maintain, and the code would come back on
+the next repair anyway); dropping the code (the tooltip is the only place that tells the
+teacher why <em>Wake</em> does nothing on this PC); writing the vendor keywords blindly.</p>
+<p>Validation: 112 Console tests pass, including the new silent-reconnect and
+informational-severity test; 602 Shared tests pass. The vendor-driver + repair path is
+still to be verified on the physical PCs.</p>
+<h2 id="d-67-ukrainian-english-and-russian-are-required-product-languages">D-67 — Ukrainian, English and Russian are required product languages<a class="anchor" href="#d-67-ukrainian-english-and-russian-are-required-product-languages" aria-label="Link to this section">#</a></h2>
+<p>Context (2026-09-09): M0 deliberately created an English <code>Strings.resx</code> seam and the
+roadmap later named only Ukrainian localization. The owner has now fixed the required
+language set as Ukrainian, English and Russian. A classroom product used without an IT
+department cannot leave Setup, removal or student-facing stock text in a different
+language from the teacher console, and relying only on the host OS language gives a
+multilingual teacher no dependable way to choose the interface.</p>
+<p>Decisions:</p>
+<ol>
+<li>M7 ships three complete product locales: Ukrainian (<code>uk</code>), neutral English and Russian
+(<code>ru</code>). English remains the source/fallback resource so a missing satellite resource
+never makes the product unusable. Translation is maintained in reviewed resource files;
+no runtime machine translation or network service is introduced.</li>
+<li>The localized product surface includes the teacher console, its dialogs and visible
+events, Windows Setup and standalone removal, stock student-facing overlay/message text,
+and the generated <code>INSTALL.txt</code>. Teacher-authored lab names, script content, job output,
+filenames and messages are data and are never translated. Developer documentation,
+protocol identifiers, diagnostic/readiness codes and technical logs remain English.</li>
+<li>The console provides an explicit language selector labelled in each language's own
+name: <code>Українська</code>, <code>English</code>, <code>Русский</code>. The choice is stored per user and survives
+restart. With no stored choice, a supported OS UI culture is used; any other culture
+falls back to English. Setup follows the same supported-culture/fallback rule from the
+Windows display language. <code>INSTALL.txt</code> uses the language selected in the console that
+generated it.</li>
+<li>Completeness is tested by comparing keys across the three resource sets, formatting
+every parameterized string, and rendering representative windows/dialogs in each
+language. M7 acceptance also checks clipping and wrapping, not merely resource lookup.</li>
+</ol>
+<p>Rejected: Ukrainian plus English only (does not meet the owner's required set); choosing
+language solely from the OS (prevents an explicit teacher preference); translating stable
+wire/log codes (breaks diagnostics and compatibility); online automatic translation (the
+lab must work without internet and generated wording would be unreviewed).</p>
+<p>Status: approved planning scope; implementation remains in M7.</p>
 <h2 id="d-68-the-m5-acceptance-drills-and-the-gaps-they-found-a-combined-picker-filter-batched-authorization-one-departure-flow-a-beacon-that-shortens-a-stale-backoff-events-bound-to-their-console-m5-portion-8">D-68 — The M5 acceptance drills and the gaps they found: a combined picker filter, batched authorization, one departure flow, a beacon that shortens a stale backoff, events bound to their console (M5 portion 8)<a class="anchor" href="#d-68-the-m5-acceptance-drills-and-the-gaps-they-found-a-combined-picker-filter-batched-authorization-one-departure-flow-a-beacon-that-shortens-a-stale-backoff-events-bound-to-their-console-m5-portion-8" aria-label="Link to this section">#</a></h2>
 <p>Context (2026-09-09): portions 1–7 were built and the milestone's acceptance criteria
 had never been read back against the code as an adversary would read them. Doing so
@@ -3586,9 +3830,9 @@ project cannot notice on its own).</p>
 </table></div>
 
 </article>
-<footer>Generated 2026-09-16 18:25 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 12:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-34-the-screen-stream-one-jpeg-per-frame-latest-wins-the-console-asks-m3-portion-1">D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)</a></li><li class="lvl2"><a href="#d-35-real-capture-one-producer-for-the-helper-and-the-simulator-dxgi-with-a-gdi-fallback-the-service-relays-m3-portion-2">D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)</a></li><li class="lvl2"><a href="#d-36-remote-control-text-as-text-shortcuts-by-position-the-service-raises-ctrlaltdel-m3-portion-3">D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)</a></li><li class="lvl2"><a href="#d-37-full-mode-quality-auto-by-default-three-manual-steps-the-frame-says-what-it-used-m3-portion-3">D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)</a></li><li class="lvl2"><a href="#d-38-m4-in-four-portions-and-the-script-library-as-the-first-m4-portion-1">D-38 — M4 in four portions, and the script library as the first (M4 portion 1)</a></li><li class="lvl2"><a href="#d-39-script-editor-quick-launch-and-desktop-application-templates">D-39 — Script editor, quick launch and desktop application templates</a></li><li class="lvl2"><a href="#d-40-optional-student-provisioning-and-standalone-removal-for-home-pc-testing">D-40 — Optional student provisioning and standalone removal for home-PC testing</a></li><li class="lvl2"><a href="#d-41-resume-a-running-file-pull-at-completed-chunk-boundaries-m4-portion-2">D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)</a></li><li class="lvl2"><a href="#d-42-explicit-upload-grants-and-a-committed-offset-query-m4-portion-2">D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)</a></li><li class="lvl2"><a href="#d-43-per-pc-result-bundles-from-the-existing-job-stream-m4-portion-2">D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)</a></li><li class="lvl2"><a href="#d-44-handout-dispatch-and-simulator-delivery-before-managed-windows-profiles">D-44 — Handout dispatch and simulator delivery before managed Windows profiles</a></li><li class="lvl2"><a href="#d-45-persist-account-mode-and-creation-evidence-before-windows-setup-integration">D-45 — Persist account mode and creation evidence before Windows Setup integration</a></li><li class="lvl2"><a href="#d-46-windows-account-preparation-under-private-storage-and-an-exclusive-lock">D-46 — Windows account preparation under private storage and an exclusive lock</a></li><li class="lvl2"><a href="#d-47-encrypt-the-settings-journal-and-restore-only-confirmed-unchanged-values">D-47 — Encrypt the settings journal and restore only confirmed, unchanged values</a></li><li class="lvl2"><a href="#d-48-start-native-settings-integration-with-two-fixed-dword-policies">D-48 — Start native settings integration with two fixed DWORD policies</a></li><li class="lvl2"><a href="#d-49-bind-ac-power-timeouts-to-a-scheme-and-confirm-native-activation">D-49 — Bind AC power timeouts to a scheme and confirm native activation</a></li><li class="lvl2"><a href="#d-50-journal-the-windows-update-active-hours-tuple-as-one-policy">D-50 — Journal the Windows Update active-hours tuple as one policy</a></li><li class="lvl2"><a href="#d-51-gate-the-lsa-autologon-secret-on-recorded-student-ownership">D-51 — Gate the LSA autologon secret on recorded student ownership</a></li><li class="lvl2"><a href="#d-52-integrate-m4-with-guarded-native-ownership-and-external-recovery">D-52 — Integrate M4 with guarded native ownership and external recovery</a></li><li class="lvl2"><a href="#d-53-lab-files-and-one-active-room-per-teacher-console-planned-m5">D-53 — Lab files and one active room per teacher console (planned M5)</a></li><li class="lvl2"><a href="#d-54-administrator-backup-onboarding-and-lightweight-console-installation-planned-m5">D-54 — Administrator backup onboarding and lightweight console installation (planned M5)</a></li><li class="lvl2"><a href="#d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1">D-55 — The profile store: profiles.json, labs/&lt;lab_id&gt;/, and a resumable migration (M5 portion 1)</a></li><li class="lvl2"><a href="#d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3">D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, instance: revocation (M5 portion 3)</a></li><li class="lvl2"><a href="#d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4">D-57 — One active session: ActiveLabController, release before acquire, the departure report, result ownership (M5 portions 2 and 4)</a></li><li class="lvl2"><a href="#d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5">D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)</a></li><li class="lvl2"><a href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted .app/.dmg, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)</a></li><li class="lvl2"><a href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)</a></li><li class="lvl2"><a href="#d-68-the-m5-acceptance-drills-and-the-gaps-they-found-a-combined-picker-filter-batched-authorization-one-departure-flow-a-beacon-that-shortens-a-stale-backoff-events-bound-to-their-console-m5-portion-8">D-68 — The M5 acceptance drills and the gaps they found: a combined picker filter, batched authorization, one departure flow, a beacon that shortens a stale backoff, events bound to their console (M5 portion 8)</a></li><li class="lvl2"><a href="#d-69-one-policy-journal-on-the-agent-restore-first-unconditionally-and-without-the-document-the-document-only-decides-what-is-re-applied-a-named-mutex-onstop-restores-a-watchdog-task-m6-portion-1">D-69 — One policy journal on the agent: restore first, unconditionally and without the document; the document only decides what is re-applied; a named mutex; OnStop restores; a watchdog task (M6 portion 1)</a></li><li class="lvl2"><a href="#d-70-the-lock-overlay-a-raw-win32-window-in-the-helper-painted-from-one-skiasharp-bitmap-a-lock-has-its-own-1-h-hard-limit-the-hooks-run-on-a-thread-that-does-nothing-else-m6-portion-1">D-70 — The lock overlay: a raw Win32 window in the helper painted from one SkiaSharp bitmap; a lock has its own 1 h hard limit; the hooks run on a thread that does nothing else (M6 portion 1)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#d-01.net-10-lts-not.net-8">D-01 — .NET 10 LTS, not .NET 8</a></li><li class="lvl2"><a href="#d-02-avalonia-ui-for-the-console">D-02 — Avalonia UI for the console</a></li><li class="lvl2"><a href="#d-03-build-screen-capturecontrol-ourselves-no-veyonvnc-on-student-pcs">D-03 — Build screen capture/control ourselves, no Veyon/VNC on student PCs</a></li><li class="lvl2"><a href="#d-04-grpc-over-tls-as-the-only-transport">D-04 — gRPC over TLS as the only transport</a></li><li class="lvl2"><a href="#d-05-agents-dial-out-to-the-console-console-broadcasts-a-beacon">D-05 — Agents dial out to the console, console broadcasts a beacon</a></li><li class="lvl2"><a href="#d-06-two-processes-on-the-student-pc-service-session-helper-both-system">D-06 — Two processes on the student PC (service + session helper), both SYSTEM</a></li><li class="lvl2"><a href="#d-07-own-package-catalog-instead-of-wingetchocolatey">D-07 — Own package catalog instead of winget/chocolatey</a></li><li class="lvl2"><a href="#d-08-installer-is-a-c-exe-not-a-powershell-script">D-08 — Installer is a C# exe, not a PowerShell script</a></li><li class="lvl2"><a href="#d-09-password-1-for-student-auto-logon-lsa-stored-secret">D-09 — Password &quot;1&quot; for student, auto-logon, LSA-stored secret</a></li><li class="lvl2"><a href="#d-10-network-assumptions-to-verify-on-site">D-10 — Network assumptions (TO VERIFY ON SITE)</a></li><li class="lvl2"><a href="#d-11-jpeg-tiles-first-h.264-later">D-11 — JPEG tiles first, H.264 later</a></li><li class="lvl2"><a href="#d-13-the-lab-is-a-private-ca-the-teacher-machine-is-replaceable">D-13 — The lab is a private CA; the teacher machine is replaceable</a></li><li class="lvl2"><a href="#d-14-certificate-enrollment-with-single-use-codes-the-usb-carries-no-secret">D-14 — Certificate enrollment with single-use codes; the USB carries no secret</a></li><li class="lvl2"><a href="#d-15-unsigned-binaries-plus-an-antivirus-exclusion-not-code-signing">D-15 — Unsigned binaries plus an antivirus exclusion, not code signing</a></li><li class="lvl2"><a href="#d-16-exam-mode-is-four-independent-switches-and-it-is-fail-safe">D-16 — Exam mode is four independent switches, and it is fail-safe</a></li><li class="lvl2"><a href="#d-17-design-for-up-to-30-student-pcs">D-17 — Design for up to 30 student PCs</a></li><li class="lvl2"><a href="#d-21-several-teacher-machines-take-turns-two-at-once-is-tolerated-never-shared">D-21 — Several teacher machines take turns; two at once is tolerated, never shared</a></li><li class="lvl2"><a href="#d-22-internet-control-is-its-own-action-open-whitelist-blocked">D-22 — Internet control is its own action: open, whitelist, blocked</a></li><li class="lvl2"><a href="#d-23-one-file-channel-two-landings-installers-and-handouts">D-23 — One file channel, two landings: installers and handouts</a></li><li class="lvl2"><a href="#d-24-how-the-trust-model-is-actually-built-m1">D-24 — How the trust model is actually built (M1)</a></li><li class="lvl2"><a href="#d-25-four-questions-the-m1-review-left-open-answered">D-25 — Four questions the M1 review left open, answered</a></li><li class="lvl2"><a href="#d-26-the-backup-archive-and-the-lab-key-unlock-window-m1">D-26 — The backup archive and the lab-key unlock window (M1)</a></li><li class="lvl2"><a href="#d-28-no-invisible-credentials-a-new-stick-voids-the-old-one-removing-a-pc-revokes-it-m1">D-28 — No invisible credentials: a new stick voids the old one, removing a PC revokes it (M1)</a></li><li class="lvl2"><a href="#d-27-development-affordances-that-ship-in-the-product-m1">D-27 — Development affordances that ship in the product (M1)</a></li><li class="lvl2"><a href="#d-29-the-agents-install-seam-one-provisioning-routine-a-service-that-never-exits-m2">D-29 — The agent&#39;s install seam: one provisioning routine, a service that never exits (M2)</a></li><li class="lvl2"><a href="#d-30-supervising-the-session-helper-m2">D-30 — Supervising the session helper (M2)</a></li><li class="lvl2"><a href="#d-31-scripts-delivered-through-pullfile-kept-in-the-console-m2-portion-3-m4">D-31 — Scripts: delivered through PullFile, kept in the console (M2 portion 3 / M4)</a></li><li class="lvl2"><a href="#d-32-power-scripts-and-the-file-channel-on-a-real-pc-m2-portion-3">D-32 — Power, scripts and the file channel on a real PC (M2 portion 3)</a></li><li class="lvl2"><a href="#d-33-the-minimal-push-and-restart-m2-portion-4">D-33 — The minimal push-and-restart (M2 portion 4)</a></li><li class="lvl2"><a href="#d-34-the-screen-stream-one-jpeg-per-frame-latest-wins-the-console-asks-m3-portion-1">D-34 — The screen stream: one JPEG per frame, latest wins, the console asks (M3 portion 1)</a></li><li class="lvl2"><a href="#d-35-real-capture-one-producer-for-the-helper-and-the-simulator-dxgi-with-a-gdi-fallback-the-service-relays-m3-portion-2">D-35 — Real capture: one producer for the helper and the simulator, DXGI with a GDI fallback, the service relays (M3 portion 2)</a></li><li class="lvl2"><a href="#d-36-remote-control-text-as-text-shortcuts-by-position-the-service-raises-ctrlaltdel-m3-portion-3">D-36 — Remote control: text as text, shortcuts by position, the service raises Ctrl+Alt+Del (M3 portion 3)</a></li><li class="lvl2"><a href="#d-37-full-mode-quality-auto-by-default-three-manual-steps-the-frame-says-what-it-used-m3-portion-3">D-37 — Full-mode quality: auto by default, three manual steps, the frame says what it used (M3 portion 3)</a></li><li class="lvl2"><a href="#d-38-m4-in-four-portions-and-the-script-library-as-the-first-m4-portion-1">D-38 — M4 in four portions, and the script library as the first (M4 portion 1)</a></li><li class="lvl2"><a href="#d-39-script-editor-quick-launch-and-desktop-application-templates">D-39 — Script editor, quick launch and desktop application templates</a></li><li class="lvl2"><a href="#d-40-optional-student-provisioning-and-standalone-removal-for-home-pc-testing">D-40 — Optional student provisioning and standalone removal for home-PC testing</a></li><li class="lvl2"><a href="#d-41-resume-a-running-file-pull-at-completed-chunk-boundaries-m4-portion-2">D-41 — Resume a running file pull at completed chunk boundaries (M4 portion 2)</a></li><li class="lvl2"><a href="#d-42-explicit-upload-grants-and-a-committed-offset-query-m4-portion-2">D-42 — Explicit upload grants and a committed-offset query (M4 portion 2)</a></li><li class="lvl2"><a href="#d-43-per-pc-result-bundles-from-the-existing-job-stream-m4-portion-2">D-43 — Per-PC result bundles from the existing job stream (M4 portion 2)</a></li><li class="lvl2"><a href="#d-44-handout-dispatch-and-simulator-delivery-before-managed-windows-profiles">D-44 — Handout dispatch and simulator delivery before managed Windows profiles</a></li><li class="lvl2"><a href="#d-45-persist-account-mode-and-creation-evidence-before-windows-setup-integration">D-45 — Persist account mode and creation evidence before Windows Setup integration</a></li><li class="lvl2"><a href="#d-46-windows-account-preparation-under-private-storage-and-an-exclusive-lock">D-46 — Windows account preparation under private storage and an exclusive lock</a></li><li class="lvl2"><a href="#d-47-encrypt-the-settings-journal-and-restore-only-confirmed-unchanged-values">D-47 — Encrypt the settings journal and restore only confirmed, unchanged values</a></li><li class="lvl2"><a href="#d-48-start-native-settings-integration-with-two-fixed-dword-policies">D-48 — Start native settings integration with two fixed DWORD policies</a></li><li class="lvl2"><a href="#d-49-bind-ac-power-timeouts-to-a-scheme-and-confirm-native-activation">D-49 — Bind AC power timeouts to a scheme and confirm native activation</a></li><li class="lvl2"><a href="#d-50-journal-the-windows-update-active-hours-tuple-as-one-policy">D-50 — Journal the Windows Update active-hours tuple as one policy</a></li><li class="lvl2"><a href="#d-51-gate-the-lsa-autologon-secret-on-recorded-student-ownership">D-51 — Gate the LSA autologon secret on recorded student ownership</a></li><li class="lvl2"><a href="#d-52-integrate-m4-with-guarded-native-ownership-and-external-recovery">D-52 — Integrate M4 with guarded native ownership and external recovery</a></li><li class="lvl2"><a href="#d-53-lab-files-and-one-active-room-per-teacher-console-planned-m5">D-53 — Lab files and one active room per teacher console (planned M5)</a></li><li class="lvl2"><a href="#d-54-administrator-backup-onboarding-and-lightweight-console-installation-planned-m5">D-54 — Administrator backup onboarding and lightweight console installation (planned M5)</a></li><li class="lvl2"><a href="#d-55-the-profile-store-profiles.json-labslab_id-and-a-resumable-migration-m5-portion-1">D-55 — The profile store: profiles.json, labs/&lt;lab_id&gt;/, and a resumable migration (M5 portion 1)</a></li><li class="lvl2"><a href="#d-56-lab-files-device-requests-and-grants-the-offline-authorization-exchange-the-role-in-the-subject-ou-instance-revocation-m5-portion-3">D-56 — Lab files, device requests and grants: the offline authorization exchange, the role in the subject OU, instance: revocation (M5 portion 3)</a></li><li class="lvl2"><a href="#d-57-one-active-session-activelabcontroller-release-before-acquire-the-departure-report-result-ownership-m5-portions-2-and-4">D-57 — One active session: ActiveLabController, release before acquire, the departure report, result ownership (M5 portions 2 and 4)</a></li><li class="lvl2"><a href="#d-58-take-over-without-comparing-clocks-and-truthful-ownership-states-m5-portion-5">D-58 — Take-over without comparing clocks, and truthful ownership states (M5 portion 5)</a></li><li class="lvl2"><a href="#d-59-teacher-console-packaging-a-c-per-user-windows-installer-a-scripted.app.dmg-a-linux-tarball-single-instance-and-scoped-firewall-rules-m5-portions-6-and-7">D-59 — Teacher-console packaging: a C# per-user Windows installer, a scripted .app/.dmg, a Linux tarball; single instance and scoped firewall rules (M5 portions 6 and 7)</a></li><li class="lvl2"><a href="#d-60-enrollment-codes-imported-from-a-backup-are-dormant-until-activated-m5-portion-3">D-60 — Enrollment codes imported from a backup are dormant until activated (M5 portion 3)</a></li><li class="lvl2"><a href="#d-61-preserve-a-completed-defender-addition-after-interrupted-verification">D-61 — Preserve a completed Defender addition after interrupted verification</a></li><li class="lvl2"><a href="#d-62-journal-windows-resolved-hibernation-off-representation">D-62 — Journal Windows&#39; resolved hibernation-off representation</a></li><li class="lvl2"><a href="#d-63-probe-an-absent-hibernation-file-without-requiring-power-capabilities">D-63 — Probe an absent hibernation file without requiring power capabilities</a></li><li class="lvl2"><a href="#d-64-allow-bounded-defender-wmi-convergence-after-additive-mutation">D-64 — Allow bounded Defender WMI convergence after additive mutation</a></li><li class="lvl2"><a href="#d-65-an-absent-hibernateenabled-value-is-the-os-default-not-an-inconsistency">D-65 — An absent HibernateEnabled value is the OS default, not an inconsistency</a></li><li class="lvl2"><a href="#d-66-a-network-driver-without-wake-on-lan-settings-is-a-fact-not-an-alarm">D-66 — A network driver without Wake-on-LAN settings is a fact, not an alarm</a></li><li class="lvl2"><a href="#d-67-ukrainian-english-and-russian-are-required-product-languages">D-67 — Ukrainian, English and Russian are required product languages</a></li><li class="lvl2"><a href="#d-68-the-m5-acceptance-drills-and-the-gaps-they-found-a-combined-picker-filter-batched-authorization-one-departure-flow-a-beacon-that-shortens-a-stale-backoff-events-bound-to-their-console-m5-portion-8">D-68 — The M5 acceptance drills and the gaps they found: a combined picker filter, batched authorization, one departure flow, a beacon that shortens a stale backoff, events bound to their console (M5 portion 8)</a></li><li class="lvl2"><a href="#d-69-one-policy-journal-on-the-agent-restore-first-unconditionally-and-without-the-document-the-document-only-decides-what-is-re-applied-a-named-mutex-onstop-restores-a-watchdog-task-m6-portion-1">D-69 — One policy journal on the agent: restore first, unconditionally and without the document; the document only decides what is re-applied; a named mutex; OnStop restores; a watchdog task (M6 portion 1)</a></li><li class="lvl2"><a href="#d-70-the-lock-overlay-a-raw-win32-window-in-the-helper-painted-from-one-skiasharp-bitmap-a-lock-has-its-own-1-h-hard-limit-the-hooks-run-on-a-thread-that-does-nothing-else-m6-portion-1">D-70 — The lock overlay: a raw Win32 window in the helper painted from one SkiaSharp bitmap; a lock has its own 1 h hard limit; the hooks run on a thread that does nothing else (M6 portion 1)</a></li><li class="lvl2"><a href="#d-12-documentation-markdown-is-the-source-html-is-generated">D-12 — Documentation: Markdown is the source, HTML is generated</a></li><li class="lvl2"><a href="#d-18-build-and-test-toolchain-m0">D-18 — Build and test toolchain (M0)</a></li><li class="lvl2"><a href="#d-19-updating-labcontrol-itself-side-by-side-versions-and-a-self-rollback">D-19 — Updating LabControl itself: side-by-side versions and a self-rollback</a></li><li class="lvl2"><a href="#d-20-every-file-on-disk-carries-a-schema-version">D-20 — Every file on disk carries a schema version</a></li><li class="lvl2"><a href="#nuget-dependencies-keep-this-list-current">NuGet dependencies (keep this list current)</a></li></ul></nav>
 </div>
 </body>
 </html>

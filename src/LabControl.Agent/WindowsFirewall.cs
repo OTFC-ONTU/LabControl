@@ -164,8 +164,10 @@ internal sealed class WindowsFirewall
             {
                 existing = rules.Item(SitesRuleName);
             }
-            catch (COMException)
+            catch (Exception ex) when (ex is COMException or IOException or ArgumentException)
             {
+                // A missing rule is HRESULT 0x80070002, which the COM binder may surface as
+                // FileNotFoundException rather than COMException (review finding 1).
             }
 
             if (existing is null)

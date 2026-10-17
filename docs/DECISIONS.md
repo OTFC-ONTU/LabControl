@@ -3874,6 +3874,19 @@ Decisions:
    and then, so the refused-names list and *Allow* can be developed on the Mac.
 10. **Lab departure does not end a policy in this portion**; it has its own limit like a lock.
     Portion 6 sets the departure contract for every policy.
+11. **Review fixes (2026-10-17, an adversarial read of the Windows half before any VM run).**
+    The originals' save behind `recordDisplaced` now throws on a failed write, so the apply
+    fails and is undone instead of changing a machine whose originals are not on disk. A
+    missing sites rule (`HRESULT 0x80070002`, which the COM binder may raise as
+    `FileNotFoundException`) is caught, or no allowed name would ever pass. The watchdog asks
+    whether the service runs again after taking the mutex. Each interface is its own restore
+    step, and an interface that is gone counts as restored — otherwise one unplugged USB NIC
+    would keep the originals, and the `self_update` refusal, forever. A late resolver answer can
+    no longer put the sites rule back once the resolver is being stopped.
+    Accepted for the drill to judge: every service start resets a static loopback DNS to DHCP
+    even with no policy (a PC with its own local DNS proxy would lose it), and the agent service
+    has no dependency on the firewall service, so a re-apply at boot that runs before MpsSvc is
+    ready fails and drops the policy rather than retrying.
 
 Rejected: a block rule with allow exceptions (block beats allow); a dynamic WFP session whose
 filters vanish when the process dies (a better fail-safe, but outside the settled plan of
@@ -3946,8 +3959,17 @@ Decisions:
 8. **Nothing on the student's screen** (owner decision 2026-10-17): the browser shows its own
    "can't reach this site"; the policy is visible only on the teacher's tile.
 
-Accepted limits: a NIC that comes up after the apply keeps its own DNS — names resolve past the
-resolver and the sites it reaches stay blocked by the firewall (lab PCs are wired, one NIC); a
+9. **The upstream list only grows during a policy and an interface that comes up later is
+   pointed too** (review fixes 2026-10-17). On a re-apply — *Allow*, a new list, the standalone
+   policy returning after an exam — the interfaces already report the loopback, so the servers
+   gathered when the whitelist first started are kept and only added to. After a reboot the
+   service re-applies before the wired NIC is up; while a whitelist is in force the enforcer's
+   2-second refresh asks the machine whether an interface with a gateway does not point at the
+   resolver and, if so, re-applies through the journal, which records that interface's
+   originals first. An interface that refuses the DNS change is tolerated only when it has no
+   gateway in that family (a virtual switch, a Bluetooth PAN).
+
+Accepted limits: a
 program with its own resolver gains nothing, since the firewall is the gate; Teredo and IP-HTTPS
 in *Core Networking* stay allowed (defunct on a non-domain PC); Windows 10 before 2004 cannot
 run a whitelist (the apply fails, *Blocked* still works).

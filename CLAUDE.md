@@ -381,7 +381,7 @@ and `PolicyRestoreTask`. `agent.exe --restore-policy` now does nothing while the
 otherwise restores without re-applying (`D-73` item 7); `self_update` is refused while a policy is
 held. Console: *Internet…* / *Internet for all…*, `InternetDialog`, `InternetPresetLibrary`
 (`internet-presets.json`, in the backup and the lab file), the tile badge from `InternetState`
-alone. Tests: 927 Shared + 262 Console (13 skipping). Next: the portion-3 drill on the ARM64 VM
+alone. Tests: 929 Shared + 262 Console (13 skipping); review fixes in `D-73` item 11, `D-74` item 9. Next: the portion-3 drill on the ARM64 VM
 (ROADMAP M6), then portion 4.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,

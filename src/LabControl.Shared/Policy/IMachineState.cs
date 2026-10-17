@@ -109,6 +109,13 @@ public interface IMachineState
     /// </summary>
     InternetRuntime InternetRuntime() => Policy.InternetRuntime.None;
 
+    /// <summary>
+    /// True when the enforcement in force has fallen behind the machine — an interface that came
+    /// up after a whitelist was applied still has its own DNS (D-74 item 6) — so the enforcer
+    /// re-applies through the journal, which records the new originals first. Cheap; never throws.
+    /// </summary>
+    bool InternetNeedsReassert() => false;
+
     /// <summary>Enforce an exam's timer, whitelist and collection (portion 4); <see cref="MachineOutcome.NotInThisBuild"/> until then.</summary>
     MachineResult ApplyExam(ExamSession session);
 

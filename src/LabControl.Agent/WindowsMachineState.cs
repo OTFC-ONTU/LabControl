@@ -120,6 +120,8 @@ internal sealed class WindowsMachineState : IMachineState
 
     public InternetRuntime InternetRuntime() => _internet.Runtime();
 
+    public bool InternetNeedsReassert() => _internet.NeedsReassert();
+
     public MachineResult ApplyExam(ExamSession session) => MachineResult.NotInThisBuild(PolicyEvents.KindName(session));
 
     public MachineResult LiftExam() => MachineResult.NotInThisBuild(PolicyEvents.Text("KindExam"));

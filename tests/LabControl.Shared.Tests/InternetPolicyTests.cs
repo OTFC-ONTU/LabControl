@@ -97,9 +97,19 @@ public sealed class InternetPolicyTests
 
         public PolicyJournal Journal { get; }
 
+        public bool FailWrites { get; set; }
+
         public Rig(string? document = null)
         {
-            Journal = new PolicyJournal(Machine, LabId, () => document, Saves.Add);
+            Journal = new PolicyJournal(Machine, LabId, () => document, saved =>
+            {
+                if (FailWrites)
+                {
+                    throw new IOException("disk full");
+                }
+
+                Saves.Add(saved);
+            });
             Journal.Reported += Events.Add;
         }
 
@@ -350,5 +360,37 @@ public sealed class InternetPolicyTests
         rig.Journal.Start(Now);
 
         Assert.DoesNotContain(rig.Events, e => e.Code == PolicyEvents.Unreadable);
+    }
+
+    [Fact]
+    public void A_policy_whose_originals_cannot_be_saved_is_not_applied()
+    {
+        var rig = new Rig();
+        var mutated = false;
+        rig.Machine.BeforeMutate = () => mutated = true;
+        rig.FailWrites = true;
+
+        var state = rig.Journal.SetInternet(Whitelist(), Instance, Now);
+
+        Assert.False(mutated);
+        Assert.NotEmpty(state.Problem);
+        Assert.Equal(InternetPolicy.Types.Mode.Open, state.Mode);
+        Assert.Contains(rig.Events, e => e.Code == PolicyEvents.SaveFailed);
+    }
+
+    [Fact]
+    public void A_reassert_re_applies_the_policy_in_force_and_keeps_it_when_it_fails()
+    {
+        var rig = new Rig();
+        Assert.False(rig.Journal.ReassertInternet(Now));
+        rig.Journal.SetInternet(Whitelist(), Instance, Now);
+
+        Assert.True(rig.Journal.ReassertInternet(Now + 10));
+        Assert.Equal(2, rig.Machine.Calls.Count(c => c == nameof(IMachineState.ApplyInternet)));
+
+        rig.Machine.Answers[nameof(IMachineState.ApplyInternet)] = () => MachineResult.Failed("nic gone");
+        Assert.True(rig.Journal.ReassertInternet(Now + 20));
+        Assert.Equal(InternetPolicy.Types.Mode.Whitelist, rig.Journal.InternetStateOf(Now + 20).Mode);
+        Assert.DoesNotContain(nameof(IMachineState.LiftInternet), rig.Machine.Calls);
     }
 }

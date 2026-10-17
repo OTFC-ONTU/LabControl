@@ -2452,7 +2452,9 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   lab file. Tests: `InternetPolicyTests`, `InternetResolverTests`, the presets document and
   library tests, `InternetControlTests` (three simulated PCs end to end: whitelist, refused
   names merged, *Allow*, lift, a restart under a block, a PC with no enforcer) and the UI
-  renders — 927 Shared + 262 Console (13 skipping). **Next: the portion-3 drill on the ARM64 VM** — *Blocked* with a positive control
+  renders — 929 Shared + 262 Console (13 skipping). An adversarial review of the Windows half found
+  three defects that would have broken a whitelist on a real PC and several smaller ones, fixed
+  before any VM run (`D-73` item 11, `D-74` item 9). **Next: the portion-3 drill on the ARM64 VM** — *Blocked* with a positive control
   (a site loads before, not after; the console link, *Send files* and a package install still
   work); *Whitelist* with `*.jetbrains.com` and `docs.oracle.com` in Edge with and without
   DNS-over-HTTPS, the refused names reaching the console and *Allow* fixing a missing CDN name;

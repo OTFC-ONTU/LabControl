@@ -29,6 +29,15 @@ internal sealed class WindowsInternetControl
     private bool _firewallOff;
     private bool _noUpstream;
 
+    // The upstream servers, gathered the first time a whitelist starts and only ever added to:
+    // on a re-apply the interfaces already report the loopback, and an empty list would make
+    // every allowed name fail (review finding 2).
+    private readonly List<IPEndPoint> _upstream = [];
+
+    // Under _addresses: false from the moment the resolver is being stopped, so an answer that
+    // arrives late never puts the sites rule back (review finding 4).
+    private bool _admitting;
+
     /// <param name="program">The running <c>agent.exe</c>, pinned in the exemption rule (its <c>app\&lt;version&gt;\</c> path, D-69 item 6).</param>
     public WindowsInternetControl(ILogger log, string program)
     {
@@ -63,21 +72,13 @@ internal sealed class WindowsInternetControl
             // The resolver before the rules: a late answer would otherwise put the sites rule back
             // after the group was removed. Names fail for the moment until DNS is back.
             Step(problems, "resolver", StopResolver);
+            _upstream.Clear();
             Step(problems, "owned firewall rules", _firewall.RemoveOwnedRules);
-            Step(problems, "DNS", () =>
+            foreach (var adapter in AllAdapters())
             {
-                foreach (var adapter in AllAdapters())
-                {
-                    foreach (var ipv6 in new[] { false, true })
-                    {
-                        var dns = TryRead(adapter, ipv6);
-                        if (dns is not null && WindowsDns.PointsAtResolver(dns))
-                        {
-                            WindowsDns.Write(adapter, ipv6, []);
-                        }
-                    }
-                }
-            });
+                // One step per interface: one that refuses must not keep the others on the loopback.
+                Step(problems, $"DNS of {adapter:B}", () => ResetIfPointed(adapter));
+            }
             Step(problems, "watchdog task", PolicyRestoreTask.Delete);
             WindowsDns.FlushCache();
 
@@ -102,9 +103,16 @@ internal sealed class WindowsInternetControl
                 }
             }
 
+            var present = AllAdapters().ToHashSet();
             foreach (var dns in displaced.Dns.Where(d => !d.Dhcp))
             {
-                Step(problems, "DNS", () => WindowsDns.Write(Guid.Parse(dns.Interface), dns.Ipv6, dns.Servers));
+                // An interface that is gone (a USB NIC unplugged, a driver reinstalled) has nothing
+                // to put back; failing on it forever would keep the originals, and with them the
+                // self_update refusal, for good (review finding 7).
+                if (Guid.TryParse(dns.Interface, out var id) && present.Contains(id))
+                {
+                    Step(problems, $"DNS of {dns.Interface}", () => WindowsDns.Write(id, dns.Ipv6, dns.Servers));
+                }
             }
 
             if (displaced.DisabledRules.Count > 0)
@@ -341,32 +349,46 @@ internal sealed class WindowsInternetControl
     private string? StartWhitelist(InternetSession session, DisplacedSettings displaced, IReadOnlyList<System.Net.NetworkInformation.NetworkInterface> adapters)
     {
         // Upstream before the switch: afterwards the interfaces report the loopback. A static
-        // original kept from an unfinished restore counts too.
-        var upstream = WindowsDns.EffectiveServers(adapters);
+        // original kept from an unfinished restore counts too. Only ever added to.
+        foreach (var server in WindowsDns.EffectiveServers(adapters))
+        {
+            AddUpstream(server.Address);
+        }
+
         foreach (var dns in displaced.Dns.Where(d => !d.Dhcp))
         {
             foreach (var server in dns.Servers)
             {
-                if (IPAddress.TryParse(server, out var address) && !IPAddress.IsLoopback(address) && upstream.All(u => !u.Address.Equals(address)))
+                if (IPAddress.TryParse(server, out var address))
                 {
-                    upstream.Add(new IPEndPoint(address, 53));
+                    AddUpstream(address);
                 }
             }
         }
 
-        _noUpstream = upstream.Count == 0;
+        _noUpstream = _upstream.Count == 0;
         if (_resolver is { Running: true } running)
         {
             running.SetAllowed(session.AllowedHosts);
-            running.SetUpstream(upstream);
+            running.SetUpstream(_upstream.ToArray());
         }
         else
         {
             StopResolver();
-            _addresses.Clear();
-            var resolver = new LoopbackResolver(new LoopbackResolverOptions(LoopbackResolverOptions.ProductionListen, upstream, session.AllowedHosts, Admit, _log));
+            lock (_addresses)
+            {
+                _addresses.Clear();
+                _admitting = true;
+            }
+
+            var resolver = new LoopbackResolver(new LoopbackResolverOptions(LoopbackResolverOptions.ProductionListen, _upstream.ToArray(), session.AllowedHosts, Admit, _log));
             if (!resolver.TryStart(out var code))
             {
+                lock (_addresses)
+                {
+                    _admitting = false;
+                }
+
                 resolver.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
                 return PolicyEvents.Text("InternetResolverFailed", code);
             }
@@ -376,16 +398,7 @@ internal sealed class WindowsInternetControl
 
         foreach (var adapter in adapters)
         {
-            var id = WindowsDns.IdOf(adapter);
-            WindowsDns.Write(id, ipv6: false, [WindowsDns.Loopback(false)]);
-            try
-            {
-                WindowsDns.Write(id, ipv6: true, [WindowsDns.Loopback(true)]);
-            }
-            catch (IOException) when (!HasIpv6Dns(adapter))
-            {
-                // An interface without IPv6 DNS has nothing to point; one with it must be pointed.
-            }
+            PointAtResolver(adapter);
         }
 
         return null;
@@ -399,14 +412,29 @@ internal sealed class WindowsInternetControl
             return;
         }
 
+        StopResolver();
+        var present = AllAdapters().ToHashSet();
         foreach (var dns in displaced.Dns.ToArray())
         {
-            WindowsDns.Write(Guid.Parse(dns.Interface), dns.Ipv6, dns.Dhcp ? [] : dns.Servers);
+            if (Guid.TryParse(dns.Interface, out var id) && present.Contains(id))
+            {
+                WindowsDns.Write(id, dns.Ipv6, dns.Dhcp ? [] : dns.Servers);
+            }
+
             displaced.Dns.Remove(dns);
         }
 
-        StopResolver();
-        _addresses.Clear();
+        // An interface pointed without a recorded original goes back to DHCP, as a restore does (review finding 8).
+        foreach (var adapter in present)
+        {
+            ResetIfPointed(adapter);
+        }
+
+        lock (_addresses)
+        {
+            _addresses.Clear();
+        }
+
         _firewall.SetSiteAddresses([]);
     }
 
@@ -419,6 +447,11 @@ internal sealed class WindowsInternetControl
     {
         lock (_addresses)
         {
+            if (!_admitting)
+            {
+                return false;
+            }
+
             try
             {
                 if (_addresses.Admit(addresses))
@@ -438,11 +471,95 @@ internal sealed class WindowsInternetControl
 
     private void StopResolver()
     {
+        lock (_addresses)
+        {
+            _admitting = false;
+        }
+
         var resolver = _resolver;
         _resolver = null;
         if (resolver is not null && !resolver.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(10)))
         {
             throw new IOException("the whitelist resolver did not stop within 10 s");
+        }
+    }
+
+    private void AddUpstream(IPAddress address)
+    {
+        if (!IPAddress.IsLoopback(address) && !address.IsIPv6SiteLocal && _upstream.All(u => !u.Address.Equals(address)))
+        {
+            _upstream.Add(new IPEndPoint(address, 53));
+        }
+    }
+
+    /// <summary>
+    /// Points one interface at the resolver. An interface that refuses is tolerated only when it
+    /// cannot reach anything past the lab anyway — no default gateway in that family (a virtual
+    /// switch, a Bluetooth PAN); one that can must be pointed, or names would resolve past the
+    /// resolver (review finding 10).
+    /// </summary>
+    private void PointAtResolver(System.Net.NetworkInformation.NetworkInterface adapter)
+    {
+        var id = WindowsDns.IdOf(adapter);
+        foreach (var ipv6 in new[] { false, true })
+        {
+            try
+            {
+                WindowsDns.Write(id, ipv6, [WindowsDns.Loopback(ipv6)]);
+            }
+            catch (IOException) when (!HasGateway(adapter, ipv6) && !(ipv6 && HasIpv6Dns(adapter)))
+            {
+                _log.LogInformation("interface {Name} refused its {Family} DNS change and has no gateway there; left as it is", adapter.Name, ipv6 ? "IPv6" : "IPv4");
+            }
+        }
+    }
+
+    private static void ResetIfPointed(Guid adapter)
+    {
+        foreach (var ipv6 in new[] { false, true })
+        {
+            if (TryRead(adapter, ipv6) is { } dns && WindowsDns.PointsAtResolver(dns))
+            {
+                WindowsDns.Write(adapter, ipv6, []);
+            }
+        }
+    }
+
+    /// <summary>
+    /// True while a whitelist is in force and an interface that is up does not point at the
+    /// resolver — the wired NIC that came up after a reboot's re-apply (review finding 3) — so
+    /// the enforcer re-applies through the journal, which records its originals first.
+    /// </summary>
+    public bool NeedsReassert()
+    {
+        lock (_lock)
+        {
+            if (_applied is not { Mode: InternetPolicy.Types.Mode.Whitelist })
+            {
+                return false;
+            }
+
+            try
+            {
+                return WindowsDns.Candidates().Any(a => HasGateway(a, false) && TryRead(a, false) is { } dns && !WindowsDns.PointsAtResolver(dns));
+            }
+            catch (Exception ex) when (ex is System.Net.NetworkInformation.NetworkInformationException or FormatException)
+            {
+                return false;
+            }
+        }
+    }
+
+    private static bool HasGateway(System.Net.NetworkInformation.NetworkInterface adapter, bool ipv6)
+    {
+        try
+        {
+            return adapter.GetIPProperties().GatewayAddresses.Any(g =>
+                (g.Address.AddressFamily == AddressFamily.InterNetworkV6) == ipv6 && !g.Address.Equals(IPAddress.Any) && !g.Address.Equals(IPAddress.IPv6Any));
+        }
+        catch (System.Net.NetworkInformation.NetworkInformationException)
+        {
+            return false;
         }
     }
 

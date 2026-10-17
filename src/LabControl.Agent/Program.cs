@@ -218,6 +218,14 @@ internal static class Program
                 return 3;
             }
 
+            // Asked again under the mutex: at boot the service may have started, re-applied and
+            // released it while this task waited (review finding 6).
+            if (ServiceControl.ServiceIsRunning())
+            {
+                log.LogInformation("The {Service} service started while this task waited; it owns the policy. Nothing done.", Defaults.ServiceName);
+                return 0;
+            }
+
             if (lease.Outcome == PolicyMutexOutcome.Unavailable)
             {
                 // Cannot be serialized against the service (a DACL, an unelevated operator): the

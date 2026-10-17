@@ -2661,7 +2661,9 @@ names with <em>Allow</em>), <code>LabSession.SetInternet</code> / <code>LiftInte
 lab file. Tests: <code>InternetPolicyTests</code>, <code>InternetResolverTests</code>, the presets document and
 library tests, <code>InternetControlTests</code> (three simulated PCs end to end: whitelist, refused
 names merged, <em>Allow</em>, lift, a restart under a block, a PC with no enforcer) and the UI
-renders — 927 Shared + 262 Console (13 skipping). <strong>Next: the portion-3 drill on the ARM64 VM</strong> — <em>Blocked</em> with a positive control
+renders — 929 Shared + 262 Console (13 skipping). An adversarial review of the Windows half found
+three defects that would have broken a whitelist on a real PC and several smaller ones, fixed
+before any VM run (<code>D-73</code> item 11, <code>D-74</code> item 9). <strong>Next: the portion-3 drill on the ARM64 VM</strong> — <em>Blocked</em> with a positive control
 (a site loads before, not after; the console link, <em>Send files</em> and a package install still
 work); <em>Whitelist</em> with <code>*.jetbrains.com</code> and <code>docs.oracle.com</code> in Edge with and without
 DNS-over-HTTPS, the refused names reaching the console and <em>Allow</em> fixing a missing CDN name;
@@ -2880,7 +2882,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-17 23:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 23:59 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

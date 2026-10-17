@@ -426,6 +426,7 @@ public sealed class PolicyEnforcer : IAsyncDisposable
 
     /// <summary>
     /// Every <see cref="Defaults.InternetStateRefusedInterval"/> while a whitelist is in force:
+    /// re-applies when the machine fell behind the policy (an interface that came up later), and
     /// re-sends the state when the resolver refused something new, so the teacher's list of
     /// missing names stays current without thirty PCs sending one message per refusal (D-74).
     /// </summary>
@@ -442,6 +443,23 @@ public sealed class PolicyEnforcer : IAsyncDisposable
                 }
 
                 published = _publishedRefusedVersion;
+            }
+
+            var reassert = false;
+            try
+            {
+                reassert = _machine.InternetNeedsReassert();
+            }
+            catch (Exception ex)
+            {
+                _log.LogDebug(ex, "asking whether the internet policy fell behind failed: {Message}", ex.Message);
+            }
+
+            if (reassert)
+            {
+                Guarded("internet", () => Journal.ReassertInternet(_clock().ToUnixTimeSeconds()));
+                PublishInternet();
+                return;
             }
 
             if (Runtime().RefusedVersion != published)

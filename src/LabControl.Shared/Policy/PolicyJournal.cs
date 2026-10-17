@@ -172,7 +172,7 @@ public sealed class PolicyJournal
                         {
                             var ceiling = TimeSpan.FromSeconds(Math.Max(0, Math.Min((long)Defaults.ExamHardLimit.TotalSeconds, exam.HardLimitUnix - nowUnix)));
                             Reapply(examInternet, ceiling, nowUnix, nameof(IMachineState.ApplyInternet),
-                                s => _machine.ApplyInternet(s, policy.Displaced!, () => Save(policy, nowUnix)), () => policy.ExamInternet = examInternet, reapplied, dropped,
+                                s => _machine.ApplyInternet(s, policy.Displaced!, () => SaveOrThrow(policy, nowUnix)), () => policy.ExamInternet = examInternet, reapplied, dropped,
                                 undo: () => open &= UndoInternet(policy));
                         }
                     }
@@ -194,7 +194,7 @@ public sealed class PolicyJournal
                     else
                     {
                         Reapply(internet, Defaults.InternetPolicyHardLimit, nowUnix, nameof(IMachineState.ApplyInternet),
-                            s => _machine.ApplyInternet(s, policy.Displaced!, () => Save(policy, nowUnix)), () => policy.Internet = internet, reapplied, dropped,
+                            s => _machine.ApplyInternet(s, policy.Displaced!, () => SaveOrThrow(policy, nowUnix)), () => policy.Internet = internet, reapplied, dropped,
                             undo: () => open &= UndoInternet(policy));
                     }
                 }
@@ -323,7 +323,7 @@ public sealed class PolicyJournal
                 {
                     // The standalone policy comes back when the exam's ends (D-22): the machine
                     // changes from one to the other without opening in between.
-                    var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(underneath, _policy.Displaced!, () => Save(nowUnix)));
+                    var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(underneath, _policy.Displaced!, () => SaveOrThrow(_policy, nowUnix)));
                     if (result.Succeeded)
                     {
                         _policy.ExamInternet = null;
@@ -594,6 +594,33 @@ public sealed class PolicyJournal
         }
     }
 
+    /// <summary>
+    /// Re-applies the internet policy in force when the machine fell behind it
+    /// (<see cref="IMachineState.InternetNeedsReassert"/>): the same apply, so new originals are
+    /// recorded and saved before anything changes. A failure is reported and the policy kept —
+    /// what was already enforced still is, and the next refresh tries again. Returns whether it ran.
+    /// </summary>
+    public bool ReassertInternet(long nowUnix)
+    {
+        lock (_lock)
+        {
+            if (_stopped || (_policy.ExamInternet ?? _policy.Internet) is not { } effective || effective.Ended(nowUnix))
+            {
+                return false;
+            }
+
+            var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(effective, _policy.Displaced!, () => SaveOrThrow(_policy, nowUnix)));
+            if (!result.Succeeded)
+            {
+                Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed,
+                    PolicyEvents.Text("ApplyFailed", PolicyEvents.KindName(effective), effective.SessionId, Describe(result, PolicyEvents.KindName(effective))));
+            }
+
+            Save(nowUnix);
+            return true;
+        }
+    }
+
     /// <summary>The internet state as it stands, for the re-send after <c>Welcome</c> and the refused-names refresh.</summary>
     public InternetState InternetStateOf(long nowUnix, InternetRuntime? runtime = null)
     {
@@ -665,7 +692,7 @@ public sealed class PolicyJournal
             return InternetStateLocked(null, nowUnix, runtime);
         }
 
-        var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(session, _policy.Displaced!, () => Save(nowUnix)));
+        var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(session, _policy.Displaced!, () => SaveOrThrow(_policy, nowUnix)));
         if (result.Succeeded)
         {
             _policy.Internet = session;
@@ -974,6 +1001,24 @@ public sealed class PolicyJournal
     private void Unreadable(string message) => Report(Event.Types.Severity.Warning, PolicyEvents.Unreadable, message);
 
     private void Save(long nowUnix) => Save(_policy, nowUnix);
+
+    /// <summary>
+    /// The save behind <c>recordDisplaced</c>: the originals must be on disk before the machine
+    /// changes, so a failed write throws into the machine's apply, which fails and is undone,
+    /// instead of being reported and carried on past (review finding 5).
+    /// </summary>
+    private void SaveOrThrow(ClassroomPolicy policy, long nowUnix)
+    {
+        try
+        {
+            _write(new PolicyDocument { LabId = _labId, SavedAtUnix = nowUnix, Policy = Copy(policy) });
+        }
+        catch (Exception ex)
+        {
+            Report(Event.Types.Severity.Warning, PolicyEvents.SaveFailed, PolicyEvents.Text("SaveFailed", ex.Message));
+            throw new IOException(PolicyEvents.Text("SaveFailed", ex.Message), ex);
+        }
+    }
 
     private void Save(ClassroomPolicy policy, long nowUnix)
     {

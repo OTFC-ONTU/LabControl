@@ -393,6 +393,17 @@ public sealed partial class MainViewModel : ObservableObject
         RefreshBroadcast();
     }
 
+    /// <summary>
+    /// The status line while the console's own screen cannot be captured: the producer's
+    /// stable code (<c>capture.permission</c>, ...) in words from the resources, never its
+    /// English message (D-71 item 14).
+    /// </summary>
+    public static string BroadcastProblemText(string code)
+    {
+        var reason = code.StartsWith("capture.", StringComparison.Ordinal) ? code["capture.".Length..] : code;
+        return Strings.Format("Broadcast.StatusProblem", MachineTileViewModel.CaptureReasonText(reason));
+    }
+
     private void RefreshBroadcast()
     {
         var hub = _session.Broadcast;
@@ -403,9 +414,9 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        if (hub.CaptureProblem is { } problem)
+        if (hub.CaptureProblemCode is { } code)
         {
-            BroadcastStatus = Strings.Format("Broadcast.StatusProblem", problem);
+            BroadcastStatus = BroadcastProblemText(code);
             return;
         }
 

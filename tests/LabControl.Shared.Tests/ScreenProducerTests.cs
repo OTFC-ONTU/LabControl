@@ -72,6 +72,68 @@ public class ScreenProducerTests
     }
 
     [Fact]
+    public async Task A_keyframe_asked_for_while_one_is_on_its_way_is_still_sent()
+    {
+        // D-71 item 13: a PC joins a broadcast while the keyframe it did not get is being
+        // fanned out. The cap and so the settings stay the same; the request must not be
+        // taken as served by the frame in flight, or a still screen sends nothing until the
+        // periodic keyframe 5 s later.
+        var screen = new ScriptedScreen(640, 400);
+        screen.Script([Rect(0, 0, 640, 400)]);
+        var frames = new ConcurrentQueue<VideoFrame>();
+        ScreenProducer? producer = null;
+        var asked = 0;
+        producer = Producer(() => screen, frames, accept: frame =>
+        {
+            if (frame.Keyframe && Interlocked.Exchange(ref asked, 1) == 0)
+            {
+                producer!.Apply(Fast(VideoSettings.FullControl(requestKeyframe: true)));
+            }
+
+            return true;
+        });
+        await using (producer)
+        {
+            producer.Apply(Fast(VideoSettings.FullControl()));
+            var deadline = DateTime.UtcNow + Defaults.KeyframeInterval / 2;
+            while (frames.Count(f => f.Keyframe) < 2 && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(20, TestContext.Current.CancellationToken);
+            }
+
+            Assert.Equal(2, frames.Count(f => f.Keyframe));
+        }
+    }
+
+    [Fact]
+    public async Task A_disposed_producer_starts_nothing_when_asked_again()
+    {
+        // D-71 item 12: the broadcast hub asks for a keyframe from inside the producer's own
+        // sink and can lose the race with Stop. A loop started after the disposal would keep
+        // capturing the teacher's screen until the console exits.
+        var opened = 0;
+        var frames = new ConcurrentQueue<VideoFrame>();
+        var producer = Producer(() =>
+        {
+            Interlocked.Increment(ref opened);
+            var screen = new ScriptedScreen(640, 400);
+            screen.Script([Rect(0, 0, 640, 400)]);
+            return screen;
+        }, frames);
+
+        producer.Apply(Fast(VideoSettings.FullControl()));
+        await WaitFor(() => !frames.IsEmpty);
+        await producer.DisposeAsync();
+
+        producer.Apply(Fast(VideoSettings.FullControl(requestKeyframe: true)));
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+
+        Assert.Null(producer.Streaming);
+        Assert.Equal(1, Volatile.Read(ref opened));
+        await producer.DisposeAsync();
+    }
+
+    [Fact]
     public async Task A_refused_delta_stays_owed_and_the_next_one_carries_both_rectangles()
     {
         var screen = new ScriptedScreen(640, 400);

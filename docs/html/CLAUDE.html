@@ -462,8 +462,12 @@ no <code>kind</code>; the console never lets such an answer clear a lock the PC 
 <p><strong>M6 portion 2 is built (2026-10-17, <code>D-71</code>, <code>D-72</code>), review-fixed and partly verified in the
 ARM64 VM the same day</strong> (<code>D-71</code> items 9–11: the helper resets the picture on its pipe read
 loop, a broadcast with no frame for <code>Defaults.BroadcastStallTimeout</code> = 15 s ends with
-<code>broadcast.stalled</code>, a stream cut with its connection is <code>LinkEnded</code>; ROADMAP M6 records the
-drill and what it did not cover — physical input, the Mac's real display, the lab). The teacher's screen: <code>Shared/Video/ScaledScreenSource</code> (the downscale to
+<code>broadcast.stalled</code>, a stream cut with its connection is <code>LinkEnded</code>; a second review added
+items 12–14: a disposed <code>ScreenProducer</code> starts nothing, a keyframe requested while one is in
+flight is still sent, the status line explains capture problems from <code>Capture.*</code> resources;
+ROADMAP M6 records the drill — keyboard refusal with a positive control, service restart,
+reboot and the Mac's real display passed — and what remains: physical mouse refusal, the
+readability check, the lab). The teacher's screen: <code>Shared/Video/ScaledScreenSource</code> (the downscale to
 <code>Defaults.BroadcastWidth</code> = 1280 inside the source, <code>TileDiff</code>, the pointer drawn in) with
 <code>CoreGraphicsScreenSource</code> (macOS, <code>DllImport</code>, <em>Screen Recording</em> preflight and request)
 and <code>GdiDisplayScreenSource</code> (Windows), chosen by <code>ConsoleScreen</code> (Linux: unsupported);
@@ -717,7 +721,7 @@ ROADMAP's <em>Physical lab</em> row and the on-site checklist. Do not describe W
 working in this lab until the vendor-driver rerun proves it.</p>
 
 </article>
-<footer>Generated 2026-10-17 21:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-17 22:33 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

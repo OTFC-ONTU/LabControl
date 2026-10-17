@@ -1,3 +1,4 @@
+using LabControl.Console.Localization;
 using LabControl.Console.Services;
 using LabControl.Console.ViewModels;
 using LabControl.FakeAgent;
@@ -324,6 +325,39 @@ public class BroadcastTests
         finally
         {
             await DisposeAllAsync(machines);
+        }
+    }
+
+    [Fact]
+    public async Task A_screen_that_cannot_be_captured_is_explained_from_the_resources()
+    {
+        // D-71 item 14: the status line names the producer's stable code in words from the
+        // resources, never the producer's English message, so a translated console stays
+        // translated when the Screen Recording permission is missing.
+        const string english = "macOS has not given this console the Screen Recording permission";
+        await using var console = await TestConsole.CreateLabAsync();
+        console.Session.BroadcastSource = () => throw new ScreenCaptureException("permission", english);
+        var (machines, _) = await StartMachinesAsync(console, 1);
+        try
+        {
+            console.Session.StartBroadcast([machines[0].AgentId]);
+            Assert.True(await Wait.UntilAsync(() => console.Session.Broadcast?.CaptureProblemCode is not null, TimeSpan.FromSeconds(15)));
+            Assert.Equal("capture.permission", console.Session.Broadcast!.CaptureProblemCode);
+
+            var text = MainViewModel.BroadcastProblemText(console.Session.Broadcast.CaptureProblemCode!);
+            Assert.Contains(Strings.Get("Capture.permission"), text, StringComparison.Ordinal);
+            Assert.DoesNotContain(english, text, StringComparison.Ordinal);
+            Assert.DoesNotContain("!Capture.", text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await console.Session.StopBroadcastAsync();
+            await DisposeAllAsync(machines);
+        }
+
+        foreach (var reason in new[] { "no_display", "unsupported", "capture_failed", "open_failed" })
+        {
+            Assert.DoesNotContain("!", MainViewModel.BroadcastProblemText("capture." + reason), StringComparison.Ordinal);
         }
     }
 

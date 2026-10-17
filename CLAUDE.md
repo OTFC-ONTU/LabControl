@@ -338,8 +338,12 @@ no `kind`; the console never lets such an answer clear a lock the PC still shows
 **M6 portion 2 is built (2026-10-17, `D-71`, `D-72`), review-fixed and partly verified in the
 ARM64 VM the same day** (`D-71` items 9–11: the helper resets the picture on its pipe read
 loop, a broadcast with no frame for `Defaults.BroadcastStallTimeout` = 15 s ends with
-`broadcast.stalled`, a stream cut with its connection is `LinkEnded`; ROADMAP M6 records the
-drill and what it did not cover — physical input, the Mac's real display, the lab). The teacher's screen: `Shared/Video/ScaledScreenSource` (the downscale to
+`broadcast.stalled`, a stream cut with its connection is `LinkEnded`; a second review added
+items 12–14: a disposed `ScreenProducer` starts nothing, a keyframe requested while one is in
+flight is still sent, the status line explains capture problems from `Capture.*` resources;
+ROADMAP M6 records the drill — keyboard refusal with a positive control, service restart,
+reboot and the Mac's real display passed — and what remains: physical mouse refusal, the
+readability check, the lab). The teacher's screen: `Shared/Video/ScaledScreenSource` (the downscale to
 `Defaults.BroadcastWidth` = 1280 inside the source, `TileDiff`, the pointer drawn in) with
 `CoreGraphicsScreenSource` (macOS, `DllImport`, *Screen Recording* preflight and request)
 and `GdiDisplayScreenSource` (Windows), chosen by `ConsoleScreen` (Linux: unsupported);

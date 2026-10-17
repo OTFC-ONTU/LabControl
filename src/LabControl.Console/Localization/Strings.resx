@@ -81,6 +81,10 @@
   <data name="Capture.gdi_failed" xml:space="preserve"><value>GDI capture failed</value></data>
   <data name="Capture.open_failed" xml:space="preserve"><value>could not open the screen</value></data>
   <data name="Capture.failed" xml:space="preserve"><value>capture stopped</value></data>
+  <data name="Capture.permission" xml:space="preserve"><value>macOS has not given LabControl the Screen Recording permission</value></data>
+  <data name="Capture.no_display" xml:space="preserve"><value>there is no display to capture</value></data>
+  <data name="Capture.unsupported" xml:space="preserve"><value>capturing the screen is not available on this system</value></data>
+  <data name="Capture.capture_failed" xml:space="preserve"><value>the screen gave no picture</value></data>
   <data name="Input.no_desktop" xml:space="preserve"><value>no desktop to inject into</value></data>
   <data name="Input.blocked" xml:space="preserve"><value>Windows refused the input</value></data>
   <data name="Input.failed" xml:space="preserve"><value>injection failed</value></data>

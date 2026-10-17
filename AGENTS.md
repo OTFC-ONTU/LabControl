@@ -134,8 +134,12 @@ the documents relevant to the task:
   the limits as durations, and keep every teacher-facing reason a code.
 - **M6 portion 2 is built (2026-10-17, `D-71`, `D-72`), review-fixed (`D-71` items 9–11:
   picture reset on the helper's pipe read loop, `broadcast.stalled` after
-  `Defaults.BroadcastStallTimeout`, a cut connection is `LinkEnded`) and partly verified in
-  the ARM64 VM; physical input, the Mac's real display and the lab remain (ROADMAP M6).** The
+  `Defaults.BroadcastStallTimeout`, a cut connection is `LinkEnded`; items 12–14 from a
+  second review: a disposed `ScreenProducer` starts nothing, a keyframe requested while one
+  is in flight is still sent, capture problems shown from `Capture.*` resources) and partly
+  verified in the ARM64 VM — keyboard refusal, service restart, reboot and the Mac's real
+  display passed; physical mouse refusal, the readability check and the lab remain
+  (ROADMAP M6).** The
   console's screen (CoreGraphics on macOS after the *Screen Recording* permission, GDI on
   Windows, none on Linux) is scaled to 1280 wide inside `ScaledScreenSource`, encoded once
   by `BroadcastHub` and served over the server-streaming `PullBroadcast` with a latest-wins

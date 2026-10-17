@@ -261,6 +261,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
     /// <summary>A known capture reason in words; an unknown one as the code itself, so a new reason is never hidden.</summary>
     public static string CaptureReasonText(string reason) =>
         reason is "no_desktop" or "access_lost" or "no_duplication" or "gdi_failed" or "open_failed" or "failed"
+            or "permission" or "no_display" or "unsupported" or "capture_failed"
             ? Strings.Get("Capture." + reason)
             : reason.Replace('_', ' ');
 

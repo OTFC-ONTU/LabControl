@@ -37,7 +37,9 @@ public sealed class ScreenProducer : IAsyncDisposable
     private VideoSettings? _settings;
     private int _settingsVersion;
     private bool _keyframeWanted;
+    private long _keyframeRequests;
     private string? _sourceKind;
+    private bool _disposed;
 
     public ScreenProducer(string name, Func<IScreenSource> open, FrameSink sink, Reporter report, ILogger log, TimeProvider? time = null)
     {
@@ -79,12 +81,19 @@ public sealed class ScreenProducer : IAsyncDisposable
     /// <summary>
     /// The console's word, or <c>null</c> when the link ended: starts, stops or retunes the
     /// loop. A change of mode or rate keeps the source open — the loop reads its settings on
-    /// every tick — and starts with a keyframe.
+    /// every tick — and starts with a keyframe. Once disposed it does nothing: a caller that
+    /// raced the disposal (the broadcast hub asking for a keyframe from inside the loop's own
+    /// sink) must not start a loop nobody will stop (D-71 item 12).
     /// </summary>
     public void Apply(VideoControl? control)
     {
         lock (_lock)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             if (control is not { Active: true })
             {
                 Stop();
@@ -92,13 +101,16 @@ public sealed class ScreenProducer : IAsyncDisposable
             }
 
             var settings = VideoSettings.From(control);
-            _keyframeWanted |= control.RequestKeyframe;
+            if (control.RequestKeyframe)
+            {
+                WantKeyframe();
+            }
 
             if (_settings != settings)
             {
                 _settings = settings;
                 _settingsVersion++;
-                _keyframeWanted = true;
+                WantKeyframe();
             }
 
             if (_running is null)
@@ -113,6 +125,17 @@ public sealed class ScreenProducer : IAsyncDisposable
                 _log.LogInformation("{Pc}: video now {Mode} at {Fps} fps, {Quality}", _name, settings.Mode, settings.FramesPerSecond, settings.IsAdaptive ? "auto quality" : $"q{settings.Quality}");
             }
         }
+    }
+
+    /// <summary>
+    /// The console asks for a keyframe. Every request is counted, so one that arrives while a
+    /// keyframe is on its way is not taken as served by it. The loop's own wants (a reopened
+    /// source, a new resolution) are served by the frame in hand and are not counted. Under <see cref="_lock"/>.
+    /// </summary>
+    private void WantKeyframe()
+    {
+        _keyframeWanted = true;
+        _keyframeRequests++;
     }
 
     private void Stop()
@@ -146,11 +169,13 @@ public sealed class ScreenProducer : IAsyncDisposable
                 VideoSettings settings;
                 int version;
                 bool keyframeWanted;
+                long keyframeRequests;
                 lock (_lock)
                 {
                     settings = _settings!;
                     version = _settingsVersion;
                     keyframeWanted = _keyframeWanted;
+                    keyframeRequests = _keyframeRequests;
                 }
 
                 if (state.SettingsVersion != version)
@@ -235,8 +260,9 @@ public sealed class ScreenProducer : IAsyncDisposable
 
                         lock (_lock)
                         {
-                            // Consumed — unless a newer request arrived while this one was on its way.
-                            if (keyframeWanted && _settingsVersion == version)
+                            // Consumed — unless a newer request arrived while this one was on its way,
+                            // even one that changed no setting (a PC joining a broadcast, D-71 item 13).
+                            if (keyframeWanted && _keyframeRequests == keyframeRequests)
                             {
                                 _keyframeWanted = false;
                             }
@@ -549,6 +575,7 @@ public sealed class ScreenProducer : IAsyncDisposable
         Task? loop;
         lock (_lock)
         {
+            _disposed = true;
             Stop();
             loop = _loop;
             _loop = null;

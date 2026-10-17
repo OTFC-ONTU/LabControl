@@ -3708,6 +3708,28 @@ Decisions:
    connection ending — logged, with no event — and only an answer from the console (a
    refusal: `NotFound`, `PermissionDenied`…) is a `broadcast.failed` warning; the PC used to
    queue a spurious `broadcast.failed` for whichever console linked next.
+12. **A disposed producer starts nothing** (second review, 2026-10-17). The hub asks
+   `ScreenProducer.Apply` for a keyframe from inside the producer's own sink, after checking
+   that it is not disposed but outside its lock, and `Apply` started a fresh loop whenever
+   none was running — which is exactly what `Stop` leaves behind. A *Stop*, the limit or a
+   lab departure landing in that window left an orphaned loop capturing the teacher's screen
+   (and keeping the macOS recording indicator on) until the console exited. `ScreenProducer`
+   now remembers its disposal and `Apply` does nothing after it.
+13. **A keyframe asked for while one is on its way is still sent.** The producer cleared its
+   "keyframe wanted" flag after a keyframe was taken whenever the settings had not changed,
+   which also swallowed a newer request: a PC joining a broadcast between the hub's
+   subscriber snapshot and that clear lost its keyframe (the cap is the same for one to three
+   PCs, so nothing changed) and, on a still teacher screen, saw black until the periodic
+   keyframe 5 s later. Every request from the console is now counted and the flag is cleared
+   only when no request arrived after the frame was produced; the loop's own wants (a
+   reopened source, a new resolution) are served by the frame in hand and are not counted,
+   so they cost no extra keyframe.
+14. **The status line explains a capture problem from the resources.** It showed the
+   producer's English message ("macOS has not given this console the Screen Recording
+   permission"), which a translated console must not (`D-67`). It now puts the stable code
+   (`capture.permission`, `capture.no_display`, `capture.unsupported`,
+   `capture.capture_failed`, ...) into words through `Capture.*` resources, as the tiles
+   already do for a PC's capture reasons.
 
 Rejected: frames on `Link` (the unbounded queue, above); UDP multicast (Wi-Fi multicast is
 slow and lossy, and the lab's switch and the teacher's router are not ours to configure;
@@ -3726,7 +3748,10 @@ to the next keyframe while the fast one sees every frame in order. `BroadcastVid
 console's capture frozen mid-broadcast: the PC gives the screen back with `broadcast.stalled`
 while the link stays up), a console cut off by a TCP reset (the PC gives the screen back,
 joins again on relink and reports no `broadcast.failed`) and a frame of a broadcast that is
-over never staying on the screen; the last two fail against the code before the fix.
+over never staying on the screen; the last two fail against the code before the fix. The
+second review added `ScreenProducerTests` for an `Apply` after disposal and a keyframe
+requested while one is in flight (both fail against the code before items 12–13) and a
+`BroadcastTests` case for the localized capture problem (item 14).
 
 ## D-72 — Console capture: CoreGraphics on macOS, GDI on Windows; one encode shared by every PC; the downscale inside the screen source (M6 portion 2)
 

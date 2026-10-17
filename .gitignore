@@ -27,3 +27,15 @@ usb/
 
 # Windows acceptance fixture outputs (large, machine-specific)
 tools/windows-tests/out/
+
+# Local agent / development scratch — never commit
+.claude/m6-plan/
+.claude/worktrees/
+.claude/settings.local.json
+/*.log
+/devlab-data/
+/payload/
+*.lcbak
+*.lclab
+*.lcgrant
+*.lcreq

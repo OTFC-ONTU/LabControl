@@ -102,7 +102,7 @@ the documents relevant to the task:
   the Avalonia quit hook by hand, and the milestone in the physical lab. The `Welcome.console_access`
   `.proto` change landed with portion 5 and `docs/PROTOCOL.md` was updated in that commit.
 - **M6 portion 1 is built (2026-09-16, `D-69`, `D-70`) and verified in an isolated
-  Windows 11 ARM64 VM (2026-10-17, `D-80`).** The policy journal (`Shared/Policy/`, `policy.json`) restores the machine
+  Windows 11 ARM64 VM (2026-10-17, `D-81`).** The policy journal (`Shared/Policy/`, `policy.json`) restores the machine
   first and re-applies second, under the named mutex `Global\LabControl.Policy`, with the
   hard limit re-clamped on every pass; a lock has its own 1 h ceiling
   (`Defaults.LockHardLimit`) clamped on the agent's clock and does **not** end on lab
@@ -188,6 +188,12 @@ the documents relevant to the task:
   Account-off touches neither setting. Do not change UAC security policy to bypass
   native administrator-maintenance acceptance (`D-52`).
 - Do not invent features outside `docs/ROADMAP.md`; propose the scope there first.
+- M6 portion 1 has passed ARM64 VM acceptance; portions 2–6 remain. Its owner decisions
+  (2026-09-09) and corrected six-portion plan are settled in ROADMAP M6, *Settled before implementation*; follow them and use the
+  reserved `D-69`…`D-79`.
+- The README is the public project page with one line of status per milestone; put long
+  working notes in `docs/DEVELOPMENT.md`. Never commit local scratch (plans, logs, dev lab
+  data, USB payloads, lab documents); `.gitignore` covers them.
 
 ## Shared documentation contract for Codex and Claude Code
 
@@ -232,8 +238,12 @@ or the generated HTML stale is not finished.
 LabControl/
 ├── AGENTS.md                      Codex instructions and shared agent contract
 ├── CLAUDE.md                      detailed project brief and Claude Code rules
-├── README.md                      human overview and quick start
+├── README.md                      public project page: features, screenshots, quick start
+├── LICENSE                        MIT
+├── .github/workflows/ci.yml       CI: build + tests on Linux, native build on Windows
 ├── docs/                          architecture, protocol, installer, ADRs, roadmap
+│   ├── DEVELOPMENT.md             command lines, FakeAgent, Windows VM workflow, status notes
+│   ├── images/                    README screenshots from the headless UI renders
 │   └── html/                      generated Markdown mirror; never hand-edit
 ├── src/LabControl.Shared/         contracts, shared models, constants, core logic
 ├── src/LabControl.Console/        cross-platform Avalonia teacher console

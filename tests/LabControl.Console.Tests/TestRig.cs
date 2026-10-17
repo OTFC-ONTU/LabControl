@@ -198,6 +198,36 @@ internal sealed class TestConsole : IAsyncDisposable
         System.IO.Directory.CreateDirectory(path);
         return path;
     }
+
+    /// <summary>
+    /// Removes a <see cref="TempDirectory"/> after a test. A closed session's coalesced saves
+    /// can still land a file while the tree is being deleted ("Directory not empty" on a busy
+    /// runner), so the delete is retried briefly and a leftover temp folder never fails a test.
+    /// </summary>
+    public static void DeleteTempDirectory(string path)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                System.IO.Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt >= 20)
+                {
+                    return;
+                }
+
+                Thread.Sleep(100);
+            }
+        }
+    }
 }
 
 /// <summary>

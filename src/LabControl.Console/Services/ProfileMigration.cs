@@ -43,7 +43,7 @@ public enum MigrationStep
 /// index is thrown away and made again from the root; one that is already committed is kept,
 /// and the root files are moved complete into a <c>migration-conflict-*</c> directory for the
 /// owner to look at — the case of a pre-M5 build having been run on the root again after the
-/// move (README, <i>Downgrading</i>), where the root is newer than the copy.
+/// move (docs/DEVELOPMENT.md, <i>Downgrading</i>), where the root is newer than the copy.
 /// </para>
 /// </summary>
 public sealed class ProfileMigration

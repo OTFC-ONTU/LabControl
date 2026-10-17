@@ -26,6 +26,7 @@ internal static class Program
         ("docs/ARCHITECTURE.md", "Architecture"),
         ("docs/PROTOCOL.md", "Protocol"),
         ("docs/INSTALLER.md", "Installer"),
+        ("docs/DEVELOPMENT.md", "Development"),
         ("docs/ROADMAP.md", "Roadmap"),
         ("docs/DECISIONS.md", "Decisions"),
     ];
@@ -60,7 +61,7 @@ internal static class Program
                 page.Title = FirstHeadingText(document) ?? page.NavTitle;
                 page.Summary = FirstParagraphText(document);
                 page.Toc = BuildToc(document);
-                page.Body = PostProcess(Markdown.ToHtml(markdown, pipeline));
+                page.Body = PostProcess(RewriteLinks(Markdown.ToHtml(markdown, pipeline), page, pages));
             }
 
             foreach (var page in pages)
@@ -180,6 +181,69 @@ internal static class Program
         }
 
         return sb.ToString().Trim();
+    }
+
+    /// <summary>
+    /// Markdown links are relative to their source file (README.md at the root, the rest in
+    /// docs/), while the mirror lives in docs/html/. A link to a mirrored .md opens its page;
+    /// any other relative link or image points back at the file in the repository.
+    /// </summary>
+    private static string RewriteLinks(string html, Page page, IReadOnlyList<Page> pages)
+    {
+        // The mirror makes no external requests: a remote image (a README badge) becomes its alt text.
+        html = Regex.Replace(html, "<img\\s[^>]*src=\"https?://[^>]*>", m =>
+        {
+            var alt = Regex.Match(m.Value, "alt=\"([^\"]*)\"");
+            return alt.Success ? $"<span class=\"badge\">{alt.Groups[1].Value}</span>" : string.Empty;
+        });
+
+        var sourceDir = Path.GetDirectoryName(page.RelativePath)?.Replace('\\', '/') ?? string.Empty;
+        return Regex.Replace(html, "(href|src)=\"([^\"]*)\"", m =>
+        {
+            var target = WebUtility.HtmlDecode(m.Groups[2].Value);
+            if (target.Length == 0 || target[0] is '#' or '/' || Regex.IsMatch(target, "^[A-Za-z][A-Za-z0-9+.-]*:"))
+            {
+                return m.Value;
+            }
+
+            var hash = target.IndexOf('#');
+            var path = hash < 0 ? target : target[..hash];
+            var fragment = hash < 0 ? string.Empty : target[hash..];
+            var repoPath = NormalizePath(sourceDir.Length == 0 ? path : sourceDir + "/" + path);
+            var mirrored = pages.FirstOrDefault(p => string.Equals(p.RelativePath, repoPath, StringComparison.OrdinalIgnoreCase));
+            var rewritten = mirrored is not null ? mirrored.OutputName + fragment
+                : repoPath.StartsWith("docs/html/", StringComparison.Ordinal) ? repoPath["docs/html/".Length..] + fragment
+                : "../../" + repoPath + fragment;
+            return $"{m.Groups[1].Value}=\"{Encode(rewritten)}\"";
+        });
+    }
+
+    /// <summary>Resolves "." and ".." segments of a repository-relative path, keeping a trailing slash.</summary>
+    private static string NormalizePath(string path)
+    {
+        var segments = new List<string>();
+        foreach (var segment in path.Split('/'))
+        {
+            if (segment is "" or ".")
+            {
+                continue;
+            }
+
+            if (segment == "..")
+            {
+                if (segments.Count > 0)
+                {
+                    segments.RemoveAt(segments.Count - 1);
+                }
+
+                continue;
+            }
+
+            segments.Add(segment);
+        }
+
+        var joined = string.Join('/', segments);
+        return path.EndsWith('/') && joined.Length > 0 ? joined + "/" : joined;
     }
 
     /// <summary>
@@ -364,6 +428,13 @@ internal static class Program
         pre code{background:none;border:0;padding:0;font-size:.845rem;white-space:pre}
         blockquote{margin:0 0 1.2em;padding:.1em 0 .1em 1.1em;border-left:3px solid var(--accent);
                    color:var(--muted)}
+
+        img{max-width:100%;height:auto}
+        .badge{display:inline-block;font-size:.8rem;color:var(--muted);border:1px solid var(--line);
+               border-radius:5px;padding:.05em .45em;margin:0 .15em}
+        .mermaid{font-family:var(--mono);font-size:.845rem;white-space:pre;overflow-x:auto;
+                 background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);
+                 padding:14px 16px;margin:0 0 1.3em;line-height:1.5}
 
         /* ---- tables ---- */
         .table-wrap{overflow-x:auto;margin:0 0 1.5em;border:1px solid var(--line);

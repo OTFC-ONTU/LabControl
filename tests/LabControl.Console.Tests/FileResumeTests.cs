@@ -22,8 +22,27 @@ public sealed class FileResumeTests
         Random.Shared.NextBytes(content);
         var offer = console.Session.Files.OfferBytes(content, "boundary.bin");
         using var destination = new MemoryStream();
-        Assert.Equal(size, await pc.Link.PullFileAsync(offer.Reference, offer.Sha256, destination, TestContext.Current.CancellationToken));
+        Assert.Equal(size, await PullWhenReadyAsync(pc.Link, offer.Reference, offer.Sha256, destination));
         Assert.Equal(content, destination.ToArray());
+    }
+
+    /// <summary>
+    /// <see cref="AgentLink.IsLinked"/> can turn true a moment before the link's client is in
+    /// place; a pull in that window is refused before a byte is written. Retry only that refusal.
+    /// </summary>
+    private static async Task<long> PullWhenReadyAsync(AgentLink link, string reference, string sha256, Stream destination)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await link.PullFileAsync(reference, sha256, destination, TestContext.Current.CancellationToken);
+            }
+            catch (FilePullException ex) when (attempt < 50 && destination.Length == 0 && ex.Message.Contains("not linked", StringComparison.Ordinal))
+            {
+                await Task.Delay(100, TestContext.Current.CancellationToken);
+            }
+        }
     }
 
     [Theory]

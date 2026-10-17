@@ -101,7 +101,9 @@ behind this, so **everything must be zero-maintenance and self-explanatory**.
 LabControl/
 ├── AGENTS.md                  ← Codex instructions + shared agent-document contract
 ├── CLAUDE.md                  ← this file
-├── README.md                  ← human overview + quick start
+├── README.md                  ← public project page: features, screenshots, quick start
+├── LICENSE                    ← MIT
+├── .github/workflows/ci.yml   ← CI: build + tests on Linux, native build on Windows
 ├── LabControl.sln             ← classic .sln, not .slnx (D-18)
 ├── Directory.Build.props      ← settings shared by every project
 ├── Directory.Packages.props   ← central package versions; projects reference names only
@@ -112,6 +114,8 @@ LabControl/
 │   ├── INSTALLER.md           ← exactly what the USB installer does, step by step
 │   ├── DECISIONS.md           ← ADR-style log of decisions and rejected alternatives
 │   ├── ROADMAP.md             ← milestones M0…M7 with acceptance criteria
+│   ├── DEVELOPMENT.md         ← command lines, FakeAgent, Windows VM workflow, status notes
+│   ├── images/                ← README screenshots (from LABCONTROL_UI_SHOTS headless renders)
 │   └── html/                  ← GENERATED mirror of every .md — never edit by hand
 ├── src/
 │   ├── LabControl.Shared/     ← .proto files, generated stubs, shared models, constants
@@ -200,6 +204,15 @@ tools/make-icon.py                             # regenerate the console icon int
 
 See `docs/ROADMAP.md` — it holds the milestone table, the per-milestone acceptance
 criteria, the on-site verification checklist and the open questions for the owner.
+The README is the public project page and keeps only a one-line status per milestone;
+longer working notes belong in `docs/DEVELOPMENT.md`. Local scratch (plans, logs, dev
+lab data, USB payloads) never goes into git — `.gitignore` covers `.claude/m6-plan/`,
+`*.log`, `*.lock`, `devlab-data/`, `payload/` and lab documents.
+
+**M6 portion 1 verified; portions 2–6 remain:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
+the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
+of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
+journal are in ROADMAP M6, *Settled before implementation*; M6 reserves `D-69`…`D-79`.
 
 **Planning update (2026-09-08, D-53):** new M5 is lab files, teacher access and fast
 switching between rooms; it is not implemented. Previous M5 classroom control is now
@@ -312,7 +325,7 @@ the second-half review's fixes (795 + 236 after the foundation review's, 782 + 2
 built, 778 + 228 before the portion; one load-sensitive beacon test failed under the full
 run and passed alone) (`LockTests`, `OverlayLinkTests`, `PolicyEnforcerTests`, the UI
 renders). `dotnet publish -r win-x64` and `-r win-arm64` of the helper and the agent
-succeed. **Windows 11 ARM64 VM acceptance passed on 2026-10-17** (`D-80`): physical
+succeed. **Windows 11 ARM64 VM acceptance passed on 2026-10-17** (`D-81`): physical
 input refusal with a positive control, injected input under the lock, Ctrl+Alt+Del,
 ten-minute clock skew, expiry without the console, service restart, `--restore-policy`,
 sign-out/reboot/autologon and corrupt-policy recovery. Native defects fixed: recreate

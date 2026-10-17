@@ -667,7 +667,7 @@ prompt. A helper silent for `HelperSilenceTimeout` (10 s) is killed and restarte
 `Event` from the helper is relayed to the console unchanged. When the pipe closes the helper
 exits at once; when the helper exits the service respawns it (D-30).
 
-The native lock follows input-desktop changes (`D-80`): the helper recreates its
+The native lock follows input-desktop changes (`D-81`): the helper recreates its
 window and hooks on fresh threads for Default/Winlogon, retaining the same session id
 and absolute deadlines. This changes no message fields or ownership rules.
 

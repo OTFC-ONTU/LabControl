@@ -529,7 +529,7 @@ Decisions:
    (`app\<version>`, `app\current`), same service configuration (LocalSystem, auto-start,
    restart ×3 at 10 s), same firewall group and Defender exclusion. It skips the hostname,
    Wake-on-LAN and power because none of them is needed to test the agent, and it is
-   documented as development-only in the README. Since 2026-09-07 it also performs
+   documented as development-only in `docs/DEVELOPMENT.md`. Since 2026-09-07 it also performs
    INSTALLER.md step 8 on request (`-Student`): the M2 acceptance criterion "`student`
    cannot stop the service, kill `session.exe` or read `ProgramData\LabControl`" needs the
    account on `PC-00` before Setup.exe exists, and the VM runs so far were signed in as an
@@ -2059,7 +2059,7 @@ and `LabBackup`:
    root is still the only truth. A copy that differs and *is* committed is kept, and the
    root files are moved, complete, to `<data>/migration-conflict-<yyyyMMdd-HHmmss>/`
    (`Defaults.MigrationConflictDirectoryPrefix`) and logged as a warning; the console
-   opens the saved lab. This is the downgrade-then-upgrade case (README, *Downgrading*),
+   opens the saved lab. This is the downgrade-then-upgrade case (`docs/DEVELOPMENT.md`, *Downgrading*),
    where a pre-M5 build ran on the root after the copy and the root is newer. The
    conflict directory is never deleted by the console.
 7. **Sentinel ordering on delete.** The originals go in the order `lab.json`,
@@ -3626,7 +3626,52 @@ the stale-lock re-lift in the supervisor does not compare session ids (a one-sta
 flicker at worst), a modifier held at `Block()` stays down in the OS until tapped, the
 window is recreated on every 3 s re-assert while creation keeps failing.
 
-## D-80 — A lock follows the input desktop with fresh native threads (M6 portion 1)
+## D-80 — Public repository: MIT, a README that is a project page, links that work in the mirror
+
+Context (2026-10-09): the repository is being prepared to become public. The README had
+grown into a development journal, the tree carried a local M6 scratch folder (console
+logs, a development lab's data and USB payload, a `sample` dump, VM helpers), and the
+HTML mirror copied every relative link verbatim, so a link to `docs/ROADMAP.md` from a
+page in `docs/html/` pointed nowhere and an image would not have shown. `D-69`…`D-79` are
+reserved for M6, so this entry takes the next free number.
+
+Decisions:
+
+1. **MIT licence**, copyright *Viacheslav Stohul, Одеський технічний фаховий коледж ОНТУ*
+   (owner decision 2026-10-09): `LICENSE` at the root, `Copyright` and
+   `PackageLicenseExpression` in `Directory.Build.props`.
+2. **The README is the project page** — what LabControl does, three screenshots from the
+   headless UI renders (`docs/images/`), how it works, quick start, one line of status per
+   milestone. Everything long and internal (command lines, `FakeAgent` failure injection,
+   the Windows VM workflow, downgrading to a pre-M5 build, the per-milestone status notes)
+   moved to `docs/DEVELOPMENT.md` unchanged in substance. The settled M6 plan moved from the
+   scratch folder into ROADMAP M6, *Settled before implementation*.
+3. **Local scratch is never committed**: `.gitignore` covers `.claude/m6-plan/` and
+   `.claude/worktrees/`, logs, `devlab-data/` and `payload/` at the root, and the lab
+   documents (`.lcbak`, `.lclab`, `.lcgrant`, `.lcreq`) anywhere. Root-anchored patterns
+   keep a future test fixture named `setup.json` or `payload/` from being skipped silently.
+4. **History is not rewritten.** A scan of every commit found no private key, token or
+   code of a real classroom; the removed payload held only single-use codes of a
+   development lab on a VM and its public CA certificate.
+5. **`tools/DocsBuild` rewrites relative links** in the mirror: a link to a mirrored `.md`
+   opens its HTML page, anything else (an image, a script, a directory) points back to the
+   file in the repository. Mermaid diagrams stay readable as text in the offline mirror —
+   it loads no script — and GitHub renders them.
+
+6. **CI on GitHub Actions** (`.github/workflows/ci.yml`, badge in the README): on every push
+   to `main` and every pull request, Linux builds the solution and runs the whole test suite,
+   and Windows compiles it natively, so a Windows-only break is caught before a lab visit.
+   Windows tests are not run there: the agent and Setup need a real or virtual lab PC.
+   A failed Linux test run is repeated once with a warning: the suite races real sockets,
+   timers and file saves, and on a two-core runner a different one lost in each of the
+   first runs (journal row, temp cleanup, pull before the link's client, lab-switch burst).
+   A real break fails twice and stays red; each warning is a flake to fix in the test.
+
+Rejected: rewriting history to drop the scratch folder (nothing secret in it, and every
+existing clone and commit link would break); a separate docs site (the offline mirror
+already exists, `D-12`).
+
+## D-81 — A lock follows the input desktop with fresh native threads (M6 portion 1)
 
 Context (2026-10-17): the first native lock drill ran in a new Windows 11 ARM64
 clone, with one host-only NIC and no shared folders. Ctrl+Alt+Del exposed two defects
@@ -3782,7 +3827,7 @@ project cannot notice on its own).
 | CommunityToolkit.Mvvm | Console | MVVM source generators |
 | Avalonia.AvaloniaEdit | Console | Script editor with line numbers, undo and token coloring (D-39) |
 | System.Management.Automation | Console | Offline PowerShell syntax parsing/tokenization only; no execution or per-PC runtime (D-39) |
-| System.Security.Cryptography.Pkcs | Console | Direct 10.0.13 security pin for the parser's transitive dependency; NuGet audit remains enabled (D-80) |
+| System.Security.Cryptography.Pkcs | Console | Direct 10.0.13 security pin for the parser's transitive dependency; NuGet audit remains enabled (D-81) |
 | Grpc.AspNetCore | Console | gRPC server |
 | Grpc.Net.Client, Grpc.Tools, Google.Protobuf | Shared/Agent | gRPC client + codegen |
 | System.Security.Cryptography.ProtectedData | Shared | Windows DPAPI for the console instance key; the BCL dropped it from the shared framework (D-24) |

@@ -2103,6 +2103,57 @@ parts; isolating session lifecycle, access and recovery is the main work. Build
 profiles/import first, switching second, then access/handover hardening, desktop
 packaging and the multi-device acceptance drills.</p>
 <hr />
+<h2 id="lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; <code>D-82</code>)<a class="anchor" href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82" aria-label="Link to this section">#</a></h2>
+<p><strong>Why.</strong> On 2026-10-20 the owner, the only administrator, found he no longer knew the lab
+key's passphrase and had no recovery code. The console still opened (its own instance key is
+in the Mac's keychain), but nothing that needs the lab key could be done: no new PC enrolled
+(nine of the fourteen were still to install), no agent update pushed, no physical-lab test of
+M6 portion 3. A forgotten key cannot be recovered — it is encrypted under the passphrase by
+design (<code>D-13</code>) — and the only way out was a new lab and a USB walk with <code>Setup.exe --rekey</code>
+to every installed PC. The owner: &quot;this case is surely not the last one&quot;.</p>
+<p><strong>Owner decisions (2026-10-20).</strong> (1) Moving the PCs to a new key is for an
+<strong>administrator</strong> console only, never a teacher device. (2) <strong>Remember the key on this
+computer</strong>, on by default. (3) Built <strong>now</strong>, before M6 portion 4.</p>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li><strong>Remember the lab key on this computer.</strong> A device holder in the key document whose
+secret lives only in the OS store this console already uses for its own key (macOS
+keychain, Windows DPAPI, Linux secret service). The console opens the key with it
+whenever an operation needs it — no passphrase on this computer. A checkbox (checked) in the
+unlock and create dialogs; <em>Forget on this computer</em> in Settings. The passphrase and the
+recovery code stay for the backup and for any other computer.</li>
+<li><strong>Move this lab to a new key</strong> — for a lost passphrase, from an administrator console whose
+key cannot be opened. A wizard creates a new lab (new CA, new lab id) with a new passphrase,
+shows the new recovery code until it is confirmed written down, remembers the new key on this
+computer, and carries over the PC records (numbers, names, layout, notes), the script library,
+the internet presets and the package catalog. Every linked PC of the old lab is then moved
+<strong>over the network</strong> with the means every installed agent already has, including <code>1.0.0</code>:
+one SYSTEM <code>run_script</code> per PC carrying that PC's own single-use enrolment code and the new
+CA certificate inside the script text, which schedules a one-shot SYSTEM task running the
+installed <code>C:\Program Files\LabControl\Setup.exe --rekey</code> (never <code>Uninstall.exe</code>, which
+prepends <code>--uninstall</code> to any arguments). The PC keeps its agent id, number, account and
+settings, and enrols into the new lab. The console then switches to the new lab. PCs that
+were off stay in the old lab, which remains in <em>My labs</em> as <em>old key — N PCs to move</em>;
+opening it moves each PC as it links. A PC with a development (unowned) installation is
+reported, not touched.</li>
+<li>Teacher devices of the old lab need a new grant from the new lab, and the old backups no
+longer open anything that matters; the wizard says both and offers a new backup.</li>
+</ul>
+<p><strong>Acceptance criteria</strong></p>
+<ul>
+<li>With the device holder, <em>Enrol PCs</em>, <em>Push agent build</em> and a backup export work on this
+computer without typing a passphrase; after <em>Forget on this computer</em> they ask again; the
+key copied to another computer still needs the passphrase or the recovery code.</li>
+<li>On an isolated VM clone with an <strong>owned</strong> (Setup) installation: <em>Move this lab to a new
+key</em> moves the PC over the network, it keeps its number and agent id, enrols into the new
+lab and links; a PC that was off is moved later from the old lab's entry; a development
+installation is refused with a reason; a teacher device cannot start the move.</li>
+<li>In the physical lab: the five installed PCs (PC-04, PC-08, PC-09, PC-10, PC-11) move to the
+new key without a USB stick or a visit, and the remaining PCs install into the new lab.</li>
+</ul>
+<p><strong>How it is being built.</strong> Three portions: <strong>(1)</strong> remember the key on this computer;
+<strong>(2)</strong> move this lab to a new key; <strong>(3)</strong> the VM drill on an owned-installation clone and the
+physical lab. Then M6 portion 4.</p>
 <h2 id="m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode<a class="anchor" href="#m6-classroom-control-broadcast-lock-exam-mode" aria-label="Link to this section">#</a></h2>
 <p><strong>Goal.</strong> The features used in every lesson.</p>
 <p><strong>Deliverables</strong></p>
@@ -2891,9 +2942,9 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-20 11:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-20 12:13 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>
 </body>
 </html>

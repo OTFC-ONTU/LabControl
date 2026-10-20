@@ -1912,6 +1912,59 @@ packaging and the multi-device acceptance drills.
 
 ---
 
+## Lab key recovery (inserted 2026-10-20, before M6 portion 4; `D-82`)
+
+**Why.** On 2026-10-20 the owner, the only administrator, found he no longer knew the lab
+key's passphrase and had no recovery code. The console still opened (its own instance key is
+in the Mac's keychain), but nothing that needs the lab key could be done: no new PC enrolled
+(nine of the fourteen were still to install), no agent update pushed, no physical-lab test of
+M6 portion 3. A forgotten key cannot be recovered — it is encrypted under the passphrase by
+design (`D-13`) — and the only way out was a new lab and a USB walk with `Setup.exe --rekey`
+to every installed PC. The owner: "this case is surely not the last one".
+
+**Owner decisions (2026-10-20).** (1) Moving the PCs to a new key is for an
+**administrator** console only, never a teacher device. (2) **Remember the key on this
+computer**, on by default. (3) Built **now**, before M6 portion 4.
+
+**Deliverables**
+- **Remember the lab key on this computer.** A device holder in the key document whose
+  secret lives only in the OS store this console already uses for its own key (macOS
+  keychain, Windows DPAPI, Linux secret service). The console opens the key with it
+  whenever an operation needs it — no passphrase on this computer. A checkbox (checked) in the
+  unlock and create dialogs; *Forget on this computer* in Settings. The passphrase and the
+  recovery code stay for the backup and for any other computer.
+- **Move this lab to a new key** — for a lost passphrase, from an administrator console whose
+  key cannot be opened. A wizard creates a new lab (new CA, new lab id) with a new passphrase,
+  shows the new recovery code until it is confirmed written down, remembers the new key on this
+  computer, and carries over the PC records (numbers, names, layout, notes), the script library,
+  the internet presets and the package catalog. Every linked PC of the old lab is then moved
+  **over the network** with the means every installed agent already has, including `1.0.0`:
+  one SYSTEM `run_script` per PC carrying that PC's own single-use enrolment code and the new
+  CA certificate inside the script text, which schedules a one-shot SYSTEM task running the
+  installed `C:\Program Files\LabControl\Setup.exe --rekey` (never `Uninstall.exe`, which
+  prepends `--uninstall` to any arguments). The PC keeps its agent id, number, account and
+  settings, and enrols into the new lab. The console then switches to the new lab. PCs that
+  were off stay in the old lab, which remains in *My labs* as *old key — N PCs to move*;
+  opening it moves each PC as it links. A PC with a development (unowned) installation is
+  reported, not touched.
+- Teacher devices of the old lab need a new grant from the new lab, and the old backups no
+  longer open anything that matters; the wizard says both and offers a new backup.
+
+**Acceptance criteria**
+- With the device holder, *Enrol PCs*, *Push agent build* and a backup export work on this
+  computer without typing a passphrase; after *Forget on this computer* they ask again; the
+  key copied to another computer still needs the passphrase or the recovery code.
+- On an isolated VM clone with an **owned** (Setup) installation: *Move this lab to a new
+  key* moves the PC over the network, it keeps its number and agent id, enrols into the new
+  lab and links; a PC that was off is moved later from the old lab's entry; a development
+  installation is refused with a reason; a teacher device cannot start the move.
+- In the physical lab: the five installed PCs (PC-04, PC-08, PC-09, PC-10, PC-11) move to the
+  new key without a USB stick or a visit, and the remaining PCs install into the new lab.
+
+**How it is being built.** Three portions: **(1)** remember the key on this computer;
+**(2)** move this lab to a new key; **(3)** the VM drill on an owned-installation clone and the
+physical lab. Then M6 portion 4.
+
 ## M6 — Classroom control: broadcast, lock, exam mode
 
 **Goal.** The features used in every lesson.

@@ -149,6 +149,12 @@ the documents relevant to the task:
   a lock stays on top and `OverlayState` is composed lock-first. The helper shows it in
   `OverlayWindow`'s broadcast mode with the lock's hooks. Keep frames off `Link`, keep the
   broadcast out of the journal, and never await a pipe write from a read loop.
+- **Lab key recovery comes next (owner decisions 2026-10-20, `D-82`), before M6 portion 4.**
+  Remember the key on this computer (a device holder, secret in the OS store, on by default), and
+  *Move this lab to a new key* from an administrator console: a new lab, every linked PC moved by a
+  SYSTEM `run_script` carrying its own enrolment code that schedules the installed
+  `C:\Program Files\LabControl\Setup.exe --rekey`. Never run `Uninstall.exe --rekey`: that file name
+  makes the executable prepend `--uninstall`.
 - **M6 portion 3 is built (2026-10-17, `D-73`, `D-74`) and passed its VM drill on Windows 11 ARM64 (2026-10-20); physical lab pending.**
   Internet control: every firewall profile's default outbound action to *Block* after the
   `LabControl Internet` group's `agent.exe` and local-subnet rules (Windows refuses loopback addresses in a rule), other programs'

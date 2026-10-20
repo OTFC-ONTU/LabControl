@@ -209,6 +209,14 @@ longer working notes belong in `docs/DEVELOPMENT.md`. Local scratch (plans, logs
 lab data, USB payloads) never goes into git — `.gitignore` covers `.claude/m6-plan/`,
 `*.log`, `*.lock`, `devlab-data/`, `payload/` and lab documents.
 
+**Lab key recovery is next (owner decisions 2026-10-20, `D-82`; ROADMAP *Lab key recovery*), before
+M6 portion 4:** the owner forgot the lab key's passphrase, so nothing that needs the key could be
+done. Three portions: (1) remember the key on this computer — a device holder whose secret lives in
+the OS store, on by default; (2) *Move this lab to a new key* from an administrator console — a new
+lab, the PCs moved over the network by a SYSTEM `run_script` that schedules the installed
+`Setup.exe --rekey` (never `Uninstall.exe`, which prepends `--uninstall`), so `1.0.0` agents need no
+update first; (3) the VM drill on an owned-installation clone and the physical lab.
+
 **M6 portion 1 verified, portion 2 built and partly VM-verified; portions 3–6 remain:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

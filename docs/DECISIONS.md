@@ -4208,6 +4208,62 @@ formats, so a catalog change invalidates a backup); tolerant parsing with defaul
 missing fields (the failure mode is silent data loss, which is the one failure mode this
 project cannot notice on its own).
 
+## D-82 — A lost lab key is survivable: the key remembered on this computer, and a lab moved to a new key over the network by its administrator console
+
+Context (2026-10-20): the owner, the lab's only administrator, forgot the lab key's
+passphrase and had no recovery code. `D-13` makes that unrecoverable on purpose: the key is
+encrypted under its holders' passphrases and the recovery code, and nothing else opens it. The
+consequence was out of proportion to the cause — no new PC could be enrolled, no update pushed,
+and the only way out was a new lab and a USB walk to every installed PC. Owner decisions:
+only an administrator console may move PCs, remembering the key is on by default, and it is
+built now.
+
+Decisions:
+
+1. **What the passphrase actually protects.** Without the key an administrator console already
+   runs SYSTEM scripts on every linked PC, locks, broadcasts and controls them; the key adds
+   enrolment, update signing, revocation and certificate renewal. Someone at the teacher's
+   unlocked computer therefore already controls the room. The passphrase keeps the key safe from
+   a copied data directory or backup and from a computer the key was never opened on. Neither
+   decision below weakens those two.
+2. **Remember the key on this computer** — a *device holder* in the key document: a holder
+   named for this console instance whose secret is 32 random bytes kept only in the OS store
+   the console already uses for its own instance key (`ISecretProtector`: macOS keychain,
+   Windows DPAPI, Linux secret service). The vault opens the key with it whenever an operation
+   needs it. On by default — a checked box in the create and unlock dialogs — and *Forget on
+   this computer* removes the holder and the stored secret. A backup carries the holder entry,
+   whose secret it does not contain, so a restored key still needs the passphrase or the
+   recovery code. The idle lock is unchanged: the key is reopened silently when needed.
+3. **Move this lab to a new key** — from an administrator console whose key cannot be opened. A
+   new lab (new CA and lab id: the profile store refuses one lab id under two CAs, `D-55`) is
+   created with a new passphrase and recovery code and remembered on this computer; the PC
+   records, scripts, internet presets and catalog are carried over. Each linked PC is moved with
+   what every installed agent already runs, so the five `1.0.0` PCs need no update first (one
+   could not be pushed without the lost key): a SYSTEM `run_script` whose text carries that PC's
+   own single-use enrolment code and the new CA certificate — never a file in the student's
+   `Materials` — writes them to a directory only SYSTEM and administrators can read, and
+   schedules a one-shot SYSTEM task that runs the installed
+   `C:\Program Files\LabControl\Setup.exe --rekey --payload <dir>` (the `D-52` trust
+   transaction: agent id, number, account mode and settings kept). The task, not the script,
+   runs it, because the rekey stops the service that runs the script. Never `Uninstall.exe`:
+   named so, the executable prepends `--uninstall` to any arguments. A PC whose installation is
+   not owned is reported (`Setup.exe` refuses it) and left as it is.
+4. **The old lab stays** in *My labs* as *old key — N PCs to move* until no PC is left in it;
+   opening it moves each PC as it links, with codes the new key — remembered on this computer —
+   issues. Teacher devices of the old lab need a new grant; the old backups are obsolete; the
+   wizard says so and offers a new backup.
+5. **No new agent job in this decision.** `Job{rekey}` stays reserved and role-gated
+   (`D-56` item 5); a native job may later replace the script once every PC runs a build that
+   has it.
+
+Rejected: a "reset" of the forgotten passphrase (impossible by construction, and a bypass would
+let anyone with the data directory sign updates for the room); storing the passphrase itself
+(the device holder gives the same convenience without the secret ever existing in plain form);
+dropping the passphrase (the backup would have nothing to be encrypted under); handing the
+enrolment code to the PC as a handout (it would sit in the student's folder); running
+`Uninstall.exe --rekey` (it would remove the agent); letting a teacher device move PCs (owner
+decision).
+
 ## NuGet dependencies (keep this list current)
 
 | Package | Where | Why |

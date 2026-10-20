@@ -67,6 +67,9 @@ internal sealed class WindowsInternetControl
         lock (_lock)
         {
             var problems = new List<string>();
+
+            // The background pass must not switch rules off behind the refine that switches them back on.
+            Step(problems, "other rules pass", StopDisabler);
             Step(problems, "firewall profiles", () =>
             {
                 var (enabled, current) = _firewall.ReadEnabled();
@@ -92,7 +95,6 @@ internal sealed class WindowsInternetControl
             WindowsDns.FlushCache();
 
             _applied = null;
-            _disabledHere = new HashSet<string>(StringComparer.Ordinal);
             _repointedAt.Clear();
             _dnsNotHeld.Clear();
             _expectedOutbound = AllAllow();
@@ -268,13 +270,6 @@ internal sealed class WindowsInternetControl
                 _firewall.EnsureAgentRule(_program);
                 _firewall.EnsureLocalSubnetRule();
                 Mark("allow rules");
-                if (_disabledHere.Count == 0 || !displaced.DisabledRules.All(_disabledHere.Contains))
-                {
-                    _firewall.SetForeignRules(displaced.DisabledRules, enabled: false);
-                    _disabledHere = new HashSet<string>(displaced.DisabledRules, StringComparer.Ordinal);
-                    Mark("other rules off");
-                }
-
                 foreach (var profile in WindowsFirewall.Profiles.Keys)
                 {
                     _firewall.SetDefaultOutbound(profile, "block");
@@ -312,12 +307,15 @@ internal sealed class WindowsInternetControl
                     return MachineResult.Failed(PolicyEvents.Text("InternetReadBack", WindowsFirewall.AgentRuleName));
                 }
 
-                if (after.ForeignEnabled.Intersect(displaced.DisabledRules, StringComparer.Ordinal).Any())
-                {
-                    return MachineResult.Failed(PolicyEvents.Text("InternetReadBack", "other programs' firewall rules"));
-                }
-
                 Mark("read back");
+
+                // 6. Other programs' outbound allow rules off — after the block, in the background.
+                // Windows rebuilds its filters after every rule change, about 300 ms each, and a
+                // classroom PC has a hundred such rules: done in line it kept the internet open for
+                // half a minute after Apply and held the policy lock all that time (PC-14,
+                // 2026-10-20). The block is in force meanwhile; only those programs' own allow
+                // rules stay open until the background pass reaches them.
+                StartDisabler(session.SessionId, displaced.DisabledRules);
                 _log.LogInformation("internet policy {Session} steps: {Steps}", session.SessionId, string.Join(", ", steps));
 
                 displaced.Applied = true;
@@ -508,6 +506,76 @@ internal sealed class WindowsInternetControl
                 _log.LogWarning(ex, "the whitelist could not allow {Count} address(es): {Message}", addresses.Count, ex.Message);
                 return false;
             }
+        }
+    }
+
+    private readonly Lock _disablerGate = new();
+    private Task? _disabler;
+    private CancellationTokenSource? _disablerStop;
+
+    /// <summary>
+    /// Switches the recorded rules off on a worker, unless this service already did for the policy
+    /// in force. Takes only its own gate, never <c>_lock</c>, so a restore can stop and wait for it.
+    /// </summary>
+    private void StartDisabler(string sessionId, IReadOnlyCollection<string> fingerprints)
+    {
+        var wanted = fingerprints.ToArray();
+        lock (_disablerGate)
+        {
+            if (wanted.Length == 0 || wanted.All(_disabledHere.Contains) || _disabler is { IsCompleted: false })
+            {
+                return;
+            }
+
+            var stop = new CancellationTokenSource();
+            _disablerStop = stop;
+            _disabler = Task.Run(() =>
+            {
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    var changed = _firewall.SetForeignRules(wanted, enabled: false, stop.Token);
+                    if (stop.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    var left = _firewall.CountEnabled(wanted);
+                    lock (_disablerGate)
+                    {
+                        if (left == 0)
+                        {
+                            _disabledHere = new HashSet<string>(wanted, StringComparer.Ordinal);
+                        }
+                    }
+
+                    _log.LogInformation("internet policy {Session}: {Changed} other program rule(s) switched off in {Ms} ms; {Left} still on",
+                        sessionId, changed, clock.ElapsedMilliseconds, left);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "switching other programs' rules off failed: {Message}", ex.Message);
+                }
+            });
+        }
+    }
+
+    /// <summary>Stops the background pass and waits for it; a rule mid-change finishes first.</summary>
+    private void StopDisabler()
+    {
+        Task? running;
+        lock (_disablerGate)
+        {
+            _disablerStop?.Cancel();
+            running = _disabler;
+            _disabler = null;
+            _disablerStop = null;
+            _disabledHere = new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        if (running is not null && !running.Wait(TimeSpan.FromSeconds(30)))
+        {
+            throw new IOException("the background pass over other programs' rules did not stop within 30 s");
         }
     }
 

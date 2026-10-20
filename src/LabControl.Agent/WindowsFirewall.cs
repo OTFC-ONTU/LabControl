@@ -230,12 +230,18 @@ internal sealed class WindowsFirewall
     /// Switches the rules with these fingerprints on or off; returns how many changed. A rule
     /// already in the asked state is left alone, so a repeat is harmless.
     /// </summary>
-    public int SetForeignRules(IReadOnlyCollection<string> fingerprints, bool enabled) => WithRules(rules =>
+    public int SetForeignRules(IReadOnlyCollection<string> fingerprints, bool enabled, CancellationToken token = default) => WithRules(rules =>
     {
         var wanted = new HashSet<string>(fingerprints, StringComparer.Ordinal);
         var changed = 0;
         foreach (object item in (IEnumerable)rules)
         {
+            if (token.IsCancellationRequested)
+            {
+                Release(item);
+                break;
+            }
+
             try
             {
                 dynamic rule = item;

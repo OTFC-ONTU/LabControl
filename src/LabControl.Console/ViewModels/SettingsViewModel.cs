@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LabControl.Console.Localization;
 using LabControl.Console.Services;
+using LabControl.Shared.Lab;
 using LabControl.Shared;
 using LabControl.Shared.Identity;
 using LabControl.Shared.Persistence;
@@ -231,6 +232,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         var vault = _session.Vault;
         IsUnlocked = vault is { IsUnlocked: true } or { IsRemembered: true };
         IsRemembered = vault is { IsRemembered: true };
+        OnPropertyChanged(nameof(CanMoveToNewKey));
         CanRemember = vault is { Memory: not null, IsRemembered: false };
         KeyStatus = MainViewModel.KeyStatusText(vault);
 
@@ -396,6 +398,78 @@ public sealed partial class SettingsViewModel : ObservableObject
         : string.Equals(name, LabKeyMemory.HolderNameOf(_session.Instance.InstanceId), StringComparison.Ordinal)
             ? Strings.Get("Key.HolderThisComputer")
             : Strings.Format("Key.HolderOtherComputer", _session.NameOfInstance(name[Defaults.DeviceHolderPrefix.Length..]));
+
+    /// <summary>Raised with the new lab's id once a lab was moved to a new key and the teacher chose to switch to it (D-82).</summary>
+    public event Action<string>? SwitchLabRequested;
+
+    /// <summary>The move is offered on an administrator console of a lab not yet moved (D-82, owner decision 1).</summary>
+    public bool CanMoveToNewKey => _session.Vault is not null && _bootstrap.Profiles.Find(_session.LabId)?.MovedToLabId is null;
+
+    /// <summary>
+    /// <i>Lost the passphrase? Move this lab to a new key…</i> (D-82 item 3): explains, asks for the
+    /// new key's holder and passphrase, creates the new lab remembered on this computer, makes
+    /// sure the new recovery code is written down, sends every linked PC its move, waits for
+    /// their answers and offers to switch. PCs that were off move when they link to this lab later.
+    /// </summary>
+    [RelayCommand]
+    private async Task MoveToNewKeyAsync()
+    {
+        if (!CanMoveToNewKey
+            || !await _dialogs.ConfirmAsync(Strings.Get("Move.Title"), Strings.Format("Move.Explain", _session.LabName), Strings.Get("Common.Continue")))
+        {
+            return;
+        }
+
+        var answer = await _dialogs.AddHolderAsync(Strings.Get("Move.NewKeyHeading"), Strings.Get("Move.NewKeyHint"));
+        if (answer is null)
+        {
+            return;
+        }
+
+        LabMoveTarget target;
+        RecoveryCode recovery;
+        try
+        {
+            (target, recovery) = await Task.Run(() =>
+            {
+                var created = _bootstrap.CreateLabForMove(_session, answer.Name, answer.Passphrase, out var code);
+                return (created, code);
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.Security.Cryptography.CryptographicException)
+        {
+            await _dialogs.ShowMessageAsync(Strings.Get("Move.Title"), Strings.Format("Move.CreateFailed", ex.Message));
+            return;
+        }
+
+        _session.Events.Info("lab.moved", Strings.Format("Event.LabMoved", _session.LabName));
+        await _dialogs.ShowRecoveryCodeAsync(recovery);
+
+        _session.MoveTarget = target;
+        var linked = _session.Linked.Select(c => c.AgentId).ToArray();
+        var jobs = _session.MoveToNewKey(linked, target);
+        LastMessage = Strings.Format("Move.Sending", jobs.Count);
+
+        // The scripts only write a payload and schedule a task: their answers come within seconds.
+        var deadline = DateTimeOffset.UtcNow + Defaults.LabMoveScriptTimeout;
+        while (DateTimeOffset.UtcNow < deadline && jobs.Any(j => _session.Jobs.Find(j.Id) is { IsFinished: false }))
+        {
+            await Task.Delay(500);
+        }
+
+        var finished = jobs.Select(j => _session.Jobs.Find(j.Id)).Where(j => j is not null).ToArray();
+        var moved = finished.Count(j => j!.Output.Any(line => line.Contains(LabMoveScript.ScheduledMarker, StringComparison.Ordinal)));
+        var refused = finished.Count(j => j!.Output.Any(line => line.Contains(LabMoveScript.RefusedMarker, StringComparison.Ordinal)));
+        var offline = _session.Registry.Document.Machines.Count - linked.Length;
+        var summary = Strings.Format("Move.Summary", moved, refused, jobs.Count - moved - refused, Math.Max(0, offline), target.LabName);
+        LastMessage = summary;
+        Refresh();
+
+        if (await _dialogs.ConfirmAsync(Strings.Get("Move.Title"), summary + "\n\n" + Strings.Get("Move.SwitchQuestion"), Strings.Get("Move.Switch")))
+        {
+            SwitchLabRequested?.Invoke(target.LabId);
+        }
+    }
 
     [RelayCommand]
     private async Task AddHolderAsync()

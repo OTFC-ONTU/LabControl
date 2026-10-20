@@ -154,7 +154,8 @@ the documents relevant to the task:
   *Move this lab to a new key* from an administrator console: a new lab, every linked PC moved by a
   SYSTEM `run_script` carrying its own enrolment code that schedules the installed
   `C:\Program Files\LabControl\Setup.exe --rekey`. Never run `Uninstall.exe --rekey`: that file name
-  makes the executable prepend `--uninstall`.
+  makes the executable prepend `--uninstall`. Portions 1–2 built 2026-10-20; the move passed its
+  VM drill on an owned installation (agent id and number kept, enrolled into the new lab by itself).
 - **M6 portion 3 is built (2026-10-17, `D-73`, `D-74`) and passed its VM drill on Windows 11 ARM64 (2026-10-20); physical lab pending.**
   Internet control: every firewall profile's default outbound action to *Block* after the
   `LabControl Internet` group's `agent.exe` and local-subnet rules (Windows refuses loopback addresses in a rule), other programs'

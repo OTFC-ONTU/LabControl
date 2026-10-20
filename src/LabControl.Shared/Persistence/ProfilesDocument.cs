@@ -78,6 +78,14 @@ public sealed class ProfileRecord
 
     public ProfileSource Source { get; set; }
 
+    /// <summary>
+    /// Set when this lab was moved to a new key (D-82): the lab its PCs are being moved to.
+    /// Opening this profile then moves each PC as it links; <c>null</c> for an ordinary lab.
+    /// </summary>
+    public string? MovedToLabId { get; set; }
+
+    public long MovedAtUnix { get; set; }
+
     /// <summary>SHA-256 of the public CA certificate (DER), lowercase hex — the value of <see cref="AuthorityFingerprint"/>.</summary>
     public static string AuthorityFingerprintOf(ReadOnlySpan<byte> authorityDer) =>
         Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(authorityDer));

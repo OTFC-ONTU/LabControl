@@ -848,7 +848,7 @@ public sealed class SingleInstanceTests
 
         public Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false) => Task.FromResult<UnlockAnswer?>(null);
 
-        public Task<HolderAnswer?> AddHolderAsync() => Task.FromResult<HolderAnswer?>(null);
+        public Task<HolderAnswer?> AddHolderAsync(string? heading = null, string? hint = null) => Task.FromResult<HolderAnswer?>(null);
 
         public Task<string?> AskTextAsync(string title, string prompt, string initial = "", bool secret = false) => Task.FromResult<string?>(null);
 

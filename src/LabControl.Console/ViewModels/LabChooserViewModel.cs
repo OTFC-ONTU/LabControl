@@ -90,6 +90,7 @@ public sealed partial class LabRowViewModel : ObservableObject
 
     private static string StatusOf(ProfileRecord record, DateTimeOffset now) => record.Authorization switch
     {
+        _ when record.MovedToLabId is { Length: > 0 } => Strings.Get("Chooser.Status.MovedToNewKey"),
         ProfileAuthorization.NeedsAuthorization => Strings.Get("Chooser.Status.NeedsAuthorization"),
         ProfileAuthorization.RequestPending => Strings.Get("Chooser.Status.RequestPending"),
         ProfileAuthorization.Expired => Strings.Get("Chooser.Status.Expired"),

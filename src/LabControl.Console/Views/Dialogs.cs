@@ -138,16 +138,18 @@ public sealed class UnlockDialog : DialogWindow<UnlockAnswer>
 
 public sealed class HolderDialog : DialogWindow<HolderAnswer>
 {
-    public HolderDialog()
+    /// <param name="heading">The question, when it is not adding a holder — the new key of a lab moved after a lost passphrase (D-82).</param>
+    /// <param name="hint">The line under it, in that case.</param>
+    public HolderDialog(string? heading = null, string? hint = null)
     {
-        Title = Strings.Get("Key.AddHolder");
+        Title = heading ?? Strings.Get("Key.AddHolder");
 
         var name = Field(Strings.Get("Key.HolderName"));
         var passphrase = Field(Strings.Get("Key.HolderPassphrase"), secret: true);
         var again = Field(Strings.Get("Key.HolderPassphraseAgain"), secret: true);
         var error = new TextBlock { Foreground = Brushes.IndianRed, IsVisible = false, TextWrapping = TextWrapping.Wrap };
 
-        var ok = Primary(Strings.Get("Key.AddHolder"));
+        var ok = Primary(heading is null ? Strings.Get("Key.AddHolder") : Strings.Get("Common.Continue"));
         ok.Click += (_, _) =>
         {
             if (string.IsNullOrWhiteSpace(name.Text))
@@ -174,7 +176,8 @@ public sealed class HolderDialog : DialogWindow<HolderAnswer>
         var cancel = Secondary(Strings.Get("Common.Cancel"));
         cancel.Click += (_, _) => Finish(null);
 
-        Body(Heading(Strings.Get("Key.AddHolder")), Label(Strings.Get("Key.AddHolderHint")), name, passphrase, again, error, Buttons(cancel, ok));
+        name.Text = heading is null ? null : Environment.UserName;
+        Body(Heading(heading ?? Strings.Get("Key.AddHolder")), Label(hint ?? Strings.Get("Key.AddHolderHint")), name, passphrase, again, error, Buttons(cancel, ok));
         Opened += (_, _) => name.Focus();
     }
 }

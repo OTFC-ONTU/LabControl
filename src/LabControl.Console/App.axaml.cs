@@ -551,6 +551,7 @@ public partial class App : Application
         var viewModel = new MainViewModel(session, _bootstrap, main, action => Dispatcher.UIThread.Post(action)) { IsConnecting = connecting };
         main.DataContext = viewModel;
         viewModel.DisconnectRequested += () => _ = DisconnectAsync(main, viewModel, session);
+        viewModel.SwitchLabRequested += labId => _ = SwitchToMovedLabAsync(viewModel, labId);
         // A drop on the main window goes through the same queue as a forwarded launch: one
         // import batch at a time, whatever asked for it.
         main.FilesDropped += OnFilesArrived;
@@ -602,6 +603,23 @@ public partial class App : Application
     }
 
     /// <summary><i>Disconnect</i>: the departure report, then release, then the chooser.</summary>
+    /// <summary>
+    /// After <i>Move this lab to a new key</i> (D-82): the old lab is released and the new one
+    /// opened, where the moved PCs enrol as they come back under the new key. No departure
+    /// question — the teacher has just chosen this, and nothing of the old lab's must outlive it.
+    /// </summary>
+    private async Task SwitchToMovedLabAsync(MainViewModel viewModel, string labId)
+    {
+        if (_controller is null || viewModel.IsDetached)
+        {
+            return;
+        }
+
+        CloseMain();
+        ShowChooser();
+        await _controller.ActivateAsync(labId);
+    }
+
     private async Task DisconnectAsync(MainWindow main, MainViewModel viewModel, LabSession session)
     {
         if (_controller is null || viewModel.IsDetached || session.IsDisposed)

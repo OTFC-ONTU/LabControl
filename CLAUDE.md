@@ -215,7 +215,10 @@ done. Three portions: (1) remember the key on this computer — a device holder 
 the OS store, on by default; (2) *Move this lab to a new key* from an administrator console — a new
 lab, the PCs moved over the network by a SYSTEM `run_script` that schedules the installed
 `Setup.exe --rekey` (never `Uninstall.exe`, which prepends `--uninstall`), so `1.0.0` agents need no
-update first; (3) the VM drill on an owned-installation clone and the physical lab.
+update first; (3) the VM drill on an owned-installation clone and the physical lab. **Portions 1 and
+2 are built (2026-10-20) and portion 2 passed its VM drill** — an owned installation moved over the
+network, kept its agent id and number and enrolled into the new lab on its own (ROADMAP *Lab key
+recovery*). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.
 
 **M6 portion 1 verified, portion 2 built and partly VM-verified; portions 3–6 remain:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console

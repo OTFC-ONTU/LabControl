@@ -2169,6 +2169,29 @@ still working, a second remember replacing the first, the document carried elsew
 needing the passphrase, forget taking everything back, a torn or foreign device file meaning
 &quot;not remembered&quot;, a PC enrolling while the key is idle-locked; 930 Shared + 269 Console. It
 cannot help the lab whose passphrase is already lost — that is portion 2.</li>
+<li><em>Portion 2 built and VM-drilled (2026-10-20).</em> <code>LabMoveScript</code> (Shared) writes the per-PC
+PowerShell: refuses a PC without <code>installation.json</code> and the installed <code>Setup.exe</code>, writes the
+payload into <code>C:\ProgramData\LabControlMove\&lt;id&gt;</code> (ACL by well-known SID: SYSTEM and
+Administrators only), and registers a one-shot SYSTEM task that runs
+<code>C:\Program Files\LabControl\Setup.exe --rekey</code> 20 s later, logs, deletes the used
+<code>setup.json</code> and the task. <code>ConsoleBootstrap.CreateLabForMove</code> creates the new lab (layout,
+scripts, presets, catalog carried; the new key remembered; the old profile's
+<code>MovedToLabId</code>); <code>LabSession.MoveToNewKey</code> mints one code of the new lab per linked PC and
+sends the script, pinning the console's address when it is bound to one; <code>MoveTarget</code> makes
+the old profile move each PC that links later. Settings: <em>Lost the passphrase? Move this lab
+to a new key…</em> — explanation, new holder and passphrase, the new recovery code, the moves,
+a summary and <em>Switch now</em>; <em>My labs</em> marks the old lab <em>old key</em>. The tests found that
+<code>Path.Combine</code> on the Mac joined the Windows path with <code>/</code>. <strong>VM drill</strong> on the internet clone
+with a fresh <strong>owned</strong> installation (<code>Setup.exe --number 1 --no-student --no-reboot</code> into
+disposable lab A): <code>move-new-key</code> from A → the script answered <code>LABCONTROL_MOVE_SCHEDULED</code>
+in 14 s; 20 s later the task ran <code>Setup.exe --rekey</code> (&quot;Lab trust replaced&quot;, exit 0), the
+used code was deleted, the task removed itself, <code>agent.json</code> named lab B with the <strong>same
+agent id and number</strong>; with B served on the same port the PC enrolled into B on its own, B's
+key reopened from this computer's memory with no passphrase. The development installation
+removed beforehand had neither <code>installation.json</code> nor the installed <code>Setup.exe</code>, the
+script's refusal condition. Noted: the PC reports <code>policy.unreadable</code> once (&quot;belongs to
+another lab&quot;) — its old <code>policy.json</code> is discarded, as designed. <strong>Next: portion 3</strong> — the
+owner runs <em>Move this lab to a new key</em> on the real console; the five <code>1.0.0</code> PCs move.</li>
 </ul>
 <h2 id="m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode<a class="anchor" href="#m6-classroom-control-broadcast-lock-exam-mode" aria-label="Link to this section">#</a></h2>
 <p><strong>Goal.</strong> The features used in every lesson.</p>
@@ -2958,7 +2981,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-20 12:21 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-20 12:49 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

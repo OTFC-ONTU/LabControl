@@ -118,6 +118,79 @@ public sealed class ConsoleBootstrap
         return NewSession(store, vault, instance);
     }
 
+    /// <summary>
+    /// The new lab a lab whose key was lost moves to (D-82 item 3): a new key and CA under a new
+    /// lab id with the given holder and passphrase, this computer's instance, the room layout,
+    /// the script library, the internet presets and the package catalog of <paramref name="from"/>,
+    /// the new key remembered on this computer, and the old profile marked as moved. No session
+    /// is started: the old lab stays active until its linked PCs have been sent their move.
+    /// </summary>
+    public LabMoveTarget CreateLabForMove(LabSession from, string holderName, string passphrase, out RecoveryCode recoveryCode)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        using var lab = LabKey.Create(from.LabName, holderName, passphrase, out recoveryCode);
+        var store = StoreFor(lab.LabId);
+        store.EnsureDirectories();
+        store.SaveLabKey(lab.Document);
+
+        var instance = ConsoleInstance.Mint(lab, from.Instance.InstanceName, _newProtector());
+        store.SaveInstance(instance.Document);
+        store.SaveLab(new LabDocument
+        {
+            LabId = lab.LabId,
+            LabName = lab.LabName,
+            Layout = from.Registry.Document.Layout.Select(t => new LayoutTile { Number = t.Number, Column = t.Column, Row = t.Row }).ToList(),
+        });
+
+        if (from.Store.LoadScripts() is { } scripts)
+        {
+            scripts.LabId = lab.LabId;
+            store.SaveScripts(scripts);
+        }
+
+        if (from.Store.LoadInternetPresets() is { } presets)
+        {
+            presets.LabId = lab.LabId;
+            store.SaveInternetPresets(presets);
+        }
+
+        store.WriteCatalog(from.Store.ReadCatalog());
+
+        // Remembered here at once: the codes for PCs that come back later are minted with it.
+        new LabKeyMemory(store, instance.InstanceId, () => SecretProtector.For(instance.Document.PrivateKey)).Remember(lab);
+        store.SaveLabKey(lab.Document);
+
+        Record(lab, instance.Document, ProfileSource.Created, pcCount: 0);
+        if (Profiles.Find(from.LabId) is { } old)
+        {
+            old.MovedToLabId = lab.LabId;
+            old.MovedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            Profiles.Upsert(old);
+            Profiles.LastUsedLabId = lab.LabId;
+            Profiles.Save();
+        }
+
+        return new LabMoveTarget(lab.LabId, lab.LabName, store, lab.Document.Authority);
+    }
+
+    /// <summary>The lab a moved profile's PCs go to, when <paramref name="labId"/> was moved and its target is still on this computer (D-82 item 4).</summary>
+    public LabMoveTarget? MoveTargetOf(string labId)
+    {
+        if (Profiles.Find(labId)?.MovedToLabId is not { Length: > 0 } targetId || Profiles.Find(targetId) is null)
+        {
+            return null;
+        }
+
+        var store = StoreFor(targetId);
+        if (!store.HasLabKey)
+        {
+            return null;
+        }
+
+        var key = store.LoadLabKey();
+        return new LabMoveTarget(key.LabId, key.LabName, store, key.Authority);
+    }
+
     /// <summary>Reads a backup far enough to show its lab name and holders before asking for a secret.</summary>
     public static BackupDocument ReadBackup(string path) =>
         LabBackup.Parse(File.ReadAllText(path), Path.GetFileName(path));
@@ -624,6 +697,9 @@ public sealed class ConsoleBootstrap
         {
             // A PC of another saved lab is refused by name (D-57 item 2); the index is the only source.
             LabNameResolver = labId => Profiles.Find(labId)?.LabName,
+
+            // A lab moved to a new key (D-82 item 4) moves each PC that still links here.
+            MoveTarget = vault is null ? null : MoveTargetOf(identity.LabId),
         };
 
     // ------------------------------------------------------------------ backup
@@ -804,6 +880,9 @@ public sealed class ConsoleBootstrap
         Profiles.Save();
     }
 }
+
+/// <summary>The lab a lab with a lost key is moved to (D-82): its id and name, its profile directory and its public CA certificate.</summary>
+public sealed record LabMoveTarget(string LabId, string LabName, LabStore Store, byte[] Authority);
 
 /// <summary>A saved lab read from disk and ready to serve; <see cref="Vault"/> is <c>null</c> on a teacher profile (M5, D-56).</summary>
 public sealed record OpenedLab(LabStore Store, LabIdentity Identity, LabKeyVault? Vault, ConsoleInstance Instance, InstanceDocument Document, bool NeedsRemint);

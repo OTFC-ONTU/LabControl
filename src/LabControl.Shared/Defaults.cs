@@ -250,6 +250,9 @@ public static class Defaults
     /// </summary>
     public const int DeviceHolderIterations = 1_000;
 
+    /// <summary>The move script's own limit (D-82): it only writes a payload and schedules a task.</summary>
+    public static readonly TimeSpan LabMoveScriptTimeout = TimeSpan.FromMinutes(2);
+
     /// <summary>The random secret of a device holder, in bytes (D-82).</summary>
     public const int DeviceHolderSecretBytes = 32;
     public const string LogsDirectoryName = "logs";

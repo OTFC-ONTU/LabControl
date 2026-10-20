@@ -21,8 +21,8 @@ public sealed class WindowDialogs : IDialogs
     public async Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false) =>
         await Show(new UnlockDialog(reason, offerRemember));
 
-    public async Task<HolderAnswer?> AddHolderAsync() =>
-        await Show(new HolderDialog());
+    public async Task<HolderAnswer?> AddHolderAsync(string? heading = null, string? hint = null) =>
+        await Show(new HolderDialog(heading, hint));
 
     public async Task<string?> AskTextAsync(string title, string prompt, string initial = "", bool secret = false) =>
         await Show(new TextDialog(title, prompt, initial, secret));

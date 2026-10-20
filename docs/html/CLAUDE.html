@@ -343,7 +343,10 @@ done. Three portions: (1) remember the key on this computer — a device holder 
 the OS store, on by default; (2) <em>Move this lab to a new key</em> from an administrator console — a new
 lab, the PCs moved over the network by a SYSTEM <code>run_script</code> that schedules the installed
 <code>Setup.exe --rekey</code> (never <code>Uninstall.exe</code>, which prepends <code>--uninstall</code>), so <code>1.0.0</code> agents need no
-update first; (3) the VM drill on an owned-installation clone and the physical lab.</p>
+update first; (3) the VM drill on an owned-installation clone and the physical lab. <strong>Portions 1 and
+2 are built (2026-10-20) and portion 2 passed its VM drill</strong> — an owned installation moved over the
+network, kept its agent id and number and enrolled into the new lab on its own (ROADMAP <em>Lab key
+recovery</em>). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.</p>
 <p><strong>M6 portion 1 verified, portion 2 built and partly VM-verified; portions 3–6 remain:</strong> the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
@@ -750,7 +753,7 @@ ROADMAP's <em>Physical lab</em> row and the on-site checklist. Do not describe W
 working in this lab until the vendor-driver rerun proves it.</p>
 
 </article>
-<footer>Generated 2026-10-20 12:21 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-20 12:49 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

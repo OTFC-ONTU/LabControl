@@ -624,4 +624,22 @@ LabControl uses it only while you show your screen, and sends the picture only t
   <data name="Key.ForgetConfirm" xml:space="preserve"><value>Forget the lab key on this computer? The passphrase or the recovery code will be needed here again — make sure you have one of them.</value></data>
   <data name="Key.HolderThisComputer" xml:space="preserve"><value>This computer (remembered)</value></data>
   <data name="Key.HolderOtherComputer" xml:space="preserve"><value>Another computer: {0} (remembered)</value></data>
+  <data name="Move.ScriptName" xml:space="preserve"><value>Move to the lab's new key</value></data>
+  <data name="Event.MoveSent" xml:space="preserve"><value>{0}: sent its move to the new key of “{1}”; it rejoins under the new key within a minute.</value></data>
+  <data name="Move.Action" xml:space="preserve"><value>Lost the passphrase? Move this lab to a new key…</value></data>
+  <data name="Move.Title" xml:space="preserve"><value>Move this lab to a new key</value></data>
+  <data name="Move.Explain" xml:space="preserve"><value>Use this only when nobody knows the passphrase of “{0}” and the recovery code is lost too.
+
+A new lab key is made, with a new passphrase and a new recovery code, and remembered on this computer. Every PC that is on now is moved to it over the network within a minute — no USB stick, no visit; it keeps its number, its student account and its settings. PCs that are off are moved the next time they connect to this lab, which stays under My labs until they have.
+
+Other teachers' devices will need a new lab file afterwards, and the old backups no longer open this lab.</value></data>
+  <data name="Move.NewKeyHeading" xml:space="preserve"><value>The new lab key</value></data>
+  <data name="Move.NewKeyHint" xml:space="preserve"><value>Your name and the passphrase for the new key. This time keep the passphrase somewhere safe as well — and write down the recovery code shown next.</value></data>
+  <data name="Move.CreateFailed" xml:space="preserve"><value>The new lab key could not be created: {0}</value></data>
+  <data name="Move.Sending" xml:space="preserve"><value>Sending the move to {0} PC(s)…</value></data>
+  <data name="Move.Summary" xml:space="preserve"><value>{0} PC(s) are moving to the new key and will rejoin within a minute; {1} could not be moved this way (installed without Setup — use Setup.exe --rekey from a USB stick); {2} did not answer; {3} are off and will move when they connect to this lab. The new lab is “{4}”.</value></data>
+  <data name="Move.SwitchQuestion" xml:space="preserve"><value>Switch to the new lab now? The moved PCs enrol there as they come back.</value></data>
+  <data name="Move.Switch" xml:space="preserve"><value>Switch now</value></data>
+  <data name="Event.LabMoved" xml:space="preserve"><value>“{0}” is being moved to a new lab key; its PCs are sent their move.</value></data>
+  <data name="Chooser.Status.MovedToNewKey" xml:space="preserve"><value>old key — PCs that connect here are moved to the new key</value></data>
 </root>

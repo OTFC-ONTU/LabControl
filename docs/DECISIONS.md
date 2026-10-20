@@ -4266,7 +4266,16 @@ decision).
 
 Validation (portion 1, 2026-10-20, on the Mac): `LabKeyMemoryTests` (seven) with the file
 protector standing in for the keychain; the console's own test rig never touches the developer's
-keychain. Portion 2 and the drills follow.
+keychain. Portion 2: `LabMoveTests` — the script parses as Windows PowerShell, carries the payload
+inside, names `Setup.exe` and never `Uninstall.exe`, grants by SID; a hostile move id is refused;
+the new lab is created remembered with layout, scripts and presets and the old profile marked;
+each linked PC gets one move with its own code of the new lab, a second request is skipped, and a
+PC linking later is moved by the old session. The tests caught `Path.Combine` joining the
+installed `Setup.exe` path with `/` on the Mac. VM drill (Windows 11 ARM64, owned installation):
+moved over the network with the agent id and number kept, enrolled into the new lab on its own,
+the new key opened from this computer's memory. Item 3 gains one rule from the drill: a console
+bound to one address pins it in the move payload, one serving every address leaves discovery —
+the rekey's own rule for an absent host.
 
 ## NuGet dependencies (keep this list current)
 

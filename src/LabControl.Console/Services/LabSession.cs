@@ -1014,6 +1014,12 @@ public sealed class LabSession : IAsyncDisposable
         NoteWoke(hello.AgentId, who, now);
         DeliverJobs(connection, resendInFlight: true, hello.BootTimeUnix);
 
+        // A lab moved to a new key (D-82 item 4): each PC that links here is sent its move.
+        if (MoveTarget is { } moveTarget && !connection.IsOutdated)
+        {
+            MoveToNewKey([hello.AgentId], moveTarget);
+        }
+
         // Screens (M3): every linked PC streams a thumbnail; the full view asks for more.
         // An M2-era agent answers with session.not_in_this_build once and is otherwise unhurt.
         if (!connection.IsOutdated)
@@ -1849,6 +1855,99 @@ public sealed class LabSession : IAsyncDisposable
         }
 
         return (sent, skipped);
+    }
+
+    // ------------------------------------------------------------------ moving to a new key (D-82)
+
+    private readonly HashSet<string> _moveSent = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Set while this lab is being moved to a new key (D-82 item 4): every PC that links is sent
+    /// its move once per session. <c>null</c> for an ordinary lab.
+    /// </summary>
+    public LabMoveTarget? MoveTarget { get; set; }
+
+    /// <summary>PCs of this lab sent a move in this session, linked or not since.</summary>
+    public IReadOnlyCollection<string> MovesSent
+    {
+        get
+        {
+            lock (_moveSent)
+            {
+                return _moveSent.ToArray();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Moves the given linked PCs to <paramref name="target"/> (D-82 item 3): for each, one
+    /// single-use enrolment code minted in the target lab, a payload with that code and the
+    /// target's CA certificate, and a SYSTEM <c>run_script</c> whose text carries both and
+    /// schedules the installed <c>Setup.exe --rekey</c>. A PC that is not linked is skipped — it
+    /// is moved when it links, while <see cref="MoveTarget"/> is set — and one already sent a
+    /// move in this session is not sent another. Needs no key of this lab: only the target's
+    /// codes, which need no key either. Returns the jobs created.
+    /// </summary>
+    public IReadOnlyList<JobRecord> MoveToNewKey(IEnumerable<string> agentIds, LabMoveTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(agentIds);
+        ArgumentNullException.ThrowIfNull(target);
+        if (Vault is null)
+        {
+            throw new InvalidOperationException(Strings.Get("Access.AdministratorNeeded"));
+        }
+
+        var jobs = new List<JobRecord>();
+        foreach (var agentId in agentIds.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (FindLinked(agentId) is not { } connection || connection.IsOutdated)
+            {
+                continue;
+            }
+
+            lock (_moveSent)
+            {
+                if (!_moveSent.Add(agentId))
+                {
+                    continue;
+                }
+            }
+
+            var now = _clock();
+            var codes = new EnrollmentAuthority(target.Store.LoadEnrollment(target.LabId));
+            var code = codes.Generate(1, $"move from {LabName} {now:yyyy-MM-dd HH:mm}", now, Instance.InstanceId, Instance.InstanceName)[0];
+            codes.Persist(target.Store.SaveEnrollment);
+
+            var setup = new SetupPayloadDocument
+            {
+                LabId = target.LabId,
+                LabName = target.LabName,
+
+                // A console bound to one address is found there; one serving every address is
+                // found by its beacon, as a stick written by WritePayload is (the rekey's rule).
+                ConsoleHost = Options.BindAddress is { } bound && !bound.Equals(System.Net.IPAddress.Any) && !bound.Equals(System.Net.IPAddress.IPv6Any)
+                    ? bound.ToString()
+                    : null,
+                ConsolePort = Port,
+                NextNumber = connection.Number,
+                EnrollmentCodes = [code],
+                WrittenBy = Instance.InstanceName,
+                WrittenAtUnix = now.ToUnixTimeSeconds(),
+            };
+            var text = LabMoveScript.Build(Guid.NewGuid().ToString("N"),
+                System.Text.Encoding.UTF8.GetBytes(JsonStore.Serialize(setup, SetupPayloadDocument.Migrations)), target.Authority);
+            jobs.AddRange(RunScript([agentId], new ScriptRecord
+            {
+                Name = Localization.Strings.Get("Move.ScriptName"),
+                Shell = RunScriptRequest.PowerShellValue,
+                RunAs = RunScriptRequest.SystemValue,
+                TimeoutSeconds = (int)Defaults.LabMoveScriptTimeout.TotalSeconds,
+                Text = text,
+            }));
+            Events.Info("lab.move_sent", Localization.Strings.Format("Event.MoveSent", string.Format(System.Globalization.CultureInfo.InvariantCulture, Defaults.MachineNameFormat, connection.Number), target.LabName), agentId, connection.Number);
+        }
+
+        return jobs;
     }
 
     // ------------------------------------------------------------------ internet (M6 portion 3)

@@ -215,3 +215,13 @@ and a refused site, `curl.exe --doh-url https://1.1.1.1/dns-query` for DoH, the 
 against a list saved before, the interface DNS in both families, the watchdog task, and port 53.
 Never disable the virtio NIC to simulate a late interface (it bugchecks the guest); reset its
 DNS by hand instead.
+
+## Lab key move drill (D-82)
+
+`move-new-key` (`agent_id`) creates a second disposable lab B in the same root (instance
+directory `moved`), remembers its key with the file protector, and sends the PC the production
+move script. The PC must have an **owned** installation: remove a development one, then run the
+built USB layout's `Setup.exe --number 1 --no-student --no-reboot --payload <dir>` as SYSTEM.
+After the job answers `LABCONTROL_MOVE_SCHEDULED`, read
+`C:\ProgramData\LabControlMove\<id>\move.log` in the guest, stop host A and start
+`TestLabHost --bind <same> --port <A's port> --root <root> --instance moved`: the PC enrols into B.

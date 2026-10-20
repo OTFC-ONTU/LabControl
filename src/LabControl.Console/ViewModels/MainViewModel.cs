@@ -54,6 +54,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         Settings = new SettingsViewModel(session, bootstrap, dialogs, EnsureUnlockedAsync);
         Settings.BackupChanged += RefreshBanners;
+        Settings.SwitchLabRequested += labId => SwitchLabRequested?.Invoke(labId);
         Scripts = new ScriptsViewModel(session, dialogs, () => Selected.Select(t => t.AgentId).ToArray());
 
         Title = Strings.Format("Main.Title", session.LabName, session.Instance.InstanceName);
@@ -160,6 +161,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The teacher pressed <i>Disconnect</i>; the app shows the departure report and releases the lab.</summary>
     public event Action? DisconnectRequested;
+
+    /// <summary>The lab was moved to a new key and the teacher chose to switch to it (D-82); the app releases this lab and opens that one.</summary>
+    public event Action<string>? SwitchLabRequested;
 
     public ObservableCollection<MachineTileViewModel> Machines { get; } = [];
 

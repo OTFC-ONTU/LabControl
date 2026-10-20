@@ -1979,6 +1979,29 @@ physical lab. Then M6 portion 4.
   needing the passphrase, forget taking everything back, a torn or foreign device file meaning
   "not remembered", a PC enrolling while the key is idle-locked; 930 Shared + 269 Console. It
   cannot help the lab whose passphrase is already lost — that is portion 2.
+- *Portion 2 built and VM-drilled (2026-10-20).* `LabMoveScript` (Shared) writes the per-PC
+  PowerShell: refuses a PC without `installation.json` and the installed `Setup.exe`, writes the
+  payload into `C:\ProgramData\LabControlMove\<id>` (ACL by well-known SID: SYSTEM and
+  Administrators only), and registers a one-shot SYSTEM task that runs
+  `C:\Program Files\LabControl\Setup.exe --rekey` 20 s later, logs, deletes the used
+  `setup.json` and the task. `ConsoleBootstrap.CreateLabForMove` creates the new lab (layout,
+  scripts, presets, catalog carried; the new key remembered; the old profile's
+  `MovedToLabId`); `LabSession.MoveToNewKey` mints one code of the new lab per linked PC and
+  sends the script, pinning the console's address when it is bound to one; `MoveTarget` makes
+  the old profile move each PC that links later. Settings: *Lost the passphrase? Move this lab
+  to a new key…* — explanation, new holder and passphrase, the new recovery code, the moves,
+  a summary and *Switch now*; *My labs* marks the old lab *old key*. The tests found that
+  `Path.Combine` on the Mac joined the Windows path with `/`. **VM drill** on the internet clone
+  with a fresh **owned** installation (`Setup.exe --number 1 --no-student --no-reboot` into
+  disposable lab A): `move-new-key` from A → the script answered `LABCONTROL_MOVE_SCHEDULED`
+  in 14 s; 20 s later the task ran `Setup.exe --rekey` ("Lab trust replaced", exit 0), the
+  used code was deleted, the task removed itself, `agent.json` named lab B with the **same
+  agent id and number**; with B served on the same port the PC enrolled into B on its own, B's
+  key reopened from this computer's memory with no passphrase. The development installation
+  removed beforehand had neither `installation.json` nor the installed `Setup.exe`, the
+  script's refusal condition. Noted: the PC reports `policy.unreadable` once ("belongs to
+  another lab") — its old `policy.json` is discarded, as designed. **Next: portion 3** — the
+  owner runs *Move this lab to a new key* on the real console; the five `1.0.0` PCs move.
 
 ## M6 — Classroom control: broadcast, lock, exam mode
 

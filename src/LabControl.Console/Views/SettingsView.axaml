@@ -60,6 +60,7 @@
         <Button Content="{loc:Localize Key.Forget}" Command="{Binding ForgetKeyCommand}" IsVisible="{Binding IsRemembered}" />
       </StackPanel>
       <TextBlock Text="{loc:Localize Key.RememberHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+      <Button Content="{loc:Localize Move.Action}" Command="{Binding MoveToNewKeyCommand}" IsVisible="{Binding CanMoveToNewKey}" HorizontalAlignment="Left" />
       <TextBlock Text="{loc:Localize Key.UnlockHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
 
       <TextBlock Classes="h" Text="{loc:Localize Settings.Holders}" />

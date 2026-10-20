@@ -374,6 +374,27 @@ internal static class TestLabHost
                                 if (command.Paths is not [var name]) throw new ArgumentException("Name one host in paths.");
                                 result = new { ok = true, asked = session.AllowRefusedName(name) };
                                 break;
+                            // D-82 drill: a new lab B in this root (instance directory "moved"), remembered with the
+                            // file protector, and the PC sent its move. Start a second host with
+                            // --root <root> --instance moved --port <this port> to serve B afterwards.
+                            case "move-new-key":
+                            {
+                                if (command.AgentId is null || !session.IsLinked(command.AgentId))
+                                    throw new InvalidOperationException("Choose a linked fixture agent.");
+                                var movedStore = new LabStore(Path.Combine(root, "moved"));
+                                if (movedStore.HasLab) throw new InvalidOperationException("This root already holds a moved lab.");
+                                using var moved = LabKey.Create("Disposable M4 fixture moved", "Disposable fixture", Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)), out _);
+                                movedStore.EnsureDirectories();
+                                movedStore.SaveLabKey(moved.Document);
+                                var movedInstance = ConsoleInstance.Mint(moved, "Disposable M4 fixture moved", new FileSecretProtector());
+                                movedStore.SaveInstance(movedInstance.Document);
+                                movedStore.SaveLab(new LabDocument { LabId = moved.LabId, LabName = moved.LabName });
+                                new LabKeyMemory(movedStore, movedInstance.InstanceId, () => new FileSecretProtector()).Remember(moved);
+                                movedStore.SaveLabKey(moved.Document);
+                                var moveJobs = session.MoveToNewKey([command.AgentId], new LabMoveTarget(moved.LabId, moved.LabName, movedStore, moved.Document.Authority));
+                                result = new { ok = moveJobs.Count == 1, moved_lab_id = moved.LabId, job_ids = moveJobs.Select(j => j.Id).ToArray() };
+                                break;
+                            }
                             case "unlock":
                                 result = new { ok = vault.IsUnlocked || passphrase is not null && vault.TryUnlock(passphrase), action = "unlock" };
                                 break;

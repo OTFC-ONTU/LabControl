@@ -50,7 +50,7 @@ public partial class LabChooserWindow : Window, IDialogs
 
     public Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false) => _dialogs.UnlockAsync(reason, offerRemember);
 
-    public Task<HolderAnswer?> AddHolderAsync() => _dialogs.AddHolderAsync();
+    public Task<HolderAnswer?> AddHolderAsync(string? heading = null, string? hint = null) => _dialogs.AddHolderAsync(heading, hint);
 
     public Task<string?> AskTextAsync(string title, string prompt, string initial = "", bool secret = false) => _dialogs.AskTextAsync(title, prompt, initial, secret);
 

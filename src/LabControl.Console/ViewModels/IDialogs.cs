@@ -27,7 +27,8 @@ public interface IDialogs
     /// <param name="offerRemember">Show "Remember on this computer", checked (D-82) — only for the session's own key.</param>
     Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false);
 
-    Task<HolderAnswer?> AddHolderAsync();
+    /// <param name="heading">Asks for a new key's first holder instead of an extra holder (D-82).</param>
+    Task<HolderAnswer?> AddHolderAsync(string? heading = null, string? hint = null);
 
     Task<string?> AskTextAsync(string title, string prompt, string initial = "", bool secret = false);
 

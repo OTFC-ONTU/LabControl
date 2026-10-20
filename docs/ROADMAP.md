@@ -2577,7 +2577,13 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   *Internet* dialog grew past a 13" screen as the refused list filled, hiding *Apply*; its
   buttons now stay visible and the rest scrolls. Lifting is confirmed after ~26 s (the foreign
   rules are switched back on in line, so a restart cannot leave them off); the internet itself
-  opens at the first step. Still open: the 14-PC drill and DoH in Edge.
+  opens at the first step. **14-PC drill (2026-10-20)**, all PCs on that build: *No internet*
+  and *Only these sites* for the whole lab — every PC reported the policy and stayed linked,
+  allowed sites loaded, the rest (and DoH in Edge) did not, *Send files* reached PCs under the
+  block, *Allow* amended the list, a PC rebooted under the whitelist came back with it, and
+  *Open* opened all fourteen. One finding: that rebooted PC's first restore failed with
+  ERROR_WRITE_PROTECT because the agent started before Windows Firewall; a restore and an apply
+  now wait for `MpsSvc` (`D-73` item 12) — that build still to push.
 ---
 
 ## M7 — Software catalog, localization, polish

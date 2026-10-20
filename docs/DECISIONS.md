@@ -3884,7 +3884,11 @@ Decisions:
     leave them off, and the internet opens at the first step anyway. The helper's reports reach
     the enforcer through a worker, latest wins, never from the pipe's read loop that the silence
     watchdog times. The reassert gives up for ten minutes on an interface re-pointed twice within
-    a minute (`internet.dns_not_held`). The agent logs each apply's step timings.
+    a minute (`internet.dns_not_held`). The agent logs each apply's step timings. The 14-PC drill
+    then showed a reboot under a whitelist failing its first restore with ERROR_WRITE_PROTECT:
+    the agent had started before Windows Firewall (`MpsSvc`). A restore and an apply now wait up
+    to `Defaults.FirewallServiceWait` (60 s) for that service to run; one that never comes up is
+    reported by the steps as before.
 
 11. **Review fixes (2026-10-17, an adversarial read of the Windows half before any VM run).**
     The originals' save behind `recordDisplaced` now throws on a failed write, so the apply

@@ -68,6 +68,14 @@ internal sealed class WindowsInternetControl
         {
             var problems = new List<string>();
 
+            // At boot the agent may start before Windows Firewall, whose COM object then refuses
+            // every change as write-protected (PC-01, 2026-10-20). A firewall that never comes up
+            // is reported by the steps below, as before.
+            if (!ServiceControl.WaitRunning(Defaults.FirewallServiceName, Defaults.FirewallServiceWait))
+            {
+                _log.LogWarning("Windows Firewall ({Service}) is not running after {Seconds} s; restoring anyway", Defaults.FirewallServiceName, Defaults.FirewallServiceWait.TotalSeconds);
+            }
+
             // The background pass must not switch rules off behind the refine that switches them back on.
             Step(problems, "other rules pass", StopDisabler);
             Step(problems, "firewall profiles", () =>
@@ -202,6 +210,7 @@ internal sealed class WindowsInternetControl
         {
             try
             {
+                ServiceControl.WaitRunning(Defaults.FirewallServiceName, Defaults.FirewallServiceWait);
                 var (enabled, current) = _firewall.ReadEnabled();
                 _firewallOff = WindowsFirewall.Profiles.Any(p => (current & p.Value) != 0 && !enabled[p.Key]);
                 if (_firewallOff)

@@ -1055,6 +1055,12 @@ public static class Defaults
     /// <summary>Default duration offered for a standalone policy: "this lesson".</summary>
     public static readonly TimeSpan InternetPolicyLessonDuration = TimeSpan.FromMinutes(90);
 
+    /// <summary>Windows Firewall's service; the agent waits for it before a restore or an apply at boot (D-73 item 12).</summary>
+    public const string FirewallServiceName = "MpsSvc";
+
+    /// <summary>How long the agent waits for <see cref="FirewallServiceName"/> to run before touching the firewall anyway.</summary>
+    public static readonly TimeSpan FirewallServiceWait = TimeSpan.FromSeconds(60);
+
     /// <summary>Where the whitelist resolver listens while a whitelist policy is active.</summary>
     public const string WhitelistResolverAddress = "127.0.0.1";
     public const int WhitelistResolverPort = 53;

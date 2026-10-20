@@ -176,6 +176,42 @@ internal static class ServiceControl
         }
     }
 
+    /// <summary>
+    /// Waits until another service — Windows Firewall, <c>MpsSvc</c> — reports <i>running</i>, up to
+    /// <paramref name="timeout"/>. At boot the agent can start before it, and the firewall's COM
+    /// object then refuses every change with ERROR_WRITE_PROTECT (PC-01, 2026-10-20). Returns
+    /// whether it is running; never throws.
+    /// </summary>
+    public static bool WaitRunning(string serviceName, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (true)
+        {
+            try
+            {
+                using var manager = PInvoke.OpenSCManager(null, null, PInvoke.SC_MANAGER_CONNECT);
+                if (!manager.IsInvalid)
+                {
+                    using var service = PInvoke.OpenService(manager, serviceName, PInvoke.SERVICE_QUERY_STATUS);
+                    if (!service.IsInvalid && QueryState(service) == SERVICE_STATUS_CURRENT_STATE.SERVICE_RUNNING)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                return false;
+            }
+
+            Thread.Sleep(500);
+        }
+    }
+
     private static SERVICE_STATUS_CURRENT_STATE? QueryState(SafeHandle service) =>
         PInvoke.QueryServiceStatus(service, out var status) ? status.dwCurrentState : null;
 

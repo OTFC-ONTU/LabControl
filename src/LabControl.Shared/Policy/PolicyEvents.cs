@@ -163,7 +163,10 @@ public static class InternetReasons
     /// <summary>The exam's internet switch is in force; the standalone policy waits underneath it (D-22).</summary>
     public const string ExamWins = "internet.exam_wins";
 
-    private static readonly string[] Known = [RestoreUnconfirmed, FirewallOff, ResolverDown, NoUpstream, ExamWins];
+    /// <summary>An interface keeps setting its DNS back past the resolver; the whitelist stopped re-pointing it for a while (D-74 item 9).</summary>
+    public const string DnsNotHeld = "internet.dns_not_held";
+
+    private static readonly string[] Known = [RestoreUnconfirmed, FirewallOff, ResolverDown, NoUpstream, ExamWins, DnsNotHeld];
 
     public static bool IsKnown(string code) => Array.IndexOf(Known, code) >= 0;
 }

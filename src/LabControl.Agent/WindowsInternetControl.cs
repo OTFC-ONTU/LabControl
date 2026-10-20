@@ -33,6 +33,11 @@ internal sealed class WindowsInternetControl
     // reassert) does not walk them again. Cleared by every restore.
     private HashSet<string> _disabledHere = new(StringComparer.Ordinal);
 
+    // The reassert's memory (D-74 item 9): when each interface was last re-pointed, and the ones it
+    // gave up on because they do not keep their DNS on the resolver.
+    private readonly Dictionary<string, DateTimeOffset> _repointedAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTimeOffset> _dnsNotHeld = new(StringComparer.OrdinalIgnoreCase);
+
     // The upstream servers, gathered the first time a whitelist starts and only ever added to:
     // on a re-apply the interfaces already report the loopback, and an empty list would make
     // every allowed name fail (review finding 2).
@@ -88,6 +93,8 @@ internal sealed class WindowsInternetControl
 
             _applied = null;
             _disabledHere = new HashSet<string>(StringComparer.Ordinal);
+            _repointedAt.Clear();
+            _dnsNotHeld.Clear();
             _expectedOutbound = AllAllow();
             return Outcome(problems);
         }
@@ -366,6 +373,11 @@ internal sealed class WindowsInternetControl
                 reasons.Add(InternetReasons.NoUpstream);
             }
 
+            if (whitelist && _dnsNotHeld.Values.Any(until => DateTimeOffset.UtcNow < until))
+            {
+                reasons.Add(InternetReasons.DnsNotHeld);
+            }
+
             var resolver = _resolver;
             return resolver is null
                 ? new InternetRuntime(false, [], 0, string.Join(' ', reasons))
@@ -571,7 +583,39 @@ internal sealed class WindowsInternetControl
 
             try
             {
-                return WindowsDns.Candidates().Any(a => HasGateway(a, false) && TryRead(a, false) is { } dns && !WindowsDns.PointsAtResolver(dns));
+                var now = DateTimeOffset.UtcNow;
+                foreach (var adapter in WindowsDns.Candidates())
+                {
+                    if (!HasGateway(adapter, false) || TryRead(adapter, false) is not { } dns || WindowsDns.PointsAtResolver(dns))
+                    {
+                        continue;
+                    }
+
+                    var id = adapter.Id;
+                    if (_dnsNotHeld.TryGetValue(id, out var givenUpUntil) && now < givenUpUntil)
+                    {
+                        continue;
+                    }
+
+                    // An interface pointed again within a minute did not hold its DNS: something on
+                    // the PC sets it back. Re-applying every two seconds held the policy lock for half
+                    // a minute each time and starved the helper (PC-14, 2026-10-20); give up on it for
+                    // ten minutes and say so instead.
+                    if (_repointedAt.TryGetValue(id, out var last) && now - last < TimeSpan.FromMinutes(1))
+                    {
+                        _dnsNotHeld[id] = now + TimeSpan.FromMinutes(10);
+                        _log.LogWarning("interface {Name} ({Description}) does not keep its DNS on the resolver (it reads {Servers}); not re-pointed for ten minutes",
+                            adapter.Name, adapter.Description, string.Join(",", dns.Static.DefaultIfEmpty("DHCP")));
+                        continue;
+                    }
+
+                    _repointedAt[id] = now;
+                    _log.LogInformation("interface {Name} ({Description}) points its DNS at {Servers}, not the resolver; re-applying the whitelist",
+                        adapter.Name, adapter.Description, string.Join(",", dns.Static.DefaultIfEmpty("DHCP")));
+                    return true;
+                }
+
+                return false;
             }
             catch (Exception ex) when (ex is System.Net.NetworkInformation.NetworkInformationException or FormatException)
             {

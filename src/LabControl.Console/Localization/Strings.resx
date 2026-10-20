@@ -642,4 +642,5 @@ Other teachers' devices will need a new lab file afterwards, and the old backups
   <data name="Move.Switch" xml:space="preserve"><value>Switch now</value></data>
   <data name="Event.LabMoved" xml:space="preserve"><value>“{0}” is being moved to a new lab key; its PCs are sent their move.</value></data>
   <data name="Chooser.Status.MovedToNewKey" xml:space="preserve"><value>old key — PCs that connect here are moved to the new key</value></data>
+  <data name="Internet.dns_not_held" xml:space="preserve"><value>a network adapter keeps setting its DNS back, so allowed sites may not load there</value></data>
 </root>

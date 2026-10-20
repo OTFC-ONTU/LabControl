@@ -2583,7 +2583,10 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   block, *Allow* amended the list, a PC rebooted under the whitelist came back with it, and
   *Open* opened all fourteen. One finding: that rebooted PC's first restore failed with
   ERROR_WRITE_PROTECT because the agent started before Windows Firewall; a restore and an apply
-  now wait for `MpsSvc` (`D-73` item 12) — that build still to push.
+  now wait for `MpsSvc` (`D-73` item 12). That build was pushed to all fourteen the same day:
+  a whitelist for the whole lab, PC-01, PC-03 and PC-12 rebooted under it — each came back with
+  the whitelist re-applied and no restore error — and *Open* was confirmed by all fourteen
+  within 32 s. **The internet-control acceptance in the physical lab is passed.**
 ---
 
 ## M7 — Software catalog, localization, polish

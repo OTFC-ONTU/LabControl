@@ -646,5 +646,6 @@ working in this lab until the vendor-driver rerun proves it.
 **Physical lab, 2026-10-20:** all fourteen PCs (PC-01…PC-14) are installed and linked. The owner had
 forgotten the lab key's passphrase; the lab was moved to a new key with *Move this lab to a new key*
 (`D-82`) — all fourteen moved over the network in half a minute — and the new key is remembered on the
-MacBook. All fourteen run the M6 portion-3 build with the lab fixes (`D-73` item 12); the internet-control
-drill passed on all of them, reboots under a whitelist included.
+MacBook. The internet-control drill passed on all fourteen, reboots under a whitelist included; PC-01, PC-03
+and PC-12 rolled back afterwards (rebooted inside the update's probation, `D-19`) and are to be pushed
+the firewall-wait build again. In a drill, reboot a PC only after it reports *stable*.

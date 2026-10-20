@@ -2586,7 +2586,11 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   now wait for `MpsSvc` (`D-73` item 12). That build was pushed to all fourteen the same day:
   a whitelist for the whole lab, PC-01, PC-03 and PC-12 rebooted under it — each came back with
   the whitelist re-applied and no restore error — and *Open* was confirmed by all fourteen
-  within 32 s. **The internet-control acceptance in the physical lab is passed.**
+  within 32 s. **The internet-control acceptance in the physical lab is passed.** Ten minutes
+  later those three rolled back to the previous build: they had been rebooted inside the new
+  build's probation, and ten continuous linked minutes no longer fitted before its deadline —
+  the `D-19` safeguard doing its job. Lesson for drills: reboot only after a PC reports
+  *stable*. The three are to be pushed again.
 ---
 
 ## M7 — Software catalog, localization, polish

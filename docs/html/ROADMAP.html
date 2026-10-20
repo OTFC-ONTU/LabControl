@@ -2794,7 +2794,11 @@ ERROR_WRITE_PROTECT because the agent started before Windows Firewall; a restore
 now wait for <code>MpsSvc</code> (<code>D-73</code> item 12). That build was pushed to all fourteen the same day:
 a whitelist for the whole lab, PC-01, PC-03 and PC-12 rebooted under it — each came back with
 the whitelist re-applied and no restore error — and <em>Open</em> was confirmed by all fourteen
-within 32 s. <strong>The internet-control acceptance in the physical lab is passed.</strong></li>
+within 32 s. <strong>The internet-control acceptance in the physical lab is passed.</strong> Ten minutes
+later those three rolled back to the previous build: they had been rebooted inside the new
+build's probation, and ten continuous linked minutes no longer fitted before its deadline —
+the <code>D-19</code> safeguard doing its job. Lesson for drills: reboot only after a PC reports
+<em>stable</em>. The three are to be pushed again.</li>
 </ul>
 <hr />
 <h2 id="m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish<a class="anchor" href="#m7-software-catalog-localization-polish" aria-label="Link to this section">#</a></h2>
@@ -3006,7 +3010,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-20 14:35 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-20 14:44 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

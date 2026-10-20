@@ -200,7 +200,7 @@ public sealed class LabImports
         var active = _active(request.LabId);
         if (active is { IsDisposed: false, Vault: { } vault })
         {
-            if (!vault.IsUnlocked)
+            if (!vault.IsUnlocked && !vault.TryReopen())
             {
                 var secret = _unlockKey is null ? null : await _unlockKey(Strings.Format("Import.UnlockForRequest", labName, Path.GetFileName(path)));
                 if (secret is null)

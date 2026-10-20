@@ -84,9 +84,10 @@ public partial class App : Application
     /// returns whether the vault is now open. <paramref name="cancellation"/> closes it with
     /// "no" (the console is shutting down while it waits).
     /// </summary>
-    private static async Task<bool> PromptUnlockAsync(IClassicDesktopStyleApplicationLifetime desktop, Window? owner, LabKeyVault vault, string reason, CancellationToken cancellation = default)
+    private static async Task<bool> PromptUnlockAsync(IClassicDesktopStyleApplicationLifetime desktop, Window? owner, LabKeyVault vault, string reason,
+        CancellationToken cancellation = default, bool offerRemember = false)
     {
-        var prompt = new UnlockDialog(reason);
+        var prompt = new UnlockDialog(reason, offerRemember && vault.Memory is not null);
         using var closeOnCancel = cancellation.Register(() => Dispatcher.UIThread.Post(prompt.Close));
         if (cancellation.IsCancellationRequested)
         {
@@ -105,8 +106,8 @@ public partial class App : Application
 
         var answer = await prompt.Completion;
         return answer is not null && (answer.RecoveryCode is not null
-            ? vault.TryUnlock(answer.RecoveryCode)
-            : vault.TryUnlock(answer.Passphrase ?? string.Empty));
+            ? vault.TryUnlock(answer.RecoveryCode, answer.Remember)
+            : vault.TryUnlock(answer.Passphrase ?? string.Empty, answer.Remember));
     }
 
     private async Task StartAsync(IClassicDesktopStyleApplicationLifetime desktop)
@@ -496,8 +497,8 @@ public partial class App : Application
             // The wizard was closed before the recovery code was acknowledged or a backup
             // exported (ARCHITECTURE §3.7). Both steps need the lab key, and the main window
             // stays shut until they are done.
-            if (session.Vault is { IsUnlocked: false } vault
-                && !await PromptUnlockAsync(_desktop, _chooser, vault, Strings.Get("Unlock.ReasonResume")))
+            if (session.Vault is { IsUnlocked: false } vault && !vault.TryReopen()
+                && !await PromptUnlockAsync(_desktop, _chooser, vault, Strings.Get("Unlock.ReasonResume"), offerRemember: true))
             {
                 await _controller.DeactivateAsync(Strings.Get("App.SetupNotFinished"));
                 return;

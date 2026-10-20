@@ -2154,6 +2154,22 @@ new key without a USB stick or a visit, and the remaining PCs install into the n
 <p><strong>How it is being built.</strong> Three portions: <strong>(1)</strong> remember the key on this computer;
 <strong>(2)</strong> move this lab to a new key; <strong>(3)</strong> the VM drill on an owned-installation clone and the
 physical lab. Then M6 portion 4.</p>
+<ul>
+<li><em>Portion 1 built (2026-10-20), on the Mac.</em> <code>LabKeyMemory</code> (<code>Console/Services</code>) adds the
+device holder <code>device:&lt;instance id&gt;</code> with a 32-byte random secret in the store that holds this
+instance's own key (<code>SecretProtector.For</code> the instance key: the keychain on the owner's Mac),
+<code>device-key.json</code> (<code>DeviceKeyDocument</code>) beside it in the profile. <code>LabKeyVault.Memory</code>,
+<code>IsRemembered</code>, <code>TryReopen</code>, <code>Remember</code>, <code>Forget</code>; <code>Use</code> and <code>Peek</code> reopen a remembered key, so
+enrolment, renewal, revocation and a push work without a prompt and the renewal banner and the
+<em>unlocked until…</em> banner disappear. A checked <em>Remember on this computer</em> in the unlock dialog
+for the session's own key and in the create wizard; <em>Remember on this computer</em> / <em>Forget on
+this computer</em> in Settings, where a device holder reads <em>This computer (remembered)</em>. Tests:
+<code>LabKeyMemoryTests</code> — reopened after a restart with no passphrase, passphrase and recovery code
+still working, a second remember replacing the first, the document carried elsewhere still
+needing the passphrase, forget taking everything back, a torn or foreign device file meaning
+&quot;not remembered&quot;, a PC enrolling while the key is idle-locked; 930 Shared + 269 Console. It
+cannot help the lab whose passphrase is already lost — that is portion 2.</li>
+</ul>
 <h2 id="m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode<a class="anchor" href="#m6-classroom-control-broadcast-lock-exam-mode" aria-label="Link to this section">#</a></h2>
 <p><strong>Goal.</strong> The features used in every lesson.</p>
 <p><strong>Deliverables</strong></p>
@@ -2942,7 +2958,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-20 12:13 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-20 12:21 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

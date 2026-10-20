@@ -13,6 +13,7 @@ using LabControl.Shared.Setup;
 using LabControl.Shared.Lab;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
+using LabControl.Shared.Protection;
 using LabControl.Shared.Power;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
@@ -171,6 +172,11 @@ public sealed class LabSession : IAsyncDisposable
         Vault = vault;
         Instance = instance;
         InstanceDocument = instanceDocument;
+        if (vault is not null)
+        {
+            // This computer's memory of the key (D-82), in the same store as this instance's own key.
+            vault.Memory ??= new LabKeyMemory(store, instance.InstanceId, () => SecretProtector.For(instanceDocument.PrivateKey));
+        }
         _loggers = loggers;
         _log = loggers.CreateLogger<LabSession>();
         _clock = clock ?? (() => DateTimeOffset.UtcNow);

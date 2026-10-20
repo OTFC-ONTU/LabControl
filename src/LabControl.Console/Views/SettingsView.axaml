@@ -56,7 +56,10 @@
         <Button Content="{loc:Localize Unlock.Action}" Command="{Binding UnlockCommand}" IsVisible="{Binding !IsUnlocked}" />
         <Button Content="{loc:Localize Key.Lock}" Command="{Binding LockCommand}" IsVisible="{Binding IsUnlocked}" />
         <Button Content="{loc:Localize Key.Reprint}" Command="{Binding ReprintRecoveryCodeCommand}" />
+        <Button Content="{loc:Localize Key.Remember}" Command="{Binding RememberKeyCommand}" IsVisible="{Binding CanRemember}" />
+        <Button Content="{loc:Localize Key.Forget}" Command="{Binding ForgetKeyCommand}" IsVisible="{Binding IsRemembered}" />
       </StackPanel>
+      <TextBlock Text="{loc:Localize Key.RememberHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
       <TextBlock Text="{loc:Localize Key.UnlockHint}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
 
       <TextBlock Classes="h" Text="{loc:Localize Settings.Holders}" />
@@ -67,7 +70,7 @@
               <Button DockPanel.Dock="Right" Content="{loc:Localize Key.RemoveHolder}"
                       Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RemoveHolderCommand}"
                       CommandParameter="{Binding}" />
-              <TextBlock Text="{Binding Name}" VerticalAlignment="Center" MinWidth="200" />
+              <TextBlock Text="{Binding Display}" VerticalAlignment="Center" MinWidth="200" />
               <TextBlock Text="{Binding Since, StringFormat={loc:Localize Key.SinceFormat}}" VerticalAlignment="Center" Opacity="0.7" />
             </DockPanel>
           </DataTemplate>

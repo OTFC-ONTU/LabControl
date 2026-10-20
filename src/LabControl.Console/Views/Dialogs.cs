@@ -83,13 +83,15 @@ public abstract class DialogWindow<T> : Window
 
 public sealed class UnlockDialog : DialogWindow<UnlockAnswer>
 {
-    public UnlockDialog(string reason)
+    public UnlockDialog(string reason, bool offerRemember = false)
     {
         Title = Strings.Get("Unlock.Title");
 
         var passphrase = Field(Strings.Get("Unlock.Passphrase"), secret: true);
         var recovery = Field(Strings.Get("Unlock.RecoveryCode"));
         var useRecovery = new CheckBox { Content = Strings.Get("Unlock.UseRecoveryCode") };
+        // On by default (owner decision 2026-10-20, D-82): this computer opens the key by itself afterwards.
+        var remember = new CheckBox { Content = Strings.Get("Unlock.Remember"), IsChecked = true, IsVisible = offerRemember };
         recovery.IsVisible = false;
         useRecovery.IsCheckedChanged += (_, _) =>
         {
@@ -112,7 +114,7 @@ public sealed class UnlockDialog : DialogWindow<UnlockAnswer>
                     return;
                 }
 
-                Finish(new UnlockAnswer(null, code));
+                Finish(new UnlockAnswer(null, code, offerRemember && remember.IsChecked == true));
                 return;
             }
 
@@ -123,13 +125,13 @@ public sealed class UnlockDialog : DialogWindow<UnlockAnswer>
                 return;
             }
 
-            Finish(new UnlockAnswer(passphrase.Text, null));
+            Finish(new UnlockAnswer(passphrase.Text, null, offerRemember && remember.IsChecked == true));
         };
 
         var cancel = Secondary(Strings.Get("Common.Cancel"));
         cancel.Click += (_, _) => Finish(null);
 
-        Body(Heading(Strings.Get("Unlock.Heading")), Label(reason), passphrase, recovery, useRecovery, error, Buttons(cancel, ok));
+        Body(Heading(Strings.Get("Unlock.Heading")), Label(reason), passphrase, recovery, useRecovery, remember, error, Buttons(cancel, ok));
         Opened += (_, _) => passphrase.Focus();
     }
 }

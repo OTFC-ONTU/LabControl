@@ -78,7 +78,15 @@ it:
 - one per **key holder**: a named person and their passphrase (PBKDF2-HMAC-SHA256,
   ≥ 600 000 iterations, per-holder salt);
 - one **recovery code** — 128 random bits shown once as printable groups, meant for a
-  wallet, a safe, or a home drawer.
+  wallet, a safe, or a home drawer;
+- optionally one per **computer that remembers the key** (`D-82`): a holder named
+  `device:<instance id>` whose secret is 32 random bytes kept only in that computer's OS store
+  (the keychain, DPAPI, the secret service — where the console instance's own key already
+  lives), referenced from `device-key.json` in the lab's profile. On that computer the key
+  opens itself whenever an operation needs it; a backup carries the holder entry but never its
+  secret, so anywhere else the passphrase or the recovery code is still needed. On by default
+  since 2026-10-20, after the owner forgot the passphrase; *Forget on this computer* in
+  Settings removes it.
 
 More than one holder is supported deliberately: the owner asked for a colleague to be
 able to open the lab if he is ill on an exam day. Holders are added and removed from the
@@ -465,6 +473,7 @@ labs/
     enrollment.json  administrator profiles only; codes imported from a backup are dormant (D-60)
     scripts.json
     internet-presets.json  M6 portion 3 (D-73)
+    device-key.json  this computer's way into a remembered lab key (D-82); never in a backup
     access.json   teacher profiles: pending request / grant metadata (D-56)
     packages/
     logs/         events-*, jobs-*, batches/ — per lab

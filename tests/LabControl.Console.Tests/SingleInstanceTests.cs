@@ -846,7 +846,7 @@ public sealed class SingleInstanceTests
             await _gate.WaitAsync();
         }
 
-        public Task<UnlockAnswer?> UnlockAsync(string reason) => Task.FromResult<UnlockAnswer?>(null);
+        public Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false) => Task.FromResult<UnlockAnswer?>(null);
 
         public Task<HolderAnswer?> AddHolderAsync() => Task.FromResult<HolderAnswer?>(null);
 

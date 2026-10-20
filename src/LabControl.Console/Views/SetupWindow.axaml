@@ -53,6 +53,7 @@
         <TextBox Text="{Binding Passphrase}" PasswordChar="•" />
         <TextBox Text="{Binding PassphraseAgain}" PasswordChar="•" PlaceholderText="{loc:Localize Setup.PassphraseAgain}" />
         <TextBlock Classes="p" Text="{loc:Localize Setup.PassphraseHint}" FontSize="12" />
+        <CheckBox IsChecked="{Binding RememberKey}" Content="{loc:Localize Unlock.Remember}" />
         <TextBlock Text="{loc:Localize Setup.InstanceName}" />
         <TextBox Text="{Binding InstanceName}" />
         <TextBlock Classes="p" Text="{loc:Localize Setup.InstanceNameHint}" FontSize="12" />

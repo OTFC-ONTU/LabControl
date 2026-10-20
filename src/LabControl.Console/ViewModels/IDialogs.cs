@@ -5,7 +5,7 @@ using LabControl.Shared.Setup;
 namespace LabControl.Console.ViewModels;
 
 /// <summary>What the teacher typed into the unlock dialog: one of the two, never both.</summary>
-public sealed record UnlockAnswer(string? Passphrase, RecoveryCode? RecoveryCode);
+public sealed record UnlockAnswer(string? Passphrase, RecoveryCode? RecoveryCode, bool Remember = false);
 
 /// <summary>The selected local handouts and the optional opening preference.</summary>
 public sealed record SendFilesAnswer(IReadOnlyList<string> Paths, bool Open);
@@ -24,7 +24,8 @@ public sealed record LockAnswer(string Message, TimeSpan? Duration);
 /// </summary>
 public interface IDialogs
 {
-    Task<UnlockAnswer?> UnlockAsync(string reason);
+    /// <param name="offerRemember">Show "Remember on this computer", checked (D-82) — only for the session's own key.</param>
+    Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false);
 
     Task<HolderAnswer?> AddHolderAsync();
 

@@ -1965,6 +1965,21 @@ computer**, on by default. (3) Built **now**, before M6 portion 4.
 **(2)** move this lab to a new key; **(3)** the VM drill on an owned-installation clone and the
 physical lab. Then M6 portion 4.
 
+- *Portion 1 built (2026-10-20), on the Mac.* `LabKeyMemory` (`Console/Services`) adds the
+  device holder `device:<instance id>` with a 32-byte random secret in the store that holds this
+  instance's own key (`SecretProtector.For` the instance key: the keychain on the owner's Mac),
+  `device-key.json` (`DeviceKeyDocument`) beside it in the profile. `LabKeyVault.Memory`,
+  `IsRemembered`, `TryReopen`, `Remember`, `Forget`; `Use` and `Peek` reopen a remembered key, so
+  enrolment, renewal, revocation and a push work without a prompt and the renewal banner and the
+  *unlocked until…* banner disappear. A checked *Remember on this computer* in the unlock dialog
+  for the session's own key and in the create wizard; *Remember on this computer* / *Forget on
+  this computer* in Settings, where a device holder reads *This computer (remembered)*. Tests:
+  `LabKeyMemoryTests` — reopened after a restart with no passphrase, passphrase and recovery code
+  still working, a second remember replacing the first, the document carried elsewhere still
+  needing the passphrase, forget taking everything back, a torn or foreign device file meaning
+  "not remembered", a PC enrolling while the key is idle-locked; 930 Shared + 269 Console. It
+  cannot help the lab whose passphrase is already lost — that is portion 2.
+
 ## M6 — Classroom control: broadcast, lock, exam mode
 
 **Goal.** The features used in every lesson.

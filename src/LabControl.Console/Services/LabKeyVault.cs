@@ -7,7 +7,8 @@ namespace LabControl.Console.Services;
 /// Where the console keeps the lab key: the encrypted document always, the unlocked key
 /// only for <see cref="Defaults.LabKeyUnlockWindow"/> after it was last used (D-26). Every
 /// CA operation — enrolling, renewing, revoking, adding a holder, exporting a backup — goes
-/// through <see cref="Use"/>, which is what keeps the window honest.
+/// through <see cref="Use"/>, which is what keeps the window honest. A key remembered on this
+/// computer (D-82, <see cref="Memory"/>) reopens itself there whenever it is needed.
 /// </summary>
 public sealed class LabKeyVault : IDisposable
 {
@@ -60,9 +61,59 @@ public sealed class LabKeyVault : IDisposable
     /// <summary>Raised on unlock, lock and any change to the document (holders, recovery code).</summary>
     public event Action? Changed;
 
-    public bool TryUnlock(string passphrase)
+    /// <summary>
+    /// This computer's memory of the key (D-82); <c>null</c> where none is offered. With it the
+    /// key reopens itself whenever an operation needs it — <see cref="Use{T}"/>, <see cref="Peek"/>
+    /// — so a remembered key never asks for the passphrase on this computer.
+    /// </summary>
+    public LabKeyMemory? Memory { get; set; }
+
+    /// <summary>True when this computer opens the key without a passphrase.</summary>
+    public bool IsRemembered => Memory?.IsRemembered(Document) == true;
+
+    /// <param name="remember">Also remember the key on this computer once it is open (D-82).</param>
+    public bool TryUnlock(string passphrase, bool remember = false)
     {
         if (!LabKey.TryUnlock(Document, passphrase, out var key))
+        {
+            return false;
+        }
+
+        Adopt(key);
+        if (remember)
+        {
+            Remember();
+        }
+
+        return true;
+    }
+
+    /// <param name="remember">Also remember the key on this computer once it is open (D-82).</param>
+    public bool TryUnlock(RecoveryCode recoveryCode, bool remember = false)
+    {
+        if (!LabKey.TryUnlock(Document, recoveryCode, out var key))
+        {
+            return false;
+        }
+
+        Adopt(key);
+        if (remember)
+        {
+            Remember();
+        }
+
+        return true;
+    }
+
+    /// <summary>Opens the key with this computer's memory of it, if there is one; true when the key is open afterwards.</summary>
+    public bool TryReopen()
+    {
+        if (IsUnlocked)
+        {
+            return true;
+        }
+
+        if (Memory?.TryOpen(Document) is not { } key)
         {
             return false;
         }
@@ -71,15 +122,39 @@ public sealed class LabKeyVault : IDisposable
         return true;
     }
 
-    public bool TryUnlock(RecoveryCode recoveryCode)
+    /// <summary>Remembers the open key on this computer and saves the key document; false when it is locked or there is no memory.</summary>
+    public bool Remember()
     {
-        if (!LabKey.TryUnlock(Document, recoveryCode, out var key))
+        if (Memory is not { } memory || !Use(memory.Remember))
         {
             return false;
         }
 
-        Adopt(key);
+        Save();
         return true;
+    }
+
+    /// <summary>
+    /// Forgets the key on this computer. The holder is removed from the document when the key is
+    /// open (it is reopened for that if it can be); otherwise only the secret goes, which leaves a
+    /// holder nobody can use.
+    /// </summary>
+    public void Forget()
+    {
+        if (Memory is not { } memory)
+        {
+            return;
+        }
+
+        if (Use(key => memory.Forget(key)))
+        {
+            Save();
+        }
+        else
+        {
+            memory.Forget(null);
+            Changed?.Invoke();
+        }
     }
 
     /// <summary>Takes an already-unlocked key — from the first-run wizard or an import.</summary>
@@ -122,6 +197,7 @@ public sealed class LabKeyVault : IDisposable
     /// </summary>
     public bool Use<T>(Func<LabKey, T> action, out T result)
     {
+        TryReopen();
         lock (_gate)
         {
             if (_key is null)
@@ -141,6 +217,7 @@ public sealed class LabKeyVault : IDisposable
     /// <summary>Peeks at the unlocked key for a read-only step (issuing, signing) that the caller already guards.</summary>
     public LabKey? Peek()
     {
+        TryReopen();
         lock (_gate)
         {
             if (_key is not null)

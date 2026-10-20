@@ -83,6 +83,10 @@ public sealed partial class SetupViewModel : ObservableObject
     [ObservableProperty]
     public partial string PassphraseAgain { get; set; } = string.Empty;
 
+    /// <summary>Remember the new key on this computer (D-82); on by default, owner decision 2026-10-20.</summary>
+    [ObservableProperty]
+    public partial bool RememberKey { get; set; } = true;
+
     [ObservableProperty]
     public partial string InstanceName { get; set; }
 
@@ -179,7 +183,17 @@ public sealed partial class SetupViewModel : ObservableObject
 
             // PBKDF2 at 600 000 iterations takes a moment; keep the window responsive.
             RecoveryCode recovery = null!;
-            Session = await Task.Run(() => _bootstrap.CreateLab(labName, holder, passphrase, instance, out recovery));
+            var remember = RememberKey;
+            Session = await Task.Run(() =>
+            {
+                var created = _bootstrap.CreateLab(labName, holder, passphrase, instance, out recovery);
+                if (remember)
+                {
+                    created.Vault?.Remember();
+                }
+
+                return created;
+            });
             _recoveryCode = recovery;
             RecoveryCodeText = recovery.ToPrintableString();
             Step = SetupStep.RecoveryCode;

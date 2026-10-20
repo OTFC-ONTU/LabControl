@@ -4264,6 +4264,10 @@ enrolment code to the PC as a handout (it would sit in the student's folder); ru
 `Uninstall.exe --rekey` (it would remove the agent); letting a teacher device move PCs (owner
 decision).
 
+Validation (portion 1, 2026-10-20, on the Mac): `LabKeyMemoryTests` (seven) with the file
+protector standing in for the keychain; the console's own test rig never touches the developer's
+keychain. Portion 2 and the drills follow.
+
 ## NuGet dependencies (keep this list current)
 
 | Package | Where | Why |

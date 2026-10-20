@@ -48,7 +48,7 @@ public partial class MainWindow : Window, IDialogs
 
     // IDialogs: forwarded to the owner-bound implementation so the view model never sees Avalonia.
 
-    public Task<UnlockAnswer?> UnlockAsync(string reason) => _dialogs.UnlockAsync(reason);
+    public Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false) => _dialogs.UnlockAsync(reason, offerRemember);
 
     public Task<HolderAnswer?> AddHolderAsync() => _dialogs.AddHolderAsync();
 

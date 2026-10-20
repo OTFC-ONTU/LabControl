@@ -781,17 +781,24 @@ public sealed partial class MainViewModel : ObservableObject
             return true;
         }
 
+        // Remembered on this computer (D-82): no prompt at all.
+        if (vault.TryReopen())
+        {
+            RefreshBanners();
+            return true;
+        }
+
         while (true)
         {
-            var answer = await _dialogs.UnlockAsync(reason);
+            var answer = await _dialogs.UnlockAsync(reason, offerRemember: vault.Memory is not null);
             if (answer is null)
             {
                 return false;
             }
 
             var opened = answer.RecoveryCode is not null
-                ? vault.TryUnlock(answer.RecoveryCode)
-                : vault.TryUnlock(answer.Passphrase ?? string.Empty);
+                ? vault.TryUnlock(answer.RecoveryCode, answer.Remember)
+                : vault.TryUnlock(answer.Passphrase ?? string.Empty, answer.Remember);
 
             if (opened)
             {
@@ -828,15 +835,20 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    private void RefreshBanners()
-    {
-        var vault = _session.Vault;
-        IsUnlocked = vault is { IsUnlocked: true };
-        KeyStatus = vault is null
-            ? Strings.Get("Access.TeacherStatus")
+    /// <summary>"Remembered on this computer", "unlocked until 14:20", "locked", or the teacher's word.</summary>
+    internal static string KeyStatusText(LabKeyVault? vault) => vault is null
+        ? Strings.Get("Access.TeacherStatus")
+        : vault.IsRemembered
+            ? Strings.Get("Key.Remembered")
             : vault.IsUnlocked
                 ? Strings.Format("Key.UnlockedUntil", vault.LocksAt?.ToLocalTime().ToString("t", Strings.Culture) ?? string.Empty)
                 : Strings.Get("Key.Locked");
+
+    private void RefreshBanners()
+    {
+        var vault = _session.Vault;
+        IsUnlocked = vault is { IsUnlocked: true } or { IsRemembered: true };
+        KeyStatus = KeyStatusText(vault);
 
         var wanted = new List<BannerViewModel>();
 
@@ -872,7 +884,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         var renewals = _session.MachinesNeedingRenewal();
-        if (renewals.Count > 0 && vault is { IsUnlocked: false })
+        if (renewals.Count > 0 && vault is { IsUnlocked: false, IsRemembered: false })
         {
             wanted.Add(new BannerViewModel("renew", Strings.Format("Banner.Renewal", renewals.Count),
                 Strings.Get("Banner.UnlockKey"), () => EnsureUnlockedAsync(Strings.Get("Unlock.ReasonRenewal")), isWarning: true));
@@ -886,7 +898,7 @@ public sealed partial class MainViewModel : ObservableObject
                 Strings.Get("Banner.ExportBackup"), () => Settings.ExportBackupCommand.ExecuteAsync(null), isWarning: true));
         }
 
-        if (vault is { IsUnlocked: true })
+        if (vault is { IsUnlocked: true, IsRemembered: false })
         {
             wanted.Add(new BannerViewModel("unlocked", KeyStatus, Strings.Get("Key.Lock"),
                 () => { vault.Lock(); return Task.CompletedTask; }, isWarning: false));

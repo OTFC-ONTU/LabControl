@@ -18,8 +18,8 @@ public sealed class WindowDialogs : IDialogs
 
     public WindowDialogs(Window owner) => _owner = owner;
 
-    public async Task<UnlockAnswer?> UnlockAsync(string reason) =>
-        await Show(new UnlockDialog(reason));
+    public async Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false) =>
+        await Show(new UnlockDialog(reason, offerRemember));
 
     public async Task<HolderAnswer?> AddHolderAsync() =>
         await Show(new HolderDialog());

@@ -33,6 +33,9 @@ public sealed class LabStore
 
     public string LogsDirectory => Path.Combine(Directory, Defaults.LogsDirectoryName);
 
+    /// <summary>How this computer opens the lab key without a passphrase, when it is remembered here (D-82).</summary>
+    public string DeviceKeyPath => Path.Combine(Directory, Defaults.DeviceKeyFileName);
+
     /// <summary>Delivered, unanswered jobs kept across a switch away from this lab (M5, D-57 item 4).</summary>
     public string InFlightJobsPath => Path.Combine(LogsDirectory, Defaults.InFlightJobsFileName);
 
@@ -93,6 +96,18 @@ public sealed class LabStore
     public void SaveScripts(ScriptsDocument document) => JsonStore.Save(ScriptsPath, document, ScriptsDocument.Migrations);
 
     /// <summary>The named whitelist presets, or null before the first run created the seed preset (D-73).</summary>
+    public DeviceKeyDocument? LoadDeviceKey() => JsonStore.LoadIfExists<DeviceKeyDocument>(DeviceKeyPath, DeviceKeyDocument.Migrations);
+
+    public void SaveDeviceKey(DeviceKeyDocument document) => JsonStore.Save(DeviceKeyPath, document, DeviceKeyDocument.Migrations, ownerOnly: true);
+
+    public void DeleteDeviceKey()
+    {
+        if (File.Exists(DeviceKeyPath))
+        {
+            File.Delete(DeviceKeyPath);
+        }
+    }
+
     public InternetPresetsDocument? LoadInternetPresets() => JsonStore.LoadIfExists<InternetPresetsDocument>(InternetPresetsPath, InternetPresetsDocument.Migrations);
 
     public void SaveInternetPresets(InternetPresetsDocument document) => JsonStore.Save(InternetPresetsPath, document, InternetPresetsDocument.Migrations);

@@ -205,6 +205,8 @@ public static class Defaults
     public const int ScriptsSchemaVersion = 1;
     /// <summary><c>internet-presets.json</c>, the teacher's named whitelist presets (M6, D-73).</summary>
     public const int InternetPresetsSchemaVersion = 1;
+    /// <summary><c>device-key.json</c>, this computer's way into the lab key when it is remembered here (D-82).</summary>
+    public const int DeviceKeySchemaVersion = 1;
     public const int SetupPayloadSchemaVersion = 1;
     public const int InstallationSchemaVersion = 1;
     public const int SetupSettingsSchemaVersion = 1;
@@ -233,6 +235,23 @@ public static class Defaults
     public const string ScriptsFileName = "scripts.json";
     /// <summary>The named whitelist presets (M6, D-73): beside <c>lab.json</c>, inside the backup and the lab file.</summary>
     public const string InternetPresetsFileName = "internet-presets.json";
+    /// <summary>
+    /// This computer's way into the lab key when it is remembered here (D-82): the reference to
+    /// a random secret in the OS store. Per computer — never in a backup or a lab file.
+    /// </summary>
+    public const string DeviceKeyFileName = "device-key.json";
+
+    /// <summary>The key holder a remembered key adds is named this prefix plus the console instance id (D-82).</summary>
+    public const string DeviceHolderPrefix = "device:";
+
+    /// <summary>
+    /// PBKDF2 rounds for a device holder's wrapping (D-82). Its secret is 32 random bytes, not a
+    /// passphrase, so stretching adds nothing; a few rounds keep reopening the key instant.
+    /// </summary>
+    public const int DeviceHolderIterations = 1_000;
+
+    /// <summary>The random secret of a device holder, in bytes (D-82).</summary>
+    public const int DeviceHolderSecretBytes = 32;
     public const string LogsDirectoryName = "logs";
 
     // ---------------------------------------------------------------- saved labs (M5, D-55)

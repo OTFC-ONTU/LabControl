@@ -48,7 +48,7 @@ public partial class LabChooserWindow : Window, IDialogs
 
     // IDialogs
 
-    public Task<UnlockAnswer?> UnlockAsync(string reason) => _dialogs.UnlockAsync(reason);
+    public Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false) => _dialogs.UnlockAsync(reason, offerRemember);
 
     public Task<HolderAnswer?> AddHolderAsync() => _dialogs.AddHolderAsync();
 

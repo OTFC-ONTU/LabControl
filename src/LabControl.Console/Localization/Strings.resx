@@ -612,4 +612,16 @@ LabControl uses it only while you show your screen, and sends the picture only t
   <data name="Internet.LiftSent" xml:space="preserve"><value>Internet opened on {0} of {1} PC(s).</value></data>
   <data name="Internet.Preset.name_empty" xml:space="preserve"><value>Give the preset a name.</value></data>
   <data name="Internet.Preset.name_taken" xml:space="preserve"><value>Another preset already has that name.</value></data>
+  <data name="Unlock.Remember" xml:space="preserve"><value>Remember on this computer — no passphrase here next time</value></data>
+  <data name="Unlock.ReasonRemember" xml:space="preserve"><value>Open the lab key once to remember it on this computer.</value></data>
+  <data name="Key.Remembered" xml:space="preserve"><value>Lab key: remembered on this computer — it opens by itself when needed.</value></data>
+  <data name="Key.Remember" xml:space="preserve"><value>Remember on this computer</value></data>
+  <data name="Key.Forget" xml:space="preserve"><value>Forget on this computer</value></data>
+  <data name="Key.RememberHint" xml:space="preserve"><value>Remembered, the key opens on this computer without the passphrase; the passphrase and the recovery code are still needed for a backup and on any other computer. Keep them anyway.</value></data>
+  <data name="Key.RememberFailed" xml:space="preserve"><value>The key could not be remembered on this computer; the passphrase keeps working.</value></data>
+  <data name="Key.RememberedEvent" xml:space="preserve"><value>The lab key is remembered on this computer.</value></data>
+  <data name="Key.ForgottenEvent" xml:space="preserve"><value>The lab key is no longer remembered on this computer.</value></data>
+  <data name="Key.ForgetConfirm" xml:space="preserve"><value>Forget the lab key on this computer? The passphrase or the recovery code will be needed here again — make sure you have one of them.</value></data>
+  <data name="Key.HolderThisComputer" xml:space="preserve"><value>This computer (remembered)</value></data>
+  <data name="Key.HolderOtherComputer" xml:space="preserve"><value>Another computer: {0} (remembered)</value></data>
 </root>

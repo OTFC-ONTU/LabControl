@@ -486,7 +486,7 @@ public sealed class AcceptanceDrillTests
             return Task.CompletedTask;
         }
 
-        public Task<ViewModels.UnlockAnswer?> UnlockAsync(string reason) =>
+        public Task<ViewModels.UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false) =>
             Task.FromResult<ViewModels.UnlockAnswer?>(new ViewModels.UnlockAnswer(TestConsole.Passphrase, null));
 
         public Task<ViewModels.HolderAnswer?> AddHolderAsync() => Task.FromResult<ViewModels.HolderAnswer?>(null);

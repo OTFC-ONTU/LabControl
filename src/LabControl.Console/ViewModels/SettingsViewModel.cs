@@ -11,7 +11,8 @@ using LabControl.Shared.Setup;
 namespace LabControl.Console.ViewModels;
 
 /// <summary>A key holder row in Settings.</summary>
-public sealed record HolderRowViewModel(string Name, string Since);
+/// <summary>One key holder: <paramref name="Name"/> as stored, <paramref name="Display"/> as the teacher reads it (a remembering computer is not a person, D-82).</summary>
+public sealed record HolderRowViewModel(string Name, string Since, string Display);
 
 /// <summary>
 /// One console device of the lab in Settings (ARCHITECTURE §3.7.1, M5 D-56): this machine,
@@ -163,6 +164,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsUnlocked { get; set; }
 
+    /// <summary>This computer opens the lab key without a passphrase (D-82).</summary>
+    [ObservableProperty]
+    public partial bool IsRemembered { get; set; }
+
+    /// <summary>The key could be remembered here: there is a memory and it is not remembered yet.</summary>
+    [ObservableProperty]
+    public partial bool CanRemember { get; set; }
+
     [ObservableProperty]
     public partial string BackupStatus { get; set; } = string.Empty;
 
@@ -220,12 +229,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     public void Refresh()
     {
         var vault = _session.Vault;
-        IsUnlocked = vault is { IsUnlocked: true };
-        KeyStatus = vault is null
-            ? Strings.Get("Access.TeacherStatus")
-            : vault.IsUnlocked
-                ? Strings.Format("Key.UnlockedUntil", vault.LocksAt?.ToLocalTime().ToString("t", Strings.Culture) ?? string.Empty)
-                : Strings.Get("Key.Locked");
+        IsUnlocked = vault is { IsUnlocked: true } or { IsRemembered: true };
+        IsRemembered = vault is { IsRemembered: true };
+        CanRemember = vault is { Memory: not null, IsRemembered: false };
+        KeyStatus = MainViewModel.KeyStatusText(vault);
 
         Holders.Clear();
         if (vault is not null)
@@ -233,7 +240,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             foreach (var wrapping in vault.Document.Wrappings.Where(w => w.Kind == KeyWrappingKind.Holder))
             {
                 Holders.Add(new HolderRowViewModel(wrapping.Name,
-                    DateTimeOffset.FromUnixTimeSeconds(wrapping.CreatedAtUnix).ToLocalTime().ToString("d", Strings.Culture)));
+                    DateTimeOffset.FromUnixTimeSeconds(wrapping.CreatedAtUnix).ToLocalTime().ToString("d", Strings.Culture),
+                    HolderDisplayName(wrapping.Name)));
             }
         }
 
@@ -348,6 +356,46 @@ public sealed partial class SettingsViewModel : ObservableObject
         _session.Vault?.Lock();
         Refresh();
     }
+
+    /// <summary>Remembers the lab key on this computer (D-82); asks for the passphrase once if the key is locked.</summary>
+    [RelayCommand]
+    private async Task RememberKeyAsync()
+    {
+        if (_session.Vault is not { } vault || !await _ensureUnlocked(Strings.Get("Unlock.ReasonRemember")))
+        {
+            return;
+        }
+
+        if (!vault.Remember())
+        {
+            await _dialogs.ShowMessageAsync(Strings.Get("Settings.LabKey"), Strings.Get("Key.RememberFailed"));
+        }
+
+        _session.Events.Info("key.remembered", Strings.Get("Key.RememberedEvent"));
+        Refresh();
+    }
+
+    /// <summary>Forgets the lab key on this computer: the passphrase is needed here again (D-82).</summary>
+    [RelayCommand]
+    private async Task ForgetKeyAsync()
+    {
+        if (_session.Vault is not { } vault
+            || !await _dialogs.ConfirmAsync(Strings.Get("Settings.LabKey"), Strings.Get("Key.ForgetConfirm"), Strings.Get("Key.Forget"), destructive: true))
+        {
+            return;
+        }
+
+        vault.Forget();
+        _session.Events.Info("key.forgotten", Strings.Get("Key.ForgottenEvent"));
+        Refresh();
+    }
+
+    /// <summary>"This computer" for the holder this console added, "Another computer" for another console's, the name otherwise.</summary>
+    private string HolderDisplayName(string name) =>
+        !LabKeyMemory.IsDeviceHolder(name) ? name
+        : string.Equals(name, LabKeyMemory.HolderNameOf(_session.Instance.InstanceId), StringComparison.Ordinal)
+            ? Strings.Get("Key.HolderThisComputer")
+            : Strings.Format("Key.HolderOtherComputer", _session.NameOfInstance(name[Defaults.DeviceHolderPrefix.Length..]));
 
     [RelayCommand]
     private async Task AddHolderAsync()

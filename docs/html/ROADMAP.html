@@ -2769,7 +2769,23 @@ reboot and hard power-off re-applying it; a hand-reset DNS re-pointed within 8 s
 whitelist → blocked → expiry on the PC's clock; <em>Open</em> restoring the static DNS exactly
 (<code>D-73</code>, VM drill paragraph). <strong>Still open:</strong> a browser with DoH in the student's session
 (checked with <code>curl --doh-url</code> as SYSTEM), <code>win-x64</code>, a real NIC and the 14-PC drill in the
-physical lab; the refused list also fills with Windows' own background names.</li>
+physical lab; the refused list also fills with Windows' own background names.
+<strong>Physical lab, PC-14 (2026-10-20)</strong>, after the lab was moved to a new key (<em>Lab key
+recovery</em>) and the build pushed with the remembered key: the whitelist works in Edge
+(<code>jetbrains.com</code>, <code>docs.oracle.com</code> open; <code>google.com</code>, <code>msn.com</code> refused and listed). Three
+defects found and fixed there, each re-pushed and re-run: the helper's reports waited on the
+policy lock during an apply, so the service restarted <code>session.exe</code> as silent every time
+(the relay now runs on a worker); the per-step timing showed <strong>33.3 s of a 34 s apply</strong> in
+switching about a hundred foreign outbound allow rules off (Windows rebuilds its filters per
+change, ~300 ms each) — and the default outbound block only came after it, so the internet
+stayed open half a minute after <em>Apply</em>; the block and the names now come first and the rules
+are switched off by a background pass — the next apply was confirmed <strong>within the same
+second</strong>; and the reassert re-applied the whitelist every ~50 s on that PC (it now gives up on
+an interface that does not keep its DNS, logs which, and reports <code>internet.dns_not_held</code>). The
+<em>Internet</em> dialog grew past a 13&quot; screen as the refused list filled, hiding <em>Apply</em>; its
+buttons now stay visible and the rest scrolls. Lifting is confirmed after ~26 s (the foreign
+rules are switched back on in line, so a restart cannot leave them off); the internet itself
+opens at the first step. Still open: the 14-PC drill and DoH in Edge.</li>
 </ul>
 <hr />
 <h2 id="m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish<a class="anchor" href="#m7-software-catalog-localization-polish" aria-label="Link to this section">#</a></h2>
@@ -2981,7 +2997,7 @@ are M5), two consoles <em>sharing</em> one lab at the same time
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-20 12:49 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-20 14:18 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

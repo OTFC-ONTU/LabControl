@@ -2562,6 +2562,22 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   (`D-73`, VM drill paragraph). **Still open:** a browser with DoH in the student's session
   (checked with `curl --doh-url` as SYSTEM), `win-x64`, a real NIC and the 14-PC drill in the
   physical lab; the refused list also fills with Windows' own background names.
+  **Physical lab, PC-14 (2026-10-20)**, after the lab was moved to a new key (*Lab key
+  recovery*) and the build pushed with the remembered key: the whitelist works in Edge
+  (`jetbrains.com`, `docs.oracle.com` open; `google.com`, `msn.com` refused and listed). Three
+  defects found and fixed there, each re-pushed and re-run: the helper's reports waited on the
+  policy lock during an apply, so the service restarted `session.exe` as silent every time
+  (the relay now runs on a worker); the per-step timing showed **33.3 s of a 34 s apply** in
+  switching about a hundred foreign outbound allow rules off (Windows rebuilds its filters per
+  change, ~300 ms each) — and the default outbound block only came after it, so the internet
+  stayed open half a minute after *Apply*; the block and the names now come first and the rules
+  are switched off by a background pass — the next apply was confirmed **within the same
+  second**; and the reassert re-applied the whitelist every ~50 s on that PC (it now gives up on
+  an interface that does not keep its DNS, logs which, and reports `internet.dns_not_held`). The
+  *Internet* dialog grew past a 13" screen as the refused list filled, hiding *Apply*; its
+  buttons now stay visible and the rest scrolls. Lifting is confirmed after ~26 s (the foreign
+  rules are switched back on in line, so a restart cannot leave them off); the internet itself
+  opens at the first step. Still open: the 14-PC drill and DoH in Edge.
 ---
 
 ## M7 — Software catalog, localization, polish

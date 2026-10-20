@@ -3876,6 +3876,16 @@ Decisions:
    and then, so the refused-names list and *Allow* can be developed on the Mac.
 10. **Lab departure does not end a policy in this portion**; it has its own limit like a lock.
     Portion 6 sets the departure contract for every policy.
+12. **Physical-lab fixes (2026-10-20, PC-14).** Other programs' rules are switched off **after**
+    the default outbound block, by a cancellable background pass that a restore stops before it
+    refines: per-rule changes cost ~300 ms each on a real PC (Windows rebuilds its filters), a
+    hundred of them took 33 s, and with the block last the internet stayed open that long. They
+    are switched back **in line** on a lift — slower to confirm (~26 s) but a restart can never
+    leave them off, and the internet opens at the first step anyway. The helper's reports reach
+    the enforcer through a worker, latest wins, never from the pipe's read loop that the silence
+    watchdog times. The reassert gives up for ten minutes on an interface re-pointed twice within
+    a minute (`internet.dns_not_held`). The agent logs each apply's step timings.
+
 11. **Review fixes (2026-10-17, an adversarial read of the Windows half before any VM run).**
     The originals' save behind `recordDisplaced` now throws on a failed write, so the apply
     fails and is undone instead of changing a machine whose originals are not on disk. A

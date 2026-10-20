@@ -1022,6 +1022,12 @@ public static class Defaults
     public static readonly TimeSpan OverlayRepaintInterval = TimeSpan.FromSeconds(1);
 
     /// <summary>
+    /// While a lock or a broadcast is on the screen the helper re-states that the display is
+    /// required this often (D-84); far inside the 20-minute display timeout Setup applies.
+    /// </summary>
+    public static readonly TimeSpan DisplayKeepAliveInterval = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// The longest lock message the agent keeps and the helper draws (M6 portion 1): a
     /// longer one is cut. Fifty wrapped lines already run off a 1366×768 screen; the picture
     /// stops at its bottom band whatever the length.

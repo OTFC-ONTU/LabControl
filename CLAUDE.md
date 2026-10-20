@@ -649,3 +649,5 @@ forgotten the lab key's passphrase; the lab was moved to a new key with *Move th
 MacBook. The internet-control drill passed on all fourteen, reboots under a whitelist included; PC-01, PC-03
 and PC-12 rolled back afterwards (rebooted inside the update's probation, `D-19`). Since `D-83` (VM-drilled
 2026-10-20) a reboot inside the probation restarts it, at most three times, instead of rolling back.
+The lab also showed monitors going dark under a broadcast or a lock (the 20-minute display timeout);
+the helper now holds the display on while either shows (`D-84`), built and not yet run on Windows.

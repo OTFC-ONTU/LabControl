@@ -4329,6 +4329,38 @@ refused. VM drill (owned installation, Windows 11 ARM64): pushed, rebooted at mi
 version reported `update.probation_extended`, the rollback task moved to the new deadline, the old
 deadline passed without a rollback, and the update became stable ten minutes after the reboot.
 
+## D-84 — A lock or a broadcast keeps the student's monitor on
+
+Context (2026-10-20, physical lab): during a broadcast, a lock and other long overlays the
+student PCs' monitors went dark — not sleep, the display alone. Setup applies the power plan's
+"display off after 20 min" (`D-49`, INSTALLER step 7), and under an overlay nobody touches the
+PC; the lock's and the broadcast's hooks even swallow what the student does, so the student
+cannot keep it awake either.
+
+Decision:
+
+1. The helper's `DisplayKeeper` holds the display on for exactly as long as `OverlayController`
+   has a lock or a broadcast — either, or one under the other. The controller states what it
+   wants on every pass of its loop (once a second); the keeper acts only on a change.
+2. Holding is `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED)`
+   on a thread of its own, re-stated every `Defaults.DisplayKeepAliveInterval` (30 s), and
+   released with `ES_CONTINUOUS` alone. The state belongs to the thread, so a helper that dies
+   leaves nothing behind; the power plan itself is never touched (it is Setup's, journaled).
+3. An execution state keeps a lit display lit but does not light a dark one, and a lock or a
+   broadcast that starts after twenty idle minutes would otherwise begin on a black monitor.
+   On taking hold the keeper therefore injects one relative mouse step and its return on the
+   input desktop: injected input passes the hooks by design (`D-70` item 3), the monitor wakes
+   as for any input, and the pointer ends where it was.
+4. Rejected: changing the display timeout from the agent while an overlay runs (a second owner
+   of a journaled Setup value, and a crash would leave it changed); a periodic input jiggle for
+   the whole overlay (input where an execution state suffices); keeping the display on for
+   watching a PC from the console — a dark monitor nobody sits at is not the teacher's problem,
+   and remote control is input, which wakes it anyway. Exam mode (portion 4) reuses the keeper
+   when it shows anything on the screen.
+
+Not yet run on Windows; the native check is: display timeout 1 min, a lock held for 3 min stays
+lit, a lock started on a dark monitor lights it, the display goes dark again 1 min after unlock.
+
 ## NuGet dependencies (keep this list current)
 
 | Package | Where | Why |

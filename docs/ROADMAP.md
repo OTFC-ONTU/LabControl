@@ -2592,6 +2592,11 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   the `D-19` safeguard doing its job but unable to tell a teacher's reboot from a failure. Since
   `D-83` a reboot inside the probation restarts it (at most three times), VM-drilled the same day;
   the three are to be pushed that build.
+- *Monitors going dark under an overlay (found in the physical lab, 2026-10-20; `D-84`).*
+  During a broadcast or a lock the student monitors switched off after the power plan's
+  20 idle minutes. The helper now holds the display on while a lock or a broadcast shows and
+  wakes a dark monitor when one starts. Built on the Mac; to verify on Windows (VM with a
+  1-minute display timeout, then the lab).
 ---
 
 ## M7 — Software catalog, localization, polish

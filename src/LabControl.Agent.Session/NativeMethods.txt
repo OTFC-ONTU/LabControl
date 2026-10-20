@@ -115,3 +115,7 @@ SetBrushOrgEx
 FillRect
 GetStockObject
 GET_STOCK_OBJECT_FLAGS
+
+// Keeping the monitor on while the overlay shows something (DisplayKeeper, D-84)
+SetThreadExecutionState
+EXECUTION_STATE

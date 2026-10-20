@@ -647,5 +647,5 @@ working in this lab until the vendor-driver rerun proves it.
 forgotten the lab key's passphrase; the lab was moved to a new key with *Move this lab to a new key*
 (`D-82`) — all fourteen moved over the network in half a minute — and the new key is remembered on the
 MacBook. The internet-control drill passed on all fourteen, reboots under a whitelist included; PC-01, PC-03
-and PC-12 rolled back afterwards (rebooted inside the update's probation, `D-19`) and are to be pushed
-the firewall-wait build again. In a drill, reboot a PC only after it reports *stable*.
+and PC-12 rolled back afterwards (rebooted inside the update's probation, `D-19`). Since `D-83` (VM-drilled
+2026-10-20) a reboot inside the probation restarts it, at most three times, instead of rolling back.

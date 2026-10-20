@@ -23,6 +23,66 @@ public sealed class UpdateTrialTests : IDisposable
         Assert.Equal(UpdateTrialPhase.Stable, Trial.Read()!.Phase);
     }
 
+    // ------------------------------------------------------------------ D-83: a reboot restarts the probation
+
+    [Fact]
+    public void A_reboot_inside_the_probation_moves_the_deadline_on_and_the_rollback_waits_for_it()
+    {
+        Begin();
+        var boot = Trial.Read()!.BootUnix;
+        Assert.NotEqual(0, boot);
+
+        // The same boot: a service restart is not a reboot.
+        Assert.Null(Trial.ExtensionFor("0.2.0", boot + 5, _now.AddMinutes(2)));
+
+        // A reboot at minute 2: a fresh probation from now.
+        var rebooted = boot + 120;
+        var moved = Trial.ExtensionFor("0.2.0", rebooted, _now.AddMinutes(2));
+        Assert.NotNull(moved);
+        Assert.True(moved > _now.AddMinutes(12));
+        Assert.True(Trial.Extend("job", moved!.Value, rebooted));
+        Assert.Equal(1, Trial.Read()!.Extensions);
+
+        // The old deadline no longer rolls back; the new one does.
+        Assert.False(Trial.RollBack(_now.AddMinutes(12).AddSeconds(30), false, _ => throw new Exception()));
+        Assert.True(Trial.RollBack(moved.Value, false, _ => { }));
+    }
+
+    [Fact]
+    public void Only_three_reboots_extend_and_never_for_another_version_or_a_finished_trial()
+    {
+        Begin();
+        var boot = Trial.Read()!.BootUnix;
+        Assert.Null(Trial.ExtensionFor("0.1.0", boot + 600, _now));
+        for (var i = 1; i <= Defaults.UpdateProbationRebootExtensions; i++)
+        {
+            var at = _now.AddMinutes(5 * i);
+            var deadline = Trial.ExtensionFor("0.2.0", boot + 600 * i, at);
+            Assert.NotNull(deadline);
+            Assert.True(Trial.Extend("job", deadline!.Value, boot + 600 * i));
+        }
+
+        Assert.Null(Trial.ExtensionFor("0.2.0", boot + 600 * 10, _now.AddMinutes(30)));
+        Assert.False(Trial.Extend("job", _now.AddHours(5), boot + 600 * 10));
+        Assert.False(Trial.Extend("other-job", _now.AddHours(5), boot + 600 * 11));
+
+        Assert.True(Trial.Accept("0.2.0", _now.AddMinutes(16), TimeSpan.FromMinutes(10)));
+        Assert.Null(Trial.ExtensionFor("0.2.0", boot + 600 * 20, _now.AddMinutes(20)));
+    }
+
+    [Fact]
+    public void A_record_from_before_the_boot_field_is_stamped_not_extended_and_an_earlier_deadline_is_refused()
+    {
+        Begin();
+        var path = Path.Combine(_directory, Defaults.UpdateTrialFileName);
+        File.WriteAllText(path, File.ReadAllText(path).Replace("\"boot_unix\"", "\"ignored_boot\"", StringComparison.Ordinal));
+        Assert.Equal(0, Trial.Read()!.BootUnix);
+
+        Assert.Null(Trial.ExtensionFor("0.2.0", 1_800_000_000, _now));
+        Assert.Equal(1_800_000_000, Trial.Read()!.BootUnix);
+        Assert.False(Trial.Extend("job", _now.AddMinutes(1), 1_800_000_100));
+    }
+
     [Fact]
     public void Deadline_rolls_back_without_any_new_agent_participation()
     {

@@ -71,7 +71,8 @@ internal static class UpdateRecovery
             FinalizeTerminal(completed);
     }
 
-    internal static void CreateDeadlineTask(string executable, DateTimeOffset deadline, string jobId)
+    /// <param name="replace">Replace the job's existing task (D-83, a deadline moved by a reboot); otherwise an existing one is an error.</param>
+    internal static void CreateDeadlineTask(string executable, DateTimeOffset deadline, string jobId, bool replace = false)
     {
         XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
         XElement E(string name, params object[] children) => new(ns + name, children);
@@ -92,7 +93,10 @@ internal static class UpdateRecovery
         try
         {
             // Task name belongs to this durable job, never overwrite a pre-existing task.
-            Run("schtasks.exe", "/Create", "/TN", TaskName(new UpdateTrialDocument { JobId = jobId }), "/XML", path);
+            if (replace)
+                Run("schtasks.exe", "/Create", "/TN", TaskName(new UpdateTrialDocument { JobId = jobId }), "/XML", path, "/F");
+            else
+                Run("schtasks.exe", "/Create", "/TN", TaskName(new UpdateTrialDocument { JobId = jobId }), "/XML", path);
         }
         finally
         {
@@ -100,6 +104,23 @@ internal static class UpdateRecovery
             try { File.Delete(path); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
         }
+    }
+
+    /// <summary>
+    /// D-83: called once by the new version at service start. After a reboot inside its probation
+    /// the deadline task — which runs the <b>previous</b> executable — is moved first, and only then
+    /// the later deadline recorded, so an interruption between the two still ends in a rollback.
+    /// </summary>
+    public static void ExtendAfterReboot(string running, Action<string> log)
+    {
+        var trial = Trial;
+        var boot = UpdateTrial.CurrentBootUnix();
+        if (trial.ExtensionFor(running, boot, DateTimeOffset.UtcNow) is not { } deadline || trial.Read() is not { } state)
+            return;
+        var previous = InstallLayout.Default.AgentExecutable(state.Previous);
+        CreateDeadlineTask(previous, deadline, state.JobId, replace: true);
+        if (trial.Extend(state.JobId, deadline, boot))
+            log($"update.probation_extended The PC rebooted during the probation of {running}; the probation restarts and ends by {deadline:yyyy-MM-dd HH:mm:ss} UTC.");
     }
 
     public static string TaskName(UpdateTrialDocument state) => UpdateTrial.RecoveryTaskName(state);

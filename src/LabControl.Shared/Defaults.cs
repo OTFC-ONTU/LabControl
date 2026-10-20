@@ -598,6 +598,15 @@ public static class Defaults
     /// </summary>
     public static readonly TimeSpan UpdateProbation = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// How many reboots inside one probation may each restart it (D-83): a teacher's reboot is not
+    /// a failed release, a release that keeps rebooting the PC is.
+    /// </summary>
+    public const int UpdateProbationRebootExtensions = 3;
+
+    /// <summary>Two boot times computed from uptime this close are the same boot (D-83).</summary>
+    public static readonly TimeSpan UpdateProbationBootTolerance = TimeSpan.FromSeconds(60);
+
     /// <summary>Service recovery restarts this many times before the rollback action is run.</summary>
     public const int ServiceRestartsBeforeRollback = 3;
 

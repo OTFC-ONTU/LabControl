@@ -15,6 +15,15 @@ public sealed class UpdateTrialDocument : ISchemaVersioned
     public DateTimeOffset Deadline { get; set; }
     public UpdateTrialPhase Phase { get; set; }
     public bool RecoveryFinalized { get; set; }
+
+    /// <summary>
+    /// When the machine last booted as this trial knew it, Unix seconds; 0 in a record from before
+    /// D-83. A newer boot seen by the new version is a reboot inside the probation.
+    /// </summary>
+    public long BootUnix { get; set; }
+
+    /// <summary>How many times a reboot has moved <see cref="Deadline"/> on (D-83), at most <see cref="Defaults.UpdateProbationRebootExtensions"/>.</summary>
+    public int Extensions { get; set; }
 }
 
 /// <summary>Durable, process-locked probation decisions shared with the known-good
@@ -60,7 +69,56 @@ public sealed class UpdateTrial(string directory)
         if (current is { RecoveryFinalized: false })
             throw new InvalidOperationException("The preceding update's recovery configuration must be finalized first.");
         Save(new UpdateTrialDocument { JobId = jobId, Version = version, Previous = previous,
-            Deadline = deadline, Phase = UpdateTrialPhase.OnProbation });
+            Deadline = deadline, Phase = UpdateTrialPhase.OnProbation, BootUnix = CurrentBootUnix() });
+        return true;
+    });
+
+    /// <summary>When this machine booted, Unix seconds, from its uptime.</summary>
+    public static long CurrentBootUnix() =>
+        DateTimeOffset.UtcNow.ToUnixTimeSeconds() - Environment.TickCount64 / 1000;
+
+    /// <summary>
+    /// D-83: the new version, starting after a reboot inside its probation, gets a fresh probation
+    /// — the teacher's reboot is not a failed release (three PCs rolled back in the lab,
+    /// 2026-10-20, rebooted 10 s too late to fit ten continuous minutes before the deadline).
+    /// Returns the deadline to move the external task to, or <c>null</c> when nothing changes: no
+    /// trial on probation for <paramref name="running"/>, no reboot since the trial last knew
+    /// (a boot within <see cref="Defaults.UpdateProbationBootTolerance"/> is the same boot), or
+    /// <see cref="Defaults.UpdateProbationRebootExtensions"/> already used. A record from before
+    /// D-83 has no boot: it is stamped with this one and not extended. The deadline only ever
+    /// moves later. The caller moves the task <b>first</b> and then calls <see cref="Extend"/>,
+    /// so a crash in between leaves a task that still rolls back — later, never not at all.
+    /// </summary>
+    public DateTimeOffset? ExtensionFor(string running, long bootUnix, DateTimeOffset now) => Locked(() =>
+    {
+        var state = ReadCore();
+        if (state is null || state.Phase != UpdateTrialPhase.OnProbation || state.Version != running)
+            return (DateTimeOffset?)null;
+        if (state.BootUnix == 0)
+        {
+            state.BootUnix = bootUnix;
+            Save(state);
+            return null;
+        }
+
+        if (bootUnix - state.BootUnix <= Defaults.UpdateProbationBootTolerance.TotalSeconds
+            || state.Extensions >= Defaults.UpdateProbationRebootExtensions)
+            return null;
+        var extended = SchedulerDeadline(now + Defaults.UpdateProbation + Defaults.ServiceRestartWait * 2);
+        return extended > state.Deadline ? extended : null;
+    });
+
+    /// <summary>Records a moved deadline and the boot that earned it (D-83); refuses one earlier than the current deadline.</summary>
+    public bool Extend(string jobId, DateTimeOffset deadline, long bootUnix) => Locked(() =>
+    {
+        var state = ReadCore();
+        if (state is null || state.JobId != jobId || state.Phase != UpdateTrialPhase.OnProbation || deadline <= state.Deadline
+            || state.Extensions >= Defaults.UpdateProbationRebootExtensions)
+            return false;
+        state.Deadline = deadline;
+        state.BootUnix = bootUnix;
+        state.Extensions++;
+        Save(state);
         return true;
     });
 

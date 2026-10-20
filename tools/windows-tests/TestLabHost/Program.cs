@@ -202,7 +202,7 @@ internal static class TestLabHost
                                 if (command.BuildDirectory is null || command.BaseVersion is null
                                     || !AgentBuild.TryLoad(command.BuildDirectory, command.BaseVersion, out var build, out _, command.MinimumInstalledVersion ?? "0.0.0"))
                                     throw new InvalidDataException("Invalid update build.");
-                                if (!vault.IsUnlocked && (passphrase is null || !vault.TryUnlock(passphrase))) throw new InvalidOperationException("Fixture key is unavailable.");
+                                if (!vault.IsUnlocked && !vault.TryReopen() && (passphrase is null || !vault.TryUnlock(passphrase))) throw new InvalidOperationException("Fixture key is unavailable.");
                                 IReadOnlyList<JobRecord> jobs;
                                 if (command.Action == "push-wrong-key")
                                 {

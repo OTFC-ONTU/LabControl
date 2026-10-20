@@ -2589,8 +2589,9 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   within 32 s. **The internet-control acceptance in the physical lab is passed.** Ten minutes
   later those three rolled back to the previous build: they had been rebooted inside the new
   build's probation, and ten continuous linked minutes no longer fitted before its deadline —
-  the `D-19` safeguard doing its job. Lesson for drills: reboot only after a PC reports
-  *stable*. The three are to be pushed again.
+  the `D-19` safeguard doing its job but unable to tell a teacher's reboot from a failure. Since
+  `D-83` a reboot inside the probation restarts it (at most three times), VM-drilled the same day;
+  the three are to be pushed that build.
 ---
 
 ## M7 — Software catalog, localization, polish

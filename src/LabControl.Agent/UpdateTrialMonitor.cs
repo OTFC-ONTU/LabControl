@@ -8,7 +8,8 @@ using Microsoft.Extensions.Logging;
 namespace LabControl.Agent;
 
 /// <summary>Only an uninterrupted, monotonic ten-minute linked interval accepts a trial.
-/// Every process restart starts a new interval; the external deadline remains on disk.</summary>
+/// Every process restart starts a new interval; the external deadline remains on disk — moved
+/// on, at most three times, when the new version starts after a reboot (D-83).</summary>
 internal sealed class UpdateTrialMonitor : IAsyncDisposable
 {
     private readonly AgentLink _link;
@@ -25,6 +26,24 @@ internal sealed class UpdateTrialMonitor : IAsyncDisposable
         _log = log;
         link.Linked += OnLinked;
         link.Unlinked += OnUnlinked;
+
+        // D-83: a reboot inside the probation restarts it rather than costing the release.
+        try
+        {
+            UpdateRecovery.ExtendAfterReboot(Program.InstalledVersion, line =>
+            {
+                var code = line.Split(' ', 2)[0];
+                var message = line.Length > code.Length ? line[(code.Length + 1)..] : line;
+                _log.LogInformation("{Message}", message);
+                link.Report(Event.Types.Severity.Info, code, message);
+            });
+        }
+        catch (Exception ex)
+        {
+            // The old deadline and its task are untouched: the worst case is the rollback D-19 had.
+            _log.LogWarning("Could not extend the update probation after a reboot: {Message}", ex.Message);
+        }
+
         _loop = Task.Run(RunAsync);
     }
 

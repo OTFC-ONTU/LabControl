@@ -4291,6 +4291,44 @@ the new key opened from this computer's memory. Item 3 gains one rule from the d
 bound to one address pins it in the move payload, one serving every address leaves discovery —
 the rekey's own rule for an absent host.
 
+## D-83 — A reboot inside an update's probation restarts the probation, at most three times
+
+Context (2026-10-20): `D-19` accepts a pushed agent only after ten continuous linked minutes
+before a deadline the previous version's scheduled task enforces. In the physical lab three PCs
+rebooted by the teacher four minutes into their probation came back on the new build, re-applied
+their internet policy, and were rolled back ten minutes later: 9 min 43 s of continuous link did
+not fit before the deadline. The safeguard exists for a release that crashes or cannot link; it
+could not tell a teacher's reboot from a failure. Owner decision: make it tell them apart.
+
+Decisions:
+
+1. The trial record (`update-trial.json`) keeps the machine's boot time (`boot_unix`, from the
+   uptime) and how many times the deadline was moved (`extensions`).
+2. When the **new** version starts and the machine booted more than 60 s
+   (`UpdateProbationBootTolerance`) after the boot the trial knew — a reboot, not a service
+   restart — the probation restarts: the deadline becomes now + ten minutes + two service-restart
+   waits, never earlier than it was, at most `UpdateProbationRebootExtensions` (3) times. A
+   release that keeps rebooting the PC still rolls back.
+3. Order: the previous executable's deadline task is replaced (`schtasks /Create /F`) **first**,
+   then the later deadline is written. An interruption between the two leaves a task that rolls
+   back later than planned, never one that does not roll back.
+4. A record from before this decision has no boot time: the first start stamps it and does not
+   extend.
+5. Crashes are untouched: the service's failure actions still count them and roll back.
+6. The agent reports `update.probation_extended` with the new deadline.
+
+Rejected: counting cumulative rather than continuous linked time (a release that drops the link
+every few minutes would pass); extending on every service start (a crash loop would never roll
+back); dropping the deadline after a reboot (nothing would roll back a release that cannot link
+after one).
+
+Validation (2026-10-20): `UpdateTrialTests` — a reboot moves the deadline and the old one no longer
+rolls back while the new one does; the same boot does not extend; three extensions at most, none for
+another version or a settled trial; an old record is stamped not extended; an earlier deadline is
+refused. VM drill (owned installation, Windows 11 ARM64): pushed, rebooted at minute eight, the new
+version reported `update.probation_extended`, the rollback task moved to the new deadline, the old
+deadline passed without a rollback, and the update became stable ten minutes after the reboot.
+
 ## NuGet dependencies (keep this list current)
 
 | Package | Where | Why |

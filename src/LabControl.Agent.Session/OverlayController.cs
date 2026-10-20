@@ -59,6 +59,7 @@ internal sealed class OverlayController : IDisposable
     private long _broadcastSinceUnix;
     private long _broadcastHardLimitUnix;
     private readonly BroadcastPicture _picture;
+    private readonly DisplayKeeper _display;
 
     // The broadcast the picture belongs to; touched only by the pipe's read loop (Offer).
     private string? _pictureSession;
@@ -71,6 +72,7 @@ internal sealed class OverlayController : IDisposable
         _report = report;
         _pcName = pcName;
         _picture = new BroadcastPicture(log);
+        _display = new DisplayKeeper(log);
         _thread = new Thread(Run) { Name = "overlay-control", IsBackground = true };
         _thread.Start();
     }
@@ -152,6 +154,9 @@ internal sealed class OverlayController : IDisposable
                 }
 
                 FollowDesktop();
+
+                // A lock or a broadcast keeps the monitor on, even one under the other (D-84).
+                _display.Want(_current is not null || _broadcast is not null);
             }
         }
         catch (ObjectDisposedException)
@@ -531,6 +536,7 @@ internal sealed class OverlayController : IDisposable
             _block = null;
         }
 
+        _display.Dispose();
         _picture.Dispose();
         _queue.Dispose();
     }

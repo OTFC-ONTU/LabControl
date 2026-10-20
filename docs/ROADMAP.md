@@ -2591,6 +2591,11 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   build's probation, and ten continuous linked minutes no longer fitted before its deadline —
   the `D-19` safeguard doing its job. Lesson for drills: reboot only after a PC reports
   *stable*. The three are to be pushed again.
+- *Monitors going dark under an overlay (found in the physical lab, 2026-10-20; `D-84`).*
+  During a broadcast or a lock the student monitors switched off after the power plan's
+  20 idle minutes. The helper now holds the display on while a lock or a broadcast shows and
+  wakes a dark monitor when one starts. Built on the Mac; to verify on Windows (VM with a
+  1-minute display timeout, then the lab).
 ---
 
 ## M7 — Software catalog, localization, polish

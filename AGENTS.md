@@ -170,7 +170,9 @@ the documents relevant to the task:
   and the lab file), refused names with *Allow* (`amend_hosts`), a tile badge from `InternetState`
   alone. Keep the limits as durations, keep reasons as codes, never record a resolver-pointed DNS
   list as an original, and never re-apply a whitelist from a short-lived process. The 14-PC
-  physical-lab drill passed on 2026-10-20 after the lab fixes (`D-73` item 12). Next: portion 4.
+  physical-lab drill passed on 2026-10-20 after the lab fixes (`D-73` item 12). A lock or a
+  broadcast holds the student's display on through the helper's `DisplayKeeper` (`D-84`, not yet
+  run on Windows); exam mode should reuse it. Next: portion 4.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the

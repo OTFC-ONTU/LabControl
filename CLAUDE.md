@@ -648,4 +648,6 @@ forgotten the lab key's passphrase; the lab was moved to a new key with *Move th
 (`D-82`) — all fourteen moved over the network in half a minute — and the new key is remembered on the
 MacBook. The internet-control drill passed on all fourteen, reboots under a whitelist included; PC-01, PC-03
 and PC-12 rolled back afterwards (rebooted inside the update's probation, `D-19`) and are to be pushed
-the firewall-wait build again. In a drill, reboot a PC only after it reports *stable*.
+the firewall-wait build again. In a drill, reboot a PC only after it reports *stable*. The lab also showed
+monitors going dark under a broadcast or a lock (the 20-minute display timeout); the helper now holds the
+display on while either shows (`D-84`), built and not yet run on Windows.

@@ -453,7 +453,8 @@ makes re-runs safe. `--dry-run` prints the plan only; `--number 7` skips the pro
      *Allow this device to wake the computer* = on, *Only allow a magic packet* = on;
      "Allow the computer to turn off this device to save power" = **on** (required for
      WoL from S5 on many Realtek/Intel NICs).
-   - Power plan: never sleep on AC, display off after 20 min, "never" for disk.
+   - Power plan: never sleep on AC, display off after 20 min, "never" for disk. A lock or a
+     broadcast holds the display on for its duration from the helper (D-84).
    - Disable "Windows Update → automatic restart during active hours" nagging
      (active hours 07–20); do **not** disable updates.
 8. **Student account** — only when account creation is enabled (D-40).

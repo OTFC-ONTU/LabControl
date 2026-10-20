@@ -3818,7 +3818,9 @@ Decisions:
    running executable's `app\<version>\` path — the console link, the file channel, the
    resolver's upstream queries), `LocalSubnet` for every program (shares, the printer), and the
    loopback. All live in the group `LabControl Internet`. *Blocked* and *whitelist* differ only
-   by the resolver and the learned-address rule (`D-74`). Profiles are `NET_FW_PROFILE_TYPE2`
+   by the resolver and the learned-address rule (`D-74`). There is no loopback rule: the VM
+   drill showed Windows Firewall refuses loopback addresses in a rule (`E_INVALIDARG`), because
+   it never filters the loopback at all. Profiles are `NET_FW_PROFILE_TYPE2`
    1/2/4, read and written through `HNetCfg.FwPolicy2`'s indexed properties by late-bound
    `InvokeMember`; rules through the same object like Setup's firewall store.
 2. **Restore order** (`D-69` item 2, the resolver moved forward): every profile's default
@@ -3831,7 +3833,7 @@ Decisions:
 3. **Apply order**: originals recorded into the displaced block and **saved by the journal
    before anything changes** (`IMachineState.ApplyInternet` gained a `recordDisplaced` callback —
    the `D-47` discipline; portion 1 saved only afterwards), then the watchdog armed, then the
-   exemption, subnet and loopback rules, the foreign rules switched off, and only then the
+   exemption and subnet rules, the foreign rules switched off, and only then the
    default outbound block; a whitelist then starts the resolver and points DNS at it. Read back
    (every profile *Block*, the exemption present, no foreign rule enabled) before it reports
    done. A failed apply may leave the machine half-changed, so the journal immediately lifts
@@ -3903,7 +3905,32 @@ the timing, the refused amend, the undo after a failed apply and the kept sessio
 undo, the clock, the restart with the limit re-clamped, the exam's precedence and the
 standalone policy coming back after it, the watchdog's restore-only pass, refused names only
 under a whitelist, an old document without `disabled_rules`. The Windows half compiles for
-`win-x64`; nothing of it has run on Windows yet — the VM drill is the next step.
+`win-x64`.
+
+VM drill (2026-10-20, Windows 11 ARM64 clone *M6 isolated internet acceptance 2026-10-20* on
+UTM's shared NAT, so the guest had real internet; `TestLabHost` with the new `internet-*`
+commands; hashes compared on host and guest): it found two defects, both fixed and re-run —
+the loopback rule above (the first block failed and **was undone, the PC left open**, which
+exercised the failed-apply path for real), and an `InternetState` that reported the resolver
+of the policy just replaced, because the journal composed it from a runtime read before the
+apply (the journal now reads the runtime itself, after the change). Then passed: *Blocked* —
+sites and DoH refused, the link, the LAN file server and a `run_script` over `PullFile` kept
+working, every profile *Block*, 117 foreign outbound rules switched off and the 17 left all
+`LocalSubnet`-only, the watchdog task armed, `self_update` refused with its sentence; `sc stop`
+— the machine open at once with all 134 foreign rules back, the document kept; the watchdog
+pass with the service stopped — exit 0, nothing re-applied; start — the same session back with
+the same limit; a killed agent — the block held, the service restarted, "machine open, 1
+re-applied"; *Open* — the enabled-rule list identical to the baseline, the task gone.
+*Whitelist* with a static DNS `192.168.64.1, 1.1.1.1` set beforehand — allowed names loaded
+(`jetbrains.com` itself through `*.`), others refused in 13 ms, DoH refused, IPv4 and IPv6 DNS
+on the loopback, the refused names at the console, *Allow* amending the list with the timing
+kept; a reboot and a hard power-off both came back with the whitelist re-applied; a DNS reset
+by hand was re-pointed within 8 s (the reassert of `D-74` item 9); whitelist → blocked → expiry
+on the PC's own clock; *Open* restored the static list exactly and freed port 53. Observed, not
+changed: every restore writes the profiles' default outbound action as an explicit *Allow*
+where Windows showed *NotConfigured* (the same effect), and the refused list fills with
+Windows' own background names (`www.bing.com`, `*.events.data.microsoft.com`, `g.live.com`,
+an app package name, `microsoft.microsoftofficehub`) within a minute of a whitelist.
 
 ## D-74 — The whitelist resolver: names in, addresses admitted to one rule before the answer leaves; DNS pointed at it in both families (M6 portion 3)
 

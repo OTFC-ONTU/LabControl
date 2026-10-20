@@ -363,7 +363,9 @@ showing*, the macOS permission explanation, a status-bar line, the *WATCHING* ba
 toolbar wraps. Tests: 818 Shared + 251 Console (`BroadcastTests`, `BroadcastVideoTests`).
 Remaining for portion 2: physical mouse refusal, the readability check and the lab (ROADMAP M6).
 
-**M6 portion 3 is built (2026-10-17, `D-73`, `D-74`), on the Mac; not yet run on Windows.**
+**M6 portion 3 is built (2026-10-17, `D-73`, `D-74`) and passed its VM drill on Windows 11 ARM64
+(2026-10-20)** after two fixes found there (no loopback firewall rule — Windows refuses one; the
+resolver state read after a change); physical lab pending.
 Owner decisions of 2026-10-17: nothing on the student's screen, one example preset (*Java
 docs*), the refused names listed in the *Internet* dialog with an *Allow* that acts at once,
 other programs' outbound allow rules switched off for the policy. `InternetPolicy` carries
@@ -381,8 +383,8 @@ and `PolicyRestoreTask`. `agent.exe --restore-policy` now does nothing while the
 otherwise restores without re-applying (`D-73` item 7); `self_update` is refused while a policy is
 held. Console: *Internet…* / *Internet for all…*, `InternetDialog`, `InternetPresetLibrary`
 (`internet-presets.json`, in the backup and the lab file), the tile badge from `InternetState`
-alone. Tests: 929 Shared + 262 Console (13 skipping); review fixes in `D-73` item 11, `D-74` item 9. Next: the portion-3 drill on the ARM64 VM
-(ROADMAP M6), then portion 4.
+alone. Tests: 930 Shared + 262 Console (13 skipping); review fixes in `D-73` item 11, `D-74` item 9. Next: the physical lab (ROADMAP M6),
+then portion 4.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

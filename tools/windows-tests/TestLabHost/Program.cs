@@ -352,6 +352,28 @@ internal static class TestLabHost
                             case "broadcast-access":
                                 result = new { ok = true, access = LabControl.Shared.Video.ConsoleScreen.Access().ToString() };
                                 break;
+                            // M6 portion 3 internet drill: block, whitelist (hosts in `paths`), open, allow one refused name.
+                            case "internet-block":
+                            case "internet-whitelist":
+                            case "internet-open":
+                                if (command.AgentId is null || !session.IsLinked(command.AgentId))
+                                    throw new InvalidOperationException("Choose a linked fixture agent.");
+                                if (command.Seconds is < 0 or > 28800) throw new ArgumentException("Invalid internet duration.");
+                                if (command.Action == "internet-open")
+                                    result = new { ok = session.LiftInternet([command.AgentId]) == 1 };
+                                else
+                                {
+                                    var hosts = command.Action == "internet-whitelist" ? (command.Paths ?? []).Take(32).ToArray() : [];
+                                    result = new { ok = session.SetInternet([command.AgentId],
+                                        command.Action == "internet-block" ? LabControl.Shared.Protocol.InternetPolicy.Types.Mode.Blocked : LabControl.Shared.Protocol.InternetPolicy.Types.Mode.Whitelist,
+                                        hosts, command.Action == "internet-whitelist" ? "Drill" : string.Empty,
+                                        command.Seconds is > 0 ? TimeSpan.FromSeconds(command.Seconds.Value) : null) == 1 };
+                                }
+                                break;
+                            case "internet-allow":
+                                if (command.Paths is not [var name]) throw new ArgumentException("Name one host in paths.");
+                                result = new { ok = true, asked = session.AllowRefusedName(name) };
+                                break;
                             case "unlock":
                                 result = new { ok = vault.IsUnlocked || passphrase is not null && vault.TryUnlock(passphrase), action = "unlock" };
                                 break;
@@ -371,6 +393,7 @@ internal static class TestLabHost
                     host = bind.ToString(), port = session.Port, beacon_port = beaconPort,
                     lab_key_unlocked = vault.IsUnlocked,
                     broadcast_targets = session.BroadcastTargets.ToArray(), broadcasting = session.Broadcast is not null,
+                    refused_names = session.RefusedNames().Select(r => new { r.Name, r.PcCount }).ToArray(),
                     events = session.Events.Recent.TakeLast(25)
                         .Select(e => new { at = e.AtUnix, severity = e.Severity.ToString(), code = e.Code, message = Trim(e.Message) }).ToArray(),
                     agents = session.Linked.Select(pc => new { agent_id = pc.AgentId, number = pc.Number, version = pc.Hello.AgentVersion,
@@ -381,6 +404,11 @@ internal static class TestLabHost
                         overlay = pc.OverlayState is { } overlay ? new { kind = overlay.Kind.ToString(), overlay.SessionId,
                             overlay.InputBlocked, overlay.Reason, overlay.Problem, overlay.RemainingSeconds,
                             overlay.SetByInstance, overlay.SinceUnix, overlay.UntilUnix, overlay.HardLimitUnix } : null,
+                        internet = pc.InternetState is { } internet ? new { mode = internet.Mode.ToString(), internet.SessionId,
+                            internet.UntilUnix, internet.HardLimitUnix, internet.RemainingSeconds, internet.ResolverActive,
+                            allowed = internet.AllowedHosts.ToArray(), refused = internet.RefusedRecently.ToArray(),
+                            internet.Problem, internet.Reason, internet.SetByInstance } : null,
+                        internet_problem = pc.InternetProblem,
                         readiness_codes = pc.Machine.SetupReadinessCodes,
                         screen = ScreenStatus(session.Screens.Find(pc.AgentId)) }).ToArray(),
                     jobs = session.Jobs.All().Select(job => new { id = job.Id, agent_id = job.AgentId, state = job.State.ToString(),

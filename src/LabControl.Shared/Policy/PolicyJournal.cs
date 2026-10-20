@@ -568,7 +568,7 @@ public sealed class PolicyJournal
     /// one is only kept, not applied (D-22). Returns what the PC enforces afterwards, with
     /// <c>problem</c> set when the request was refused or failed.
     /// </summary>
-    public InternetState SetInternet(InternetPolicy request, string setByInstance, long nowUnix, InternetRuntime? runtime = null)
+    public InternetState SetInternet(InternetPolicy request, string setByInstance, long nowUnix)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(setByInstance);
@@ -577,19 +577,19 @@ public sealed class PolicyJournal
         {
             if (_stopped)
             {
-                return InternetStateLocked(PolicyEvents.RefusedStopped, nowUnix, runtime);
+                return InternetStateLocked(PolicyEvents.RefusedStopped, nowUnix);
             }
 
             if (request.AmendHosts)
             {
-                return AmendInternetLocked(request, nowUnix, runtime);
+                return AmendInternetLocked(request, nowUnix);
             }
 
             return request.Mode switch
             {
-                InternetPolicy.Types.Mode.Open => LiftInternetLocked(nowUnix, runtime),
-                InternetPolicy.Types.Mode.Whitelist or InternetPolicy.Types.Mode.Blocked => ApplyInternetLocked(request, setByInstance, nowUnix, runtime),
-                _ => InternetStateLocked(PolicyEvents.RefusedUnknownMode, nowUnix, runtime),
+                InternetPolicy.Types.Mode.Open => LiftInternetLocked(nowUnix),
+                InternetPolicy.Types.Mode.Whitelist or InternetPolicy.Types.Mode.Blocked => ApplyInternetLocked(request, setByInstance, nowUnix),
+                _ => InternetStateLocked(PolicyEvents.RefusedUnknownMode, nowUnix),
             };
         }
     }
@@ -622,11 +622,11 @@ public sealed class PolicyJournal
     }
 
     /// <summary>The internet state as it stands, for the re-send after <c>Welcome</c> and the refused-names refresh.</summary>
-    public InternetState InternetStateOf(long nowUnix, InternetRuntime? runtime = null)
+    public InternetState InternetStateOf(long nowUnix)
     {
         lock (_lock)
         {
-            return InternetStateLocked(null, nowUnix, runtime);
+            return InternetStateLocked(null, nowUnix);
         }
     }
 
@@ -642,11 +642,11 @@ public sealed class PolicyJournal
         }
     }
 
-    private InternetState ApplyInternetLocked(InternetPolicy request, string setByInstance, long nowUnix, InternetRuntime? runtime)
+    private InternetState ApplyInternetLocked(InternetPolicy request, string setByInstance, long nowUnix)
     {
         if (request.UntilSeconds < 0)
         {
-            return InternetStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix, runtime);
+            return InternetStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix);
         }
 
         var previous = _policy.Internet;
@@ -664,32 +664,32 @@ public sealed class PolicyJournal
 
         if (session.Ended(nowUnix))
         {
-            return InternetStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix, runtime);
+            return InternetStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix);
         }
 
-        return EnforceInternetLocked(session, nowUnix, runtime);
+        return EnforceInternetLocked(session, nowUnix);
     }
 
-    private InternetState AmendInternetLocked(InternetPolicy request, long nowUnix, InternetRuntime? runtime)
+    private InternetState AmendInternetLocked(InternetPolicy request, long nowUnix)
     {
         if (_policy.Internet is not { } current || current.SessionId != request.SessionId || current.Mode != InternetPolicy.Types.Mode.Whitelist)
         {
-            return InternetStateLocked(PolicyEvents.RefusedNoInternetSession, nowUnix, runtime);
+            return InternetStateLocked(PolicyEvents.RefusedNoInternetSession, nowUnix);
         }
 
         var amended = Copy(current);
         amended.AllowedHosts = Normalize(request.AllowedHosts);
-        return EnforceInternetLocked(amended, nowUnix, runtime);
+        return EnforceInternetLocked(amended, nowUnix);
     }
 
     /// <summary>Applies a standalone session — or only keeps it while the exam's policy wins — and keeps the document honest about the outcome.</summary>
-    private InternetState EnforceInternetLocked(InternetSession session, long nowUnix, InternetRuntime? runtime)
+    private InternetState EnforceInternetLocked(InternetSession session, long nowUnix)
     {
         if (_policy.ExamInternet is not null)
         {
             _policy.Internet = session;
             Save(nowUnix);
-            return InternetStateLocked(null, nowUnix, runtime);
+            return InternetStateLocked(null, nowUnix);
         }
 
         var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(session, _policy.Displaced!, () => SaveOrThrow(_policy, nowUnix)));
@@ -697,7 +697,7 @@ public sealed class PolicyJournal
         {
             _policy.Internet = session;
             Save(nowUnix);
-            return InternetStateLocked(null, nowUnix, runtime);
+            return InternetStateLocked(null, nowUnix);
         }
 
         var name = PolicyEvents.KindName(session);
@@ -727,14 +727,14 @@ public sealed class PolicyJournal
         }
 
         Save(nowUnix);
-        return InternetStateLocked(problem, nowUnix, runtime);
+        return InternetStateLocked(problem, nowUnix);
     }
 
-    private InternetState LiftInternetLocked(long nowUnix, InternetRuntime? runtime)
+    private InternetState LiftInternetLocked(long nowUnix)
     {
         if (_policy.Internet is not { } internet)
         {
-            return InternetStateLocked(null, nowUnix, runtime);
+            return InternetStateLocked(null, nowUnix);
         }
 
         if (_policy.ExamInternet is not null)
@@ -742,7 +742,7 @@ public sealed class PolicyJournal
             // Waiting underneath the exam's policy, never enforced: forgotten, nothing to lift.
             _policy.Internet = null;
             Save(nowUnix);
-            return InternetStateLocked(null, nowUnix, runtime);
+            return InternetStateLocked(null, nowUnix);
         }
 
         var result = Guard(nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!));
@@ -752,17 +752,17 @@ public sealed class PolicyJournal
             var problem = Describe(result, name);
             _machineOpen = false;
             Report(Event.Types.Severity.Warning, PolicyEvents.RestoreFailed, PolicyEvents.Text("LiftFailed", name, internet.SessionId, problem));
-            return InternetStateLocked(problem, nowUnix, runtime);
+            return InternetStateLocked(problem, nowUnix);
         }
 
         _policy.Internet = null;
         _policy.Displaced = new DisplacedSettings();
         Save(nowUnix);
-        return InternetStateLocked(null, nowUnix, runtime);
+        return InternetStateLocked(null, nowUnix);
     }
 
     /// <summary>The effective policy — the exam's if one is in force, else the standalone one — with the live side folded in. Never throws.</summary>
-    private InternetState InternetStateLocked(string? problem, long nowUnix, InternetRuntime? runtime)
+    private InternetState InternetStateLocked(string? problem, long nowUnix)
     {
         var state = new InternetState { Mode = InternetPolicy.Types.Mode.Open, Problem = problem ?? string.Empty };
         var reasons = new List<string>();
@@ -788,7 +788,9 @@ public sealed class PolicyJournal
             reasons.Add(InternetReasons.RestoreUnconfirmed);
         }
 
-        if (runtime is not null)
+        // Read now, after whatever this call changed: a runtime taken before an apply would
+        // report the resolver of the policy just replaced (found on the VM, 2026-10-20).
+        var runtime = RuntimeOf();
         {
             state.ResolverActive = runtime.ResolverActive;
             if (effective is { Mode: InternetPolicy.Types.Mode.Whitelist })
@@ -801,6 +803,18 @@ public sealed class PolicyJournal
 
         state.Reason = string.Join(' ', reasons.Distinct(StringComparer.Ordinal));
         return state;
+    }
+
+    private InternetRuntime RuntimeOf()
+    {
+        try
+        {
+            return _machine.InternetRuntime() ?? InternetRuntime.None;
+        }
+        catch (Exception)
+        {
+            return InternetRuntime.None;
+        }
     }
 
     private static IEnumerable<string> InternetCodes(string? reason) =>

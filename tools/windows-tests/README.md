@@ -192,3 +192,26 @@ test USB payload; do not expose a real lab directory through a file server. Comp
 executable hashes on host and guest. Check desktop switching, remote input, the shifted
 clock, console loss, service restart, sign-out/sign-in and a corrupt policy journal as
 recorded in ROADMAP M6. Restore the guest clock, unlock and stop the fixture afterwards.
+
+## M6 internet drill
+
+The internet drill needs a guest that can reach the internet — a block or a whitelist is
+meaningless without it — so it runs on its own clone, *M6 isolated internet acceptance
+2026-10-20*, with one shared-NAT NIC and no shared folders. `utm-exec-internet.applescript`
+is bound to that clone's UUID, name and MAC and refuses anything else. Bind `TestLabHost` to
+the NAT bridge address (`--bind 192.168.64.1`); its beacon port is never the production one,
+so a disposable lab never reaches a real room on the Mac's own network. Provision the guest's
+agent for the disposable lab with `agent.exe --install --payload <dir> --number 1 --console
+192.168.64.1:<port> --force` when its installation was a development one (`Setup.exe --rekey`
+requires an owned installation).
+
+Commands: `internet-block` and `internet-whitelist` (`agent_id`, `seconds` 0…28800 — 0 or
+absent for until lifted; the whitelist's hosts in `paths`), `internet-open` (`agent_id`) and
+`internet-allow` (one host in `paths`, sent as `amend_hosts` to every whitelist that does not
+cover it). Status carries each agent's `internet` state and `internet_problem`, and the
+merged `refused_names`. Check from the guest as SYSTEM: `Invoke-WebRequest` against an allowed
+and a refused site, `curl.exe --doh-url https://1.1.1.1/dns-query` for DoH, the profiles'
+`DefaultOutboundAction`, the `LabControl Internet` group, the foreign outbound allow rules
+against a list saved before, the interface DNS in both families, the watchdog task, and port 53.
+Never disable the virtio NIC to simulate a late interface (it bugchecks the guest); reset its
+DNS by hand instead.

@@ -341,10 +341,10 @@ public sealed class InternetPolicyTests
         var rig = new Rig();
         rig.Machine.Runtime = new InternetRuntime(true, ["fonts.gstatic.com"], 3, InternetReasons.NoUpstream);
 
-        var blocked = rig.Journal.SetInternet(new InternetPolicy { Mode = InternetPolicy.Types.Mode.Blocked, SessionId = "b" }, Instance, Now, rig.Machine.Runtime);
+        var blocked = rig.Journal.SetInternet(new InternetPolicy { Mode = InternetPolicy.Types.Mode.Blocked, SessionId = "b" }, Instance, Now);
         Assert.Empty(blocked.RefusedRecently);
 
-        var whitelist = rig.Journal.SetInternet(Whitelist(), Instance, Now, rig.Machine.Runtime);
+        var whitelist = rig.Journal.SetInternet(Whitelist(), Instance, Now);
         Assert.Equal(["fonts.gstatic.com"], whitelist.RefusedRecently);
         Assert.True(whitelist.ResolverActive);
         Assert.Contains(InternetReasons.NoUpstream, whitelist.Reason);
@@ -392,5 +392,26 @@ public sealed class InternetPolicyTests
         Assert.True(rig.Journal.ReassertInternet(Now + 20));
         Assert.Equal(InternetPolicy.Types.Mode.Whitelist, rig.Journal.InternetStateOf(Now + 20).Mode);
         Assert.DoesNotContain(nameof(IMachineState.LiftInternet), rig.Machine.Calls);
+    }
+
+    [Fact]
+    public void The_state_after_a_change_reports_the_resolver_as_it_is_afterwards_not_before()
+    {
+        // Found on the VM: whitelist -> blocked reported resolver_active from before the change.
+        var rig = new Rig();
+        rig.Machine.BeforeMutate = null;
+        var whitelist = rig.Journal.SetInternet(Whitelist(), Instance, Now);
+        rig.Machine.Runtime = new InternetRuntime(true, [], 1, string.Empty);
+        Assert.True(rig.Journal.InternetStateOf(Now).ResolverActive);
+
+        rig.Machine.Answers[nameof(IMachineState.ApplyInternet)] = () =>
+        {
+            rig.Machine.Runtime = Policy.InternetRuntime.None;
+            return MachineResult.Done;
+        };
+        var blocked = rig.Journal.SetInternet(new InternetPolicy { Mode = InternetPolicy.Types.Mode.Blocked, SessionId = "b" }, Instance, Now + 1);
+
+        Assert.False(blocked.ResolverActive);
+        Assert.Equal(InternetPolicy.Types.Mode.Blocked, blocked.Mode);
     }
 }

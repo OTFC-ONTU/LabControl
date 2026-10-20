@@ -176,8 +176,8 @@ internal sealed class WindowsInternetControl
 
     /// <summary>
     /// Enforces a whitelist or a block (D-73 item 3): records the originals the block does not
-    /// hold yet and has the journal save them, arms the watchdog, then creates the exemption,
-    /// the local-subnet and the loopback rules, switches other programs' outbound allow rules off
+    /// hold yet and has the journal save them, arms the watchdog, then creates the exemption and
+    /// the local-subnet rule, switches other programs' outbound allow rules off
     /// and only then sets every profile's default outbound action to Block. A whitelist starts
     /// the resolver and points every interface's DNS at it; a block stops it and gives DNS back.
     /// Read back before it says done.
@@ -234,7 +234,7 @@ internal sealed class WindowsInternetControl
                     }
                 }
 
-                displaced.OwnedRules = [WindowsFirewall.LocalSubnetRuleName, WindowsFirewall.LoopbackRuleName, WindowsFirewall.SitesRuleName, WindowsFirewall.AgentRuleName];
+                displaced.OwnedRules = [WindowsFirewall.LocalSubnetRuleName, WindowsFirewall.SitesRuleName, WindowsFirewall.AgentRuleName];
                 recordDisplaced();
 
                 // 2. The watchdog first: a crash from here on is still undone (D-69 item 6).
@@ -243,7 +243,8 @@ internal sealed class WindowsInternetControl
                 // 3. The ways that stay open, then the block.
                 _firewall.EnsureAgentRule(_program);
                 _firewall.EnsureLocalSubnetRule();
-                _firewall.EnsureLoopbackRule();
+                // No loopback rule: Windows Firewall refuses loopback addresses in a rule
+                // (E_INVALIDARG, found on the VM) because it never filters the loopback at all.
                 _firewall.SetForeignRules(displaced.DisabledRules, enabled: false);
                 foreach (var profile in WindowsFirewall.Profiles.Keys)
                 {

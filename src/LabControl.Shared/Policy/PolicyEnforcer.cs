@@ -349,7 +349,7 @@ public sealed class PolicyEnforcer : IAsyncDisposable
                 return;
             }
 
-            var outcome = Guarded("internet", () => PublishInternet(Journal.SetInternet(policy, setByInstance, _clock().ToUnixTimeSeconds(), Runtime())));
+            var outcome = Guarded("internet", () => PublishInternet(Journal.SetInternet(policy, setByInstance, _clock().ToUnixTimeSeconds())));
             if (outcome != PassOutcome.Ran)
             {
                 AnswerInternet(new InternetState
@@ -379,7 +379,7 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         }
     }
 
-    private void PublishInternet() => PublishInternet(Journal.InternetStateOf(_clock().ToUnixTimeSeconds(), Runtime()));
+    private void PublishInternet() => PublishInternet(Journal.InternetStateOf(_clock().ToUnixTimeSeconds()));
 
     /// <summary>Hands the state to the link and keeps the refused-names refresh running while a whitelist is in force.</summary>
     private void PublishInternet(InternetState state)

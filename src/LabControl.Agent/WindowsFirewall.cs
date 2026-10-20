@@ -40,7 +40,6 @@ internal sealed class WindowsFirewall
 
     public const string AgentRuleName = Defaults.InternetFirewallRuleGroup + " (agent)";
     public const string LocalSubnetRuleName = Defaults.InternetFirewallRuleGroup + " (local subnet)";
-    public const string LoopbackRuleName = Defaults.InternetFirewallRuleGroup + " (loopback)";
     public const string SitesRuleName = Defaults.InternetFirewallRuleGroup + " (sites)";
 
     /// <summary>Remote-address keywords that only ever reach the lab's own network; a rule scoped to them alone is not a way out.</summary>
@@ -130,9 +129,6 @@ internal sealed class WindowsFirewall
 
     /// <summary>The lab's own subnet stays reachable for every program — shares, the printer, the console (ARCHITECTURE §6.2).</summary>
     public void EnsureLocalSubnetRule() => EnsureRule(LocalSubnetRuleName, "LocalSubnet", null);
-
-    /// <summary>The loopback interface, where the whitelist resolver listens; Windows does not filter it today, the rule says so anyway.</summary>
-    public void EnsureLoopbackRule() => EnsureRule(LoopbackRuleName, "127.0.0.1,::1", null);
 
     /// <summary>
     /// The whitelist's learned addresses as one rule (D-74). An empty list removes the rule: a

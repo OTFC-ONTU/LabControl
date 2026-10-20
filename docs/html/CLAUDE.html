@@ -486,7 +486,9 @@ again (<code>AgentLink.LinkEpoch</code>). Console: <em>Show my screen</em>, <em>
 showing</em>, the macOS permission explanation, a status-bar line, the <em>WATCHING</em> badge; the
 toolbar wraps. Tests: 818 Shared + 251 Console (<code>BroadcastTests</code>, <code>BroadcastVideoTests</code>).
 Remaining for portion 2: physical mouse refusal, the readability check and the lab (ROADMAP M6).</p>
-<p><strong>M6 portion 3 is built (2026-10-17, <code>D-73</code>, <code>D-74</code>), on the Mac; not yet run on Windows.</strong>
+<p><strong>M6 portion 3 is built (2026-10-17, <code>D-73</code>, <code>D-74</code>) and passed its VM drill on Windows 11 ARM64
+(2026-10-20)</strong> after two fixes found there (no loopback firewall rule — Windows refuses one; the
+resolver state read after a change); physical lab pending.
 Owner decisions of 2026-10-17: nothing on the student's screen, one example preset (<em>Java
 docs</em>), the refused names listed in the <em>Internet</em> dialog with an <em>Allow</em> that acts at once,
 other programs' outbound allow rules switched off for the policy. <code>InternetPolicy</code> carries
@@ -504,8 +506,8 @@ and <code>PolicyRestoreTask</code>. <code>agent.exe --restore-policy</code> now 
 otherwise restores without re-applying (<code>D-73</code> item 7); <code>self_update</code> is refused while a policy is
 held. Console: <em>Internet…</em> / <em>Internet for all…</em>, <code>InternetDialog</code>, <code>InternetPresetLibrary</code>
 (<code>internet-presets.json</code>, in the backup and the lab file), the tile badge from <code>InternetState</code>
-alone. Tests: 929 Shared + 262 Console (13 skipping); review fixes in <code>D-73</code> item 11, <code>D-74</code> item 9. Next: the portion-3 drill on the ARM64 VM
-(ROADMAP M6), then portion 4.</p>
+alone. Tests: 930 Shared + 262 Console (13 skipping); review fixes in <code>D-73</code> item 11, <code>D-74</code> item 9. Next: the physical lab (ROADMAP M6),
+then portion 4.</p>
 <p><strong>M0 is done (2026-09-04). M1 is done (2026-09-05)</strong>: the trust model, beacon discovery,
 mutual TLS, enrolment, the <code>Link</code> stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, <code>FakeAgent</code> and the console UI — see the M1 <em>Progress</em> and
@@ -741,7 +743,7 @@ ROADMAP's <em>Physical lab</em> row and the on-site checklist. Do not describe W
 working in this lab until the vendor-driver rerun proves it.</p>
 
 </article>
-<footer>Generated 2026-10-17 23:59 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-20 11:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

@@ -7,6 +7,9 @@ using LabControl.Shared;
 
 namespace LabControl.Agent;
 
+/// <summary>What one walk over the firewall's rules found (D-73): the agent group's rule names, and other programs' enabled outbound allow rules that reach past the lab, as fingerprints.</summary>
+internal sealed record FirewallScan(IReadOnlyList<string> Owned, IReadOnlyList<string> ForeignEnabled);
+
 /// <summary>One outbound allow rule another program owns, as the policy switched it off (D-73 item 4).</summary>
 /// <param name="Fingerprint">What identifies the rule when it is switched back on: firewall rule names are not unique.</param>
 internal sealed record ForeignRule(string Fingerprint, string Name);
@@ -288,20 +291,86 @@ internal sealed class WindowsFirewall
     /// cut the console link. A rule left by an older build is gone already — every service start
     /// removes the whole group first.
     /// </summary>
+    /// <summary>
+    /// Adds the rule unless the group already has it. Never removes and re-adds: on a change of
+    /// policy the block is already in force, and an exemption that vanished for a moment would
+    /// cut the console link. Looked up by name, never by a walk over every rule — a classroom PC
+    /// has hundreds, and each late-bound property read is a cross-process call (found in the lab,
+    /// 2026-10-20: an apply took 31 s). A rule left by an older build is gone already — every
+    /// service start removes the whole group first.
+    /// </summary>
     private void EnsureRule(string name, string remoteAddresses, string? program) => WithRules(rules =>
     {
-        if (Exists(rules, name))
+        if (Find(rules, name))
         {
             return true;
         }
 
         Add(rules, name, remoteAddresses, program);
-        if (!Exists(rules, name))
+        if (!Find(rules, name))
         {
             throw new IOException($"the firewall rule {name} did not read back");
         }
 
         return true;
+    });
+
+    /// <summary>True when a rule of this name exists in the agent's group; one <c>Item</c> call, no walk.</summary>
+    private static bool Find(dynamic rules, string name)
+    {
+        object? existing = null;
+        try
+        {
+            existing = rules.Item(name);
+            return existing is not null && string.Equals(Text(((dynamic)existing).Grouping), Defaults.InternetFirewallRuleGroup, StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is COMException or IOException or ArgumentException)
+        {
+            // HRESULT 0x80070002 for a missing rule, raised as either exception by the binder.
+            return false;
+        }
+        finally
+        {
+            Release(existing);
+        }
+    }
+
+    /// <summary>
+    /// One walk over every rule (D-73, the lab's 31-second apply): the agent group's rule names and
+    /// the fingerprints of the other programs' enabled outbound allow rules that reach past the lab.
+    /// A rule's cheap properties are read first and the fingerprint only for the few that qualify.
+    /// </summary>
+    public FirewallScan Scan() => WithRules(rules =>
+    {
+        var owned = new List<string>();
+        var foreign = new List<string>();
+        foreach (object item in (IEnumerable)rules)
+        {
+            try
+            {
+                dynamic rule = item;
+                var group = Text(rule.Grouping);
+                if (string.Equals(group, Defaults.InternetFirewallRuleGroup, StringComparison.Ordinal))
+                {
+                    owned.Add((string)rule.Name);
+                    continue;
+                }
+
+                if ((int)rule.Direction != DirectionOut || (int)rule.Action != ActionAllow || !(bool)rule.Enabled
+                    || string.Equals(group, CoreNetworkingGroup, StringComparison.OrdinalIgnoreCase) || LocalOnly(Text(rule.RemoteAddresses)))
+                {
+                    continue;
+                }
+
+                foreign.Add(Fingerprint(rule));
+            }
+            finally
+            {
+                Release(item);
+            }
+        }
+
+        return new FirewallScan(owned.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), foreign.Distinct(StringComparer.Ordinal).ToList());
     });
 
     private static void Add(dynamic rules, string name, string remoteAddresses, string? program)

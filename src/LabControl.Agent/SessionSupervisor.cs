@@ -716,7 +716,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                         break;
 
                     case HelperMessage.PayloadOneofCase.OverlayState:
-                        RelayOverlayState(message.OverlayState);
+                        QueueOverlayState(message.OverlayState);
                         break;
 
                     default:
@@ -740,7 +740,13 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             // Whatever the helper showed went with it; a lock that is held is shown again by
             // the next helper, and the console sees the gap until then — as a code the
             // console puts into words (D-70 item 7): no helper, or nobody logged on at all.
-            Policy?.NoteEnforcement(false, _snapshot.SessionId is null ? OverlayReasons.NoSession : OverlayReasons.HelperDown);
+            var gone = _snapshot.SessionId is null ? OverlayReasons.NoSession : OverlayReasons.HelperDown;
+            if (Policy is { } policy)
+            {
+                // Off this task too: the journal's lock may be held by an apply for seconds.
+                _ = Task.Run(() => policy.NoteEnforcement(false, gone));
+            }
+
             Wake();
         }
     }
@@ -752,6 +758,50 @@ internal sealed class SessionSupervisor : IAsyncDisposable
     /// that cannot show the lock does not get one <c>Overlay</c> per status. Runs on the pipe
     /// read loop and never throws out of it.
     /// </summary>
+    private OverlayState? _pendingOverlayState;
+    private bool _relayingOverlayState;
+
+    /// <summary>
+    /// Hands the helper's report to a worker, latest wins, and returns at once. Relaying takes
+    /// the policy journal's lock, which an internet apply holds for seconds while it walks the
+    /// firewall's rules; on the pipe's read loop that wait stopped the reads, the helper looked
+    /// silent past <see cref="Defaults.HelperSilenceTimeout"/> and was restarted again and again
+    /// (found on PC-14 in the physical lab, 2026-10-20).
+    /// </summary>
+    private void QueueOverlayState(OverlayState reported)
+    {
+        lock (_lock)
+        {
+            _pendingOverlayState = reported;
+            if (_relayingOverlayState)
+            {
+                return;
+            }
+
+            _relayingOverlayState = true;
+        }
+
+        _ = Task.Run(() =>
+        {
+            while (true)
+            {
+                OverlayState? next;
+                lock (_lock)
+                {
+                    next = _pendingOverlayState;
+                    _pendingOverlayState = null;
+                    if (next is null)
+                    {
+                        _relayingOverlayState = false;
+                        return;
+                    }
+                }
+
+                RelayOverlayState(next);
+            }
+        });
+    }
+
     private void RelayOverlayState(OverlayState reported)
     {
         var policy = Policy;

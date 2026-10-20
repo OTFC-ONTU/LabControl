@@ -29,6 +29,10 @@ internal sealed class WindowsInternetControl
     private bool _firewallOff;
     private bool _noUpstream;
 
+    // The rules this service has switched off for the policy in force: a re-apply (Allow, a
+    // reassert) does not walk them again. Cleared by every restore.
+    private HashSet<string> _disabledHere = new(StringComparer.Ordinal);
+
     // The upstream servers, gathered the first time a whitelist starts and only ever added to:
     // on a re-apply the interfaces already report the loopback, and an empty list would make
     // every allowed name fail (review finding 2).
@@ -83,6 +87,7 @@ internal sealed class WindowsInternetControl
             WindowsDns.FlushCache();
 
             _applied = null;
+            _disabledHere = new HashSet<string>(StringComparer.Ordinal);
             _expectedOutbound = AllAllow();
             return Outcome(problems);
         }
@@ -197,6 +202,13 @@ internal sealed class WindowsInternetControl
 
                 var whitelist = session.Mode == InternetPolicy.Types.Mode.Whitelist;
                 var adapters = WindowsDns.Candidates();
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                var steps = new List<string>();
+                void Mark(string step)
+                {
+                    steps.Add($"{step} {clock.ElapsedMilliseconds} ms");
+                    clock.Restart();
+                }
 
                 // 1. Originals, only those the block does not hold yet (IMachineState contract).
                 if (displaced.ProfileDefaultOutbound.Count == 0)
@@ -209,7 +221,8 @@ internal sealed class WindowsInternetControl
 
                 if (displaced.DisabledRules.Count == 0)
                 {
-                    displaced.DisabledRules.AddRange(_firewall.ForeignAllowRules().Select(r => r.Fingerprint).Distinct(StringComparer.Ordinal));
+                    displaced.DisabledRules.AddRange(_firewall.Scan().ForeignEnabled);
+                    Mark("scan");
                 }
 
                 if (whitelist)
@@ -236,21 +249,32 @@ internal sealed class WindowsInternetControl
 
                 displaced.OwnedRules = [WindowsFirewall.LocalSubnetRuleName, WindowsFirewall.SitesRuleName, WindowsFirewall.AgentRuleName];
                 recordDisplaced();
+                Mark("record");
 
                 // 2. The watchdog first: a crash from here on is still undone (D-69 item 6).
                 PolicyRestoreTask.Arm(_program, session.HardLimitUnix);
+                Mark("watchdog");
 
-                // 3. The ways that stay open, then the block.
+                // 3. The ways that stay open, then the block. No loopback rule: Windows Firewall
+                // refuses loopback addresses in a rule (E_INVALIDARG, found on the VM) because it
+                // never filters the loopback at all.
                 _firewall.EnsureAgentRule(_program);
                 _firewall.EnsureLocalSubnetRule();
-                // No loopback rule: Windows Firewall refuses loopback addresses in a rule
-                // (E_INVALIDARG, found on the VM) because it never filters the loopback at all.
-                _firewall.SetForeignRules(displaced.DisabledRules, enabled: false);
+                Mark("allow rules");
+                if (_disabledHere.Count == 0 || !displaced.DisabledRules.All(_disabledHere.Contains))
+                {
+                    _firewall.SetForeignRules(displaced.DisabledRules, enabled: false);
+                    _disabledHere = new HashSet<string>(displaced.DisabledRules, StringComparer.Ordinal);
+                    Mark("other rules off");
+                }
+
                 foreach (var profile in WindowsFirewall.Profiles.Keys)
                 {
                     _firewall.SetDefaultOutbound(profile, "block");
                     _expectedOutbound[profile] = "block";
                 }
+
+                Mark("block");
 
                 // 4. Names.
                 if (whitelist)
@@ -267,22 +291,27 @@ internal sealed class WindowsInternetControl
                 }
 
                 WindowsDns.FlushCache();
+                Mark("names");
 
-                // 5. Read back.
+                // 5. Read back, in one walk.
                 if (_firewall.ReadDefaultOutbound().Any(p => p.Value != "block"))
                 {
                     return MachineResult.Failed(PolicyEvents.Text("InternetReadBack", "default outbound"));
                 }
 
-                if (!_firewall.OwnedRules().Contains(WindowsFirewall.AgentRuleName, StringComparer.OrdinalIgnoreCase))
+                var after = _firewall.Scan();
+                if (!after.Owned.Contains(WindowsFirewall.AgentRuleName, StringComparer.OrdinalIgnoreCase))
                 {
                     return MachineResult.Failed(PolicyEvents.Text("InternetReadBack", WindowsFirewall.AgentRuleName));
                 }
 
-                if (_firewall.CountEnabled(displaced.DisabledRules) > 0)
+                if (after.ForeignEnabled.Intersect(displaced.DisabledRules, StringComparer.Ordinal).Any())
                 {
                     return MachineResult.Failed(PolicyEvents.Text("InternetReadBack", "other programs' firewall rules"));
                 }
+
+                Mark("read back");
+                _log.LogInformation("internet policy {Session} steps: {Steps}", session.SessionId, string.Join(", ", steps));
 
                 displaced.Applied = true;
                 _applied = session;

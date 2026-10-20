@@ -128,10 +128,13 @@ public sealed class InternetDialog : DialogWindow<InternetAnswer>
             BorderBrush = Brushes.Gray,
             CornerRadius = new Avalonia.CornerRadius(4),
             Padding = new Avalonia.Thickness(8),
-            Child = new ScrollViewer { MaxHeight = 160, Content = _refused },
+            Child = new ScrollViewer { MaxHeight = 120, Content = _refused },
         };
 
-        Body(
+        // The buttons stay at the bottom, always visible; everything above scrolls. Sized to its
+        // content the dialog grew past the screen on a 13" Mac as the refused list filled, and
+        // Apply ended up under the Dock (found in the lab, 2026-10-20).
+        var form = Body(
             Heading(Strings.Format("Internet.Targets", model.PcCount)),
             open,
             whitelist,
@@ -142,8 +145,22 @@ public sealed class InternetDialog : DialogWindow<InternetAnswer>
             Label(Strings.Get("Internet.RefusedHeading")),
             refusedBox,
             _problem,
-            Label(Strings.Get("Internet.Offline")),
-            Buttons(cancel, apply));
+            Label(Strings.Get("Internet.Offline")));
+        Content = null;
+        var buttons = Buttons(cancel, apply);
+        buttons.Margin = new Avalonia.Thickness(20, 8, 20, 16);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        var layout = new DockPanel();
+        layout.Children.Add(buttons);
+        layout.Children.Add(new ScrollViewer { Content = form, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
+        Content = layout;
+        Opened += (_, _) =>
+        {
+            if ((Screens.ScreenFromWindow(this) ?? Screens.Primary) is { } screen)
+            {
+                MaxHeight = screen.WorkingArea.Height / screen.Scaling * 0.9;
+            }
+        };
 
         FillPresets(null);
         RefreshRefused();

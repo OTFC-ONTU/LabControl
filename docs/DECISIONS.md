@@ -4361,6 +4361,66 @@ Decision:
 Not yet run on Windows; the native check is: display timeout 1 min, a lock held for 3 min stays
 lit, a lock started on a dark monitor lights it, the display goes dark again 1 min after unlock.
 
+## D-85 — Proposal: an Ubuntu student agent, and the display-server choice it hinges on
+
+Status: **proposed, not scheduled** (2026-10-22). Hard requirement 2 and "Linux/macOS student
+agents" in ROADMAP *Out of scope for v1* still stand; this entry records the estimate and the
+options so that a decision to port starts from them. ROADMAP *Proposed after v1 — Ubuntu
+student agent* holds the portions.
+
+Context: the owner asked how hard a port to Ubuntu would be. The teacher console already
+targets Linux (`linux-x64` publish, the per-user tarball, `SecretToolProtector`,
+`SO_PEERCRED`); its gaps are *Show my screen* (`D-72`: Linux unsupported) and a run on a real
+Linux desktop. The student side is the real port. Measured on `main` (2026-10-22):
+`LabControl.Agent` 5.9k lines, `LabControl.Agent.Session` 3.0k, `LabControl.Setup` 3.8k —
+about 12.7k lines that are Windows-only. `LabControl.Shared` (25.7k: protocol, `AgentLink`,
+jobs, video, the policy journal, the whitelist resolver, the setup journal) is platform-neutral
+and already runs on macOS and Linux through `FakeAgent`; the platform seams are interfaces
+(`IMachineState`, `IScreenSource`, `IAgentBehaviour`, `ISecretProtector`, the `ISetup*` stores).
+
+What maps easily: the service (a systemd unit), power and log-off (`systemctl`, `loginctl`),
+Wake-on-LAN (`ethtool`/NetworkManager), inventory (`/proc`, `/sys`), the agent's secret store
+(a root-only file through `FileSecretProtector`), handouts. What maps with work: scripts (bash
+via `runuser`/`systemd-run --uid`, and a Linux script library), internet control (nftables +
+systemd-resolved behind the existing resolver), self-update and probation under systemd, offline
+software installation (`.deb` dependencies without internet — likely a local apt repository
+served by the console), and Setup (`useradd`, autologin, firewall, power, profile reset from
+`/etc/skel`, all through the existing journal). Ctrl+Alt+Del has no equivalent; a robust lock
+must instead disable VT switching (Ctrl+Alt+F1…F6) and SysRq.
+
+The hard part is the session helper — capture, input injection, the lock and broadcast overlay
+— and it depends on the display server. Ubuntu 26.04 LTS ships GNOME 50 with **no Xorg
+session** (Wayland only; X11 apps run under XWayland). Under Wayland a client cannot capture the
+screen, inject input or keep a window above everything without the compositor's consent.
+
+Options:
+
+1. **Xorg session with a non-GNOME desktop** (Xubuntu/Xfce or MATE on LightDM). Capture with
+   XShm/XDamage, input with XTest, the lock as an override-redirect full-screen window with
+   keyboard/pointer grabs. Smallest and best understood; closest to the Windows helper. Cost:
+   the lab runs a non-default desktop, and X11 is in maintenance mode upstream, so this choice
+   may need revisiting in a few years.
+2. **Wayland, GNOME only.** Input blocked and injected below the compositor by the root agent
+   (`EVIOCGRAB` on evdev devices, a `uinput` device for injection — independent of any
+   desktop). Capture through Mutter's private `org.gnome.Mutter.ScreenCast` /
+   `RemoteDesktop` D-Bus API as gnome-remote-desktop does, without the portal's consent dialog;
+   the overlay as a GNOME Shell extension or a fullscreen client plus the evdev grab. Default
+   Ubuntu, but tied to a private GNOME API that can change between releases, and more code.
+3. **Wayland through xdg-desktop-portal.** Portable, but ScreenCast/RemoteDesktop ask the
+   student to consent and offer no unattended mode for a SYSTEM-like agent. Rejected for the
+   student side; acceptable for the teacher console's *Show my screen*, where the teacher is
+   present to answer the dialog once.
+
+Recommendation if the port is approved: option 1 first (evdev blocking from option 2 may still
+be used for the lock, since it holds whatever the desktop), option 2 only if the lab must run
+stock Ubuntu. Estimate at the project's pace: about six portions, each run in an Ubuntu VM
+(ARM64 in UTM on the Mac) — roughly 3–5 weeks with option 1, noticeably more with option 2.
+Protocol additions to expect: the agent's OS in `Hello`/inventory, `bash` as a script shell,
+and the console hiding Windows-only actions (Ctrl+Alt+Del) for a Linux PC.
+
+Owner decisions needed before any code: whether the room actually moves to Ubuntu; option 1
+or 2; whether Linux and Windows PCs must coexist in one lab.
+
 ## NuGet dependencies (keep this list current)
 
 | Package | Where | Why |

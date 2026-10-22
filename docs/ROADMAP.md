@@ -2651,6 +2651,42 @@ department. The catalog ships **empty** — the deliverable is the ease of filli
 
 ---
 
+## Proposed after v1 — Ubuntu student agent (not scheduled; `D-85`)
+
+A proposal, not a milestone: nothing here is built or planned until the owner decides the
+room moves to Ubuntu. Estimate and options in `D-85` (2026-10-22).
+
+**What is already there.** The teacher console targets Linux; its remaining work is *Show
+my screen* on Linux (through xdg-desktop-portal, the teacher consenting once) and a run on a
+real Linux desktop — a few days. On the student side `LabControl.Shared` (protocol,
+`AgentLink`, jobs, video, policies, the setup journal) is reused as is; about 12.7k lines of
+Windows-only agent, helper and Setup code are written again for Linux behind the existing
+interfaces.
+
+**The decision it hinges on.** Ubuntu 26.04 LTS's GNOME has no Xorg session. Option 1: an
+Xorg desktop (Xubuntu/Xfce or MATE) with XShm capture, XTest input and an override-redirect
+lock — smallest. Option 2: stock GNOME on Wayland with Mutter's private screen-cast API and
+evdev/uinput input — default Ubuntu, more code, a private API. The portal route cannot run
+unattended on student PCs.
+
+**Portions, if approved** (each run in an Ubuntu VM before the next):
+
+1. systemd service, provisioning, inventory, power, log-off, Wake-on-LAN; the agent's OS in
+   `Hello` and the console showing a Linux PC.
+2. Session helper: capture and the mosaic, full view, input injection (per the chosen option).
+3. Scripts in bash under the `student` user, handouts, a Linux seed script library.
+4. Lock and broadcast overlay with input blocking, VT switching and SysRq disabled, display
+   kept on.
+5. Internet control (nftables + systemd-resolved), self-update and probation under systemd.
+6. USB Setup and standalone removal: `student` account, autologin, firewall, power, profile
+   reset, all journaled; offline software installation (a local apt repository from the
+   console).
+
+**Rough size.** Large — about 3–5 weeks with option 1, more with option 2. Exam mode (M6
+portion 4 onwards) on Linux comes after these.
+
+---
+
 ## Cross-cutting work, tracked continuously
 
 Not milestones; done inside whichever milestone touches them.
@@ -2741,5 +2777,6 @@ remaining unknowns are physical facts about the room, in the on-site checklist.
 
 Simultaneous multi-lab control from one console (saved labs and sequential switching
 are M5), two consoles *sharing* one lab at the same time
-(alternating teacher machines are in scope, `D-21`), cloud relay, mobile console, Linux/macOS student agents, grading or LMS integration,
+(alternating teacher machines are in scope, `D-21`), cloud relay, mobile console, Linux/macOS student agents (an Ubuntu agent is proposed for
+after v1, `D-85`), grading or LMS integration,
 student-initiated help requests, session recording.

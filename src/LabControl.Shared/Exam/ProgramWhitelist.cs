@@ -65,6 +65,29 @@ public static class ProgramWhitelist
         "smss.exe", "services.exe", "lsass.exe", "wininit.exe",
     };
 
+    /// <summary>
+    /// Background helpers that start with Windows or with another program, never by the student's
+    /// hand: closed like anything else not on the list, but <b>quietly</b> — no warning and no
+    /// line on the strip, which otherwise told a student that OneDrive "is not allowed" when they
+    /// had never opened it (a lab PC, 2026-10-23). The teacher still sees them among the closed.
+    /// </summary>
+    public static IReadOnlySet<string> Quiet { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "onedrive.exe", "onedrivestandaloneupdater.exe", "filecoauth.exe", "filesynchelper.exe",
+        "phoneexperiencehost.exe", "yourphone.exe", "crossdeviceresume.exe", "crossdeviceservice.exe",
+        "widgets.exe", "widgetservice.exe", "gamebar.exe", "gamebarftserver.exe", "gamebarpresencewriter.exe",
+        "skypebackgroundhost.exe", "skypeapp.exe", "hxtsr.exe", "hxoutlook.exe", "hxaccounts.exe",
+        "microsoft.photos.exe", "photosapp.exe", "msteamsupdate.exe",
+        "teams.exe", "ms-teams.exe", "msteams.exe", "adobearm.exe", "jusched.exe", "igfxem.exe", "igfxext.exe",
+        "rtkauduservice64.exe", "ravbg64.exe", "nvcontainer.exe", "nvdisplay.container.exe", "amdrsserv.exe",
+        "radeonsoftware.exe", "googledrivefs.exe", "dropbox.exe", "steamwebhelper.exe", "identity_helper.exe",
+        "msedge_proxy.exe", "cookie_exporter.exe", "notification_helper.exe", "updater.exe", "googleupdate.exe",
+        "microsoftedgeupdate.exe", "officeclicktorun.exe", "sdxhelper.exe", "msoia.exe",
+    };
+
+    /// <summary>True when <paramref name="name"/> (any form <see cref="ProgramNames"/> takes) is one of the <see cref="Quiet"/> background helpers.</summary>
+    public static bool IsQuiet(string name) => ProgramNames.TryNormalize(name, out var normalized) && Quiet.Contains(normalized);
+
     /// <summary>True when the exam closes <paramref name="process"/>: the student's, not protected, and not allowed.</summary>
     public static bool ShouldClose(ProcessInfo process, SessionContext context, IReadOnlySet<string> allowed)
     {

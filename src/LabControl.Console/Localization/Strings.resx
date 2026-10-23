@@ -698,4 +698,5 @@ java.exe</value></data>
   <data name="Exam.Sent" xml:space="preserve"><value>Exam sent to {0} of {1} PC(s); each tile shows what the PC reports.</value></data>
   <data name="Exam.ExtendSent" xml:space="preserve"><value>Extension sent to {0} of {1} PC(s).</value></data>
   <data name="Exam.EndSent" xml:space="preserve"><value>End of the exam sent to {0} of {1} PC(s).</value></data>
+  <data name="Exam.NoBrowser" xml:space="preserve"><value>No browser is on the list of allowed programs, so the allowed sites cannot be opened: the browser is closed the moment it starts. Add msedge.exe (or chrome.exe, firefox.exe).</value></data>
 </root>

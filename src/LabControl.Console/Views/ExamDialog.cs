@@ -84,6 +84,15 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
         _internetPresets.IsEnabled = false;
         var whitelistRow = Row(_internetWhitelist, _internetPresets);
 
+        // Sites allowed but no browser allowed: the browser would be closed at once.
+        var noBrowser = Label(Strings.Get("Exam.NoBrowser"));
+        noBrowser.Foreground = Avalonia.Media.Brushes.DarkOrange;
+        void CheckBrowser() => noBrowser.IsVisible = ExamDialogModel.SitesWithoutBrowser(_restrict.IsChecked == true, _internetWhitelist.IsChecked == true, _programs.Text);
+        _restrict.IsCheckedChanged += (_, _) => CheckBrowser();
+        _internetWhitelist.IsCheckedChanged += (_, _) => CheckBrowser();
+        _programs.TextChanged += (_, _) => CheckBrowser();
+        noBrowser.IsVisible = false;
+
         var start = Primary(Strings.Get("Exam.Start"));
         var cancel = Secondary(Strings.Get("Common.Cancel"));
         start.Click += (_, _) =>
@@ -109,6 +118,7 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
             _internetUntouched,
             _internetBlocked,
             whitelistRow,
+            noBrowser,
             saveRow,
             Label(Strings.Format("Exam.Ceiling", (int)Defaults.ExamHardLimit.TotalHours)),
             Label(Strings.Get(model.WholeLab ? "Exam.LateJoin" : "Exam.Offline")),

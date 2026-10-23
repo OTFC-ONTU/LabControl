@@ -63,6 +63,16 @@ public sealed class ExamDialogModel
     /// words. With the switch on, an empty list is allowed: then only Windows' own programs and
     /// the shell stay open.
     /// </summary>
+    /// <summary>The browsers a teacher would allow for the exam's sites; with none of them on the list the sites cannot be opened.</summary>
+    public static IReadOnlyList<string> Browsers { get; } = ["msedge.exe", "chrome.exe", "firefox.exe", "opera.exe", "brave.exe", "browser.exe"];
+
+    /// <summary>
+    /// True when the exam allows sites but restricts programs to a list with no browser on it:
+    /// the whitelist would close the browser the moment it starts (found on a lab PC, 2026-10-23).
+    /// </summary>
+    public static bool SitesWithoutBrowser(bool restrictPrograms, bool whitelist, string? programsText) =>
+        restrictPrograms && whitelist && !ParsePrograms(programsText).Programs.Any(p => Browsers.Contains(p, StringComparer.Ordinal));
+
     public static (IReadOnlyList<string> Programs, string? Problem) ParsePrograms(string? text)
     {
         var programs = new List<string>();

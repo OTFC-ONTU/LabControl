@@ -205,6 +205,9 @@ public static class OverlayText
     /// <summary>The strip's passing line after the whitelist closed <paramref name="program"/>.</summary>
     public static string NotAllowedText(string program) => Text("ExamNotAllowedFormat", program);
 
+    /// <summary>The strip's warning before the opening sweep closes <paramref name="programs"/>.</summary>
+    public static string ClosingText(IEnumerable<string> programs, int seconds) => Text("ExamClosingFormat", string.Join(", ", programs.Distinct(StringComparer.OrdinalIgnoreCase)), seconds);
+
     /// <summary>The strip's countdown: <c>42:17 left</c>, or empty when the exam has no timer.</summary>
     public static string StripRemainingText(long? remainingSeconds)
     {

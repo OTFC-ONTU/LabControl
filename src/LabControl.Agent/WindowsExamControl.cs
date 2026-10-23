@@ -234,13 +234,29 @@ internal sealed class WindowsExamControl : IDisposable
                 }
             }
 
+            var warned = decision.Warn.Where(p => !ProgramWhitelist.IsQuiet(p.Name)).ToList();
+            if (warned.Count > 0)
+            {
+                // The student is told first and has the grace to save (a lab PC, 2026-10-23);
+                // background helpers they never opened are not named.
+                lock (_lock)
+                {
+                    _notice = OverlayText.ClosingText(warned.Select(p => p.Name), (int)Defaults.ExamSweepGrace.TotalSeconds);
+                    _noticeUntil = DateTimeOffset.UtcNow + Defaults.ExamNoticeDuration;
+                    SendStripLocked();
+                }
+
+                _log.LogInformation("exam: warned that {Programs} close in {Grace} s",
+                    string.Join(", ", decision.Warn.Select(p => p.Name)), Defaults.ExamSweepGrace.TotalSeconds);
+            }
+
             if (decision.AskToClose.Count > 0)
             {
                 var ask = new ClosePrograms();
                 ask.ProcessIds.AddRange(decision.AskToClose.Select(p => (uint)p.ProcessId));
                 _sendToHelper(new ServiceMessage { ClosePrograms = ask });
                 _log.LogInformation("exam: asked {Programs} to close; they end in {Grace} s if still open",
-                    string.Join(", ", decision.AskToClose.Select(p => p.Name)), Defaults.ExamSweepGrace.TotalSeconds);
+                    string.Join(", ", decision.AskToClose.Select(p => p.Name)), Defaults.ExamCloseGrace.TotalSeconds);
             }
 
             var refused = false;
@@ -276,9 +292,12 @@ internal sealed class WindowsExamControl : IDisposable
                     _terminated.Add((process.Name, now));
                     _terminated.RemoveAll(t => t.At < now - Defaults.ExamTerminatedWindow);
                     _terminatedVersion++;
-                    _notice = OverlayText.NotAllowedText(process.Name);
-                    _noticeUntil = now + Defaults.ExamNoticeDuration;
-                    SendStripLocked();
+                    if (!ProgramWhitelist.IsQuiet(process.Name))
+                    {
+                        _notice = OverlayText.NotAllowedText(process.Name);
+                        _noticeUntil = now + Defaults.ExamNoticeDuration;
+                        SendStripLocked();
+                    }
                 }
             }
 

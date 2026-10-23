@@ -515,8 +515,10 @@ The **allowed-programs switch** is enforced by the service (`D-75`): every secon
 the processes of the active console session that run under the signed-in user's own token,
 never judges LabControl's own files or the never-touch set (the shell and the Windows processes
 under the user's token), and closes whatever else is not on the list. The first look — at the
-start, after a restart, after a new list or a pause — asks open programs to close
-(`ClosePrograms` to the helper, `WM_CLOSE`) and ends them after `ExamSweepGrace` (10 s); later
+start, after a restart, after a new list or a pause — names open programs on the strip,
+asks them to close after `ExamSweepGrace` (10 s; `ClosePrograms` to the helper, `WM_CLOSE`) and
+ends them `ExamCloseGrace` (5 s) later; background helpers (`ProgramWhitelist.Quiet`) are closed
+without a word on the strip; later
 it ends a newly started program at once. Processes the agent started for the teacher are never
 judged; a shutdown, reboot or log off pauses the watch for `ExamPowerJobSuspension` (2 min).
 Matching is by name: a renamed executable passes.

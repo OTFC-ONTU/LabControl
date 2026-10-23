@@ -1058,17 +1058,20 @@ public static class Defaults
     public static readonly TimeSpan ExamHardLimit = TimeSpan.FromHours(4);
 
     /// <summary>
-    /// The opening sweep's grace (owner decision 2026-10-23, D-75): a program that was already
-    /// open when the exam started is asked to close and ended this long after if it is still
-    /// running. A program started during the exam is ended at once.
+    /// The opening sweep's warning (owner decision 2026-10-23, D-75): a program that was already
+    /// open when the exam started is named on the strip — "closes in 10 s, save your work" — and
+    /// only then asked to close. A program started during the exam is ended at once.
     /// </summary>
     public static readonly TimeSpan ExamSweepGrace = TimeSpan.FromSeconds(10);
+
+    /// <summary>How long a program asked to close (<c>WM_CLOSE</c>) after its warning has before it is ended.</summary>
+    public static readonly TimeSpan ExamCloseGrace = TimeSpan.FromSeconds(5);
 
     /// <summary>How often the service looks at the student's session for programs the exam does not allow (D-75).</summary>
     public static readonly TimeSpan ExamWatchInterval = TimeSpan.FromSeconds(1);
 
     /// <summary>How long the strip shows "X is not allowed during the exam" after the whitelist closed X.</summary>
-    public static readonly TimeSpan ExamNoticeDuration = TimeSpan.FromSeconds(8);
+    public static readonly TimeSpan ExamNoticeDuration = TimeSpan.FromSeconds(10);
 
     /// <summary>How long a closed program stays in <c>ExamState.terminated_recently</c>.</summary>
     public static readonly TimeSpan ExamTerminatedWindow = TimeSpan.FromMinutes(10);

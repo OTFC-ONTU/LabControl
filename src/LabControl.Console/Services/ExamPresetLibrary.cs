@@ -21,7 +21,7 @@ public sealed class ExamPresetLibrary
 
     public const int SeedTimerMinutes = 80;
 
-    public static readonly IReadOnlyList<string> SeedPrograms = ["idea64.exe", "fsnotifier.exe", "jcef_helper.exe", "java.exe", "javaw.exe", "cmd.exe"];
+    public static readonly IReadOnlyList<string> SeedPrograms = ["idea64.exe", "fsnotifier.exe", "jcef_helper.exe", "java.exe", "javaw.exe", "cmd.exe", "msedge.exe"];
 
     private readonly LabStore _store;
     private readonly Func<DateTimeOffset> _clock;

@@ -29,7 +29,7 @@ public sealed class ExamPresetLibraryTests
             Assert.Equal("Practical (IntelliJ IDEA)", seed.Name);
             Assert.Equal(80, seed.TimerMinutes);
             Assert.True(seed.RestrictPrograms);
-            Assert.Equal(["idea64.exe", "fsnotifier.exe", "jcef_helper.exe", "java.exe", "javaw.exe", "cmd.exe"], seed.AllowedPrograms);
+            Assert.Equal(["idea64.exe", "fsnotifier.exe", "jcef_helper.exe", "java.exe", "javaw.exe", "cmd.exe", "msedge.exe"], seed.AllowedPrograms);
             Assert.Equal(ExamInternetModes.Whitelist, seed.InternetMode);
             Assert.Equal("Java docs", seed.InternetPresetName);
             Assert.Equal(["*.jetbrains.com", "docs.oracle.com"], seed.InternetHosts);
@@ -126,5 +126,14 @@ public sealed class ExamPresetLibraryTests
             BeaconPort = TestConsole.BeaconPort,
             BindAddress = IPAddress.Loopback,
         }, TestLogging.Factory, () => new FileSecretProtector());
+    }
+
+    [Fact]
+    public void Sites_with_no_browser_on_the_list_are_flagged()
+    {
+        Assert.True(LabControl.Console.ViewModels.ExamDialogModel.SitesWithoutBrowser(true, true, "idea64.exe\njava.exe"));
+        Assert.False(LabControl.Console.ViewModels.ExamDialogModel.SitesWithoutBrowser(true, true, "idea64\nMSEDGE"));
+        Assert.False(LabControl.Console.ViewModels.ExamDialogModel.SitesWithoutBrowser(false, true, "idea64.exe"));
+        Assert.False(LabControl.Console.ViewModels.ExamDialogModel.SitesWithoutBrowser(true, false, "idea64.exe"));
     }
 }

@@ -14,4 +14,5 @@
   <data name="ExamRemainingFormat" xml:space="preserve"><value>{0} left</value></data>
   <data name="ExamTitle" xml:space="preserve"><value>Exam</value></data>
   <data name="ExamNotAllowedFormat" xml:space="preserve"><value>{0} is not allowed during the exam</value></data>
+  <data name="ExamClosingFormat" xml:space="preserve"><value>{0} will be closed in {1} s — save your work now</value></data>
 </root>

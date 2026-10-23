@@ -191,7 +191,8 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
     private const int StudentSession = 1;
 
     private ExamSession? _exam;
-    private readonly ProgramWatch _watch = new();
+    // No waiting in a simulation: the warning and the close request follow one another at once.
+    private readonly ProgramWatch _watch = new(grace: TimeSpan.Zero, closeGrace: TimeSpan.Zero);
     private readonly List<ProcessInfo> _processes = [];
     private readonly List<(string Name, DateTimeOffset At)> _terminated = [];
     private long _terminatedVersion;
@@ -329,8 +330,24 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
 
     private void WatchLocked(DateTimeOffset now)
     {
-        var decision = _watch.Observe(_processes, new SessionContext(StudentSession, StudentSid, []), now);
-        foreach (var process in decision.AskToClose.Concat(decision.End))
+        // Warned, then asked, then closed: three looks at the same moment walk a swept program through.
+        for (var look = 0; look < 3; look++)
+        {
+            var decision = _watch.Observe(_processes, new SessionContext(StudentSession, StudentSid, []), now);
+            if (decision.AskToClose.Count == 0 && decision.End.Count == 0 && decision.Warn.Count == 0)
+            {
+                break;
+            }
+
+            Close(decision.AskToClose.Concat(decision.End), now);
+        }
+
+        _terminated.RemoveAll(t => t.At < now - Defaults.ExamTerminatedWindow);
+    }
+
+    private void Close(IEnumerable<ProcessInfo> processes, DateTimeOffset now)
+    {
+        foreach (var process in processes.ToList())
         {
             // Simulated programs close when asked: the grace never runs out here.
             _processes.RemoveAll(p => p.Key == process.Key);
@@ -339,8 +356,6 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
             _notice = OverlayText.NotAllowedText(process.Name);
             _noticeUntil = now + Defaults.ExamNoticeDuration;
         }
-
-        _terminated.RemoveAll(t => t.At < now - Defaults.ExamTerminatedWindow);
     }
 }
 

@@ -1,13 +1,19 @@
 namespace LabControl.Shared.Exam;
 
 /// <summary>What one look at the student's session decided (D-75).</summary>
-/// <param name="AskToClose">Programs that were open when the exam (or a pause) began: asked to close now, ended after <see cref="Defaults.ExamSweepGrace"/>.</param>
+/// <param name="AskToClose">Programs whose warning ran out: asked to close now (<c>WM_CLOSE</c>), ended after <see cref="Defaults.ExamCloseGrace"/>.</param>
 /// <param name="End">Programs to end now: started during the exam, or still running past their grace.</param>
-public sealed record WatchDecision(IReadOnlyList<ProcessInfo> AskToClose, IReadOnlyList<ProcessInfo> End)
+/// <param name="Warn">Programs that were open when the exam (or a pause) began: the student is told they close in <see cref="Defaults.ExamSweepGrace"/>; nothing is done to them yet.</param>
+public sealed record WatchDecision(IReadOnlyList<ProcessInfo> AskToClose, IReadOnlyList<ProcessInfo> End, IReadOnlyList<ProcessInfo> Warn)
 {
-    public static WatchDecision Nothing { get; } = new([], []);
+    public WatchDecision(IReadOnlyList<ProcessInfo> askToClose, IReadOnlyList<ProcessInfo> end)
+        : this(askToClose, end, [])
+    {
+    }
 
-    public bool IsEmpty => AskToClose.Count == 0 && End.Count == 0;
+    public static WatchDecision Nothing { get; } = new([], [], []);
+
+    public bool IsEmpty => AskToClose.Count == 0 && End.Count == 0 && Warn.Count == 0;
 }
 
 /// <summary>
@@ -15,8 +21,10 @@ public sealed record WatchDecision(IReadOnlyList<ProcessInfo> AskToClose, IReadO
 /// and 2026-10-23): the platform-neutral state machine the Windows service and the simulator
 /// both drive with snapshots of the process list. The first look after <see cref="Begin"/> —
 /// an exam starting, the service restarting under one, a pause ending — is the <b>opening
-/// sweep</b>: every program it would close is asked to close and ended after
-/// <see cref="Defaults.ExamSweepGrace"/>. Every later look ends a program it has not seen
+/// sweep</b>: every program it would close is <b>warned</b> first — the student sees it will
+/// close in <see cref="Defaults.ExamSweepGrace"/> and can save — then asked to close, and ended
+/// <see cref="Defaults.ExamCloseGrace"/> later if still running (a lab PC, 2026-10-23: asking at
+/// once closed VS Code before anyone could read a word, since it exits without a question). Every later look ends a program it has not seen
 /// before <b>at once</b>. Judging is <see cref="ProgramWhitelist.ShouldClose"/>; an
 /// <paramref name="exempt"/> process (one the agent itself started for the teacher) is never
 /// judged. Not thread-safe; its owner calls it from one thread.
@@ -25,8 +33,10 @@ public sealed class ProgramWatch
 {
     private readonly Func<int, bool> _exempt;
     private readonly TimeSpan _grace;
+    private readonly TimeSpan _closeGrace;
     private readonly HashSet<(int, long)> _known = [];
-    private readonly Dictionary<(int, long), DateTimeOffset> _asked = [];
+    // Per swept process: the moment its next step is due, and whether it was already asked to close.
+    private readonly Dictionary<(int, long), (DateTimeOffset Due, bool Asked)> _asked = [];
     private HashSet<string> _allowed = new(StringComparer.Ordinal);
     private bool _sweepPending;
     private bool _active;
@@ -34,11 +44,13 @@ public sealed class ProgramWatch
     private bool _resumeSweep;
 
     /// <param name="exempt">True for a process id the agent started itself; <c>null</c> = none.</param>
-    /// <param name="grace"><see cref="Defaults.ExamSweepGrace"/> unless a test wants it sooner.</param>
-    public ProgramWatch(Func<int, bool>? exempt = null, TimeSpan? grace = null)
+    /// <param name="grace">The warning before a swept program is asked to close; <see cref="Defaults.ExamSweepGrace"/> unless a test wants it sooner.</param>
+    /// <param name="closeGrace">How long a program asked to close has before it is ended; <see cref="Defaults.ExamCloseGrace"/> by default.</param>
+    public ProgramWatch(Func<int, bool>? exempt = null, TimeSpan? grace = null, TimeSpan? closeGrace = null)
     {
         _exempt = exempt ?? (_ => false);
         _grace = grace ?? Defaults.ExamSweepGrace;
+        _closeGrace = closeGrace ?? Defaults.ExamCloseGrace;
     }
 
     /// <summary>The whitelist is on.</summary>
@@ -123,6 +135,7 @@ public sealed class ProgramWatch
 
         var ask = new List<ProcessInfo>();
         var end = new List<ProcessInfo>();
+        var warn = new List<ProcessInfo>();
         var present = new HashSet<(int, long)>();
         foreach (var process in processes)
         {
@@ -133,11 +146,20 @@ public sealed class ProgramWatch
                 continue;
             }
 
-            if (_asked.TryGetValue(process.Key, out var deadline))
+            if (_asked.TryGetValue(process.Key, out var step))
             {
-                if (now >= deadline)
+                if (now >= step.Due)
                 {
-                    end.Add(process);
+                    if (step.Asked)
+                    {
+                        end.Add(process);
+                    }
+                    else
+                    {
+                        // The warning ran out: now it is asked to close, and ended if it will not.
+                        _asked[process.Key] = (now + _closeGrace, true);
+                        ask.Add(process);
+                    }
                 }
 
                 continue;
@@ -145,9 +167,9 @@ public sealed class ProgramWatch
 
             if (sweep)
             {
-                // Open before the exam: asked first, ended after the grace (owner decision 2026-10-23).
-                _asked[process.Key] = now + _grace;
-                ask.Add(process);
+                // Open before the exam: warned first, asked after the grace, ended after that (owner decision 2026-10-23).
+                _asked[process.Key] = (now + _grace, false);
+                warn.Add(process);
             }
             else if (isNew)
             {
@@ -167,6 +189,6 @@ public sealed class ProgramWatch
             _asked.Remove(gone);
         }
 
-        return new WatchDecision(ask, end);
+        return new WatchDecision(ask, end, warn);
     }
 }

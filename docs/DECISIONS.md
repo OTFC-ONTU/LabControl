@@ -4141,6 +4141,16 @@ overlap; the time-up lock is skipped when the clock notices the end more than tw
 exits and a failed strip is retried every 30 s; and `RestoreDefaults` stops the watch, so an
 `OnStop` restore cannot leave it closing programs.
 
+First run on a lab PC (2026-10-23) changed two things. The sweep asked at once, and VS Code —
+which exits on `WM_CLOSE` without a question — vanished before the student read anything; the
+sweep now **warns first** on the strip ("X will be closed in 10 s — save your work now",
+`Defaults.ExamSweepGrace`), then asks, then ends after `Defaults.ExamCloseGrace` (5 s). And
+background helpers the student never opened (OneDrive and the like) were announced as "not
+allowed"; a curated `ProgramWhitelist.Quiet` set is closed without a warning or a line on the
+strip, still listed for the teacher. The example preset gained `msedge.exe`, and the dialog warns
+when sites are allowed but no browser is on the program list (Edge was closed the moment it
+started, so the allowed sites could not be tested).
+
 Validation (2026-10-23, on the Mac): `ExamPolicyTests` (each switch alone, clamp, re-state,
 refused end, time-up lock, hard limit without a lock, a teacher's lock kept, the standalone
 policy surviving an exam inside it, an exam with an unappliable internet switch not applied, a

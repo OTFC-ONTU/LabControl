@@ -363,6 +363,15 @@ public sealed class ProgramWatchTests
     }
 
     [Fact]
+    public void Background_helpers_are_closed_but_quiet_and_never_overlap_the_never_touch_set()
+    {
+        Assert.True(ProgramWhitelist.IsQuiet("OneDrive.exe"));
+        Assert.False(ProgramWhitelist.IsQuiet("code.exe"));
+        Assert.Empty(ProgramWhitelist.Quiet.Intersect(ProgramWhitelist.NeverTouch));
+        Assert.True(ProgramWhitelist.ShouldClose(P(1, "onedrive.exe"), Context, new HashSet<string>()));
+    }
+
+    [Fact]
     public void A_look_that_sees_nobody_keeps_the_sweep_for_the_next()
     {
         var watch = new ProgramWatch(grace: TimeSpan.FromSeconds(10));
@@ -371,7 +380,7 @@ public sealed class ProgramWatchTests
         Assert.True(watch.Observe([], SessionContext.Nobody, T0).IsEmpty);
 
         var next = watch.Observe([P(4, "word.exe")], Context, T0.AddSeconds(1));
-        Assert.Single(next.AskToClose);
+        Assert.Single(next.Warn);
         Assert.Empty(next.End);
     }
 
@@ -388,20 +397,28 @@ public sealed class ProgramWatchTests
     }
 
     [Fact]
-    public void The_opening_sweep_asks_first_and_ends_after_the_grace()
+    public void The_opening_sweep_warns_then_asks_then_ends()
     {
-        var watch = new ProgramWatch(grace: TimeSpan.FromSeconds(10));
+        // A lab PC, 2026-10-23: asking at once closed VS Code before the student read a word.
+        var watch = new ProgramWatch(grace: TimeSpan.FromSeconds(10), closeGrace: TimeSpan.FromSeconds(5));
         watch.Begin(["idea64.exe"]);
-        var open = new[] { P(1, "explorer.exe"), P(2, "chrome.exe"), P(3, "idea64.exe") };
+        var open = new[] { P(1, "explorer.exe"), P(2, "code.exe"), P(3, "idea64.exe") };
 
         var first = watch.Observe(open, Context, T0);
-        Assert.Equal([2], first.AskToClose.Select(p => p.ProcessId));
+        Assert.Equal([2], first.Warn.Select(p => p.ProcessId));
+        Assert.Empty(first.AskToClose);
         Assert.Empty(first.End);
 
         Assert.True(watch.Observe(open, Context, T0.AddSeconds(5)).IsEmpty);
 
-        var late = watch.Observe(open, Context, T0.AddSeconds(10));
-        Assert.Equal([2], late.End.Select(p => p.ProcessId));
+        var asked = watch.Observe(open, Context, T0.AddSeconds(10));
+        Assert.Equal([2], asked.AskToClose.Select(p => p.ProcessId));
+        Assert.Empty(asked.End);
+
+        Assert.True(watch.Observe(open, Context, T0.AddSeconds(12)).IsEmpty);
+
+        var ended = watch.Observe(open, Context, T0.AddSeconds(15));
+        Assert.Equal([2], ended.End.Select(p => p.ProcessId));
     }
 
     [Fact]
@@ -450,7 +467,7 @@ public sealed class ProgramWatchTests
         Assert.True(watch.Observe([P(4, "shutdown-helper.exe")], Context, T0.AddSeconds(30)).IsEmpty);
 
         var after = watch.Observe([P(4, "shutdown-helper.exe")], Context, T0.AddSeconds(61));
-        Assert.Single(after.AskToClose);
+        Assert.Single(after.Warn);
         Assert.Empty(after.End);
     }
 
@@ -465,7 +482,7 @@ public sealed class ProgramWatchTests
         Assert.True(watch.Observe([P(1, "idea64.exe")], Context, T0.AddSeconds(1)).IsEmpty);
 
         watch.Begin(["java.exe"]);
-        Assert.Single(watch.Observe([P(1, "idea64.exe")], Context, T0.AddSeconds(2)).AskToClose);
+        Assert.Single(watch.Observe([P(1, "idea64.exe")], Context, T0.AddSeconds(2)).Warn);
     }
 
     [Fact]

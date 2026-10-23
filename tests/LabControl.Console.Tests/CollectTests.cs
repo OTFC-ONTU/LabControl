@@ -205,6 +205,33 @@ public class CollectTests
     }
 
     [Fact]
+    public async Task An_exam_ended_while_its_only_pc_is_off_still_reports_that_pc_missing()
+    {
+        // VM drill 2026-10-23: the end was judged by what the PCs last reported, so a lab whose
+        // PCs were all off when the teacher pressed End exam never reported them missing.
+        var clockAhead = TimeSpan.Zero;
+        var console = await TestConsole.CreateLabAsync(clock: () => DateTimeOffset.UtcNow + clockAhead);
+        await using var _ = console;
+        var payload = SetupPayload.Open(console.Session.WritePayload(TestConsole.TempDirectory(), pcCount: 1));
+        var store = FakeMachine.Install(Path.Combine(TestConsole.TempDirectory(), "PC-01"), 1, payload, System.Net.IPAddress.Loopback.ToString(), console.Port, burnedCode: false);
+        var machine = new FakeMachine(store, null, TestLogging.Factory.CreateLogger("PC-01"));
+        machine.Start();
+        var id = machine.AgentId;
+        Assert.True(await Wait.UntilAsync(() => console.Session.IsLinked(id), TimeSpan.FromSeconds(20)));
+        console.Session.StartExam([id], new ExamRequest("Test", null, false, [], InternetPolicy.Types.Mode.Open, [], string.Empty, string.Empty,
+            CollectFolder: @"Desktop\Exam", CollectDestination: TestConsole.TempDirectory()), wholeLab: false);
+        Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(id)?.InExam == true, TimeSpan.FromSeconds(10)));
+
+        await machine.DisposeAsync();
+        Assert.True(await Wait.UntilAsync(() => !console.Session.IsLinked(id), TimeSpan.FromSeconds(20)));
+        console.Session.EndExam([id]);
+
+        clockAhead = Defaults.CollectAfterDeadlineGrace + TimeSpan.FromSeconds(5);
+        Assert.True(await Wait.UntilAsync(() => console.Session.Collections.All() is [{ } c] && c.Rows.All(r => r.IsFinished), TimeSpan.FromSeconds(10)));
+        Assert.Equal(CollectedState.Missing, console.Session.Collections.All().Single().Rows.Single().State);
+    }
+
+    [Fact]
     public async Task A_light_reset_empties_the_three_folders_and_a_full_reset_deletes_the_profile_and_reboots()
     {
         var (console, machines) = await LabAsync(1);

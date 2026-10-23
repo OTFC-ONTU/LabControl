@@ -407,7 +407,7 @@ PC's folder, sizes counted as written) with a `report.txt` beside the PCs' folde
 
 Args: `mode` = `light` | `full`. Online only. Refused while the PC holds an exam and on an
 installation without the managed student. `light` empties Desktop, Documents and Downloads
-(Materials included; each folder's `desktop.ini` kept) under the student's token, links
+(Materials included; each folder's `desktop.ini` and hidden-and-system entries kept) under the student's token, links
 removed and never entered, within `Defaults.ProfileWipeMaxEntries` / `ProfileWipeMaxDuration`;
 what could not be removed makes the result not `ok` and is counted. `full` logs the student off,
 deletes the profile by the recorded SID with `DeleteProfile` (retried for

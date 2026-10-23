@@ -201,15 +201,21 @@ public sealed class WorkCollections
         }
     }
 
-    /// <summary>The teacher ended the exam: what does not report its end within the grace is asked for anyway.</summary>
-    public void ExamEndedByTeacher(IEnumerable<string> sessionIds)
+    /// <summary>
+    /// The teacher ended the exam on <paramref name="agentIds"/>: every remembered exam of those
+    /// PCs is over, and what does not report its end within the grace is asked for anyway. Judged
+    /// by the PCs, not by what they last reported — a PC that is off reports nothing, and it must
+    /// still end up missing (VM drill 2026-10-23).
+    /// </summary>
+    public void ExamEndedByTeacher(IEnumerable<string> agentIds)
     {
         var now = _clock();
+        var ids = new HashSet<string>(agentIds, StringComparer.OrdinalIgnoreCase);
         lock (_gate)
         {
-            foreach (var id in sessionIds)
+            foreach (var exam in _exams.Values)
             {
-                if (_exams.TryGetValue(id, out var exam))
+                if (exam.AgentIds.Overlaps(ids))
                 {
                     exam.Deadline = now;
                 }
@@ -502,10 +508,11 @@ public sealed class WorkCollections
         if (done)
         {
             var rows = collection.Rows;
-            _events.Info("collect.done", Strings.Format("Event.CollectDone", collection.Name,
-                rows.Count(r => r.State == CollectedState.Collected), rows.Count,
-                string.Join(", ", rows.Where(r => r.State is CollectedState.Missing or CollectedState.Failed or CollectedState.Empty).Select(r => PcFolder(r.Number))),
-                collection.Directory));
+            var notCollected = rows.Where(r => r.State is CollectedState.Missing or CollectedState.Failed or CollectedState.Empty).Select(r => PcFolder(r.Number)).ToArray();
+            _events.Info("collect.done", notCollected.Length == 0
+                ? Strings.Format("Event.CollectDoneAll", collection.Name, rows.Count, collection.Directory)
+                : Strings.Format("Event.CollectDone", collection.Name, rows.Count(r => r.State == CollectedState.Collected), rows.Count,
+                    string.Join(", ", notCollected), collection.Directory));
         }
 
         Changed?.Invoke();
@@ -527,7 +534,8 @@ public sealed class WorkCollections
                     text.Append("  ").Append(Strings.Format("Collect.Files", row.Files));
                 }
 
-                if (row.Message.Length > 0 && row.State != CollectedState.Collected)
+                // A collected PC's message names what it left out (open files, links, odd names): the teacher must see that too.
+                if (row.Message.Length > 0)
                 {
                     text.Append("  — ").Append(row.Message);
                 }

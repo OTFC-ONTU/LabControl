@@ -390,7 +390,8 @@ internal static class TestLabHost
                                 };
                                 var request = new ExamRequest("Контрольна робота — перевірка", command.Seconds is > 0 ? TimeSpan.FromSeconds(command.Seconds.Value) : null,
                                     command.Restrict, (command.Paths ?? []).Take(32).ToArray(), internetMode, (command.Hosts ?? []).Take(32).ToArray(),
-                                    internetMode == LabControl.Shared.Protocol.InternetPolicy.Types.Mode.Unspecified ? string.Empty : "Drill", "Drill");
+                                    internetMode == LabControl.Shared.Protocol.InternetPolicy.Types.Mode.Unspecified ? string.Empty : "Drill", "Drill",
+                                    command.CollectFolder, command.CollectFolder is null ? null : Path.Combine(root, "collected"));
                                 var (examSession, examSent) = session.StartExam([command.AgentId], request, command.WholeLab);
                                 result = new { ok = examSent == 1, session_id = examSession };
                                 break;
@@ -408,9 +409,28 @@ internal static class TestLabHost
                                 session.CreateJobs([command.AgentId], powerKind, null, null);
                                 result = new { ok = true };
                                 break;
+                            // M6 portion 5 drill (D-77, D-78): `paths[0]` the folder; work lands under <root>/collected.
+                            case "collect-files":
+                                if (command.AgentId is null || command.Paths is not [var collectFolder])
+                                    throw new InvalidOperationException("Choose a fixture agent and one folder.");
+                                var collection = session.CollectFiles([command.AgentId], "Drill", Path.Combine(root, "collected"), collectFolder);
+                                result = new { ok = true, directory = collection.Directory };
+                                break;
+                            case "reset-profile":
+                                if (command.AgentId is null || !session.IsLinked(command.AgentId))
+                                    throw new InvalidOperationException("Choose a linked fixture agent.");
+                                var resetJobs = session.ResetProfiles([command.AgentId], command.Instance switch
+                                {
+                                    "light" => LabControl.Shared.Jobs.ResetMode.Light,
+                                    "full" => LabControl.Shared.Jobs.ResetMode.Full,
+                                    _ => throw new ArgumentException("Invalid reset mode."),
+                                });
+                                result = new { ok = resetJobs.Count == 1, job_ids = resetJobs.Select(j => j.Id).ToArray() };
+                                break;
                             case "exam-extend":
                             case "exam-end":
-                                if (command.AgentId is null || !session.IsLinked(command.AgentId))
+                                // End is allowed for a PC that is off: the console must still report it missing (D-77).
+                                if (command.AgentId is null || command.Action == "exam-extend" && !session.IsLinked(command.AgentId))
                                     throw new InvalidOperationException("Choose a linked fixture agent.");
                                 if (command.Action == "exam-end")
                                     result = new { ok = session.EndExam([command.AgentId]) == 1 };
@@ -481,6 +501,8 @@ internal static class TestLabHost
                             exam.RemainingSeconds, exam.SetByInstance, exam.PresetName, allowed = exam.AllowedPrograms.ToArray(),
                             exam.RestrictPrograms, exam.Problem, exam.Reason } : null,
                         lab_exam = session.LabExamSessionId,
+                        collections = session.Collections.All().Select(c => new { c.Name, c.Folder, c.Directory,
+                            rows = c.Rows.Select(r => new { r.Number, state = r.State.ToString(), r.Files, message = Trim(r.Message) }).ToArray() }).ToArray(),
                         readiness_codes = pc.Machine.SetupReadinessCodes,
                         screen = ScreenStatus(session.Screens.Find(pc.AgentId)) }).ToArray(),
                     jobs = session.Jobs.All().Select(job => new { id = job.Id, agent_id = job.AgentId, state = job.State.ToString(),
@@ -529,5 +551,5 @@ internal static class TestLabHost
     }
     private sealed record Command(string Action, string? AgentId, string? BuildDirectory, string? BaseVersion,
         string? MinimumInstalledVersion, string[]? Paths, bool Open, int? Seconds, string? Instance, bool Teacher,
-        bool Restrict, string? Internet, string[]? Hosts, bool WholeLab);
+        bool Restrict, string? Internet, string[]? Hosts, bool WholeLab, string? CollectFolder);
 }

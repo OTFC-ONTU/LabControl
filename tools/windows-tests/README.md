@@ -229,6 +229,19 @@ guest with an `Interactive` scheduled task for the signed-in student (no passwor
 SYSTEM; the agent's own `session-script` is exempt from the whitelist and proves nothing. Look at
 the strip with `full-screen` and `save-screen`. Remove any renamed copies afterwards.
 
+## M6 collect and reset drill
+
+Collected work and profile reset need an installation **with** the managed student (`D-40`), so the
+drill runs on *M6 isolated collect acceptance 2026-10-23*, a copy of the internet clone (the same
+shared-NAT MAC — never run the two at once) reinstalled with the account; `utm-exec-collect.applescript`
+is bound to it. Commands: `collect-files` (`agent_id`, the folder in `paths`, written with `/`), work
+landing under `<root>/collected`; `reset-profile` (`agent_id`, `instance` `"light"` or `"full"`);
+`exam-start` gains `collect_folder`. Status carries each collection's rows. Prepare edge cases from
+the guest as SYSTEM (a file held open with `FileShare.None`, one with SYSTEM-only ACL, a junction
+outside, a path past 260 characters) and save scripts with a BOM — Windows PowerShell reads a file
+without one as ANSI. `sc.exe config binPath=` called from PowerShell drops the quotes Setup checks;
+set the service's `ImagePath` with `Set-ItemProperty` instead.
+
 ## Lab key move drill (D-82)
 
 `move-new-key` (`agent_id`) creates a second disposable lab B in the same root (instance

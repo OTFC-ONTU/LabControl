@@ -718,6 +718,7 @@ java.exe</value></data>
   <data name="Collect.ExamName" xml:space="preserve"><value>Exam</value></data>
   <data name="Event.CollectFailed" xml:space="preserve"><value>{0}: collecting work failed: {1}</value></data>
   <data name="Event.CollectDone" xml:space="preserve"><value>{0}: work collected from {1} of {2} PC(s). Not collected: {3}. Saved in {4}.</value></data>
+  <data name="Event.CollectDoneAll" xml:space="preserve"><value>{0}: work collected from all {1} PC(s). Saved in {2}.</value></data>
   <data name="Event.CollectReportFailed" xml:space="preserve"><value>The collection report could not be written in {0}: {1}</value></data>
   <data name="Action.CollectFiles" xml:space="preserve"><value>Collect files…</value></data>
   <data name="Action.ResetProfile" xml:space="preserve"><value>Reset profile…</value></data>

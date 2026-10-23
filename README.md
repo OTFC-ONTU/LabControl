@@ -138,7 +138,7 @@ more are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | **M3** | Screens: mosaic, full view, remote control | ✅ built and verified on a lab PC; close-out measurements remain |
 | **M4** | Deployment: USB installer, files, self-update | 🔨 in progress — `1.0.0` release candidate in the first lab |
 | **M5** | Lab files, teacher access, fast switching between rooms | 🔨 in progress — all portions built, field acceptance remains |
-| **M6** | Classroom control: broadcast, lock, exam mode | 🔨 in progress — lock verified on an ARM64 VM; broadcast partly verified on it; internet control verified in the lab; exam mode verified on an ARM64 VM; collect work and profile reset built |
+| **M6** | Classroom control: broadcast, lock, exam mode | 🔨 in progress — lock verified on an ARM64 VM; broadcast partly verified on it; internet control verified in the lab; exam mode verified on an ARM64 VM; collect work and profile reset verified on an ARM64 VM |
 | **M7** | Software catalog, localization (uk / en / ru), polish | 📋 planned |
 
 The detailed acceptance criteria and verification ledger are in the

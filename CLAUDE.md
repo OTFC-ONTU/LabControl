@@ -220,7 +220,7 @@ update first; (3) the VM drill on an owned-installation clone and the physical l
 network, kept its agent id and number and enrolled into the new lab on its own (ROADMAP *Lab key
 recovery*). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.
 
-**M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portion 4 VM-verified, portion 5 built; portion 6 remains:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
+**M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portions 4 and 5 VM-verified; portion 6 remains:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, *Settled before implementation*; M6 reserves `D-69`…`D-79`.
@@ -421,7 +421,7 @@ five defects: protected processes (Defender's session helper) are never judged; 
 the strip widens for its text; a new exam forgets the last one's closed programs; more quiet
 helpers. Tests: 972 Shared + 289 Console. Next: the physical lab (alongside portion 5).
 
-**M6 portion 5 is built (2026-10-23, `D-77`, `D-78`), review-fixed, not yet run on Windows.** Owner
+**M6 portion 5 is built (2026-10-23, `D-77`, `D-78`), review-fixed and passed its ARM64 VM drill the same day.** Owner
 decisions of 2026-10-23: the exam's folder is `Desktop\Exam` by default (created at the start; another
 folder inside the profile may be named, saved in the preset), the console unpacks into
 `<destination>/<name date>/PC-07/` (default `~/Documents/LabControl/Collected`) with a `report.txt`, a
@@ -432,7 +432,9 @@ a light reset removes Materials too. The agent asks for its upload grant with th
 running job of that PC delivered by this instance and unpacks with every name checked. `reset_profile`
 (`ProfileResetRunner`): refused during an exam and on account-off; light = Desktop/Documents/Downloads
 emptied under the token (`ProfileWipe`, iterative, links never entered); full = log off, `DeleteProfile`
-by the recorded SID, reboot. Tests: 998 Shared + 300 Console. Next: the VM drill, then portion 6.
+by the recorded SID, reboot. The VM drill fixed two defects: *End exam* with PCs off now reports them missing
+(ended by PC, not by their last report), and a light reset keeps Windows' hidden system entries (`My Music`…).
+Tests: 1003 Shared + 301 Console. Next: portion 6.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

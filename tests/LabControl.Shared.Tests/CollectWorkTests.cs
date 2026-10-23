@@ -239,4 +239,13 @@ public sealed class CollectWorkTests : IDisposable
         Assert.Equal(301, summary.Removed);
         Assert.Empty(Directory.EnumerateFileSystemEntries(desktop));
     }
+
+    [Theory]
+    [InlineData("desktop.ini", FileAttributes.Archive, false, true)]
+    [InlineData("My Music", FileAttributes.Hidden | FileAttributes.System | FileAttributes.Directory | FileAttributes.ReparsePoint, true, true)]
+    [InlineData("game.exe", FileAttributes.Hidden, false, false)]
+    [InlineData("tools", FileAttributes.System | FileAttributes.Directory, true, false)]
+    [InlineData("desktop.ini", FileAttributes.Directory, true, false)]
+    public void A_light_reset_keeps_what_windows_keeps_at_the_top_of_a_folder(string name, FileAttributes attributes, bool directory, bool kept) =>
+        Assert.Equal(kept, ProfileWipe.IsWindowsOwn(name, attributes, directory));
 }

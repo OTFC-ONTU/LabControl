@@ -2310,7 +2310,7 @@ public sealed class LabSession : IAsyncDisposable
             _labExam = null;
         }
 
-        Collections.ExamEndedByTeacher(ids.Select(id => FindLinked(id)?.ExamState).OfType<ExamState>().Where(s => s.Active).Select(s => s.SessionId).Distinct().ToArray());
+        Collections.ExamEndedByTeacher(ids);
         var (sent, skipped) = SendExam(ids, connection =>
             connection.ExamState is { Active: true } state ? new ExamMode { Active = false, SessionId = state.SessionId } : null);
         Events.Info("exam.end_sent", Localization.Strings.Format("Event.ExamEndSent", sent, skipped));

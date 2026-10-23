@@ -4285,6 +4285,13 @@ Decisions:
    to collect, missing, or failed and why; it is rewritten on every change. `collect.done` names
    the PCs not collected and where the work is.
 
+VM drill (2026-10-23, a copy of the internet clone reinstalled with the student account): one
+defect, fixed and re-run — **an exam ended while its PCs were off never reported them missing**:
+*End exam* judged which exam ended by what the PCs last reported, and a PC that is off reports
+nothing, so its exam stayed remembered without a deadline. `WorkCollections.ExamEndedByTeacher`
+now takes the PCs and ends every remembered exam of theirs; `report.txt` also shows what a
+collected PC left out, and `collect.done` says "all N" when nothing is missing.
+
 Rejected: the agent choosing a console path or a bucket id (`CollectSpec.destination_id` is never
 sent — the destination is the console's alone); the console pulling files from the PC (the PC is
 the client, `D-05`); uploading the folder file by file (thousands of grants and no all-or-nothing
@@ -4319,6 +4326,13 @@ Decisions:
    automatic sign-in then creates a new profile from Default (including Setup's add-only document
    seed, `D-52`). The reboot pauses an exam's whitelist like any power job (none can be held).
 4. Both are online-only jobs and never re-sent (`InFlightJobPolicy`).
+5. **What Windows keeps at the top of a folder stays** (`ProfileWipe.IsWindowsOwn`): `desktop.ini`
+   and anything both hidden and system — Documents' compatibility junctions `My Music`,
+   `My Pictures`, `My Videos`, which the first build removed in the VM drill (2026-10-23). A student
+   can mark a file hidden and system to keep it through a light reset; the full reset is the cure.
+6. **Automatic sign-in does not race the delete**: Setup sets no `ForceAutoLogon`, so after the log
+   off Windows waits at the sign-in screen; in the VM drill the profile was deleted 6 s after the log
+   off, the PC rebooted, and the student signed in to a new profile 21 s later.
 
 Rejected: `Win32_UserProfile.Delete` (WMI for one call Setup already makes natively); deleting the
 profile directory by path (`D-52`'s rule: never a path from an account name); a light reset that

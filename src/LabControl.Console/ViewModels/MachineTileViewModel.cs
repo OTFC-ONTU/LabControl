@@ -149,6 +149,25 @@ public sealed partial class MachineTileViewModel : ObservableObject
         _ => string.Empty,
     };
 
+    /// <summary>The PC holds an exam — its own word, from <c>ExamState</c> (M6 portion 4, D-75).</summary>
+    [ObservableProperty]
+    public partial bool InExam { get; set; }
+
+    /// <summary>"EXAM 42:17 · Practical (IntelliJ IDEA)", counted down from the PC's <c>remaining_seconds</c> on this console's clock; "EXAM" for one without a timer.</summary>
+    [ObservableProperty]
+    public partial string ExamBadge { get; set; } = string.Empty;
+
+    /// <summary>Who set the exam, its programs, what the whitelist closed lately, and the PC's reasons; empty without an exam.</summary>
+    [ObservableProperty]
+    public partial string ExamText { get; set; } = string.Empty;
+
+    /// <summary>Why the PC refused or could not apply the last exam request, or why its exam is weaker than asked; empty otherwise.</summary>
+    [ObservableProperty]
+    public partial string ExamProblem { get; set; } = string.Empty;
+
+    private ExamState? _examState;
+    private DateTimeOffset _examStateAt;
+
     /// <summary>"locked by this console", "locked by Teacher laptop", with the weakness when there is one; empty while unlocked.</summary>
     public string LockText =>
         !IsLocked ? string.Empty
@@ -247,6 +266,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
     public void RefreshPicture(DateTimeOffset now, bool linked)
     {
         Screen.Trim(now);
+        RefreshExamClock(now);
         var stalled = Screen.IsStalled(now, linked);
         IsPictureStale = !linked || stalled;
         PictureNote = !linked
@@ -268,6 +288,77 @@ public sealed partial class MachineTileViewModel : ObservableObject
     }
 
     private bool _hadPicture;
+
+    /// <summary>
+    /// The exam badge follows the PC's <c>ExamState</c> alone; an unlinked PC shows none. The
+    /// words that do not move with the clock are set here, the countdown in <see cref="RefreshExamClock"/>.
+    /// </summary>
+    private void RefreshExam(AgentConnection? connection, DateTimeOffset now, string? thisInstanceId, Func<string, string>? nameOfInstance)
+    {
+        var state = connection?.ExamState;
+        InExam = state is { Active: true };
+        var reasons = state is null ? string.Empty : ExamReasonText(state.Reason);
+        ExamProblem = string.Join("; ", new[] { connection?.ExamProblem ?? string.Empty, InExam ? reasons : string.Empty }.Where(t => t.Length > 0));
+        if (!InExam || state is null)
+        {
+            _examState = null;
+            ExamBadge = string.Empty;
+            ExamText = string.Empty;
+            return;
+        }
+
+        _examState = state;
+        _examStateAt = connection!.ExamStateAt;
+        var by = thisInstanceId is not null && string.Equals(state.SetByInstance, thisInstanceId, StringComparison.OrdinalIgnoreCase)
+            ? Strings.Get("Lock.ByThisConsole")
+            : state.SetByInstance.Length == 0 ? Strings.Get("Lock.ByUnknown") : nameOfInstance?.Invoke(state.SetByInstance) ?? state.SetByInstance;
+        var lines = new List<string> { Strings.Format("Tile.ExamBy", by) };
+        lines.Add(state.RestrictPrograms
+            ? Strings.Format(state.WhitelistEnforced ? "Tile.ExamPrograms" : "Tile.ExamProgramsNotWatched", string.Join(", ", state.AllowedPrograms))
+            : Strings.Get("Tile.ExamAnyProgram"));
+        if (state.TerminatedRecently.Count > 0)
+        {
+            lines.Add(Strings.Format("Tile.ExamClosed", string.Join(", ", state.TerminatedRecently)));
+        }
+
+        if (reasons.Length > 0)
+        {
+            lines.Add(reasons);
+        }
+
+        ExamText = string.Join("\n", lines);
+        RefreshExamClock(now);
+    }
+
+    /// <summary>The countdown on the badge: <c>remaining_seconds</c> less what has passed on this console since it arrived.</summary>
+    public void RefreshExamClock(DateTimeOffset now)
+    {
+        if (_examState is not { } state)
+        {
+            return;
+        }
+
+        var name = state.PresetName.Length > 0 ? " · " + state.PresetName : string.Empty;
+        if (state.UntilUnix <= 0)
+        {
+            ExamBadge = Strings.Get("Tile.ExamBadge") + name;
+            return;
+        }
+
+        var left = Math.Max(0, state.RemainingSeconds - (long)Math.Max(0, (now - _examStateAt).TotalSeconds));
+        var clock = TimeSpan.FromSeconds(left);
+        var text = clock.TotalHours >= 1
+            ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}", (int)clock.TotalHours, clock.Minutes, clock.Seconds)
+            : string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0}:{1:00}", clock.Minutes, clock.Seconds);
+        ExamBadge = Strings.Format("Tile.ExamBadgeTimed", text) + name;
+    }
+
+    /// <summary>The PC's <c>ExamState.reason</c> codes in words; an unknown code shown as itself, never hidden.</summary>
+    public static string ExamReasonText(string reason) =>
+        string.Join("; ", OverlayReasons.Split(reason).Select(code =>
+            ExamReasons.IsKnown(code)
+                ? Strings.Get("Exam.Reason." + code[(code.IndexOf('.') + 1)..])
+                : code));
 
     /// <summary>The lock badge follows the PC's <c>OverlayState</c> alone; an unlinked PC shows none (it may well still be locked, but this console cannot see it).</summary>
     private void RefreshLock(AgentConnection? connection, string? thisInstanceId, Func<string, string>? nameOfInstance)
@@ -388,6 +479,7 @@ public sealed partial class MachineTileViewModel : ObservableObject
         SessionLocked = connection?.SessionLocked ?? false;
         RefreshLock(connection, thisInstanceId, nameOfInstance);
         RefreshInternet(connection, thisInstanceId, nameOfInstance);
+        RefreshExam(connection, now, thisInstanceId, nameOfInstance);
         NoSession = connection?.NoSession ?? false;
         HelperDown = connection?.HelperAlive == false && !NoSession;
         CaptureProblem = connection?.CaptureProblem ?? string.Empty;

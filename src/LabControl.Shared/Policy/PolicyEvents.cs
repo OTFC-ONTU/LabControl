@@ -84,6 +84,14 @@ public static class PolicyEvents
 
     public static string RefusedUnknownMode => Text("RefusedUnknownMode");
 
+    public static string RefusedNoExamSession => Text("RefusedNoExamSession");
+
+    /// <summary>The exam's timer ran out and the PC locked its screen with "time is up" (owner decision 2026-10-23, D-75).</summary>
+    public const string ExamTimeUp = "exam.time_up";
+
+    /// <summary>The allowed-programs switch closed a program; the message names it.</summary>
+    public const string ExamClosed = "exam.closed";
+
     /// <summary>The teacher's word for a session kind, for the event messages.</summary>
     public static string KindName(PolicySession session) => session switch
     {
@@ -167,6 +175,32 @@ public static class InternetReasons
     public const string DnsNotHeld = "internet.dns_not_held";
 
     private static readonly string[] Known = [RestoreUnconfirmed, FirewallOff, ResolverDown, NoUpstream, ExamWins, DnsNotHeld];
+
+    public static bool IsKnown(string code) => Array.IndexOf(Known, code) >= 0;
+}
+
+/// <summary>
+/// The stable codes <c>ExamState.reason</c> carries (M6 portion 4, D-75): why the exam on a PC
+/// is weaker than asked. Words come from the console's resources.
+/// </summary>
+public static class ExamReasons
+{
+    /// <summary>Nobody is signed in: the strip has no screen and the whitelist no session to watch.</summary>
+    public const string NoUser = "exam.no_user";
+
+    /// <summary>The whitelist is paused while a shutdown, reboot or log off runs.</summary>
+    public const string Suspended = "exam.whitelist_suspended";
+
+    /// <summary>The process list could not be read; the whitelist is not watching.</summary>
+    public const string WatchFailed = "exam.watch_failed";
+
+    /// <summary>A program the whitelist closes would not end.</summary>
+    public const string EndRefused = "exam.end_refused";
+
+    /// <summary>No session helper is connected: the strip is not on the screen yet.</summary>
+    public const string StripNotShown = "exam.strip_not_shown";
+
+    private static readonly string[] Known = [NoUser, Suspended, WatchFailed, EndRefused, StripNotShown];
 
     public static bool IsKnown(string code) => Array.IndexOf(Known, code) >= 0;
 }

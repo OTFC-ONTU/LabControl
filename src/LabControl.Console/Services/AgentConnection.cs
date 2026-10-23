@@ -194,6 +194,64 @@ public sealed class AgentConnection
     }
 
     /// <summary>
+    /// The exam the PC enforces, from its last <c>ExamState</c> (M6 portion 4, D-75): its own
+    /// word, never an echo of the request. <c>null</c> until the agent said anything. A refusal
+    /// — <c>problem</c> set and not active — is kept in <see cref="ExamProblem"/> and does not
+    /// replace the last state that described the PC.
+    /// </summary>
+    public ExamState? ExamState { get; private set; }
+
+    /// <summary>Why the last <c>ExamMode</c> was refused or failed, until the next state without a problem; <c>null</c> otherwise.</summary>
+    public string? ExamProblem { get; private set; }
+
+    /// <summary>The PC holds an exam right now, by its own word.</summary>
+    public bool InExam => ExamState is { Active: true };
+
+    /// <summary>The exam sessions this connection has seen the PC hold or has been sent; a lab-wide exam is sent to a late PC once (owner decision 2026-10-23).</summary>
+    internal HashSet<string> ExamSessionsSeen { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>When, on this console's clock, the last <c>ExamState</c> describing the PC arrived: the badge counts <c>remaining_seconds</c> down from here, never from the PC's clock.</summary>
+    public DateTimeOffset ExamStateAt { get; private set; }
+
+    /// <summary>Merges an <c>ExamState</c>; returns <c>true</c> when what the tile shows changed.</summary>
+    public bool ApplyExamState(ExamState state, DateTimeOffset now)
+    {
+        var before = ExamState?.Clone();
+        var problemBefore = ExamProblem;
+        if (state.Problem.Length > 0 && !state.Active && ExamState is not null)
+        {
+            ExamProblem = state.Problem;
+        }
+        else
+        {
+            ExamState = state;
+            ExamStateAt = now;
+            ExamProblem = state.Problem.Length > 0 ? state.Problem : null;
+        }
+
+        if (ExamState is { Active: true, SessionId.Length: > 0 } held)
+        {
+            ExamSessionsSeen.Add(held.SessionId);
+        }
+
+        // remaining_seconds moves with every send; it is not a change the tile needs to redraw for.
+        var after = ExamState?.Clone();
+        if (before is not null)
+        {
+            before.RemainingSeconds = 0;
+            before.Problem = string.Empty;
+        }
+
+        if (after is not null)
+        {
+            after.RemainingSeconds = 0;
+            after.Problem = string.Empty;
+        }
+
+        return problemBefore != ExamProblem || !Equals(before, after);
+    }
+
+    /// <summary>
     /// Reads the capture and input problems out of the agent's events; returns <c>true</c>
     /// when something the tile shows changed.
     /// </summary>

@@ -1,3 +1,4 @@
+using LabControl.Shared;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
@@ -28,6 +29,7 @@ internal sealed class WindowsMachineState : IMachineState
     private readonly Func<ServiceMessage, ValueTask<bool>> _sendToHelperAsync;
     private readonly ILogger _log;
     private readonly WindowsInternetControl _internet;
+    private readonly WindowsExamControl _exam;
 
     /// <param name="sendToHelper">Writes a message down the helper pipe, fire-and-forget; <c>false</c> when no helper is connected.</param>
     /// <param name="sendToHelperAsync">The same, waiting until it is written — for broadcast frames, so a slow helper holds the stream back.</param>
@@ -37,10 +39,21 @@ internal sealed class WindowsMachineState : IMachineState
         _sendToHelperAsync = sendToHelperAsync;
         _log = log;
         _internet = new WindowsInternetControl(log, Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "agent.exe"));
+
+        // LabControl's own binaries — the install directory, and wherever this build runs from — are never judged by an exam's whitelist.
+        _exam = new WindowsExamControl(log, sendToHelper, [Defaults.AgentInstallDirectory, AppContext.BaseDirectory], SystemDirectories());
     }
 
-    /// <summary>The internet half of the unconditional restore (D-69 item 2, D-73); the overlay lives in a helper a restart has already ended.</summary>
-    public MachineResult RestoreDefaults() => _internet.RestoreDefaults();
+    /// <summary>
+    /// The internet half of the unconditional restore (D-69 item 2, D-73); the overlay lives in a
+    /// helper a restart has already ended. The exam's watch stops too: a restore at stop must not
+    /// leave it closing programs until the process exits.
+    /// </summary>
+    public MachineResult RestoreDefaults()
+    {
+        _exam.Lift();
+        return _internet.RestoreDefaults();
+    }
 
     public MachineResult RefineRestore(DisplacedSettings displaced) => _internet.RefineRestore(displaced);
 
@@ -122,7 +135,19 @@ internal sealed class WindowsMachineState : IMachineState
 
     public bool InternetNeedsReassert() => _internet.NeedsReassert();
 
-    public MachineResult ApplyExam(ExamSession session) => MachineResult.NotInThisBuild(PolicyEvents.KindName(session));
+    /// <summary>Where the never-touch names are Windows' own: a copy of <c>conhost.exe</c> anywhere else is judged like any program.</summary>
+    private static string[] SystemDirectories()
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        return [windows, Path.Combine(programFiles, "WindowsApps"), Path.Combine(programFilesX86, "Microsoft", "EdgeWebView"), Path.Combine(programFiles, "Microsoft", "EdgeWebView")];
+    }
 
-    public MachineResult LiftExam() => MachineResult.NotInThisBuild(PolicyEvents.Text("KindExam"));
+    /// <summary>The strip down the pipe and the allowed-programs watch in this service (M6 portion 4, D-75).</summary>
+    public MachineResult ApplyExam(ExamSession session) => _exam.Apply(session);
+
+    public MachineResult LiftExam() => _exam.Lift();
+
+    public ExamRuntime ExamRuntime() => _exam.Runtime();
 }

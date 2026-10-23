@@ -454,36 +454,75 @@ then re-applies a policy still within its limits with the limit re-clamped. The 
 portion 3 answers `problem` "cannot enforce internet policy yet"; one from before M6 ignores the
 message.
 
-## Exam mode
+## Exam mode (M6 portion 4, `D-75`, `D-76`)
 
 ```
-ExamMode {
-  string   session_id;            // one per exam, so late joiners get the same state
-  bool     active;
-  int64    ends_at_unix;          // 0 = no timer; absolute, skew-corrected at Hello
-  int64    hard_limit_unix;       // always set; the agent restores itself past this
-  string   message;               // shown in the countdown banner
-  InternetPolicy internet;        // optional; OPEN or absent = internet untouched
-  repeated string allowed_programs;   // executable names; empty = no whitelist enforced
-  CollectSpec collect;            // optional; the folder chosen when the exam was set up
+ExamMode {                        console → agent, on Link
+  string session_id;              // one per exam: a re-sent message is the same exam, a late PC joins it
+  bool   active;                  // true starts or re-states; false ends (any console of the lab may)
+  reserved 3, 4;                  // ends_at_unix, hard_limit_unix: never sent by any build
+  string message;                 // the teacher's line in the strip
+  reserved 6;                     // was block_internet
+  repeated string allowed_programs;   // executable names, matched by file name only
+  CollectSpec collect;            // portion 5; carried and kept, not acted on yet
+  InternetPolicy internet;        // absent or OPEN = untouched; its own limits are ignored
+  int64  until_seconds;           // the timer, a duration from arrival; 0 = none; negative = refused
+  int64  hard_limit_seconds;      // proposed; clamped to ExamHardLimit (4 h) on the PC's clock; <= 0 = the ceiling
+  bool   restrict_programs;       // the allowed-programs switch
+  string preset_name;             // for the tile badge
+}
+
+ExamState {                       agent → console
+  session_id, active,
+  whitelist_enforced,             // the switch is on and the service is watching the session
+  terminated_recently[],          // what the whitelist closed in the last 10 min, most recent first
+  since_unix, until_unix, hard_limit_unix,   // the PC's own clock
+  remaining_seconds,              // until the PC ends it by itself, as of sending
+  set_by_instance, preset_name, message,
+  allowed_programs[], restrict_programs,     // what is enforced, normalized (lower case, ".exe")
+  problem,                        // why an ExamMode was refused or failed; empty otherwise
+  reason                          // exam.no_user, exam.whitelist_suspended, exam.watch_failed,
+                                  // exam.end_refused, exam.strip_not_shown
 }
 ```
 
-The four restrictions are independent (`docs/ARCHITECTURE.md` §6.1): a message with a
-timer but no whitelist, no internet block and no collection is valid and common.
+The four restrictions are independent (`docs/ARCHITECTURE.md` §6.1): a timer alone, a whitelist
+alone, an internet block alone are all valid. Like `Overlay` and `InternetPolicy`, `ExamMode`
+passes the **ownership gate** first (`D-69` item 7: refused when the link is unbound or the
+console revoked or withdrawn, answered with `ExamState.problem` and `active` false, never
+touching the latest state) and every limit travels as a **duration** stamped on the PC's
+clock (`D-70` item 6). The PC answers every `ExamMode` with the `ExamState` it has afterwards —
+never an echo of the request — sends it on every change, re-sends it after every `Welcome`,
+and re-sends it at most every `ExamStateRefreshInterval` (2 s) when the whitelist closed
+something or a reason changed.
 
-State lives on the **agent**, not in the console's memory, and is persisted to disk, so
-an exam survives the console restarting, the network dropping or the PC rebooting
-mid-test. Two rules make it fail-safe:
+State lives on the **agent** in `policy.json` (`D-69`): the exam survives the console
+disappearing, the network dropping and the PC rebooting — on service start the machine is
+restored first and the exam re-applied with the time it had left. Past the hard limit the PC
+ends the exam by itself. When the **timer** runs out (not the hard limit, not a console ending
+it) the PC ends the exam and **locks the screen** with "Time is up": an ordinary lock
+(`Defaults.LockHardLimit`, until a console unlocks it), session id = the exam's + `:time-up`,
+`set_by_instance` = the exam's (`D-75` item 3). A lock already held stays.
 
-- `hard_limit_unix` is always set. Past it the agent ends the mode by itself — restores
-  the firewall, stops enforcing the whitelist, removes the overlay — even with no
-  console in sight.
-- On service start the agent first **restores** everything an exam could have changed,
-  then re-applies the mode only if the stored session is still within its limits.
+The **internet switch** is enforced as its own session (session id = the exam's + `:internet`)
+with the exam's limits — `min(ExamHardLimit, exam's own)` — and wins over a standalone policy
+while the exam lasts (`internet.exam_wins` in `InternetState.reason`); when the exam ends the
+standalone policy comes back if it is still within its limits, without the PC opening in
+between (`D-22`, `D-76`). An exam whose internet switch cannot be applied is not applied at
+all.
 
-`AgentMessage.ExamState` reports what the PC is actually enforcing, so the console shows
-the truth rather than what it last asked for.
+The **allowed-programs switch** is enforced by the service (`D-75`): every second it looks at
+the processes of the active console session that run under the signed-in user's own token,
+never judges LabControl's own files or the never-touch set (the shell and the Windows processes
+under the user's token), and closes whatever else is not on the list. The first look — at the
+start, after a restart, after a new list or a pause — asks open programs to close
+(`ClosePrograms` to the helper, `WM_CLOSE`) and ends them after `ExamSweepGrace` (10 s); later
+it ends a newly started program at once. Processes the agent started for the teacher are never
+judged; a shutdown, reboot or log off pauses the watch for `ExamPowerJobSuspension` (2 min).
+Matching is by name: a renamed executable passes.
+
+A console that started an exam for the whole lab sends it, with the remaining durations, to every
+PC of the lab that links before its end without showing that session (`D-76` item 4).
 
 ## Video
 
@@ -742,7 +781,7 @@ one implementation both sides use.
 **Envelopes.**
 
 ```
-ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame }       service → helper
+ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms }  service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
 HelperHello  { session_id, process_id, version }         first message after connecting
@@ -817,6 +856,20 @@ same `OverlayWindow` shows it, repainted on every decoded frame, and follows the
 desktop like the lock. `overlay_state` says `BROADCAST_START` while the broadcast window is
 up and no lock is held; the service tells a helper that shows a broadcast nobody is
 running to stop, and re-asserts one the helper does not show.
+
+**The exam over the pipe (M6 portion 4, `D-75`).** The service owns the exam and the
+whitelist; the helper only shows the strip and asks windows to close.
+`ExamStrip { show, message, until_seconds, notice, session_id }` is sent when the exam starts,
+is re-stated or ends (`show` false), when the whitelist closed something (`notice`: "X is not
+allowed during the exam", shown for `ExamNoticeDuration`, 8 s) and to every freshly connected
+helper (the journal's re-assert). The helper stamps `until_seconds` onto its clock and shows a
+click-through, never-activated topmost strip at the top centre of the primary monitor
+(`ExamStripWindow`) — only on the `Default` desktop, never while a lock or a broadcast covers
+the screen, and not at all when there is no timer, no message and no notice.
+`ClosePrograms { process_ids[] }` asks the helper to post `WM_CLOSE` to every visible, unowned
+top-level window of those processes on the input desktop; the service ends whatever is still
+running after `ExamSweepGrace`. The helper sends nothing back for either; the service reports
+`exam.strip_not_shown` while no helper takes the strip.
 
 **Input over the pipe (M3 portion 3, `D-36`).** Every `Input` from the console except
 `CTRL_ALT_DEL` is written down the pipe as it is (fire-and-forget, like the controls); the

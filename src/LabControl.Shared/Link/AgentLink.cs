@@ -78,6 +78,7 @@ public sealed partial class AgentLink : IAsyncDisposable
     private SessionState? _latestSessionState;
     private OverlayState? _latestOverlayState;
     private InternetState? _latestInternetState;
+    private ExamState? _latestExamState;
     private VideoUplink? _video;
     private VideoControl? _videoControl;
 
@@ -502,6 +503,49 @@ public sealed partial class AgentLink : IAsyncDisposable
         }
     }
 
+    // ------------------------------------------------------------------ exam (M6 portion 4)
+
+    /// <summary>
+    /// Raised with every <c>ExamMode</c> the ownership gate let through (PROTOCOL "Exam mode",
+    /// D-75), on the link's read thread, with the validated instance id of the console that
+    /// sent it. Like <see cref="OverlayReceived"/>: hand it on without waiting; the enforcer
+    /// answers with <see cref="PublishExamState"/>.
+    /// </summary>
+    public event Action<ExamMode, string>? ExamModeReceived;
+
+    /// <summary>Tells the console which exam the PC enforces (D-75); re-sent after every <c>Welcome</c>, like <see cref="PublishInternetState"/>.</summary>
+    public void PublishExamState(ExamState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        lock (_gateLock)
+        {
+            _latestExamState = state;
+            _outgoing?.TryWrite(new AgentMessage { ExamState = state });
+        }
+    }
+
+    /// <summary>Answers one <c>ExamMode</c> with a problem without touching the latest state; dropped when not linked.</summary>
+    public void AnswerExamProblem(ExamState problem)
+    {
+        ArgumentNullException.ThrowIfNull(problem);
+        lock (_gateLock)
+        {
+            _outgoing?.TryWrite(new AgentMessage { ExamState = problem });
+        }
+    }
+
+    /// <summary>The last state given to <see cref="PublishExamState"/>; <c>null</c> until the enforcer said anything.</summary>
+    public ExamState? LatestExamState
+    {
+        get
+        {
+            lock (_gateLock)
+            {
+                return _latestExamState;
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ video (M3)
 
     /// <summary>
@@ -883,6 +927,11 @@ public sealed partial class AgentLink : IAsyncDisposable
                     outgoing.Writer.TryWrite(new AgentMessage { InternetState = internetState });
                 }
 
+                if (_latestExamState is { } examState)
+                {
+                    outgoing.Writer.TryWrite(new AgentMessage { ExamState = examState });
+                }
+
                 // Events wait like results do (M5 portion 8): one bound to a console goes only
                 // to that console, and stays queued for it otherwise. An unbound event is
                 // about the machine and goes to whoever linked.
@@ -1137,6 +1186,10 @@ public sealed partial class AgentLink : IAsyncDisposable
                 await DeliverInternetPolicyAsync(message.InternetPolicy, outgoing, token);
                 break;
 
+            case ConsoleMessage.PayloadOneofCase.ExamMode:
+                await DeliverExamModeAsync(message.ExamMode, outgoing, token);
+                break;
+
             default:
                 // A message this build does not know is logged and ignored, never fatal
                 // (PROTOCOL, "Versioning").
@@ -1286,6 +1339,52 @@ public sealed partial class AgentLink : IAsyncDisposable
         {
             _log.LogWarning(ex, "{Pc}: the internet policy handler failed on {Mode}: {Message}", Name, policy.Mode, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// The same ownership gate for <c>ExamMode</c> (D-69 item 7, D-75): fails closed when the
+    /// link is unbound, answers a refusal with <c>ExamState.problem</c> and <c>active</c> false,
+    /// and never touches the enforcer's latest state. A link with no handler answers the same
+    /// way, so a console never waits on a PC that cannot hold an exam.
+    /// </summary>
+    private async Task DeliverExamModeAsync(ExamMode exam, ChannelWriter<AgentMessage> outgoing, CancellationToken token)
+    {
+        var instanceId = LinkedInstanceId;
+        var refusal = OwnershipGate.Refusal(instanceId, BoundInstanceId, _linkedConsoleSerial, _revocations);
+        if (refusal is not null || instanceId is null)
+        {
+            _log.LogWarning("{Pc}: exam {Active} refused — {Reason}", Name, exam.Active ? "start" : "end", refusal ?? PolicyEvents.RefusedUnbound);
+            await outgoing.WriteAsync(new AgentMessage { ExamState = ExamProblem(refusal ?? PolicyEvents.RefusedUnbound) }, token);
+            return;
+        }
+
+        var handler = ExamModeReceived;
+        if (handler is null)
+        {
+            _log.LogDebug("{Pc}: exam arrived but nothing here holds an exam", Name);
+            await outgoing.WriteAsync(new AgentMessage
+            {
+                ExamState = ExamProblem(PolicyEvents.Text("NotInThisBuild", PolicyEvents.Text("KindExam"))),
+            }, token);
+            return;
+        }
+
+        try
+        {
+            handler(exam, instanceId);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "{Pc}: the exam handler failed: {Message}", Name, ex.Message);
+        }
+    }
+
+    /// <summary>A refusal that still tells the truth: the exam the PC holds, if any, with the problem set — never "no exam" for a PC in one.</summary>
+    private ExamState ExamProblem(string problem)
+    {
+        var state = LatestExamState?.Clone() ?? new ExamState();
+        state.Problem = problem;
+        return state;
     }
 
     private void MergeRevocations(IEnumerable<RevocationEntry> entries)

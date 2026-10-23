@@ -21,6 +21,8 @@
             <TextBlock Text="{Binding StatusText}" />
             <TextBlock Text="{Binding LockText}" IsVisible="{Binding IsLocked}" />
             <TextBlock Text="{loc:Localize Tile.BroadcastTip}" IsVisible="{Binding IsBroadcasting}" />
+            <TextBlock Text="{Binding ExamText}" IsVisible="{Binding InExam}" MaxWidth="380" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding ExamProblem, StringFormat={loc:Localize Tile.ExamProblemFormat}}" IsVisible="{Binding !!ExamProblem.Length}" MaxWidth="380" TextWrapping="Wrap" />
             <TextBlock Text="{Binding InternetText}" IsVisible="{Binding HasInternetPolicy}" MaxWidth="380" TextWrapping="Wrap" />
             <TextBlock Text="{Binding InternetProblem, StringFormat={loc:Localize Tile.InternetProblemFormat}}" IsVisible="{Binding !!InternetProblem.Length}" MaxWidth="380" TextWrapping="Wrap" />
             <TextBlock Text="{Binding LockProblem, StringFormat={loc:Localize Tile.LockProblemFormat}}" IsVisible="{Binding !!LockProblem.Length}" MaxWidth="380" TextWrapping="Wrap" />
@@ -57,11 +59,18 @@
             <Border Classes="broadcast" IsVisible="{Binding IsBroadcasting}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" Padding="6,2" CornerRadius="4" Background="#CC1F5FAF">
               <TextBlock Text="{loc:Localize Tile.BroadcastBadge}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
             </Border>
-            <!-- The internet badge (M6 portion 3): the policy the PC says it enforces. -->
-            <Border Classes="internet" IsVisible="{Binding HasInternetPolicy}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6" Padding="6,2" CornerRadius="4" Background="#CC6A1B9A" MaxWidth="150">
-              <TextBlock Text="{Binding InternetBadge}" FontSize="11" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" />
-            </Border>
+            <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6" Spacing="3">
+              <!-- The exam badge (M6 portion 4): the exam the PC says it holds, counted down from its own remaining time. -->
+              <Border Classes="exam" IsVisible="{Binding InExam}" HorizontalAlignment="Left" Padding="6,2" CornerRadius="4" Background="#CC00695C" MaxWidth="190">
+                <TextBlock Text="{Binding ExamBadge}" FontSize="11" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" />
+              </Border>
+              <!-- The internet badge (M6 portion 3): the policy the PC says it enforces. -->
+              <Border Classes="internet" IsVisible="{Binding HasInternetPolicy}" HorizontalAlignment="Left" Padding="6,2" CornerRadius="4" Background="#CC6A1B9A" MaxWidth="150">
+                <TextBlock Text="{Binding InternetBadge}" FontSize="11" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" />
+              </Border>
+            </StackPanel>
             <StackPanel Spacing="1" Margin="8,6" VerticalAlignment="Bottom">
+              <TextBlock Text="{Binding ExamProblem}" FontSize="11" Foreground="DarkOrange" TextTrimming="CharacterEllipsis" IsVisible="{Binding !!ExamProblem.Length}" />
               <TextBlock Text="{Binding InternetProblem}" FontSize="11" Foreground="DarkOrange" TextTrimming="CharacterEllipsis" IsVisible="{Binding !!InternetProblem.Length}" />
               <TextBlock Text="{Binding LockText}" FontSize="11" Foreground="DarkOrange" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsLocked}" />
               <TextBlock Text="{Binding LockProblem}" FontSize="11" Foreground="DarkOrange" TextTrimming="CharacterEllipsis" IsVisible="{Binding !!LockProblem.Length}" />

@@ -44,4 +44,8 @@
   <data name="InternetStepFailed" xml:space="preserve"><value>a firewall or DNS change failed: {0}</value></data>
   <data name="InternetResolverFailed" xml:space="preserve"><value>the whitelist resolver could not listen on the loopback interface ({0}); another program may be using port 53</value></data>
   <data name="UpdateRefusedPolicy" xml:space="preserve"><value>refused: an internet policy is in force on this PC; lift it, then push the update</value></data>
+  <data name="RefusedNoExamSession" xml:space="preserve"><value>refused: this PC holds no such exam to end</value></data>
+  <data name="ExamClosedProgram" xml:space="preserve"><value>{0} was closed: the exam does not allow it</value></data>
+  <data name="ExamTimeUp" xml:space="preserve"><value>The exam's time is up; the screen is locked until the teacher unlocks it.</value></data>
+  <data name="ExamProgramWouldNotEnd" xml:space="preserve"><value>{0} is not allowed during the exam but would not end ({1})</value></data>
 </root>

@@ -53,13 +53,40 @@ internal sealed class FakeMachine : IMachineState
         return result;
     }
 
-    public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced, Action recordDisplaced) => Answer(nameof(ApplyInternet));
+    /// <summary>The internet session last applied and not lifted since.</summary>
+    public InternetSession? EnforcedInternet { get; private set; }
 
-    public MachineResult LiftInternet(DisplacedSettings displaced) => Answer(nameof(LiftInternet));
+    /// <summary>What <see cref="ExamRuntime()"/> answers.</summary>
+    public ExamRuntime Exam { get; set; } = Policy.ExamRuntime.None;
+
+    public MachineResult ApplyInternet(InternetSession session, DisplacedSettings displaced, Action recordDisplaced)
+    {
+        recordDisplaced();
+        var result = Answer(nameof(ApplyInternet));
+        if (result.Succeeded)
+        {
+            EnforcedInternet = session;
+        }
+
+        return result;
+    }
+
+    public MachineResult LiftInternet(DisplacedSettings displaced)
+    {
+        var result = Answer(nameof(LiftInternet));
+        if (result.Succeeded)
+        {
+            EnforcedInternet = null;
+        }
+
+        return result;
+    }
 
     public MachineResult ApplyExam(ExamSession session) => Answer(nameof(ApplyExam));
 
     public MachineResult LiftExam() => Answer(nameof(LiftExam));
+
+    public ExamRuntime ExamRuntime() => Exam;
 
     private MachineResult Answer(string call)
     {
@@ -682,7 +709,12 @@ public sealed class PolicyJournalTests
         Assert.Equal(2, lifted.Count);
         Assert.Contains(nameof(IMachineState.LiftInternet), rig.Machine.Calls);
         Assert.Contains(nameof(IMachineState.LiftExam), rig.Machine.Calls);
-        Assert.True(rig.Journal.Snapshot().IsEmpty);
+
+        // The timer ran out, so the screen locks with "time is up" (D-75); nothing else is held.
+        var after = rig.Journal.Snapshot();
+        Assert.Null(after.Exam);
+        Assert.Null(after.ExamInternet);
+        Assert.Equal("e" + PolicyJournal.TimeUpSuffix, after.Overlay!.SessionId);
     }
 }
 

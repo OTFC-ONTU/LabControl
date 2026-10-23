@@ -152,6 +152,9 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         {
             await Task.Delay(Defaults.PowerJobDelay);
             _log.LogInformation("{Pc}: {What} now (forced, no warning)", Link.Name, what);
+
+            // An exam's whitelist pauses so Windows can close everything itself (D-75).
+            ExamCoordination.PauseForPowerJob();
             var failure = PowerControl.Shutdown(reboot);
             if (failure is not null)
             {
@@ -186,6 +189,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"Could not log {session.User} off: {failure}" };
         }
 
+        // The log off runs on in Windows: an exam's whitelist pauses while it closes everything (D-75).
+        ExamCoordination.PauseForPowerJob();
         return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = $"Logging {session.User} off (session {session.SessionId}); the session helper follows the new session." };
     }
 

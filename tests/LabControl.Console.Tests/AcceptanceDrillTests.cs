@@ -509,6 +509,10 @@ public sealed class AcceptanceDrillTests
 
         public Task<ViewModels.InternetAnswer?> InternetAsync(ViewModels.InternetDialogModel model) => Task.FromResult<ViewModels.InternetAnswer?>(null);
 
+        public Task<Services.ExamRequest?> ExamAsync(ViewModels.ExamDialogModel model) => Task.FromResult<Services.ExamRequest?>(null);
+
+        public Task<TimeSpan?> ExtendExamAsync(int pcCount) => Task.FromResult<TimeSpan?>(null);
+
         public Task<Shared.Setup.AgentBuild?> PushAgentBuildAsync(int pcCount) => Task.FromResult<Shared.Setup.AgentBuild?>(null);
 
         public void ShowScreen(ViewModels.ScreenViewModel screen)

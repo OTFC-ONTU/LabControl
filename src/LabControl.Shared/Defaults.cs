@@ -205,6 +205,8 @@ public static class Defaults
     public const int ScriptsSchemaVersion = 1;
     /// <summary><c>internet-presets.json</c>, the teacher's named whitelist presets (M6, D-73).</summary>
     public const int InternetPresetsSchemaVersion = 1;
+    /// <summary><c>exam-presets.json</c>, the teacher's named exam presets (M6 portion 4, D-76).</summary>
+    public const int ExamPresetsSchemaVersion = 1;
     /// <summary><c>device-key.json</c>, this computer's way into the lab key when it is remembered here (D-82).</summary>
     public const int DeviceKeySchemaVersion = 1;
     public const int SetupPayloadSchemaVersion = 1;
@@ -235,6 +237,8 @@ public static class Defaults
     public const string ScriptsFileName = "scripts.json";
     /// <summary>The named whitelist presets (M6, D-73): beside <c>lab.json</c>, inside the backup and the lab file.</summary>
     public const string InternetPresetsFileName = "internet-presets.json";
+    /// <summary>The named exam presets (M6 portion 4, D-76): beside <c>lab.json</c>, inside the backup, never in the lab file.</summary>
+    public const string ExamPresetsFileName = "exam-presets.json";
     /// <summary>
     /// This computer's way into the lab key when it is remembered here (D-82): the reference to
     /// a random secret in the OS store. Per computer — never in a backup or a lab file.
@@ -1052,6 +1056,37 @@ public static class Defaults
     /// agent restores the machine on its own, so a closed laptop cannot strand a PC (D-16).
     /// </summary>
     public static readonly TimeSpan ExamHardLimit = TimeSpan.FromHours(4);
+
+    /// <summary>
+    /// The opening sweep's grace (owner decision 2026-10-23, D-75): a program that was already
+    /// open when the exam started is asked to close and ended this long after if it is still
+    /// running. A program started during the exam is ended at once.
+    /// </summary>
+    public static readonly TimeSpan ExamSweepGrace = TimeSpan.FromSeconds(10);
+
+    /// <summary>How often the service looks at the student's session for programs the exam does not allow (D-75).</summary>
+    public static readonly TimeSpan ExamWatchInterval = TimeSpan.FromSeconds(1);
+
+    /// <summary>How long the strip shows "X is not allowed during the exam" after the whitelist closed X.</summary>
+    public static readonly TimeSpan ExamNoticeDuration = TimeSpan.FromSeconds(8);
+
+    /// <summary>How long a closed program stays in <c>ExamState.terminated_recently</c>.</summary>
+    public static readonly TimeSpan ExamTerminatedWindow = TimeSpan.FromMinutes(10);
+
+    /// <summary>At most this many names in <c>ExamState.terminated_recently</c>, most recent first.</summary>
+    public const int ExamTerminatedMax = 20;
+
+    /// <summary>The PC re-sends <c>ExamState</c> at most this often when only the closed programs changed.</summary>
+    public static readonly TimeSpan ExamStateRefreshInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>At most this many allowed programs in one exam; a longer list is cut, not refused.</summary>
+    public const int ExamMaxAllowedPrograms = 200;
+
+    /// <summary>A whitelist pauses this long while a power job (shutdown, reboot, log off) runs, so Windows can close everything itself.</summary>
+    public static readonly TimeSpan ExamPowerJobSuspension = TimeSpan.FromMinutes(2);
+
+    /// <summary>Default timer offered by the exam dialog.</summary>
+    public static readonly TimeSpan ExamDefaultTimer = TimeSpan.FromMinutes(80);
 
     // ---------------------------------------------------------------- internet control
 

@@ -154,6 +154,12 @@ public sealed class ConsoleBootstrap
             store.SaveInternetPresets(presets);
         }
 
+        if (from.Store.LoadExamPresets() is { } examPresets)
+        {
+            examPresets.LabId = lab.LabId;
+            store.SaveExamPresets(examPresets);
+        }
+
         store.WriteCatalog(from.Store.ReadCatalog());
 
         // Remembered here at once: the codes for PCs that come back later are minted with it.
@@ -280,6 +286,12 @@ public sealed class ConsoleBootstrap
             {
                 payload.InternetPresets.LabId = lab.LabId;
                 store.SaveInternetPresets(payload.InternetPresets);
+            }
+
+            if (payload.ExamPresets is not null && store.LoadExamPresets() is null)
+            {
+                payload.ExamPresets.LabId = lab.LabId;
+                store.SaveExamPresets(payload.ExamPresets);
             }
 
             var enrollment = payload.Enrollment ?? new EnrollmentDocument();
@@ -445,6 +457,13 @@ public sealed class ConsoleBootstrap
                 // The whitelist presets move with the lab too (D-73); the seed preset is created only when nothing came.
                 payload.InternetPresets.LabId = lab.LabId;
                 store.SaveInternetPresets(payload.InternetPresets);
+            }
+
+            if (payload.ExamPresets is not null)
+            {
+                // The exam presets move with a backup (D-76), never with a lab file.
+                payload.ExamPresets.LabId = lab.LabId;
+                store.SaveExamPresets(payload.ExamPresets);
             }
 
             if (payload.Enrollment is not null)
@@ -752,7 +771,7 @@ public sealed class ConsoleBootstrap
             return false;
         }
 
-        if (!session.Vault.Use(lab => LabBackup.Serialize(LabBackup.Export(lab, session.Registry.Document, store.ReadCatalog(), session.Instance.InstanceName, now, session.Enrollment.Document, session.Scripts.Document, store.LoadInternetPresets())), out var json))
+        if (!session.Vault.Use(lab => LabBackup.Serialize(LabBackup.Export(lab, session.Registry.Document, store.ReadCatalog(), session.Instance.InstanceName, now, session.Enrollment.Document, session.Scripts.Document, store.LoadInternetPresets(), store.LoadExamPresets())), out var json))
         {
             error = Strings.Get("Bootstrap.KeyLocked");
             return false;

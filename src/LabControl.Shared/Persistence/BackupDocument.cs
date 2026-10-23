@@ -51,4 +51,7 @@ public sealed class BackupPayload
 
     /// <summary><c>internet-presets.json</c>: the named whitelist presets (D-73). Null in backups from before M6.</summary>
     public InternetPresetsDocument? InternetPresets { get; set; }
+
+    /// <summary><c>exam-presets.json</c>: the named exam presets (D-76). Null in backups from before M6 portion 4. Never in a lab file.</summary>
+    public ExamPresetsDocument? ExamPresets { get; set; }
 }

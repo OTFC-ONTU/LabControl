@@ -89,3 +89,13 @@ DNS_INTERFACE_SETTINGS
 DNS_SETTING_IPV6
 DNS_SETTING_NAMESERVER
 DNS_INTERFACE_SETTINGS_VERSION1
+
+// The exam's allowed-programs watch: who runs a process, from where, since when, and ending it (WindowsProcesses, D-75)
+OpenProcess
+QueryFullProcessImageName
+GetProcessTimes
+GetTokenInformation
+TerminateProcess
+PROCESS_ACCESS_RIGHTS
+PROCESS_NAME_FORMAT
+TOKEN_USER

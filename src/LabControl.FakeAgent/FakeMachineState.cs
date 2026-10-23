@@ -1,3 +1,5 @@
+using LabControl.Shared;
+using LabControl.Shared.Exam;
 using LabControl.Shared.Internet;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
@@ -182,8 +184,171 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
         }
     }
 
-    public MachineResult ApplyExam(ExamSession session) =>
-        MachineResult.NotInThisBuild(PolicyEvents.KindName(session));
+    // ------------------------------------------------------------------ exam (portion 4)
 
-    public MachineResult LiftExam() => MachineResult.Done;
+    /// <summary>The simulated student's user and session: whatever runs under them is judged by the whitelist like a real PC's.</summary>
+    private const string StudentSid = "S-1-5-21-1000-1000-1000-1001";
+    private const int StudentSession = 1;
+
+    private ExamSession? _exam;
+    private readonly ProgramWatch _watch = new();
+    private readonly List<ProcessInfo> _processes = [];
+    private readonly List<(string Name, DateTimeOffset At)> _terminated = [];
+    private long _terminatedVersion;
+    private int _nextPid = 4000;
+    private string _notice = string.Empty;
+    private DateTimeOffset _noticeUntil;
+
+    /// <summary>The exam in force, for the status line and the tests (M6 portion 4).</summary>
+    public ExamSession? Exam
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _exam;
+            }
+        }
+    }
+
+    /// <summary>The simulated student's programs, by name, for the tests.</summary>
+    public IReadOnlyList<string> Running
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _processes.Select(p => p.Name).ToList();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The real <see cref="ProgramWatch"/> over a simulated process list: the opening sweep asks
+    /// what is open to close — and simulated programs always comply — and a program the student
+    /// starts afterwards is ended at once, as on a real PC. The strip is drawn onto the desktop.
+    /// </summary>
+    public MachineResult ApplyExam(ExamSession session)
+    {
+        lock (_lock)
+        {
+            _exam = session;
+            if (session.RestrictPrograms)
+            {
+                _watch.Begin(session.AllowedPrograms);
+                WatchLocked(DateTimeOffset.UtcNow);
+            }
+            else
+            {
+                _watch.End();
+            }
+        }
+
+        UpdateStrip();
+        return MachineResult.Done;
+    }
+
+    public MachineResult LiftExam()
+    {
+        lock (_lock)
+        {
+            _exam = null;
+            _watch.End();
+            _notice = string.Empty;
+        }
+
+        _desktop()?.SetExamStrip(null);
+        return MachineResult.Done;
+    }
+
+    public ExamRuntime ExamRuntime()
+    {
+        lock (_lock)
+        {
+            if (_exam is null)
+            {
+                return Shared.Policy.ExamRuntime.None;
+            }
+
+            var since = DateTimeOffset.UtcNow - Defaults.ExamTerminatedWindow;
+            var recent = _terminated.Where(t => t.At >= since).OrderByDescending(t => t.At).Select(t => t.Name).Take(Defaults.ExamTerminatedMax).ToList();
+            return new ExamRuntime(_watch.Active, recent, _terminatedVersion, string.Empty);
+        }
+    }
+
+    /// <summary>
+    /// The simulated student starts <paramref name="program"/>; under a whitelist that does not
+    /// allow it, it is ended at once and noted. Called by the simulator's own timer and the tests.
+    /// </summary>
+    public void Launch(string program)
+    {
+        if (!ProgramNames.TryNormalize(program, out var name))
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            _processes.Add(new ProcessInfo(_nextPid += 4, name, StudentSession, StudentSid, @"C:\Program Files\" + name, _nextPid));
+            WatchLocked(DateTimeOffset.UtcNow);
+        }
+
+        UpdateStrip();
+    }
+
+    /// <summary>The desktop a simulated PC starts with: the shell, a browser and an editor left open from the last lesson.</summary>
+    public void Seed(IEnumerable<string> programs)
+    {
+        lock (_lock)
+        {
+            foreach (var program in programs)
+            {
+                if (ProgramNames.TryNormalize(program, out var name))
+                {
+                    _processes.Add(new ProcessInfo(_nextPid += 4, name, StudentSession, StudentSid, @"C:\Program Files\" + name, _nextPid));
+                }
+            }
+        }
+    }
+
+    /// <summary>What a desktop created after the exam started draws.</summary>
+    public FakeStrip? StripContent()
+    {
+        lock (_lock)
+        {
+            if (_exam is not { } exam)
+            {
+                return null;
+            }
+
+            return new FakeStrip(exam.Message, exam.UntilUnix, _notice, _noticeUntil);
+        }
+    }
+
+    private void UpdateStrip() => _desktop()?.SetExamStrip(StripContent());
+
+    private void WatchLocked(DateTimeOffset now)
+    {
+        var decision = _watch.Observe(_processes, new SessionContext(StudentSession, StudentSid, []), now);
+        foreach (var process in decision.AskToClose.Concat(decision.End))
+        {
+            // Simulated programs close when asked: the grace never runs out here.
+            _processes.RemoveAll(p => p.Key == process.Key);
+            _terminated.Add((process.Name, now));
+            _terminatedVersion++;
+            _notice = OverlayText.NotAllowedText(process.Name);
+            _noticeUntil = now + Defaults.ExamNoticeDuration;
+        }
+
+        _terminated.RemoveAll(t => t.At < now - Defaults.ExamTerminatedWindow);
+    }
+}
+
+/// <summary>The exam strip as a simulated desktop draws it: the countdown is counted at every tick, the notice shown until <paramref name="NoticeUntil"/>.</summary>
+public sealed record FakeStrip(string Message, long UntilUnix, string Notice, DateTimeOffset NoticeUntil)
+{
+    public ExamStripContent At(DateTimeOffset now) => new(
+        Message,
+        UntilUnix > 0 ? Math.Max(0, UntilUnix - now.ToUnixTimeSeconds()) : null,
+        now < NoticeUntil ? Notice : string.Empty);
 }

@@ -102,13 +102,23 @@ internal sealed class ScriptRunner
                 try
                 {
                     started = UserProcessLauncher.Start(inSession, executable, arguments, directory, Output);
+
+                    // The teacher's own script: never closed by an exam's whitelist (D-75). What it starts is judged by name.
+                    ExamCoordination.NoteAgentProcess(started.Process.Id);
                 }
                 catch (Win32Exception ex)
                 {
                     return Fail(job, $"Could not start the script in session {inSession} as the logged-on user: {ex.Message}");
                 }
 
-                outcome = await ProcessRunner.SuperviseAsync(started.Process, started.Stdout, started.Stderr, request.Timeout, Line, token);
+                try
+                {
+                    outcome = await ProcessRunner.SuperviseAsync(started.Process, started.Stdout, started.Stderr, request.Timeout, Line, token);
+                }
+                finally
+                {
+                    ExamCoordination.ForgetAgentProcess(started.Process.Id);
+                }
             }
             else
             {

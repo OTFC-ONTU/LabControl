@@ -434,6 +434,11 @@ installation on any student PC.</p>
 <td>inside the backup and the lab file, like the script library (<code>D-73</code>); one example preset on a first run</td>
 </tr>
 <tr>
+<td>Exam presets (<code>exam-presets.json</code>)</td>
+<td>that machine only</td>
+<td>inside the backup, <strong>never</strong> in the lab file (<code>D-76</code>); one example preset on a first run</td>
+</tr>
+<tr>
 <td>Logs, job results</td>
 <td>that machine only</td>
 <td>never</td>
@@ -683,6 +688,8 @@ scripts.json      the script library (D-31, D-38): name, description, shell, run
                   scripts/library/ on the first run, inside the backup
 internet-presets.json  named whitelists (M6 portion 3, D-73): name and host patterns;
                   one example on the first run, inside the backup and the lab file
+exam-presets.json named exam switch combinations (M6 portion 4, D-76); one example on
+                  the first run, inside the backup, never in the lab file
 packages/         package catalog: &lt;name&gt;.yaml + cached installer binaries
 logs/             per-day console log + per-command result bundles
 </code></pre>
@@ -887,15 +894,15 @@ limitation. Source files must remain unchanged and available until all jobs comp
 </tr>
 <tr>
 <td>Exam mode</td>
-<td>A composable set of independent switches, not a single mode (see §6.1).</td>
+<td><strong>Built (M6 portion 4), not yet run on Windows.</strong> A composable set of independent switches, not a single mode (see §6.1), held in <code>policy.json</code> like a lock (<code>D-69</code>): the console sends <code>ExamMode</code>, the ownership gate judges it, the journal stamps the durations on the PC's clock, clamps the hard limit to 4 h, restores first and re-applies second at every service start, and ends it by itself (<code>D-75</code>).</td>
 </tr>
 <tr>
 <td>— timer</td>
-<td>Countdown rendered by the helper; the deadline is absolute (console clock, skew-corrected at <code>Hello</code>) so it keeps running if the link drops, and the mode ends by itself.</td>
+<td>The strip at the top centre of the student's screen (<code>ExamStripWindow</code> in the helper, click-through, never activated, hidden under a lock or a broadcast) counts down to <code>until</code> on the PC's own clock, so it keeps running if the link drops. When the timer runs out the PC ends the exam and <strong>locks the screen with &quot;Time is up&quot;</strong> until a console unlocks it (owner decision 2026-10-23); the hard limit only restores.</td>
 </tr>
 <tr>
 <td>— app whitelist</td>
-<td>Helper subscribes to process-start events (WMI <code>Win32_ProcessStartTrace</code>, polling fallback) and terminates anything outside the allowed list. Matching is by <strong>executable path/name only</strong> — a process started by an allowed program is judged on its own name, not on its parent (owner's choice: the simpler rule). Hard-coded never-touch set: session, shell and OS processes, and LabControl itself.</td>
+<td><strong>The service</strong>, not the helper (which restarts at logon/logoff), looks at the active console session every second (<code>D-75</code>): a process is closed only when it runs under the signed-in user's own token, is not LabControl's, is not in the hard-coded never-touch set (the shell and the Windows processes under the user's token, <code>conhost</code> and <code>svchost</code> among them) and is not on the list. Matching is by <strong>executable name only</strong> — a process started by an allowed program is judged on its own name, and a renamed executable passes (owner's choice: the simpler rule). The first look asks open programs to close (<code>WM_CLOSE</code> through the helper) and ends them 10 s later; a program started during the exam is ended at once and the strip says so. The teacher's own scripts are never judged; power jobs pause the watch.</td>
 </tr>
 <tr>
 <td>Internet control</td>
@@ -939,12 +946,12 @@ combination as a named preset (<em>Written test</em>, <em>Practical with the IDE
 <tr>
 <td>Timer</td>
 <td>mode ends when the teacher ends it</td>
-<td>absolute deadline, countdown on the student screen, auto-end</td>
+<td>countdown on the student screen, auto-end on the PC's own clock, then the screen locks with &quot;Time is up&quot; until the teacher unlocks it</td>
 </tr>
 <tr>
 <td>Allowed programs</td>
 <td>anything runs</td>
-<td>only the listed executables; others are closed as they start (matched by name, not by which program launched them)</td>
+<td>only the listed executables; what is open at the start is asked to close and closed 10 s later, what starts later is closed at once (matched by name, not by which program launched them)</td>
 </tr>
 <tr>
 <td>Internet</td>
@@ -960,7 +967,8 @@ combination as a named preset (<em>Written test</em>, <em>Practical with the IDE
 </table></div>
 <p>Every switch is independently reversible, and the whole mode has a hard maximum
 duration after which the agent restores the machine on its own — a lesson must never
-end with a PC left restricted because the teacher's laptop was closed.</p>
+end with a PC left restricted because the teacher's laptop was closed. An exam started for
+the whole lab reaches a PC that is switched on later, with the time that is left (<code>D-76</code>).</p>
 <h3 id="internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked<a class="anchor" href="#internet-control-open-whitelist-blocked" aria-label="Link to this section">#</a></h3>
 <p>The owner wants the internet controllable during ordinary lessons, not only in exams:
 &quot;no internet for this lab&quot;, or &quot;only the JetBrains site and the Oracle docs&quot;. So the
@@ -1219,7 +1227,7 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-10-22 20:22 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-23 09:37 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#separate-identities">3.1 Separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl3"><a href="#saved-labs-and-one-active-room-m5-d-53.d-60-designed-being-implemented">3.9 Saved labs and one active room (M5, D-53…D-60 — designed, being implemented)</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>

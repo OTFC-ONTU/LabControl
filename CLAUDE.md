@@ -220,7 +220,7 @@ update first; (3) the VM drill on an owned-installation clone and the physical l
 network, kept its agent id and number and enrolled into the new lab on its own (ROADMAP *Lab key
 recovery*). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.
 
-**M6 portion 1 verified, portion 2 built and partly VM-verified; portions 3–6 remain:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
+**M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portion 4 built; portions 5–6 remain:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, *Settled before implementation*; M6 reserves `D-69`…`D-79`.
@@ -376,7 +376,7 @@ Remaining for portion 2: physical mouse refusal, the readability check and the l
 
 **M6 portion 3 is built (2026-10-17, `D-73`, `D-74`) and passed its VM drill on Windows 11 ARM64
 (2026-10-20)** after two fixes found there (no loopback firewall rule — Windows refuses one; the
-resolver state read after a change); physical lab pending.
+resolver state read after a change); the 14-PC physical-lab drill passed on 2026-10-20.
 Owner decisions of 2026-10-17: nothing on the student's screen, one example preset (*Java
 docs*), the refused names listed in the *Internet* dialog with an *Allow* that acts at once,
 other programs' outbound allow rules switched off for the policy. `InternetPolicy` carries
@@ -396,6 +396,27 @@ held. Console: *Internet…* / *Internet for all…*, `InternetDialog`, `Interne
 (`internet-presets.json`, in the backup and the lab file), the tile badge from `InternetState`
 alone. Tests: 930 Shared + 262 Console (13 skipping); review fixes in `D-73` item 11, `D-74` item 9. Next: the physical lab (ROADMAP M6),
 then portion 4.
+
+**M6 portion 4 is built (2026-10-23, `D-75`, `D-76`), review-fixed, not yet run on Windows.**
+Owner decisions of 2026-10-23: the timer's end locks the screen with "Time is up" until the teacher
+unlocks it (an ordinary lock, session id = exam id + `:time-up`; the hard limit only restores);
+programs open at the start are asked to close (`WM_CLOSE` through the helper) and ended after
+`Defaults.ExamSweepGrace` (10 s), programs started later are ended at once with a notice; a strip at
+the top centre (`ExamStripController` + `ExamStripWindow` in the helper, click-through, hidden under
+a lock or a broadcast, holds the monitor on) shows the countdown and the message, nothing when there
+is neither; a PC that links later joins an exam *for all* (the console remembers it in memory only).
+`ExamMode` carries durations (`until_seconds`, `hard_limit_seconds`), `restrict_programs`,
+`preset_name`; `ExamState` the PC's stamps, `remaining_seconds`, `problem`, `reason` (`ExamReasons`);
+the pipe gained `ExamStrip` and `ClosePrograms`. The journal's `SetExam`/`ExamStateOf`/`ReassertExam`
+apply the internet switch first (its own `ExamInternet` session with the exam's limits, handing a
+standalone policy back) and the exam last. The whitelist runs in the **service**
+(`WindowsExamControl`, `WindowsProcesses`) over the pure `Shared/Exam/` (`ProgramNames`,
+`ProgramWhitelist` — session and token before name, never-touch names honoured only under
+`%SystemRoot%`/`WindowsApps`/Edge WebView — and `ProgramWatch`); the teacher's own scripts are exempt
+and power jobs pause it (`ExamCoordination`). Console: *Exam…*/*Exam for all…*, `ExamDialog`,
+*Extend exam…*, *End exam*, the *EXAM* badge from `ExamState` alone, `ExamPresetLibrary`
+(`exam-presets.json`, in the backup, never in the lab file). Tests: 970 Shared + 286 Console
+(13 skipping). Next: the VM drill (ROADMAP M6, portion 4), then portion 5.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

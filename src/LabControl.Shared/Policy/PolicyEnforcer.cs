@@ -35,6 +35,9 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     private readonly Lock _lock = new();
     private readonly Action<Overlay, string> _onOverlay;
     private readonly Action<InternetPolicy, string> _onInternet;
+    private readonly Action<ExamMode, string> _onExam;
+    private readonly Timer _examTimer;
+    private long _publishedTerminatedVersion = -1;
     private readonly IMachineState _machine;
     private readonly Timer _refusedTimer;
     private long _publishedRefusedVersion = -1;
@@ -80,6 +83,8 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         _timer = new Timer(_ => Tick(), null, Timeout.Infinite, Timeout.Infinite);
         _onOverlay = OnOverlay;
         _onInternet = OnInternet;
+        _onExam = OnExam;
+        _examTimer = new Timer(_ => RefreshExam(), null, Timeout.Infinite, Timeout.Infinite);
         _refusedTimer = new Timer(_ => RefreshRefused(), null, Timeout.Infinite, Timeout.Infinite);
         Broadcast = new BroadcastReceiver(link, machine, log, _clock, broadcastCeiling, broadcastStallTimeout);
         Broadcast.Changed += () => Safe("broadcast", () => Publish(Journal.OverlayStateOf(_clock().ToUnixTimeSeconds())));
@@ -139,8 +144,10 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         // would leave the console waiting on every Overlay.
         Safe("start", () => _link.OverlayReceived += _onOverlay);
         Safe("start", () => _link.InternetPolicyReceived += _onInternet);
+        Safe("start", () => _link.ExamModeReceived += _onExam);
         Safe("start", () => Publish(Journal.OverlayStateOf(_clock().ToUnixTimeSeconds())));
         Safe("start", PublishInternet);
+        Safe("start", PublishExam);
         Rearm();
         return outcome;
     }
@@ -154,6 +161,15 @@ public sealed class PolicyEnforcer : IAsyncDisposable
     {
         Safe("reassert", () => Guarded("reassert", () => Publish(Journal.ReassertOverlay(_clock().ToUnixTimeSeconds()))));
         Safe("reassert", Broadcast.Reassert);
+
+        // The exam strip lives in the same helper (D-75): a new helper shows it again.
+        Safe("reassert", () => Guarded("reassert", () =>
+        {
+            if (Journal.ReassertExam(_clock().ToUnixTimeSeconds()))
+            {
+                PublishExam();
+            }
+        }));
     }
 
     /// <summary>
@@ -217,6 +233,16 @@ public sealed class PolicyEnforcer : IAsyncDisposable
 
         Safe("stop", () => _link.OverlayReceived -= _onOverlay);
         Safe("stop", () => _link.InternetPolicyReceived -= _onInternet);
+        Safe("stop", () => _link.ExamModeReceived -= _onExam);
+        try
+        {
+            await _examTimer.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "disposing the exam timer failed: {Message}", ex.Message);
+        }
+
         try
         {
             await _refusedTimer.DisposeAsync();
@@ -365,6 +391,144 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         });
     }
 
+    /// <summary>From the link's read thread: handed to a worker at once, never waited for.</summary>
+    private void OnExam(ExamMode exam, string instanceId) => _ = Task.Run(() => ApplyExam(exam, instanceId));
+
+    /// <summary>
+    /// An <c>ExamMode</c> already past the ownership gate (D-75), applied under the mutex and
+    /// answered with the exam, the internet policy and the screen the PC has afterwards — an
+    /// exam's internet switch changes the second, an ended one may free the third. Synchronous,
+    /// like <see cref="Apply"/>; never throws, and a busy or failed pass answers with a <c>problem</c>.
+    /// </summary>
+    public void ApplyExam(ExamMode exam, string setByInstance)
+    {
+        Safe("exam", () =>
+        {
+            if (exam is null || setByInstance is null)
+            {
+                _log.LogWarning("an exam with no {What} was handed to the enforcer; ignored", exam is null ? "message" : "instance");
+                return;
+            }
+
+            var outcome = Guarded("exam", () =>
+            {
+                var state = Journal.SetExam(exam, setByInstance, _clock().ToUnixTimeSeconds());
+                PublishExam(state);
+                PublishInternet();
+            });
+
+            if (outcome != PassOutcome.Ran)
+            {
+                // The PC's truth with the problem set, never "no exam" for a PC in one.
+                var answer = _link.LatestExamState?.Clone() ?? new ExamState();
+                answer.Problem = outcome == PassOutcome.Busy
+                    ? PolicyEvents.Text("Busy", (long)_mutexWait.TotalSeconds)
+                    : PolicyEvents.Text("EnforcerFailed", "exam", _lastFailure);
+                AnswerExam(answer);
+            }
+
+            Rearm();
+        });
+    }
+
+    private void PublishExam() => PublishExam(Journal.ExamStateOf(_clock().ToUnixTimeSeconds()));
+
+    /// <summary>
+    /// Hands the exam state to the link — remembered as the latest unless it only answers a
+    /// problem, which then goes out on its own like a refusal — and keeps the closed-programs
+    /// refresh running while an exam is held.
+    /// </summary>
+    private void PublishExam(ExamState state)
+    {
+        try
+        {
+            if (state.Problem.Length > 0)
+            {
+                _link.AnswerExamProblem(state);
+                state = Journal.ExamStateOf(_clock().ToUnixTimeSeconds());
+            }
+
+            _link.PublishExamState(state);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "could not publish the exam state: {Message}", ex.Message);
+        }
+
+        lock (_lock)
+        {
+            if (_stopped)
+            {
+                return;
+            }
+
+            try
+            {
+                _publishedTerminatedVersion = ExamRuntimeOf().TerminatedVersion;
+                var interval = state.Active ? Defaults.ExamStateRefreshInterval : Timeout.InfiniteTimeSpan;
+                _examTimer.Change(interval, interval);
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+    }
+
+    private void AnswerExam(ExamState problem)
+    {
+        try
+        {
+            _link.AnswerExamProblem(problem);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "could not answer the exam: {Message}", ex.Message);
+        }
+    }
+
+    private ExamRuntime ExamRuntimeOf()
+    {
+        try
+        {
+            return _machine.ExamRuntime() ?? Policy.ExamRuntime.None;
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "reading the exam runtime failed: {Message}", ex.Message);
+            return Policy.ExamRuntime.None;
+        }
+    }
+
+    /// <summary>
+    /// Every <see cref="Defaults.ExamStateRefreshInterval"/> while an exam is held: re-sends the
+    /// state when the whitelist closed something new or its reasons changed, so the teacher sees
+    /// what was closed without one message per program.
+    /// </summary>
+    private void RefreshExam()
+    {
+        Safe("exam-refresh", () =>
+        {
+            long published;
+            lock (_lock)
+            {
+                if (_stopped)
+                {
+                    return;
+                }
+
+                published = _publishedTerminatedVersion;
+            }
+
+            var current = Journal.ExamStateOf(_clock().ToUnixTimeSeconds());
+            var last = _link.LatestExamState;
+            if (ExamRuntimeOf().TerminatedVersion != published || last is null || last.Active != current.Active
+                || !string.Equals(last.Reason, current.Reason, StringComparison.Ordinal) || last.WhitelistEnforced != current.WhitelistEnforced)
+            {
+                PublishExam(current);
+            }
+        });
+    }
+
     /// <summary>The machine's live side; <see cref="Policy.InternetRuntime.None"/> if it throws.</summary>
     private InternetRuntime Runtime()
     {
@@ -481,9 +645,14 @@ public sealed class PolicyEnforcer : IAsyncDisposable
                 if (sessions.Count > 0)
                 {
                     Publish(Journal.OverlayStateOf(now));
-                    if (sessions.Any(s => s is InternetSession))
+                    if (sessions.Any(s => s is InternetSession or ExamSession))
                     {
                         PublishInternet();
+                    }
+
+                    if (sessions.Any(s => s is ExamSession))
+                    {
+                        PublishExam();
                     }
                 }
             });

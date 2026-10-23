@@ -301,6 +301,9 @@ internal sealed class OverlayController : IDisposable
         Report();
     }
 
+    /// <summary>A lock or a broadcast is on the screen (or wanted there): the exam strip waits underneath. Lock-free, like <see cref="State"/>.</summary>
+    public bool CoversScreen => _current is not null || _broadcast is not null;
+
     /// <summary>The state as it stands, for the status loop and every Ping — a snapshot of volatile fields, no lock, never waits.</summary>
     public OverlayState State()
     {

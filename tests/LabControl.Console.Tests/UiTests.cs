@@ -307,6 +307,42 @@ public sealed class UiTests
                 agents[7].Link.PublishInternetState(new InternetState { Mode = InternetPolicy.Types.Mode.Open });
                 Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[7].AgentId)?.InternetMode == InternetPolicy.Types.Mode.Open));
 
+                // The Exam dialog (M6 portion 4): the example preset, the sweep warning, the rename hole, time up, the 4 h ceiling.
+                Assert.False(vm.ExamCommand.CanExecute(null));
+                Assert.False(vm.AnyInExam);
+                var examDialog = new ExamDialog(new ExamDialogModel(console.Session, 8, wholeLab: true));
+                examDialog.Show();
+                await Render(examDialog, "exam");
+                var examText = string.Join("\n", examDialog.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+                Assert.Contains($"{(int)Defaults.ExamHardLimit.TotalHours} hours", examText, StringComparison.Ordinal);
+                Assert.Contains($"closed after {(int)Defaults.ExamSweepGrace.TotalSeconds} seconds", examText, StringComparison.Ordinal);
+                Assert.Contains("a renamed program passes", examText, StringComparison.Ordinal);
+                Assert.Contains("Time is up", examText, StringComparison.Ordinal);
+                Assert.Contains("idea64.exe", examDialog.GetVisualDescendants().OfType<TextBox>().First(t => t.AcceptsReturn).Text, StringComparison.Ordinal);
+                examDialog.Close();
+
+                // The exam badge follows ExamState: PC-07 in a timed exam with closed programs, PC-08 in one without a timer set elsewhere.
+                var timed = new ExamState { Active = true, SessionId = "e7", SetByInstance = console.Session.Instance.InstanceId, PresetName = "Practical", UntilUnix = 1, RemainingSeconds = 2537, RestrictPrograms = true, WhitelistEnforced = true };
+                timed.AllowedPrograms.Add("idea64.exe");
+                timed.TerminatedRecently.Add("chrome.exe");
+                agents[6].Link.PublishExamState(timed);
+                agents[7].Link.PublishExamState(new ExamState { Active = true, SessionId = "e8", SetByInstance = "other-console", Reason = ExamReasons.NoUser });
+                Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[6].AgentId)?.InExam == true && console.Session.FindLinked(agents[7].AgentId)?.InExam == true));
+                await Render(window, "main-lab-exam");
+                Assert.True(vm.AnyInExam);
+                var exam7 = vm.Machines.Single(m => m.Number == 7);
+                Assert.StartsWith("EXAM 42:1", exam7.ExamBadge, StringComparison.Ordinal);
+                Assert.Contains("chrome.exe", exam7.ExamText, StringComparison.Ordinal);
+                Assert.Equal("EXAM", vm.Machines.Single(m => m.Number == 8).ExamBadge);
+                Assert.Contains("nobody is signed in", vm.Machines.Single(m => m.Number == 8).ExamProblem, StringComparison.Ordinal);
+                var extendDialog = new ExtendExamDialog(2);
+                extendDialog.Show();
+                await Render(extendDialog, "exam-extend");
+                extendDialog.Close();
+                agents[6].Link.PublishExamState(new ExamState());
+                agents[7].Link.PublishExamState(new ExamState());
+                Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agents[7].AgentId)?.InExam == false && console.Session.FindLinked(agents[6].AgentId)?.InExam == false));
+
 
                 Assert.Equal(7, vm.Machines.Count(m => m.HasPicture));
                 Assert.False(vm.Machines.Single(m => m.Number == 3).HasPicture);

@@ -4028,6 +4028,166 @@ across silent and failing servers, a spoofed id ignored, reverse zones, several 
 TCP connection, live whitelist and upstream changes, a taken port). Windows (`SetInterfaceDnsSettings`,
 the real DNS client, browsers with DoH) is the VM drill.
 
+## D-75 — The allowed-programs switch runs in the service, judges session and token before name, and sweeps politely once; the strip is the helper's; a timer that runs out locks the screen (M6 portion 4)
+
+Context (2026-10-23): ROADMAP M6 settled the whitelist in the **service** (the helper restarts
+at logon and logoff, `D-30`, so it cannot be what keeps a program closed), judging session and
+token before name, with an opening sweep (owner decision 2026-09-09 item 2) and a pause for power
+jobs. Three product questions were still open and the owner answered them on 2026-10-23: when
+the timer runs out the exam ends **and the screen locks** with "Time is up" until the teacher
+unlocks it; programs open when the exam starts are **asked to close and ended 10 s later**, while
+a program started during the exam is **ended at once** with a line on the student's screen; the
+student sees a **narrow strip at the top centre** with the countdown and the teacher's message —
+nothing at all when the exam has neither (a passing notice still shows); and a PC that links
+after an exam for the whole lab started **joins it by itself** (the console's half, `D-76`).
+
+Decisions:
+
+1. **Durations on the wire.** `ExamMode` carries `until_seconds` (the timer; 0 = none) and
+   `hard_limit_seconds` like `Overlay` and `InternetPolicy` (`D-70` item 6); the absolute
+   `ends_at_unix`/`hard_limit_unix` it was drafted with were never sent by any build and are
+   `reserved`. The agent clamps the hard limit to `Defaults.ExamHardLimit` (4 h) on its own clock.
+   New fields: `restrict_programs` (the switch — an empty list with the switch on is a valid
+   "nothing but the shell"), `preset_name`. `ExamState` gains the PC's stamps,
+   `remaining_seconds`, `set_by_instance`, `message`, the enforced list, `problem` and `reason`
+   codes (`ExamReasons`); `ends_at_unix` is `reserved`. `ExamMode` passes the same ownership gate
+   as `Overlay` and `InternetPolicy` and is re-sent after `Welcome` like them.
+2. **The journal** (`PolicyJournal.SetExam`, `ExamStateOf`, `ReassertExam`): `active` starts or
+   re-states (the same session keeps its start; a re-state is how the console extends), `active`
+   false ends — with the session id, or whatever exam is held when it is empty; an end for another
+   exam is refused. The internet switch is its own `ExamInternet` session (id = exam id +
+   `:internet`) with the exam's limits; an exam whose internet switch cannot be applied is not
+   applied at all and the standalone policy, if any, comes back (`D-74`'s rule for a policy that
+   cannot be lifted, from the other side). Ending or replacing an exam hands the standalone policy
+   back without opening the machine in between (`D-22`).
+3. **Time is up.** When the exam ends at its **timer** (not at the hard limit, which only ever
+   restores, and not when a console ends it early) the journal applies an ordinary lock —
+   `Defaults.LockHardLimit`, until the teacher unlocks, session id = exam id + `:time-up`,
+   `set_by_instance` = the exam's — with `OverlayText.TimeUpMessage`, and reports
+   `exam.time_up`. A lock already held stays as it is. A PC that is off when the time runs out
+   does not lock on its next start: the exam is simply over.
+4. **Judging** (`Shared/Exam/ProgramWhitelist`, pure): a process is closed only when it runs in
+   the active console session, under the token of the user signed in there (an administrator who
+   elevated, SYSTEM, `DWM-1`, `UMFD-0` are never judged), is not under LabControl's own
+   directories, is not in the hard-coded never-touch set (the shell and the Windows processes that
+   run under the student's own token: `explorer`, `sihost`, `taskhostw`, `ctfmon`,
+   `RuntimeBroker`, the shell and search hosts, `dllhost`, **`conhost`** (and Windows 11's `WindowsTerminal` / `OpenConsole`, which host the console instead) — every allowed console
+   program needs it — **`svchost`** — per-user services — `msedgewebview2`, `TextInputHost`,
+   `smartscreen`, `consent`, `WerFault` and the rest in the code), and is not on the teacher's
+   list. Names are matched case-insensitively as file names with `.exe` (`ProgramNames`); no
+   process tree. A process whose token cannot be read is never judged — fail open for one
+   process, never a guess.
+5. **The watch** (`Shared/Exam/ProgramWatch`, pure; `ROADMAP` planned WMI process-start events
+   via `System.Management`, rejected below): every `Defaults.ExamWatchInterval` (1 s) the service
+   takes a snapshot of the session's processes (`WindowsProcesses`: `Process.GetProcesses`, then
+   per new process `OpenProcess(QUERY_LIMITED)` → creation time, image path, token user; cached
+   by process id). The first look after an exam starts, the service restarts under one, the list
+   changes or a pause ends is the **sweep**: what it would close is asked to close — the helper
+   posts `WM_CLOSE` to the process's visible unowned top-level windows (`ClosePrograms` down the
+   pipe; the service cannot reach session 1's windows) — and ended after `Defaults.ExamSweepGrace`
+   (10 s) if still running. Every later look ends a process it has not seen before **at once**
+   (`TerminateProcess`, after checking the creation time so a reused id is never ended), notes
+   it in `terminated_recently` and sends the strip a notice. A process that will not end is
+   decided again every second and reported as `exam.end_refused`. Re-stating the same list
+   sweeps nothing.
+6. **What is never judged besides**: processes the agent itself started in the session for the
+   teacher (`run_script` as the student; `ExamCoordination.NoteAgentProcess`) — what *they*
+   start is judged by name; and everything while a **power job** runs: shutdown, reboot and log
+   off pause the watch for `Defaults.ExamPowerJobSuspension` (2 min, `exam.whitelist_suspended`)
+   so Windows can close everything itself; the look after the pause is a sweep.
+7. **The strip** (`ServiceMessage.exam_strip`, `ExamStripController` + `ExamStripWindow` in the
+   helper): a raw Win32 window built like the lock's (`D-70` item 7) — layered, click-through,
+   never activated, topmost re-asserted every second, on a thread that joined the input desktop
+   — at the top centre of the primary monitor, a third of its width, one line high, painted from
+   `OverlayText.ComposeStrip`. A separate class, because `OverlayWindow`'s window procedure
+   finds its one window in a static. It is hidden while a lock or a broadcast shows, off the
+   `Default` desktop (logon screen, UAC) and when there is nothing to show; while it shows it
+   holds the monitor on with `D-84`'s `DisplayKeeper`, so a student thinking over a question for
+   twenty minutes does not lose the countdown to the display timeout. The service re-sends
+   it to every new helper through the journal's re-assert, and reports `exam.strip_not_shown`
+   while no helper takes it.
+8. **The simulator** runs the real `ProgramWatch` over a simulated process list (explorer,
+   chrome and notepad left open; a "student" launching chrome, telegram, notepad, IDEA or calc
+   now and then) and draws the strip onto the simulated desktop, so the console's badge, its list
+   of closed programs and the strip can be developed on a Mac.
+
+Accepted limits, stated in the console: a **renamed executable passes** (name only); a program
+that lives less than a second can run; a portable program the student brings on a stick is
+judged like any other (by name); the list cannot say "this IDE but not its terminal".
+
+Rejected: the whitelist in the helper (it restarts at logon/logoff, `D-30`); WMI
+`Win32_ProcessStartTrace` / `__InstanceCreationEvent` (needs the WMI service, arrives with the
+same second's delay as a poll, is lost when WMI restarts, and a snapshot taken by the service
+itself sees every process that lives longer than a look; no new dependency for the agent);
+Software Restriction Policies / AppLocker (machine-wide, not every edition has AppLocker, and an
+unrestore after a crash is exactly what `D-69` exists to avoid); following the process tree (an
+IDE's children are many and change; by-name is what the teacher can reason about); killing the
+sweep's programs at once (owner decision: open work gets a chance to save).
+
+Reviewed the same day (an adversarial read of the agent half, eleven findings, all fixed
+before any VM run): the process cache reused a dead process's entry for a new one with the
+same id and name, so a program escaped and was reported closed — a cached entry is now reused
+only while its creation time reads the same, and `WindowsProcesses.End` tells *ended* from
+*gone* and *not the same process*, only the first counted; the exam was applied before its
+internet switch, so a refused exam had already asked programs to close — the internet switch
+now goes first and a re-state whose internet fails keeps the running exam; a never-touch name
+counts only under `%SystemRoot%`, `WindowsApps` or Edge WebView (a game copied to the desktop
+as `conhost.exe` is judged); the teacher's script is forgotten as exempt when it exits; a look
+that sees nobody signed in keeps the sweep and the graces for the next; refusals carry the PC's
+latest `ExamState` with `problem` set instead of "no exam"; the power-job pause starts only on
+the success path; each end is re-checked against the exam under the lock and looks never
+overlap; the time-up lock is skipped when the clock notices the end more than two minutes late
+(`PolicyJournal.TimeUpLateness`); the strip window's event is disposed only after its thread
+exits and a failed strip is retried every 30 s; and `RestoreDefaults` stops the watch, so an
+`OnStop` restore cannot leave it closing programs.
+
+Validation (2026-10-23, on the Mac): `ExamPolicyTests` (each switch alone, clamp, re-state,
+refused end, time-up lock, hard limit without a lock, a teacher's lock kept, the standalone
+policy surviving an exam inside it, an exam with an unappliable internet switch not applied, a
+restart inside the exam, the live side folded in, the helper re-assert) and `ProgramWatchTests`
+(names, session and token before name, the never-touch set, the sweep's grace, at-once ending,
+a stubborn process, exempt processes, the power-job pause, re-stated lists, a reused id). The
+Windows half (the process snapshot, `TerminateProcess`, `WM_CLOSE`, the strip window) is the VM
+drill.
+
+## D-76 — Exam presets, and the exam's internet switch handing back to a standalone policy (M6 portion 4)
+
+Context (2026-10-23): `ARCHITECTURE` §6.1 saves exam switch combinations as named presets, and
+`D-22` says an exam's internet policy wins over a standalone one and hands it back. Both are
+decided here, with the console's half of "a late PC joins" (owner decision 2026-10-23).
+
+Decisions:
+
+1. **Presets** live in `exam-presets.json` (`Defaults.ExamPresetsFileName`, schema
+   `Defaults.ExamPresetsSchemaVersion`) beside `lab.json`, are carried in the **backup**
+   (`BackupPayload`, `LabBackup.UpgradeNested`) and are **excluded from the lab file** (`.lclab`):
+   a lab file gives a teacher device the room, not another teacher's exam papers. A preset is a
+   name, the message, the timer in minutes (0 = none), the allowed-programs switch and its list,
+   and the internet switch (untouched / blocked / whitelist) with the internet preset's name and a
+   copy of its hosts taken when the preset was saved. A new console starts with one example,
+   *Practical (IntelliJ IDEA)*: 80 minutes; `idea64.exe`, `fsnotifier.exe`, `jcef_helper.exe`,
+   `java.exe`, `javaw.exe`, `cmd.exe`; the *Java docs* whitelist.
+2. **The exam's internet limit** is `min(ExamHardLimit, exam's own)`: the `ExamInternet`
+   session carries the exam's `until` and hard limit, so it can never outlive the exam, and a
+   restart re-clamps it against what is left of the exam. Its own `until_seconds` and
+   `hard_limit_seconds` inside `ExamMode.internet` are ignored.
+3. **Hand-back**: while the exam's policy is in force a standalone policy set before it — or
+   during it — is kept and reported (`internet.exam_wins`); when the exam ends (timer, hard
+   limit, a console, a replacement exam, a re-state without the internet switch) the standalone
+   policy is applied in place of the exam's without opening the machine in between, if it is
+   still within its own limits; otherwise the machine is opened.
+4. **A late PC joins** (owner decision 2026-10-23): an exam started for the whole lab is
+   remembered by the console that started it — session id, settings, the deadline and hard limit
+   on the console's clock — and every PC of the lab that links before the end without showing that
+   session gets the `ExamMode` with the **remaining** durations. In memory only: a console that
+   restarts no longer adds late PCs (the PCs already in the exam keep it on their own), and the
+   memory is cleared when the lab is left.
+
+Rejected: presets in the lab file (above); presets that only reference an internet preset by
+name (a renamed or deleted internet preset would silently change an exam); persisting the lab-wide
+exam in the console (a restarted console would send an exam nobody is watching to PCs that come
+online later — the room may have moved on).
+
 ## D-80 — Public repository: MIT, a README that is a project page, links that work in the mirror
 
 Context (2026-10-09): the repository is being prepared to become public. The README had

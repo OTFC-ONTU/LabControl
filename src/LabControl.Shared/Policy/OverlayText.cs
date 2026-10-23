@@ -11,6 +11,13 @@ namespace LabControl.Shared.Policy;
 /// <param name="RemainingSeconds">Seconds until the lock lifts, or <c>null</c> for "until lifted".</param>
 public sealed record OverlayContent(string Message, string PcName, long? RemainingSeconds);
 
+/// <summary>What the exam strip shows (M6 portion 4, D-75): the teacher's line, the countdown when there is a timer, and a passing notice.</summary>
+public sealed record ExamStripContent(string Message, long? RemainingSeconds, string Notice)
+{
+    /// <summary>Nothing to show: no timer, no message, no notice — the strip is hidden (owner decision 2026-10-23).</summary>
+    public bool IsEmpty => RemainingSeconds is null && Message.Length == 0 && Notice.Length == 0;
+}
+
 /// <summary>
 /// A composed overlay picture: BGRA, premultiplied, top-down, tightly packed — what one
 /// <c>StretchDIBits</c> in the helper paints, and what a simulator can show as its screen.
@@ -188,6 +195,108 @@ public static class OverlayText
             bitmap.Dispose();
             throw;
         }
+    }
+
+    // ------------------------------------------------------------------ the exam strip (portion 4)
+
+    /// <summary>The lock's message when an exam's timer runs out (owner decision 2026-10-23, D-75).</summary>
+    public static string TimeUpMessage => Text("ExamTimeUpMessage");
+
+    /// <summary>The strip's passing line after the whitelist closed <paramref name="program"/>.</summary>
+    public static string NotAllowedText(string program) => Text("ExamNotAllowedFormat", program);
+
+    /// <summary>The strip's countdown: <c>42:17 left</c>, or empty when the exam has no timer.</summary>
+    public static string StripRemainingText(long? remainingSeconds)
+    {
+        if (remainingSeconds is null)
+        {
+            return string.Empty;
+        }
+
+        var seconds = Math.Clamp(remainingSeconds.Value, 0, (long)TimeSpan.MaxValue.TotalSeconds - 1);
+        var remaining = TimeSpan.FromSeconds(seconds);
+        var clock = remaining.TotalHours >= 1
+            ? string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}", (long)remaining.TotalHours, remaining.Minutes, remaining.Seconds)
+            : string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}", remaining.Minutes, remaining.Seconds);
+        return Text("ExamRemainingFormat", clock);
+    }
+
+    /// <summary>
+    /// The strip's size on a screen of <paramref name="screenWidth"/> × <paramref name="screenHeight"/>:
+    /// a third of the width (at least 480 px, at most the screen), one line of text high.
+    /// </summary>
+    public static (int Width, int Height) StripSize(int screenWidth, int screenHeight)
+    {
+        screenWidth = Math.Clamp(screenWidth, 1, Defaults.OverlayMaxDimension);
+        screenHeight = Math.Clamp(screenHeight, 1, Defaults.OverlayMaxDimension);
+        var height = Math.Clamp(screenHeight / 22, 28, 96);
+        var width = Math.Min(screenWidth, Math.Max(480, screenWidth / 3));
+        return (width, height);
+    }
+
+    /// <summary>
+    /// Draws the strip (D-75): <c>Exam</c> and the teacher's message at the left, the countdown
+    /// at the right in the accent colour; a notice, while there is one, takes the message's
+    /// place. One line — a long message is cut with an ellipsis, never wrapped over the
+    /// student's work. Never throws on odd input.
+    /// </summary>
+    public static OverlayBitmap ComposeStrip(ExamStripContent content, int width, int height)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        (width, height) = ComposedSize(width, height);
+
+        var bitmap = new SKBitmap(new SKImageInfo(width, height, JpegCodec.PixelFormat, SKAlphaType.Premul));
+        try
+        {
+            using var canvas = new SKCanvas(bitmap);
+            canvas.Clear(Background);
+            using var paint = new SKPaint { IsAntialias = true };
+
+            var size = height * 0.46f;
+            var margin = height * 0.45f;
+            var baseline = height * 0.5f + size * 0.36f;
+
+            var remaining = StripRemainingText(content.RemainingSeconds);
+            var remainingWidth = remaining.Length > 0 ? Measure(remaining, size) : 0f;
+            if (remaining.Length > 0)
+            {
+                DrawRight(canvas, paint, remaining, size, Accent, width - margin, baseline);
+            }
+
+            var title = Text("ExamTitle");
+            DrawLeft(canvas, paint, title, size, Muted, margin, baseline);
+            var x = margin + Measure(title, size) + margin;
+            var room = width - margin - x - (remainingWidth > 0 ? remainingWidth + margin : 0);
+            var notice = content.Notice.Length > 0;
+            var line = notice ? content.Notice : ClampMessage(content.Message).Replace('\n', ' ');
+            if (room > size && line.Length > 0)
+            {
+                DrawLeft(canvas, paint, Ellipsize(line, size, room), size, notice ? Accent : Foreground, x, baseline);
+            }
+
+            return new OverlayBitmap(bitmap);
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+    }
+
+    private static string Ellipsize(string text, float size, float maxWidth)
+    {
+        if (Measure(text, size) <= maxWidth)
+        {
+            return text;
+        }
+
+        var cut = text.Length;
+        while (cut > 1 && Measure(text[..cut] + "…", size) > maxWidth)
+        {
+            cut = Math.Max(1, cut - Math.Max(1, cut / 8));
+        }
+
+        return text[..cut].TrimEnd() + "…";
     }
 
     // ------------------------------------------------------------------ drawing

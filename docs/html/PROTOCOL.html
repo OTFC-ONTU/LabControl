@@ -663,32 +663,68 @@ then re-applies a policy still within its limits with the limit re-clamped. The 
 <code>policy.expired</code>, <code>policy.unreadable</code>, <code>policy.busy</code>, <code>policy.failed</code>. An agent from before
 portion 3 answers <code>problem</code> &quot;cannot enforce internet policy yet&quot;; one from before M6 ignores the
 message.</p>
-<h2 id="exam-mode">Exam mode<a class="anchor" href="#exam-mode" aria-label="Link to this section">#</a></h2>
-<pre><code>ExamMode {
-  string   session_id;            // one per exam, so late joiners get the same state
-  bool     active;
-  int64    ends_at_unix;          // 0 = no timer; absolute, skew-corrected at Hello
-  int64    hard_limit_unix;       // always set; the agent restores itself past this
-  string   message;               // shown in the countdown banner
-  InternetPolicy internet;        // optional; OPEN or absent = internet untouched
-  repeated string allowed_programs;   // executable names; empty = no whitelist enforced
-  CollectSpec collect;            // optional; the folder chosen when the exam was set up
+<h2 id="exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, <code>D-75</code>, <code>D-76</code>)<a class="anchor" href="#exam-mode-m6-portion-4-d-75-d-76" aria-label="Link to this section">#</a></h2>
+<pre><code>ExamMode {                        console → agent, on Link
+  string session_id;              // one per exam: a re-sent message is the same exam, a late PC joins it
+  bool   active;                  // true starts or re-states; false ends (any console of the lab may)
+  reserved 3, 4;                  // ends_at_unix, hard_limit_unix: never sent by any build
+  string message;                 // the teacher's line in the strip
+  reserved 6;                     // was block_internet
+  repeated string allowed_programs;   // executable names, matched by file name only
+  CollectSpec collect;            // portion 5; carried and kept, not acted on yet
+  InternetPolicy internet;        // absent or OPEN = untouched; its own limits are ignored
+  int64  until_seconds;           // the timer, a duration from arrival; 0 = none; negative = refused
+  int64  hard_limit_seconds;      // proposed; clamped to ExamHardLimit (4 h) on the PC's clock; &lt;= 0 = the ceiling
+  bool   restrict_programs;       // the allowed-programs switch
+  string preset_name;             // for the tile badge
+}
+
+ExamState {                       agent → console
+  session_id, active,
+  whitelist_enforced,             // the switch is on and the service is watching the session
+  terminated_recently[],          // what the whitelist closed in the last 10 min, most recent first
+  since_unix, until_unix, hard_limit_unix,   // the PC's own clock
+  remaining_seconds,              // until the PC ends it by itself, as of sending
+  set_by_instance, preset_name, message,
+  allowed_programs[], restrict_programs,     // what is enforced, normalized (lower case, &quot;.exe&quot;)
+  problem,                        // why an ExamMode was refused or failed; empty otherwise
+  reason                          // exam.no_user, exam.whitelist_suspended, exam.watch_failed,
+                                  // exam.end_refused, exam.strip_not_shown
 }
 </code></pre>
-<p>The four restrictions are independent (<code>docs/ARCHITECTURE.md</code> §6.1): a message with a
-timer but no whitelist, no internet block and no collection is valid and common.</p>
-<p>State lives on the <strong>agent</strong>, not in the console's memory, and is persisted to disk, so
-an exam survives the console restarting, the network dropping or the PC rebooting
-mid-test. Two rules make it fail-safe:</p>
-<ul>
-<li><code>hard_limit_unix</code> is always set. Past it the agent ends the mode by itself — restores
-the firewall, stops enforcing the whitelist, removes the overlay — even with no
-console in sight.</li>
-<li>On service start the agent first <strong>restores</strong> everything an exam could have changed,
-then re-applies the mode only if the stored session is still within its limits.</li>
-</ul>
-<p><code>AgentMessage.ExamState</code> reports what the PC is actually enforcing, so the console shows
-the truth rather than what it last asked for.</p>
+<p>The four restrictions are independent (<code>docs/ARCHITECTURE.md</code> §6.1): a timer alone, a whitelist
+alone, an internet block alone are all valid. Like <code>Overlay</code> and <code>InternetPolicy</code>, <code>ExamMode</code>
+passes the <strong>ownership gate</strong> first (<code>D-69</code> item 7: refused when the link is unbound or the
+console revoked or withdrawn, answered with <code>ExamState.problem</code> and <code>active</code> false, never
+touching the latest state) and every limit travels as a <strong>duration</strong> stamped on the PC's
+clock (<code>D-70</code> item 6). The PC answers every <code>ExamMode</code> with the <code>ExamState</code> it has afterwards —
+never an echo of the request — sends it on every change, re-sends it after every <code>Welcome</code>,
+and re-sends it at most every <code>ExamStateRefreshInterval</code> (2 s) when the whitelist closed
+something or a reason changed.</p>
+<p>State lives on the <strong>agent</strong> in <code>policy.json</code> (<code>D-69</code>): the exam survives the console
+disappearing, the network dropping and the PC rebooting — on service start the machine is
+restored first and the exam re-applied with the time it had left. Past the hard limit the PC
+ends the exam by itself. When the <strong>timer</strong> runs out (not the hard limit, not a console ending
+it) the PC ends the exam and <strong>locks the screen</strong> with &quot;Time is up&quot;: an ordinary lock
+(<code>Defaults.LockHardLimit</code>, until a console unlocks it), session id = the exam's + <code>:time-up</code>,
+<code>set_by_instance</code> = the exam's (<code>D-75</code> item 3). A lock already held stays.</p>
+<p>The <strong>internet switch</strong> is enforced as its own session (session id = the exam's + <code>:internet</code>)
+with the exam's limits — <code>min(ExamHardLimit, exam's own)</code> — and wins over a standalone policy
+while the exam lasts (<code>internet.exam_wins</code> in <code>InternetState.reason</code>); when the exam ends the
+standalone policy comes back if it is still within its limits, without the PC opening in
+between (<code>D-22</code>, <code>D-76</code>). An exam whose internet switch cannot be applied is not applied at
+all.</p>
+<p>The <strong>allowed-programs switch</strong> is enforced by the service (<code>D-75</code>): every second it looks at
+the processes of the active console session that run under the signed-in user's own token,
+never judges LabControl's own files or the never-touch set (the shell and the Windows processes
+under the user's token), and closes whatever else is not on the list. The first look — at the
+start, after a restart, after a new list or a pause — asks open programs to close
+(<code>ClosePrograms</code> to the helper, <code>WM_CLOSE</code>) and ends them after <code>ExamSweepGrace</code> (10 s); later
+it ends a newly started program at once. Processes the agent started for the teacher are never
+judged; a shutdown, reboot or log off pauses the watch for <code>ExamPowerJobSuspension</code> (2 min).
+Matching is by name: a renamed executable passes.</p>
+<p>A console that started an exam for the whole lab sends it, with the remaining durations, to every
+PC of the lab that links before its end without showing that session (<code>D-76</code> item 4).</p>
 <h2 id="video">Video<a class="anchor" href="#video" aria-label="Link to this section">#</a></h2>
 <p>The screen stream (ROADMAP M3, <code>D-34</code>). The console is the server for <code>PushVideo</code> as for
 everything else; the PC is the producer.</p>
@@ -950,7 +986,7 @@ at most <code>SessionPipeMaxMessageBytes</code> (16 MiB); a frame cut short or o
 protocol error and ends the connection. <code>LabControl.Shared/Session/PipeFraming.cs</code> is the
 one implementation both sides use.</p>
 <p><strong>Envelopes.</strong></p>
-<pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame }       service → helper
+<pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms }  service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
 HelperHello  { session_id, process_id, version }         first message after connecting
@@ -1021,6 +1057,19 @@ same <code>OverlayWindow</code> shows it, repainted on every decoded frame, and 
 desktop like the lock. <code>overlay_state</code> says <code>BROADCAST_START</code> while the broadcast window is
 up and no lock is held; the service tells a helper that shows a broadcast nobody is
 running to stop, and re-asserts one the helper does not show.</p>
+<p><strong>The exam over the pipe (M6 portion 4, <code>D-75</code>).</strong> The service owns the exam and the
+whitelist; the helper only shows the strip and asks windows to close.
+<code>ExamStrip { show, message, until_seconds, notice, session_id }</code> is sent when the exam starts,
+is re-stated or ends (<code>show</code> false), when the whitelist closed something (<code>notice</code>: &quot;X is not
+allowed during the exam&quot;, shown for <code>ExamNoticeDuration</code>, 8 s) and to every freshly connected
+helper (the journal's re-assert). The helper stamps <code>until_seconds</code> onto its clock and shows a
+click-through, never-activated topmost strip at the top centre of the primary monitor
+(<code>ExamStripWindow</code>) — only on the <code>Default</code> desktop, never while a lock or a broadcast covers
+the screen, and not at all when there is no timer, no message and no notice.
+<code>ClosePrograms { process_ids[] }</code> asks the helper to post <code>WM_CLOSE</code> to every visible, unowned
+top-level window of those processes on the input desktop; the service ends whatever is still
+running after <code>ExamSweepGrace</code>. The helper sends nothing back for either; the service reports
+<code>exam.strip_not_shown</code> while no helper takes the strip.</p>
 <p><strong>Input over the pipe (M3 portion 3, <code>D-36</code>).</strong> Every <code>Input</code> from the console except
 <code>CTRL_ALT_DEL</code> is written down the pipe as it is (fire-and-forget, like the controls); the
 helper queues it (<code>Defaults.InputQueueLength</code>, the newest dropped when full) for an input
@@ -1388,9 +1437,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-22 20:22 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-23 09:37 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode">Exam mode</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>
 </body>
 </html>

@@ -76,6 +76,10 @@ public partial class MainWindow : Window, IDialogs
 
     public Task<InternetAnswer?> InternetAsync(InternetDialogModel model) => _dialogs.InternetAsync(model);
 
+    public Task<Services.ExamRequest?> ExamAsync(ExamDialogModel model) => _dialogs.ExamAsync(model);
+
+    public Task<TimeSpan?> ExtendExamAsync(int pcCount) => _dialogs.ExtendExamAsync(pcCount);
+
     public Task<LabControl.Shared.Setup.AgentBuild?> PushAgentBuildAsync(int pcCount) => _dialogs.PushAgentBuildAsync(pcCount);
 
     public void ShowScreen(ScreenViewModel screen) => _dialogs.ShowScreen(screen);

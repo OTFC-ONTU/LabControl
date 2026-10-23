@@ -119,3 +119,10 @@ GET_STOCK_OBJECT_FLAGS
 // Keeping the monitor on while the overlay shows something (DisplayKeeper, D-84)
 SetThreadExecutionState
 EXECUTION_STATE
+
+// The exam strip and the opening sweep's close request (ExamStripWindow, ProgramCloser, D-75)
+EnumWindows
+GetWindowThreadProcessId
+IsWindowVisible
+GetWindow
+GET_WINDOW_CMD

@@ -52,16 +52,26 @@ public sealed class OverlaySession : PolicySession
 /// <param name="ConsoleName">The name of the teacher machine whose screen it is, for a caption.</param>
 public sealed record BroadcastSession(string SessionId, string SetByInstance, long SinceUnix, long HardLimitUnix, string ConsoleName);
 
-/// <summary>An exam (M6 portion 4); the fields portion 1 needs to persist and re-apply it are here, the rest arrives with the portion.</summary>
+/// <summary>
+/// An exam (M6 portion 4, D-75): the timer is <see cref="PolicySession.UntilUnix"/>, the
+/// allowed-programs switch <see cref="RestrictPrograms"/> over <see cref="AllowedPrograms"/>,
+/// and the internet switch is the separate <see cref="ClassroomPolicy.ExamInternet"/> session
+/// that lives and dies with this one (D-76).
+/// </summary>
 public sealed class ExamSession : PolicySession
 {
     public string Message { get; set; } = string.Empty;
 
-    /// <summary>Executable names; empty = no whitelist.</summary>
+    /// <summary>The allowed-programs switch; off = anything runs, whatever <see cref="AllowedPrograms"/> holds.</summary>
+    public bool RestrictPrograms { get; set; }
+
+    /// <summary>Executable names, normalized by <see cref="Exam.ProgramNames"/> (lower case, <c>.exe</c>).</summary>
     public List<string> AllowedPrograms { get; set; } = [];
 
-    /// <summary>The folder collected at the end, or <c>null</c> for nothing.</summary>
+    /// <summary>The folder collected at the end, or <c>null</c> for nothing (portion 5; kept, not acted on before it).</summary>
     public string? CollectFolder { get; set; }
+
+    public string PresetName { get; set; } = string.Empty;
 }
 
 /// <summary>A standalone internet policy or the exam's internet switch (M6 portion 3).</summary>

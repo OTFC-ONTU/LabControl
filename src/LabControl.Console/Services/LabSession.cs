@@ -194,6 +194,7 @@ public sealed class LabSession : IAsyncDisposable
         BatchLogs = new JobBatchLogs(store.LogsDirectory, Jobs, id => Registry.FindByAgentId(id)?.Number ?? 0, _clock);
         Scripts = new ScriptLibrary(store, identity.LabId, seedScripts ?? [], _clock, loggers.CreateLogger<ScriptLibrary>());
         InternetPresets = new InternetPresetLibrary(store, identity.LabId, _clock, loggers.CreateLogger<InternetPresetLibrary>());
+        ExamPresets = new ExamPresetLibrary(store, identity.LabId, _clock, InternetPresets, loggers.CreateLogger<ExamPresetLibrary>());
 
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
@@ -252,6 +253,9 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>The teacher's named whitelist presets (M6 portion 3, D-73), beside <c>lab.json</c> and in the backup.</summary>
     public InternetPresetLibrary InternetPresets { get; }
+
+    /// <summary>The teacher's named exam presets (M6 portion 4, D-76), beside <c>lab.json</c> and in the backup — never in a lab file.</summary>
+    public ExamPresetLibrary ExamPresets { get; }
 
     public EventLog Events { get; }
 
@@ -1282,6 +1286,10 @@ public sealed class LabSession : IAsyncDisposable
                 ApplyInternetState(connection, message.InternetState, who);
                 break;
 
+            case AgentMessage.PayloadOneofCase.ExamState:
+                ApplyExamState(connection, message.ExamState, who);
+                break;
+
             case AgentMessage.PayloadOneofCase.JobProgress:
                 Jobs.Progress(message.JobProgress, now);
                 break;
@@ -2114,6 +2122,261 @@ public sealed class LabSession : IAsyncDisposable
                 Events.Info("internet.restricted", Localization.Strings.Format(
                     connection.InternetMode == InternetPolicy.Types.Mode.Blocked ? "Event.InternetBlocked" : "Event.InternetWhitelisted", who, by), connection.AgentId, connection.Number);
             }
+        }
+
+        if (changed)
+        {
+            MachinesChanged?.Invoke();
+        }
+    }
+
+    // ------------------------------------------------------------------ exam (M6 portion 4)
+
+    /// <summary>
+    /// The exam this console started for the whole lab, kept in memory so a PC that links before
+    /// its end joins it with what is left (owner decision 2026-10-23). Forgotten when it ends, is
+    /// ended, or this session closes; a console restart forgets it too (D-76).
+    /// </summary>
+    private sealed record LabExam(ExamMode Template, DateTimeOffset? Deadline, DateTimeOffset HardDeadline);
+
+    private LabExam? _labExam;
+    private readonly Lock _examGate = new();
+
+    /// <summary>Joining late is not worth it with less than this left: the PC would end the exam again at once.</summary>
+    private static readonly TimeSpan LateJoinMargin = TimeSpan.FromSeconds(5);
+
+    /// <summary>The session id of the lab-wide exam this console remembers, or <c>null</c>.</summary>
+    public string? LabExamSessionId
+    {
+        get
+        {
+            lock (_examGate)
+            {
+                return _labExam is { } exam && !ExamOver(exam, _clock()) ? exam.Template.SessionId : null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Starts an exam on the given PCs (PROTOCOL <i>Exam mode</i>, D-75): one <c>ExamMode</c> per
+    /// linked PC with one fresh <c>session_id</c>, the timer as <c>until_seconds</c>
+    /// (<c>null</c> = no timer) and the hard limit left to each PC's own ceiling — durations
+    /// each PC stamps onto its own clock. <paramref name="wholeLab"/> remembers the exam, so a
+    /// PC that links before its end joins it. Returns the session id and how many PCs were asked.
+    /// </summary>
+    public (string SessionId, int Sent) StartExam(IEnumerable<string> agentIds, ExamRequest request, bool wholeLab)
+    {
+        ArgumentNullException.ThrowIfNull(agentIds);
+        ArgumentNullException.ThrowIfNull(request);
+        var now = _clock();
+        var template = new ExamMode
+        {
+            SessionId = Guid.NewGuid().ToString("n"),
+            Active = true,
+            Message = request.Message ?? string.Empty,
+            PresetName = request.PresetName ?? string.Empty,
+            RestrictPrograms = request.RestrictPrograms,
+            UntilSeconds = request.Timer is { } timer && timer > TimeSpan.Zero ? (long)Math.Ceiling(timer.TotalSeconds) : 0,
+            HardLimitSeconds = 0,
+        };
+        template.AllowedPrograms.AddRange(LabControl.Shared.Exam.ProgramNames.NormalizeAll(request.AllowedPrograms));
+        if (request.InternetMode is InternetPolicy.Types.Mode.Whitelist or InternetPolicy.Types.Mode.Blocked)
+        {
+            var internet = new InternetPolicy { Mode = request.InternetMode, PresetName = request.InternetPresetName ?? string.Empty };
+            if (request.InternetMode == InternetPolicy.Types.Mode.Whitelist)
+            {
+                internet.AllowedHosts.AddRange(request.InternetHosts);
+            }
+
+            template.Internet = internet;
+        }
+
+        lock (_examGate)
+        {
+            _labExam = wholeLab
+                ? new LabExam(template.Clone(), template.UntilSeconds > 0 ? now.AddSeconds(template.UntilSeconds) : null, now + Defaults.ExamHardLimit)
+                : _labExam;
+        }
+
+        var (sent, skipped) = SendExam(agentIds, connection =>
+        {
+            connection.ExamSessionsSeen.Add(template.SessionId);
+            return template.Clone();
+        });
+        Events.Info("exam.start_sent", Localization.Strings.Format("Event.ExamStartSent", sent, skipped, template.PresetName));
+        return (template.SessionId, sent);
+    }
+
+    /// <summary>
+    /// Gives every PC that holds an exam among <paramref name="agentIds"/> <paramref name="more"/>
+    /// time: the same session re-stated with what the PC has left plus <paramref name="more"/>,
+    /// counted from the PC's own <c>remaining_seconds</c>, never its clock. A lab-wide exam's
+    /// remembered deadline moves with it. Returns how many PCs were asked.
+    /// </summary>
+    public int ExtendExam(IEnumerable<string> agentIds, TimeSpan more)
+    {
+        ArgumentNullException.ThrowIfNull(agentIds);
+        var extra = (long)Math.Ceiling(Math.Max(0, more.TotalSeconds));
+        var (sent, skipped) = SendExam(agentIds, connection =>
+        {
+            if (connection.ExamState is not { Active: true, UntilUnix: > 0 } state)
+            {
+                // No exam, or one without a timer: nothing to extend.
+                return null;
+            }
+
+            var mode = FromState(state);
+            mode.UntilSeconds = state.RemainingSeconds + extra;
+            return mode;
+        });
+
+        lock (_examGate)
+        {
+            if (_labExam is { Deadline: { } deadline } exam)
+            {
+                var template = exam.Template.Clone();
+                var left = Math.Max(0, (long)Math.Ceiling((deadline - _clock()).TotalSeconds)) + extra;
+                template.UntilSeconds = left;
+                _labExam = exam with { Template = template, Deadline = deadline.AddSeconds(extra) };
+            }
+        }
+
+        Events.Info("exam.extend_sent", Localization.Strings.Format("Event.ExamExtendSent", (int)more.TotalMinutes, sent, skipped));
+        return sent;
+    }
+
+    /// <summary>
+    /// Ends the exam on the given PCs — any console of the lab may end one it can see (owner
+    /// decision 4): <c>active</c> false with the session the PC reported, so a PC that meanwhile
+    /// holds another exam keeps it. Forgets the lab-wide exam. Returns how many PCs were asked.
+    /// </summary>
+    public int EndExam(IEnumerable<string> agentIds)
+    {
+        ArgumentNullException.ThrowIfNull(agentIds);
+        var ids = agentIds.ToArray();
+        lock (_examGate)
+        {
+            _labExam = null;
+        }
+
+        var (sent, skipped) = SendExam(ids, connection =>
+            connection.ExamState is { Active: true } state ? new ExamMode { Active = false, SessionId = state.SessionId } : null);
+        Events.Info("exam.end_sent", Localization.Strings.Format("Event.ExamEndSent", sent, skipped));
+        return sent;
+    }
+
+    /// <summary>The ExamMode that re-states what a PC reported holding, settings and all; the timing is the caller's.</summary>
+    private static ExamMode FromState(ExamState state)
+    {
+        var mode = new ExamMode
+        {
+            SessionId = state.SessionId,
+            Active = true,
+            Message = state.Message,
+            PresetName = state.PresetName,
+            RestrictPrograms = state.RestrictPrograms,
+
+            // A re-stated exam gets the PC's ceiling from now: the teacher is here to end it.
+            HardLimitSeconds = 0,
+        };
+        mode.AllowedPrograms.AddRange(state.AllowedPrograms);
+        return mode;
+    }
+
+    private (int Sent, int Skipped) SendExam(IEnumerable<string> agentIds, Func<AgentConnection, ExamMode?> modeFor)
+    {
+        var sent = 0;
+        var skipped = 0;
+        foreach (var agentId in agentIds.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var connection = FindLinked(agentId);
+            if (connection is null || connection.IsOutdated || modeFor(connection) is not { } mode || !connection.TrySend(new ConsoleMessage { ExamMode = mode }))
+            {
+                skipped++;
+                continue;
+            }
+
+            sent++;
+        }
+
+        return (sent, skipped);
+    }
+
+    private static bool ExamOver(LabExam exam, DateTimeOffset now) =>
+        now + LateJoinMargin >= exam.HardDeadline || exam.Deadline is { } deadline && now + LateJoinMargin >= deadline;
+
+    /// <summary>
+    /// A PC of the lab that holds no part of the lab-wide exam and has never been sent it on this
+    /// link joins it with what is left (owner decision 2026-10-23). Judged on the PC's first
+    /// word after linking, so a PC that rebooted inside the exam — and re-applied it from its own
+    /// journal — is never sent it again.
+    /// </summary>
+    private void JoinLabExamIfLate(AgentConnection connection)
+    {
+        ExamMode? mode = null;
+        lock (_examGate)
+        {
+            if (_labExam is not { } exam)
+            {
+                return;
+            }
+
+            var now = _clock();
+            if (ExamOver(exam, now))
+            {
+                _labExam = null;
+                return;
+            }
+
+            var sessionId = exam.Template.SessionId;
+            if (connection.ExamSessionsSeen.Contains(sessionId) || connection.ExamState is { Active: true } || connection.IsOutdated)
+            {
+                // Already in it, or in another exam that is not this console's to replace.
+                connection.ExamSessionsSeen.Add(sessionId);
+                return;
+            }
+
+            connection.ExamSessionsSeen.Add(sessionId);
+            mode = exam.Template.Clone();
+            mode.UntilSeconds = exam.Deadline is { } deadline ? Math.Max(1, (long)Math.Ceiling((deadline - now).TotalSeconds)) : 0;
+            mode.HardLimitSeconds = Math.Max(1, (long)Math.Ceiling((exam.HardDeadline - now).TotalSeconds));
+        }
+
+        if (connection.TrySend(new ConsoleMessage { ExamMode = mode }))
+        {
+            Events.Info("exam.late_join", Localization.Strings.Format("Event.ExamLateJoin", string.Format(System.Globalization.CultureInfo.InvariantCulture, Defaults.MachineNameFormat, connection.Number)), connection.AgentId, connection.Number);
+        }
+    }
+
+    private void ApplyExamState(AgentConnection connection, ExamState state, string who)
+    {
+        var activeBefore = connection.InExam;
+        var problemBefore = connection.ExamProblem;
+        var changed = connection.ApplyExamState(state, _clock());
+
+        if (connection.ExamProblem is { } problem && problem != problemBefore)
+        {
+            Events.Warning("exam.refused", Localization.Strings.Format("Event.ExamRefused", who, problem), connection.AgentId, connection.Number);
+        }
+
+        if (activeBefore != connection.InExam)
+        {
+            if (connection.InExam)
+            {
+                var by = string.Equals(state.SetByInstance, Instance.InstanceId, StringComparison.OrdinalIgnoreCase)
+                    ? Localization.Strings.Get("Lock.ByThisConsole")
+                    : NameOfInstance(state.SetByInstance);
+                Events.Info("exam.started", Localization.Strings.Format("Event.ExamStarted", who, by), connection.AgentId, connection.Number);
+            }
+            else
+            {
+                Events.Info("exam.ended", Localization.Strings.Format("Event.ExamEnded", who), connection.AgentId, connection.Number);
+            }
+        }
+
+        if (state.Problem.Length == 0)
+        {
+            JoinLabExamIfLate(connection);
         }
 
         if (changed)

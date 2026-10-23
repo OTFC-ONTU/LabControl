@@ -170,6 +170,9 @@ internal static class Program
         // every status and on every change, so the service always knows what is shown.
         using var overlay = new OverlayController(loggers.CreateLogger("overlay"), state => Send(new HelperMessage { OverlayState = state }), Environment.MachineName);
 
+        // The exam strip and the opening sweep's close request (D-75); a lock or a broadcast covers the strip.
+        using var exam = new ExamStripController(loggers.CreateLogger("exam"), () => overlay.CoversScreen);
+
         var statusLoop = Task.Run(async () =>
         {
             var lastDesktop = string.Empty;
@@ -216,6 +219,14 @@ internal static class Program
 
                     case ServiceMessage.PayloadOneofCase.BroadcastFrame:
                         overlay.OfferFrame(message.BroadcastFrame);
+                        break;
+
+                    case ServiceMessage.PayloadOneofCase.ExamStrip:
+                        exam.Offer(message.ExamStrip);
+                        break;
+
+                    case ServiceMessage.PayloadOneofCase.ClosePrograms:
+                        exam.Close(message.ClosePrograms);
                         break;
 
                     default:

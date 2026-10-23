@@ -116,10 +116,32 @@ public interface IMachineState
     /// </summary>
     bool InternetNeedsReassert() => false;
 
-    /// <summary>Enforce an exam's timer, whitelist and collection (portion 4); <see cref="MachineOutcome.NotInThisBuild"/> until then.</summary>
+    /// <summary>
+    /// Enforce an exam (portion 4, D-75): the strip on the student's screen — the countdown to
+    /// <see cref="PolicySession.UntilUnix"/> and the message — and, when
+    /// <see cref="ExamSession.RestrictPrograms"/> is on, the allowed-programs watch, whose first
+    /// look is the opening sweep. Called again with the same session to re-state it (extended,
+    /// a new list, a helper that restarted) and must then change only what differs: the same
+    /// list does not sweep again. The internet switch is not this call's: the journal applies
+    /// it as an internet session (D-76).
+    /// </summary>
     MachineResult ApplyExam(ExamSession session);
 
+    /// <summary>End the exam's strip and watch. Nothing it closed comes back.</summary>
     MachineResult LiftExam();
+
+    /// <summary>The live side of the exam for <c>ExamState</c>; cheap and thread-safe, read every <see cref="Defaults.ExamStateRefreshInterval"/>.</summary>
+    ExamRuntime ExamRuntime() => Policy.ExamRuntime.None;
+}
+
+/// <summary>The live side of an exam (D-75), read by the enforcer for <c>ExamState</c>.</summary>
+/// <param name="WhitelistEnforced">The allowed-programs watch is running and can see the student's session.</param>
+/// <param name="Terminated">Programs the watch closed within <see cref="Defaults.ExamTerminatedWindow"/>, most recent first.</param>
+/// <param name="TerminatedVersion">Moves whenever <paramref name="Terminated"/> changes.</param>
+/// <param name="Reason"><see cref="ExamReasons"/> codes, space-separated; empty when all is well.</param>
+public sealed record ExamRuntime(bool WhitelistEnforced, IReadOnlyList<string> Terminated, long TerminatedVersion, string Reason)
+{
+    public static ExamRuntime None { get; } = new(false, [], 0, string.Empty);
 }
 
 /// <summary>The live side of internet enforcement (D-74), read by the enforcer for <c>InternetState</c>.</summary>

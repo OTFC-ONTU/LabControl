@@ -361,24 +361,44 @@ message CollectSpec {
 }
 
 message ExamMode {
-  string session_id                 = 1;  // stable, so a late or reconnecting PC joins the same exam
-  bool   active                     = 2;
-  int64  ends_at_unix               = 3;  // 0 = no timer
-  int64  hard_limit_unix            = 4;  // always set; the agent restores itself past this
-  string message                    = 5;
+  string session_id                 = 1;  // stable, so a re-sent message is the same exam and a late or reconnecting PC joins it
+  bool   active                     = 2;  // true starts or re-states the exam; false ends it (any console of the lab may, M6 decision 4)
+  // Were absolute console-clock moments, never sent by any build: the lab has no time source,
+  // so an exam carries durations like a lock and an internet policy (M6 portion 4, D-75).
+  reserved 3, 4;
+  reserved "ends_at_unix", "hard_limit_unix";
+  string message                    = 5;  // the teacher's line in the strip on the student's screen
   reserved 6;                             // was block_internet; now an InternetPolicy (D-22)
-  repeated string allowed_programs  = 7;  // executable names; empty = whitelist off
-  CollectSpec collect               = 8;
-  InternetPolicy internet           = 9;  // absent or OPEN = internet untouched
+  repeated string allowed_programs  = 7;  // executable names (idea64.exe); matched by name only, case-insensitively
+  CollectSpec collect               = 8;  // M6 portion 5; carried and kept, not acted on before it
+  InternetPolicy internet           = 9;  // absent or OPEN = internet untouched; its own limits are ignored -- it lives and dies with the exam
+  int64  until_seconds              = 10; // the timer: how long from arrival, stamped on the PC's clock; 0 = no timer; negative = refused
+  int64  hard_limit_seconds         = 11; // a proposed duration; the agent clamps it to ExamHardLimit on its own clock; <= 0 = the ceiling
+  bool   restrict_programs          = 12; // the allowed-programs switch; off = anything runs, whatever allowed_programs says
+  string preset_name                = 13; // for the tile badge
 }
 
+// Agent -> console: the exam the PC enforces now, sent on every change, after every Welcome,
+// when the whitelist closed something, and as the answer to a refused ExamMode (D-75). It
+// never echoes a request that was not applied: `active` false is "no exam on this PC".
 message ExamState {
   string session_id                = 1;
   bool   active                    = 2;
-  int64  ends_at_unix              = 3;
+  reserved 3;                             // was ends_at_unix, never sent; see until_unix
   reserved 4;                             // was internet_blocked; see InternetState
-  bool   whitelist_enforced        = 5;
-  repeated string terminated_recently = 6;  // what the whitelist actually killed
+  bool   whitelist_enforced        = 5;  // the allowed-programs switch is on and the service is watching the session
+  repeated string terminated_recently = 6;  // what the whitelist actually closed lately, most recent first
+  int64  since_unix                = 7;  // the PC's own clock, as are the two below
+  int64  until_unix                = 8;  // 0 = no timer
+  int64  hard_limit_unix           = 9;  // the limit the agent holds, after its own clamp
+  int64  remaining_seconds         = 10; // seconds until the PC ends it by itself, as of sending
+  string set_by_instance           = 11; // the console instance whose exam this is
+  string preset_name               = 12;
+  string message                   = 13;
+  repeated string allowed_programs = 14; // the names enforced, normalized (lower case, ".exe")
+  bool   restrict_programs         = 15;
+  string problem                   = 16; // why an ExamMode was refused or could not be applied; empty otherwise
+  string reason                    = 17; // stable codes (exam.no_user, exam.whitelist_suspended, ...), space-separated; empty when all is well
 }
 
 // ---------------------------------------------------------------------------
@@ -521,7 +541,26 @@ message ServiceMessage {
     Input        input         = 3;  // M3
     Overlay      overlay       = 4;  // M6: LOCK / UNLOCK / BROADCAST_START / BROADCAST_STOP; re-asserted to every fresh helper
     VideoFrame   broadcast_frame = 5;  // M6 portion 2: the teacher's screen, as PullBroadcast delivered it (D-71)
+    ExamStrip    exam_strip    = 6;  // M6 portion 4: the strip at the top of the student's screen; re-asserted to every fresh helper
+    ClosePrograms close_programs = 7;  // M6 portion 4: ask these windows to close, before the service ends what is left (D-75)
   }
+}
+
+// Service -> helper (M6 portion 4, D-75): what the exam strip shows. A strip with no timer, no
+// message and no notice is hidden; a lock or a broadcast always hides it while it shows.
+message ExamStrip {
+  bool   show          = 1;  // false hides the strip, whatever else is set
+  string message       = 2;  // the teacher's line
+  int64  until_seconds = 3;  // the countdown, a duration stamped on arrival; 0 = no timer
+  string notice        = 4;  // a passing line -- "notepad.exe is not allowed during the exam" -- shown for ExamNoticeDuration; empty = none
+  string session_id    = 5;
+}
+
+// Service -> helper (M6 portion 4): post WM_CLOSE to the top-level windows of these processes,
+// in the session, where the service cannot reach. The service ends whatever is still running
+// after ExamSweepGrace; the helper only asks.
+message ClosePrograms {
+  repeated uint32 process_ids = 1;
 }
 
 // Helper -> service.

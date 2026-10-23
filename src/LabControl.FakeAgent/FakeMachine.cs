@@ -32,12 +32,15 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     private FakeScreen? _desktop;
     private int _sasCount;
     private readonly Timer _browsing;
+    private readonly Timer _launching;
 
     /// <summary>
     /// Names a simulated student's browser asks for (M6 portion 3): the CDN and font hosts a
     /// documentation site typically pulls in, so a whitelist on the simulator refuses a few
     /// and the console's refused-names list has something to show.
     /// </summary>
+    private static readonly string[] LaunchedPrograms = ["chrome.exe", "telegram.exe", "notepad.exe", "idea64.exe", "calc.exe"];
+
     private static readonly string[] BrowsedNames =
     [
         "www.jetbrains.com", "resources.jetbrains.com", "docs.oracle.com", "fonts.googleapis.com", "fonts.gstatic.com",
@@ -92,6 +95,12 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         var browseEvery = TimeSpan.FromSeconds(15 + _random.Next(15));
         _browsing = new Timer(_ => _machineState.Browse(BrowsedNames[Random.Shared.Next(BrowsedNames.Length)]), null, browseEvery, browseEvery);
 
+        // An exam's whitelist sees what a real student has open and what they try to start
+        // (M6 portion 4): a few programs left from the last lesson, and now and then another.
+        _machineState.Seed(["explorer.exe", "chrome.exe", "notepad.exe"]);
+        var launchEvery = TimeSpan.FromSeconds(40 + _random.Next(40));
+        _launching = new Timer(_ => { if (_machineState.Exam is not null) _machineState.Launch(LaunchedPrograms[Random.Shared.Next(LaunchedPrograms.Length)]); }, null, launchEvery, launchEvery);
+
         // A real PC's supervisor publishes this at start and on every change (M2); the
         // simulator pretends the helper is up and the student is at the desk.
         PublishSession(SessionState.Types.Kind.Unspecified);
@@ -110,6 +119,15 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
     /// <summary>The internet policy this PC holds right now (M6 portion 3); <c>null</c> when none.</summary>
     public InternetSession? Internet => _machineState.Internet;
+
+    /// <summary>The exam this PC holds right now (M6 portion 4); <c>null</c> when none.</summary>
+    public ExamSession? Exam => _machineState.Exam;
+
+    /// <summary>The simulated student's programs, for the tests.</summary>
+    public IReadOnlyList<string> Running => _machineState.Running;
+
+    /// <summary>The simulated student starts a program, for the tests: ended at once when an exam's whitelist does not allow it.</summary>
+    public void Launch(string program) => _machineState.Launch(program);
 
     /// <summary>One simulated browser request, for the tests: refused and noted when a whitelist does not cover it.</summary>
     public void Browse(string name) => _machineState.Browse(name);
@@ -131,6 +149,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         var number = Number;
         var desktop = number % 2 == 1 ? new FakeScreen(number, 1920, 1080, idle: number % 3 == 0) : new FakeScreen(number, 1366, 768, idle: number % 3 == 0);
         desktop.SetOverlay(_machineState.Overlay);
+        desktop.SetExamStrip(_machineState.StripContent());
         if (_machineState.Broadcast is not null)
         {
             desktop.SetBroadcast(_machineState.Picture);
@@ -569,6 +588,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         Link.InputReceived -= OnInput;
         // The OnStop restore (D-69 item 5): the machine is opened, the document is kept.
         await _browsing.DisposeAsync();
+        await _launching.DisposeAsync();
         await _policy.DisposeAsync();
         _machineState.Dispose();
         await _screen.DisposeAsync();

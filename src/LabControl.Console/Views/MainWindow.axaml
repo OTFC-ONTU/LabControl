@@ -74,6 +74,11 @@
         <!-- Internet (M6 portion 3, D-73): the selection, or the whole lab; the tile badge follows what each PC reports. -->
         <Button Content="{loc:Localize Action.Internet}" Command="{Binding InternetCommand}" />
         <Button Content="{loc:Localize Action.InternetForAll}" Command="{Binding InternetForAllCommand}" />
+        <!-- Exam (M6 portion 4, D-75): the selection, or the whole lab; extend and end act on the PCs that report one. -->
+        <Button Content="{loc:Localize Action.Exam}" Command="{Binding ExamCommand}" />
+        <Button Content="{loc:Localize Action.ExamForAll}" Command="{Binding ExamForAllCommand}" />
+        <Button Content="{loc:Localize Action.ExtendExam}" Command="{Binding ExtendExamCommand}" IsVisible="{Binding AnyInExam}" />
+        <Button Content="{loc:Localize Action.EndExam}" Command="{Binding EndExamCommand}" IsVisible="{Binding AnyInExam}" />
         <!-- Broadcast (M6 portion 2, D-71): this console's screen on the selection, or the whole lab. -->
         <Button Content="{loc:Localize Action.ShowScreen}" Command="{Binding ShowScreenCommand}" />
         <Button Content="{loc:Localize Action.ShowScreenToAll}" Command="{Binding ShowScreenToAllCommand}" />

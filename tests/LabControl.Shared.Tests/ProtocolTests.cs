@@ -38,7 +38,7 @@ public class ProtocolTests
     public void Exam_mode_carries_all_four_switches_independently()
     {
         // D-16: the four restrictions must be expressible one at a time.
-        var timerOnly = new ExamMode { SessionId = "e1", Active = true, EndsAtUnix = 1_800 };
+        var timerOnly = new ExamMode { SessionId = "e1", Active = true, UntilSeconds = 1_800 };
 
         Assert.Null(timerOnly.Internet);
         Assert.Empty(timerOnly.AllowedPrograms);

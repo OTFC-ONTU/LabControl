@@ -54,6 +54,8 @@ public sealed class FakeScreen : IScreenSource
     private SKRect? _ring;
 
     private OverlaySession? _overlay;
+    private FakeStrip? _strip;
+    private string? _stripText;
     private string _overlayCountdown = string.Empty;
     private bool _overlayDrawn;
 
@@ -151,6 +153,35 @@ public sealed class FakeScreen : IScreenSource
             if (broadcast is null)
             {
                 _drawn = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The exam strip to show at the top of the desktop, or <c>null</c> for none (M6 portion 4).
+    /// A lock or a broadcast covers it, as on a real PC. From any thread.
+    /// </summary>
+    public void SetExamStrip(FakeStrip? strip)
+    {
+        lock (this)
+        {
+            _strip = strip;
+            _stripText = null;
+            if (strip is null)
+            {
+                _drawn = false;
+            }
+        }
+    }
+
+    /// <summary>What the strip shows right now, for the tests; <c>null</c> when it is not drawn.</summary>
+    public string? StripText
+    {
+        get
+        {
+            lock (this)
+            {
+                return _stripText;
             }
         }
     }
@@ -272,6 +303,7 @@ public sealed class FakeScreen : IScreenSource
             _ring = null;
             DrawWallpaper();
             _drawn = true;
+            _stripText = null;
             dirty.Add(VideoGeometry.Whole(Width, Height));
         }
 
@@ -286,6 +318,15 @@ public sealed class FakeScreen : IScreenSource
         {
             dirty.Add(DrawTyping());
             dirty.Add(MoveBox());
+        }
+
+        if (_overlay is null && _broadcast is null)
+        {
+            dirty.AddRange(DrawStrip(now, dirty));
+        }
+        else
+        {
+            _stripText = null;
         }
 
         dirty.AddRange(DrawInputs());
@@ -313,6 +354,38 @@ public sealed class FakeScreen : IScreenSource
     {
         var (width, height) = VideoGeometry.ThumbnailSize(Width, Height);
         return JpegCodec.Scale(_bitmap, width, height);
+    }
+
+    /// <summary>The exam strip at the top centre, redrawn when its words change or the desktop under it was redrawn.</summary>
+    private List<Rect> DrawStrip(DateTimeOffset now, List<Rect> drawnSoFar)
+    {
+        var result = new List<Rect>();
+        if (_strip is not { } strip)
+        {
+            return result;
+        }
+
+        var content = strip.At(now);
+        if (content.IsEmpty)
+        {
+            _stripText = null;
+            return result;
+        }
+
+        var (width, height) = OverlayText.StripSize(Width, Height);
+        var x = (Width - width) / 2;
+        var text = content.Message + "|" + OverlayText.StripRemainingText(content.RemainingSeconds) + "|" + content.Notice;
+        var overdrawn = drawnSoFar.Any(r => r.X < x + width && r.X + r.Width > x && r.Y < height);
+        if (text == _stripText && !overdrawn)
+        {
+            return result;
+        }
+
+        using var picture = OverlayText.ComposeStrip(content, width, height);
+        _canvas.DrawBitmap(picture.Bitmap, x, 0);
+        _stripText = text;
+        result.Add(new Rect { X = x, Y = 0, Width = picture.Width, Height = picture.Height });
+        return result;
     }
 
     private void DrawWallpaper()

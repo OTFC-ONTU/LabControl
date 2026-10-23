@@ -30,6 +30,7 @@ public sealed class LabStore
     public string ScriptsPath => Path.Combine(Directory, Defaults.ScriptsFileName);
 
     public string InternetPresetsPath => Path.Combine(Directory, Defaults.InternetPresetsFileName);
+    public string ExamPresetsPath => Path.Combine(Directory, Defaults.ExamPresetsFileName);
 
     public string LogsDirectory => Path.Combine(Directory, Defaults.LogsDirectoryName);
 
@@ -111,6 +112,10 @@ public sealed class LabStore
     public InternetPresetsDocument? LoadInternetPresets() => JsonStore.LoadIfExists<InternetPresetsDocument>(InternetPresetsPath, InternetPresetsDocument.Migrations);
 
     public void SaveInternetPresets(InternetPresetsDocument document) => JsonStore.Save(InternetPresetsPath, document, InternetPresetsDocument.Migrations);
+
+    public ExamPresetsDocument? LoadExamPresets() => JsonStore.LoadIfExists<ExamPresetsDocument>(ExamPresetsPath, ExamPresetsDocument.Migrations);
+
+    public void SaveExamPresets(ExamPresetsDocument document) => JsonStore.Save(ExamPresetsPath, document, ExamPresetsDocument.Migrations);
 
     // ------------------------------------------------------------------ catalog
 

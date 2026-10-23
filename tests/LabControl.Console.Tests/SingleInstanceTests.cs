@@ -870,6 +870,10 @@ public sealed class SingleInstanceTests
 
         public Task<InternetAnswer?> InternetAsync(InternetDialogModel model) => Task.FromResult<InternetAnswer?>(null);
 
+        public Task<LabControl.Console.Services.ExamRequest?> ExamAsync(ExamDialogModel model) => Task.FromResult<LabControl.Console.Services.ExamRequest?>(null);
+
+        public Task<TimeSpan?> ExtendExamAsync(int pcCount) => Task.FromResult<TimeSpan?>(null);
+
         public Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
 
         public Task<AgentBuild?> PushAgentBuildAsync(int pcCount) => Task.FromResult<AgentBuild?>(null);

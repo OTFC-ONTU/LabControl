@@ -198,7 +198,7 @@ public sealed partial class MainViewModel : ObservableObject
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand), nameof(LockScreensCommand), nameof(UnlockScreensCommand), nameof(ShowScreenCommand), nameof(InternetCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand), nameof(LockScreensCommand), nameof(UnlockScreensCommand), nameof(ShowScreenCommand), nameof(InternetCommand), nameof(ExamCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
@@ -324,6 +324,8 @@ public sealed partial class MainViewModel : ObservableObject
                 tile.Row = cell.Row;
             }
         }
+
+        AnyInExam = Machines.Any(t => t.InExam);
 
         foreach (var (agentId, tile) in _tiles.ToArray())
         {
@@ -680,6 +682,70 @@ public sealed partial class MainViewModel : ObservableObject
             ? _session.LiftInternet(targets)
             : _session.SetInternet(targets, answer.Mode, answer.Hosts, answer.PresetName, answer.Duration);
         StatusLine = Strings.Format(answer.Mode == InternetPolicy.Types.Mode.Open ? "Internet.LiftSent" : "Internet.Sent", sent, targets.Count);
+    }
+
+    // ------------------------------------------------------------------ exam (M6 portion 4)
+
+    /// <summary>Some PC of the lab reports an exam: <i>Extend exam</i> and <i>End exam</i> show.</summary>
+    [ObservableProperty]
+    public partial bool AnyInExam { get; set; }
+
+    /// <summary>The <i>Exam</i> dialog for the selected PCs, then one <c>ExamMode</c> per linked PC (D-75); the tiles follow what each PC reports.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private Task ExamAsync() => StartExamAsync(Selected.Select(t => t.AgentId).ToArray(), wholeLab: false);
+
+    /// <summary>The lab-wide variant: every PC in the lab, and a PC that links before the end joins it (owner decision 2026-10-23).</summary>
+    [RelayCommand]
+    private Task ExamForAllAsync() => StartExamAsync(Machines.Select(t => t.AgentId).ToArray(), wholeLab: true);
+
+    private async Task StartExamAsync(IReadOnlyList<string> targets, bool wholeLab)
+    {
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var request = await _dialogs.ExamAsync(new ExamDialogModel(_session, targets.Count, wholeLab));
+        if (request is null)
+        {
+            return;
+        }
+
+        var (_, sent) = _session.StartExam(targets, request, wholeLab);
+        StatusLine = Strings.Format("Exam.Sent", sent, targets.Count);
+    }
+
+    /// <summary>The PCs extend and end act on: the selected ones in an exam, or every PC in one when none of the selection is.</summary>
+    private IReadOnlyList<string> ExamTargets()
+    {
+        var selected = Selected.Where(t => t.InExam).Select(t => t.AgentId).ToArray();
+        return selected.Length > 0 ? selected : Machines.Where(t => t.InExam).Select(t => t.AgentId).ToArray();
+    }
+
+    [RelayCommand]
+    private async Task ExtendExamAsync()
+    {
+        var targets = ExamTargets();
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        if (await _dialogs.ExtendExamAsync(targets.Count) is not { } more)
+        {
+            return;
+        }
+
+        var sent = _session.ExtendExam(targets, more);
+        StatusLine = Strings.Format("Exam.ExtendSent", sent, targets.Count);
+    }
+
+    [RelayCommand]
+    private void EndExam()
+    {
+        var targets = ExamTargets();
+        var sent = _session.EndExam(targets);
+        StatusLine = Strings.Format("Exam.EndSent", sent, targets.Count);
     }
 
     private void CreateJobs(Job.Types.Kind kind, IReadOnlyDictionary<string, string>? args = null, TimeSpan? timeout = null)

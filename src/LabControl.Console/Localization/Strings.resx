@@ -643,4 +643,59 @@ Other teachers' devices will need a new lab file afterwards, and the old backups
   <data name="Event.LabMoved" xml:space="preserve"><value>“{0}” is being moved to a new lab key; its PCs are sent their move.</value></data>
   <data name="Chooser.Status.MovedToNewKey" xml:space="preserve"><value>old key — PCs that connect here are moved to the new key</value></data>
   <data name="Internet.dns_not_held" xml:space="preserve"><value>a network adapter keeps setting its DNS back, so allowed sites may not load there</value></data>
+  <data name="Action.Exam" xml:space="preserve"><value>Exam…</value></data>
+  <data name="Action.ExamForAll" xml:space="preserve"><value>Exam for all…</value></data>
+  <data name="Action.ExtendExam" xml:space="preserve"><value>Extend exam…</value></data>
+  <data name="Action.EndExam" xml:space="preserve"><value>End exam</value></data>
+  <data name="Event.ExamStartSent" xml:space="preserve"><value>Exam ({2}) sent to {0} PC(s), {1} skipped (offline or outdated).</value></data>
+  <data name="Event.ExamExtendSent" xml:space="preserve"><value>Exam extended by {0} min on {1} PC(s), {2} skipped.</value></data>
+  <data name="Event.ExamEndSent" xml:space="preserve"><value>End of the exam sent to {0} PC(s), {1} skipped.</value></data>
+  <data name="Event.ExamLateJoin" xml:space="preserve"><value>{0} linked during the lab's exam and was sent it with the time that is left.</value></data>
+  <data name="Event.ExamRefused" xml:space="preserve"><value>{0}: the exam request was not applied — {1}</value></data>
+  <data name="Event.ExamStarted" xml:space="preserve"><value>{0}: exam started by {1}.</value></data>
+  <data name="Event.ExamEnded" xml:space="preserve"><value>{0}: the exam has ended.</value></data>
+  <data name="Tile.ExamBadge" xml:space="preserve"><value>EXAM</value></data>
+  <data name="Tile.ExamBadgeTimed" xml:space="preserve"><value>EXAM {0}</value></data>
+  <data name="Tile.ExamBy" xml:space="preserve"><value>exam set by {0}</value></data>
+  <data name="Tile.ExamPrograms" xml:space="preserve"><value>only these programs: {0}</value></data>
+  <data name="Tile.ExamProgramsNotWatched" xml:space="preserve"><value>only these programs ({0}) — but the PC is not watching its programs right now</value></data>
+  <data name="Tile.ExamAnyProgram" xml:space="preserve"><value>any program may run</value></data>
+  <data name="Tile.ExamClosed" xml:space="preserve"><value>closed lately: {0}</value></data>
+  <data name="Tile.ExamProblemFormat" xml:space="preserve"><value>exam: {0}</value></data>
+  <data name="Exam.Reason.no_user" xml:space="preserve"><value>nobody is signed in, so there is no screen for the strip and no programs to watch</value></data>
+  <data name="Exam.Reason.whitelist_suspended" xml:space="preserve"><value>the program list is paused while the PC shuts down, restarts or signs out</value></data>
+  <data name="Exam.Reason.watch_failed" xml:space="preserve"><value>the PC cannot read its list of programs, so the program list is not enforced</value></data>
+  <data name="Exam.Reason.end_refused" xml:space="preserve"><value>a program that is not allowed would not close</value></data>
+  <data name="Exam.Reason.strip_not_shown" xml:space="preserve"><value>the exam strip is not on the student's screen yet (the session helper is not connected)</value></data>
+  <data name="Exam.Title" xml:space="preserve"><value>Exam</value></data>
+  <data name="Exam.Targets" xml:space="preserve"><value>Exam on {0} PC(s)</value></data>
+  <data name="Exam.TargetsAll" xml:space="preserve"><value>Exam for the whole lab ({0} PC(s))</value></data>
+  <data name="Exam.Unsaved" xml:space="preserve"><value>(not a saved preset)</value></data>
+  <data name="Exam.MessageLabel" xml:space="preserve"><value>Line shown at the top of the student screens (optional)</value></data>
+  <data name="Exam.MessagePlaceholder" xml:space="preserve"><value>Test 3: arrays. Good luck!</value></data>
+  <data name="Exam.NoTimer" xml:space="preserve"><value>No timer — the exam lasts until I end it</value></data>
+  <data name="Exam.TimerMinutes" xml:space="preserve"><value>Timer, minutes:</value></data>
+  <data name="Exam.TimeUp" xml:space="preserve"><value>When the timer runs out, every PC ends the exam and locks its screen with “Time is up” until you unlock it.</value></data>
+  <data name="Exam.RestrictPrograms" xml:space="preserve"><value>Only these programs may run (one per line):</value></data>
+  <data name="Exam.ProgramsPlaceholder" xml:space="preserve"><value>idea64.exe
+java.exe</value></data>
+  <data name="Exam.SweepWarning" xml:space="preserve"><value>Warn the room: programs not on the list that are open now are asked to close, and closed after {0} seconds — unsaved work in them is lost. A program not on the list that is started during the exam is closed at once. Windows' own programs and the desktop are never closed.</value></data>
+  <data name="Exam.RenameHole" xml:space="preserve"><value>Programs are matched by the executable's name only: a renamed program passes.</value></data>
+  <data name="Exam.InternetLabel" xml:space="preserve"><value>Internet during the exam:</value></data>
+  <data name="Exam.InternetUntouched" xml:space="preserve"><value>Leave as it is</value></data>
+  <data name="Exam.InternetWhitelist" xml:space="preserve"><value>Only the sites of the preset:</value></data>
+  <data name="Exam.NoInternetPreset" xml:space="preserve"><value>Choose an internet preset with at least one site, or another internet setting.</value></data>
+  <data name="Exam.Ceiling" xml:space="preserve"><value>Every PC ends the exam by itself after {0} hours at the latest, even if this console is closed. A standalone internet policy set before the exam comes back when it ends.</value></data>
+  <data name="Exam.LateJoin" xml:space="preserve"><value>A PC of the lab that comes online before the exam ends joins it with the time that is left (until this console is closed).</value></data>
+  <data name="Exam.Offline" xml:space="preserve"><value>A PC that is offline or too old to know exams is skipped; the exam is not queued for it.</value></data>
+  <data name="Exam.Start" xml:space="preserve"><value>Start exam</value></data>
+  <data name="Exam.ProgramProblem" xml:space="preserve"><value>“{0}” is not a program name</value></data>
+  <data name="Exam.TooManyPrograms" xml:space="preserve"><value>At most {0} programs.</value></data>
+  <data name="Exam.ExtendTitle" xml:space="preserve"><value>Extend exam</value></data>
+  <data name="Exam.ExtendTargets" xml:space="preserve"><value>Extend the exam on {0} PC(s)</value></data>
+  <data name="Exam.ExtendNote" xml:space="preserve"><value>Added to the time each PC has left. An exam without a timer is not changed.</value></data>
+  <data name="Exam.ExtendBy" xml:space="preserve"><value>+{0} min</value></data>
+  <data name="Exam.Sent" xml:space="preserve"><value>Exam sent to {0} of {1} PC(s); each tile shows what the PC reports.</value></data>
+  <data name="Exam.ExtendSent" xml:space="preserve"><value>Extension sent to {0} of {1} PC(s).</value></data>
+  <data name="Exam.EndSent" xml:space="preserve"><value>End of the exam sent to {0} of {1} PC(s).</value></data>
 </root>

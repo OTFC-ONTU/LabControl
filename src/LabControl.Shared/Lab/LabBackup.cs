@@ -18,9 +18,9 @@ public static class LabBackup
     private static string Context(string labId) => $"labcontrol/backup/{labId}";
 
     public static BackupDocument Export(LabKey lab, LabDocument labDocument, IReadOnlyDictionary<string, string> catalog, string exportedBy, DateTimeOffset now,
-        EnrollmentDocument? enrollment = null, ScriptsDocument? scripts = null, InternetPresetsDocument? internetPresets = null)
+        EnrollmentDocument? enrollment = null, ScriptsDocument? scripts = null, InternetPresetsDocument? internetPresets = null, ExamPresetsDocument? examPresets = null)
     {
-        var payload = new BackupPayload { Lab = labDocument, Catalog = new Dictionary<string, string>(catalog), Enrollment = enrollment, Scripts = scripts, InternetPresets = internetPresets };
+        var payload = new BackupPayload { Lab = labDocument, Catalog = new Dictionary<string, string>(catalog), Enrollment = enrollment, Scripts = scripts, InternetPresets = internetPresets, ExamPresets = examPresets };
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, JsonStore.Options);
 
         return new BackupDocument
@@ -70,6 +70,7 @@ public static class LabBackup
             UpgradeNested(root, "lab", Defaults.LabFileName, LabDocument.Migrations);
             UpgradeNested(root, "scripts", Defaults.ScriptsFileName, ScriptsDocument.Migrations);
             UpgradeNested(root, "internet_presets", Defaults.InternetPresetsFileName, InternetPresetsDocument.Migrations);
+            UpgradeNested(root, "exam_presets", Defaults.ExamPresetsFileName, ExamPresetsDocument.Migrations);
             UpgradeNested(root, "enrollment", Defaults.EnrollmentFileName, EnrollmentDocument.Migrations);
 
             return root.Deserialize<BackupPayload>(JsonStore.Options)

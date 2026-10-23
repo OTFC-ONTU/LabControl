@@ -128,7 +128,7 @@ public sealed class PolicyDocument : ISchemaVersioned
         return session switch
         {
             OverlaySession overlay => overlay.Message is null ? path + ".message" : null,
-            ExamSession exam => exam.Message is null ? path + ".message" : MissingElement(exam.AllowedPrograms, path + ".allowed_programs"),
+            ExamSession exam => exam.Message is null ? path + ".message" : exam.PresetName is null ? path + ".preset_name" : MissingElement(exam.AllowedPrograms, path + ".allowed_programs"),
             InternetSession internet => internet.PresetName is null ? path + ".preset_name" : MissingElement(internet.AllowedHosts, path + ".allowed_hosts"),
             _ => null,
         };

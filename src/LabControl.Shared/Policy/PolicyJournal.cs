@@ -319,43 +319,25 @@ public sealed class PolicyJournal
 
             if (_policy.ExamInternet is { } examInternet && (examInternet.Ended(nowUnix) || _policy.Exam is null || _policy.Exam.Ended(nowUnix)))
             {
-                if (_policy.Internet is { } underneath && !underneath.Ended(nowUnix))
-                {
-                    // The standalone policy comes back when the exam's ends (D-22): the machine
-                    // changes from one to the other without opening in between.
-                    var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(underneath, _policy.Displaced!, () => SaveOrThrow(_policy, nowUnix)));
-                    if (result.Succeeded)
-                    {
-                        _policy.ExamInternet = null;
-                        lifted.Add(examInternet);
-                        changed = true;
-                        Report(Event.Types.Severity.Info, PolicyEvents.Expired, PolicyEvents.Text("SessionExpired", PolicyEvents.Text("KindExamInternet"), examInternet.SessionId));
-                    }
-                    else
-                    {
-                        Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed, PolicyEvents.Text("ApplyFailed", PolicyEvents.KindName(underneath), underneath.SessionId, Describe(result, PolicyEvents.KindName(underneath))));
-                        _policy.Internet = null;
-                        changed |= Lift(examInternet, nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!), () =>
-                        {
-                            _policy.ExamInternet = null;
-                            _policy.Displaced = new DisplacedSettings();
-                        }, lifted);
-                        changed = true;
-                    }
-                }
-                else
-                {
-                    changed |= Lift(examInternet, nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!), () =>
-                    {
-                        _policy.ExamInternet = null;
-                        _policy.Displaced = new DisplacedSettings();
-                    }, lifted);
-                }
+                changed |= HandBackExamInternetLocked(examInternet, nowUnix, lifted);
             }
 
             if (_policy.Exam is { } exam && exam.Ended(nowUnix))
             {
-                changed |= Lift(exam, nameof(IMachineState.LiftExam), _machine.LiftExam, () => _policy.Exam = null, lifted);
+                // The timer ran out — not the hard limit, which is the fail-safe and only ever
+                // restores: the screen locks with "time is up" until the teacher unlocks it
+                // (owner decision 2026-10-23, D-75). A lock already held stays as it is.
+                // A tick hours late (a PC that slept through the end) does not lock now (review finding 9).
+                var timeUp = exam.UntilUnix > 0 && exam.UntilUnix <= exam.HardLimitUnix && nowUnix >= exam.UntilUnix
+                    && nowUnix - exam.UntilUnix <= (long)TimeUpLateness.TotalSeconds;
+                if (Lift(exam, nameof(IMachineState.LiftExam), _machine.LiftExam, () => _policy.Exam = null, lifted))
+                {
+                    changed = true;
+                    if (timeUp && _policy.Overlay is null)
+                    {
+                        LockForTimeUpLocked(exam, nowUnix);
+                    }
+                }
             }
 
             if (_policy.Overlay is { } overlay && overlay.Ended(nowUnix))
@@ -833,6 +815,332 @@ public sealed class PolicyJournal
         }
 
         return kept;
+    }
+
+    // ------------------------------------------------------------------ exam (portion 4)
+
+    /// <summary>
+    /// A console's <c>ExamMode</c>, already past the ownership gate (D-75): <c>active</c> starts
+    /// or re-states the exam — the timer and the hard limit arrive as durations and become
+    /// moments here, the hard limit clamped to <see cref="Defaults.ExamHardLimit"/> — and
+    /// <c>active</c> false ends it. The exam's internet switch is applied as its own session
+    /// whose limits are the exam's (<c>min(ExamHardLimit, exam's own)</c>, D-76) and which wins
+    /// over a standalone policy until the exam ends, when the standalone one comes back if it
+    /// is still within its limits (D-22). An exam whose internet switch cannot be applied is not
+    /// applied at all. Returns what the PC enforces afterwards, with <c>problem</c> set when the
+    /// request was refused or failed.
+    /// </summary>
+    public ExamState SetExam(ExamMode request, string setByInstance, long nowUnix)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(setByInstance);
+
+        lock (_lock)
+        {
+            if (_stopped)
+            {
+                return ExamStateLocked(PolicyEvents.RefusedStopped, nowUnix);
+            }
+
+            return request.Active ? StartExamLocked(request, setByInstance, nowUnix) : EndExamLocked(request.SessionId ?? string.Empty, nowUnix);
+        }
+    }
+
+    /// <summary>The exam state as it stands, for the re-send after <c>Welcome</c> and the refresh of the closed programs.</summary>
+    public ExamState ExamStateOf(long nowUnix)
+    {
+        lock (_lock)
+        {
+            return ExamStateLocked(null, nowUnix);
+        }
+    }
+
+    /// <summary>
+    /// Re-states the exam to a machine that lost part of it — a helper restarted at logon or
+    /// logoff shows no strip until told again. A no-op without an exam; the same list does not
+    /// sweep again. Returns whether an exam was re-stated.
+    /// </summary>
+    public bool ReassertExam(long nowUnix)
+    {
+        lock (_lock)
+        {
+            if (_stopped || _policy.Exam is not { } exam || exam.Ended(nowUnix))
+            {
+                return false;
+            }
+
+            var result = Guard(nameof(IMachineState.ApplyExam), () => _machine.ApplyExam(exam));
+            if (!result.Succeeded)
+            {
+                Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed,
+                    PolicyEvents.Text("ApplyFailed", PolicyEvents.KindName(exam), exam.SessionId, Describe(result, PolicyEvents.KindName(exam))));
+            }
+
+            return true;
+        }
+    }
+
+    private ExamState StartExamLocked(ExamMode request, string setByInstance, long nowUnix)
+    {
+        if (request.UntilSeconds < 0)
+        {
+            return ExamStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix);
+        }
+
+        var previous = _policy.Exam;
+        var sessionId = request.SessionId is { Length: > 0 } id ? id : Guid.NewGuid().ToString("n");
+        var same = previous is not null && previous.SessionId == sessionId;
+        var exam = new ExamSession
+        {
+            SessionId = sessionId,
+            SetByInstance = setByInstance,
+            SinceUnix = same ? previous!.SinceUnix : nowUnix,
+            UntilUnix = request.UntilSeconds > 0 ? ClassroomPolicy.Add(nowUnix, request.UntilSeconds) : 0,
+            HardLimitUnix = ClassroomPolicy.Clamp(request.HardLimitSeconds > 0 ? ClassroomPolicy.Add(nowUnix, request.HardLimitSeconds) : 0, Defaults.ExamHardLimit, nowUnix),
+            Message = OverlayText.ClampMessage(request.Message),
+            RestrictPrograms = request.RestrictPrograms,
+            AllowedPrograms = Exam.ProgramNames.NormalizeAll(request.AllowedPrograms),
+            CollectFolder = request.Collect is { Folder.Length: > 0 } collect ? collect.Folder : null,
+            PresetName = request.PresetName ?? string.Empty,
+        };
+
+        if (exam.Ended(nowUnix))
+        {
+            return ExamStateLocked(PolicyEvents.RefusedAlreadyEnded, nowUnix);
+        }
+
+        // Another exam is replaced, not merged: its internet switch goes with it.
+        var lifted = new List<PolicySession>();
+        if (previous is not null && !same)
+        {
+            if (_policy.ExamInternet is { } replaced)
+            {
+                HandBackExamInternetLocked(replaced, nowUnix, lifted);
+            }
+        }
+
+        var name = PolicyEvents.KindName(exam);
+
+        // The internet switch first, the exam last (review finding 2): the exam's first look
+        // asks the student's programs to close, which must never happen for an exam that is
+        // then refused. Its own session, the exam's limits (D-76).
+        var wanted = request.Internet is { Mode: InternetPolicy.Types.Mode.Whitelist or InternetPolicy.Types.Mode.Blocked } internet
+            ? new InternetSession
+            {
+                Mode = internet.Mode,
+                SessionId = exam.SessionId + ExamInternetSuffix,
+                SetByInstance = setByInstance,
+                SinceUnix = _policy.ExamInternet is { } held && held.SessionId == exam.SessionId + ExamInternetSuffix ? held.SinceUnix : nowUnix,
+                UntilUnix = exam.UntilUnix,
+                HardLimitUnix = exam.HardLimitUnix,
+                AllowedHosts = internet.Mode == InternetPolicy.Types.Mode.Whitelist ? Normalize(internet.AllowedHosts) : [],
+                PresetName = internet.PresetName ?? string.Empty,
+            }
+            : null;
+
+        if (wanted is not null)
+        {
+            var applied = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(wanted, _policy.Displaced!, () => SaveOrThrow(_policy, nowUnix)));
+            if (!applied.Succeeded)
+            {
+                // A policy that cannot be applied is never applied (D-74). The apply may have
+                // changed half the machine: put the standalone policy back, or open it.
+                var internetName = PolicyEvents.Text("KindExamInternet");
+                var problem = Describe(applied, internetName);
+                Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed, PolicyEvents.Text("ApplyFailed", internetName, wanted.SessionId, problem));
+                _policy.ExamInternet ??= wanted;
+                HandBackExamInternetLocked(_policy.ExamInternet, nowUnix, lifted);
+                if (previous is not null && !same)
+                {
+                    // The other exam was being replaced; it does not come back half-held.
+                    Lift(previous, nameof(IMachineState.LiftExam), _machine.LiftExam, () => _policy.Exam = null, lifted);
+                }
+
+                // A re-state that failed leaves the running exam as it was, without its internet switch.
+                Save(nowUnix);
+                return ExamStateLocked(problem, nowUnix);
+            }
+
+            _policy.ExamInternet = wanted;
+        }
+
+        var result = Guard(nameof(IMachineState.ApplyExam), () => _machine.ApplyExam(exam));
+        if (!result.Succeeded)
+        {
+            var problem = Describe(result, name);
+            Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed, PolicyEvents.Text("ApplyFailed", name, exam.SessionId, problem));
+            if (!same)
+            {
+                // Nothing of a refused exam may stay: its internet switch goes, and so does the
+                // exam it was replacing, which the machine may now hold only half of.
+                if (wanted is not null && _policy.ExamInternet is { } refused)
+                {
+                    HandBackExamInternetLocked(refused, nowUnix, lifted);
+                }
+
+                if (previous is not null)
+                {
+                    Lift(previous, nameof(IMachineState.LiftExam), _machine.LiftExam, () => _policy.Exam = null, lifted);
+                }
+            }
+
+            Save(nowUnix);
+            return ExamStateLocked(problem, nowUnix);
+        }
+
+        _policy.Exam = exam;
+
+        if (wanted is null && _policy.ExamInternet is { } dropped)
+        {
+            // Re-stated without the internet switch: the standalone policy, if any, comes back.
+            HandBackExamInternetLocked(dropped, nowUnix, lifted);
+        }
+
+        Save(nowUnix);
+        return ExamStateLocked(null, nowUnix);
+    }
+
+    private ExamState EndExamLocked(string sessionId, long nowUnix)
+    {
+        if (_policy.Exam is not { } exam)
+        {
+            return ExamStateLocked(null, nowUnix);
+        }
+
+        if (sessionId.Length > 0 && !string.Equals(sessionId, exam.SessionId, StringComparison.Ordinal))
+        {
+            return ExamStateLocked(PolicyEvents.RefusedNoExamSession, nowUnix);
+        }
+
+        var lifted = new List<PolicySession>();
+        if (_policy.ExamInternet is { } examInternet)
+        {
+            HandBackExamInternetLocked(examInternet, nowUnix, lifted);
+        }
+
+        string? problem = null;
+        var result = Guard(nameof(IMachineState.LiftExam), _machine.LiftExam);
+        if (result.Succeeded)
+        {
+            _policy.Exam = null;
+        }
+        else
+        {
+            var name = PolicyEvents.KindName(exam);
+            problem = Describe(result, name);
+            _machineOpen = false;
+            Report(Event.Types.Severity.Warning, PolicyEvents.RestoreFailed, PolicyEvents.Text("LiftFailed", name, exam.SessionId, problem));
+        }
+
+        Save(nowUnix);
+        return ExamStateLocked(problem, nowUnix);
+    }
+
+    /// <summary>
+    /// Ends the exam's internet switch: the standalone policy underneath comes back if it is
+    /// still within its limits — the machine changes from one to the other without opening in
+    /// between (D-22) — and otherwise the machine is opened. Returns whether anything changed.
+    /// </summary>
+    private bool HandBackExamInternetLocked(InternetSession examInternet, long nowUnix, List<PolicySession> lifted)
+    {
+        if (_policy.Internet is { } underneath && !underneath.Ended(nowUnix))
+        {
+            var result = Guard(nameof(IMachineState.ApplyInternet), () => _machine.ApplyInternet(underneath, _policy.Displaced!, () => SaveOrThrow(_policy, nowUnix)));
+            if (result.Succeeded)
+            {
+                _policy.ExamInternet = null;
+                lifted.Add(examInternet);
+                Report(Event.Types.Severity.Info, PolicyEvents.Expired, PolicyEvents.Text("SessionExpired", PolicyEvents.Text("KindExamInternet"), examInternet.SessionId));
+                return true;
+            }
+
+            Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed, PolicyEvents.Text("ApplyFailed", PolicyEvents.KindName(underneath), underneath.SessionId, Describe(result, PolicyEvents.KindName(underneath))));
+            _policy.Internet = null;
+            Lift(examInternet, nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!), () =>
+            {
+                _policy.ExamInternet = null;
+                _policy.Displaced = new DisplacedSettings();
+            }, lifted);
+            return true;
+        }
+
+        return Lift(examInternet, nameof(IMachineState.LiftInternet), () => _machine.LiftInternet(_policy.Displaced!), () =>
+        {
+            _policy.ExamInternet = null;
+            _policy.Displaced = new DisplacedSettings();
+        }, lifted);
+    }
+
+    /// <summary>The "time is up" lock (owner decision 2026-10-23, D-75): an ordinary lock — its own 1 h ceiling, until the teacher unlocks it — set in the exam's name.</summary>
+    private void LockForTimeUpLocked(ExamSession exam, long nowUnix)
+    {
+        var session = new OverlaySession
+        {
+            Kind = Overlay.Types.Kind.Lock,
+            SessionId = exam.SessionId + TimeUpSuffix,
+            SetByInstance = exam.SetByInstance ?? string.Empty,
+            SinceUnix = nowUnix,
+            UntilUnix = 0,
+            HardLimitUnix = ClassroomPolicy.Clamp(0, Defaults.LockHardLimit, nowUnix),
+            Message = OverlayText.ClampMessage(OverlayText.TimeUpMessage),
+        };
+
+        var result = Guard(nameof(IMachineState.ApplyOverlay), () => _machine.ApplyOverlay(session));
+        if (!result.Succeeded)
+        {
+            Report(Event.Types.Severity.Warning, PolicyEvents.ApplyFailed,
+                PolicyEvents.Text("ApplyFailed", PolicyEvents.KindName(session), session.SessionId, Describe(result, PolicyEvents.KindName(session))));
+            return;
+        }
+
+        _policy.Overlay = session;
+        Report(Event.Types.Severity.Info, PolicyEvents.ExamTimeUp, PolicyEvents.Text("ExamTimeUp"));
+    }
+
+    /// <summary>The exam's internet session id is the exam's with this suffix, so the console can tell it from a standalone one.</summary>
+    public const string ExamInternetSuffix = ":internet";
+
+    /// <summary>How late the clock may notice the timer's end and still lock with "time is up".</summary>
+    public static readonly TimeSpan TimeUpLateness = TimeSpan.FromMinutes(2);
+
+    /// <summary>The "time is up" lock's session id is the exam's with this suffix.</summary>
+    public const string TimeUpSuffix = ":time-up";
+
+    /// <summary>The exam as it stands, with the live side folded in. Null-safe like <see cref="OverlayStateLocked"/>; never throws.</summary>
+    private ExamState ExamStateLocked(string? problem, long nowUnix)
+    {
+        var state = new ExamState { Problem = problem ?? string.Empty };
+        if (_policy.Exam is not { } exam)
+        {
+            return state;
+        }
+
+        state.Active = true;
+        state.SessionId = exam.SessionId ?? string.Empty;
+        state.SinceUnix = exam.SinceUnix;
+        state.UntilUnix = exam.UntilUnix;
+        state.HardLimitUnix = exam.HardLimitUnix;
+        state.RemainingSeconds = Math.Max(0, exam.DeadlineUnix - nowUnix);
+        state.SetByInstance = exam.SetByInstance ?? string.Empty;
+        state.PresetName = exam.PresetName ?? string.Empty;
+        state.Message = exam.Message ?? string.Empty;
+        state.RestrictPrograms = exam.RestrictPrograms;
+        state.AllowedPrograms.AddRange((exam.AllowedPrograms ?? []).Where(p => p is not null));
+
+        ExamRuntime runtime;
+        try
+        {
+            runtime = _machine.ExamRuntime() ?? ExamRuntime.None;
+        }
+        catch (Exception)
+        {
+            runtime = ExamRuntime.None;
+        }
+
+        state.WhitelistEnforced = exam.RestrictPrograms && runtime.WhitelistEnforced;
+        state.TerminatedRecently.AddRange((runtime.Terminated ?? []).Where(n => n is not null));
+        state.Reason = string.Join(' ', InternetCodes(runtime.Reason).Distinct(StringComparer.Ordinal));
+        return state;
     }
 
     // ------------------------------------------------------------------ the pieces

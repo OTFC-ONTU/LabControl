@@ -57,6 +57,12 @@ public interface IDialogs
     /// <summary>The <i>Internet</i> dialog (M6 portion 3, D-73): mode, sites and presets, duration, and the refused names with their <i>Allow</i>.</summary>
     Task<InternetAnswer?> InternetAsync(InternetDialogModel model);
 
+    /// <summary>The <i>Exam</i> dialog (M6 portion 4, D-75): the switches, the presets, and what the room must be told before <i>Start</i>.</summary>
+    Task<Services.ExamRequest?> ExamAsync(ExamDialogModel model);
+
+    /// <summary><i>Extend exam</i>: how many minutes more; <c>null</c> when cancelled.</summary>
+    Task<TimeSpan?> ExtendExamAsync(int pcCount);
+
     Task<string?> PickFolderAsync(string title);
 
     /// <summary>The development-only <i>Push agent build</i> dialog (D-33): which folder, which version number; returns the build read from it.</summary>

@@ -172,7 +172,19 @@ the documents relevant to the task:
   list as an original, and never re-apply a whitelist from a short-lived process. The 14-PC
   physical-lab drill passed on 2026-10-20 after the lab fixes (`D-73` item 12). A lock or a
   broadcast holds the student's display on through the helper's `DisplayKeeper` (`D-84`, not yet
-  run on Windows); exam mode should reuse it. Next: portion 4.
+  run on Windows); the exam strip reuses it.
+- **M6 portion 4 is built (2026-10-23, `D-75`, `D-76`), review-fixed, not yet run on Windows.**
+  Exam mode: `ExamMode`/`ExamState` with durations, the journal's `SetExam` (internet switch first as
+  its own `ExamInternet` session that hands a standalone policy back, the exam last), a "Time is up"
+  lock when the timer — not the hard limit — runs out, the allowed-programs whitelist in the
+  **service** (`WindowsExamControl` over the pure `Shared/Exam/ProgramWatch`: session and token before
+  name, never-touch names only under the Windows directories, a polite opening sweep with
+  `WM_CLOSE` through the helper and a 10 s grace, at-once ending later, power jobs pause it, the
+  teacher's scripts exempt), the strip in the helper (`ExamStripWindow`, click-through, hidden under
+  a lock or broadcast), presets in `exam-presets.json` (backup only, never the lab file), late PCs
+  joining an exam *for all* from the console's memory. Keep the whitelist out of the helper, keep
+  the internet switch before the exam, and never count a process as closed that this call did not
+  end. Next: the VM drill, then portion 5.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the

@@ -30,6 +30,12 @@ public sealed class ExamPreset
 
     public List<string> InternetHosts { get; set; } = [];
 
+    /// <summary>The collect-work switch (M6 portion 5, D-77); where the work lands on the console is never part of a preset.</summary>
+    public bool CollectWork { get; set; }
+
+    /// <summary>The folder on the PCs, relative to the student profile (<see cref="Jobs.CollectRequest"/>).</summary>
+    public string CollectFolder { get; set; } = Jobs.CollectRequest.DefaultFolder;
+
     public long CreatedAtUnix { get; set; }
 
     public long ModifiedAtUnix { get; set; }

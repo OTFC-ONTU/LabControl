@@ -840,7 +840,8 @@ console fail clearly. Scripts and updates use this same path without changing th
 <code>GetUploadStatus</code> to resume <code>PushFile</code> at committed offsets. The console selects the
 staging stream and expected size/hash; an agent cannot choose a console path. Callers own
 staging/cleanup and expose only verified results. This transport is built; the per-PC
-diagnostic-upload and collected-work consumers remain pending. Fan-out result bundles
+collected-work consumer is built (M6 portion 5, <code>D-77</code>): the agent asks for its grant with
+<code>RequestUpload</code> once its archive exists; diagnostic uploads remain pending. Fan-out result bundles
 use existing <code>Link</code> job output instead (D-43).</p>
 <p>The console's <em>Send files…</em> action and FakeAgent handout delivery are built (D-44).
 Every selected file/PC pair is one job in a shared batch. FakeAgent writes into <code>Materials</code>
@@ -894,7 +895,7 @@ limitation. Source files must remain unchanged and available until all jobs comp
 </tr>
 <tr>
 <td>Exam mode</td>
-<td><strong>Built (M6 portion 4), not yet run on Windows.</strong> A composable set of independent switches, not a single mode (see §6.1), held in <code>policy.json</code> like a lock (<code>D-69</code>): the console sends <code>ExamMode</code>, the ownership gate judges it, the journal stamps the durations on the PC's clock, clamps the hard limit to 4 h, restores first and re-applies second at every service start, and ends it by itself (<code>D-75</code>).</td>
+<td><strong>Built (M6 portion 4); VM drill passed on Windows 11 ARM64 (2026-10-23), physical lab pending.</strong> A composable set of independent switches, not a single mode (see §6.1), held in <code>policy.json</code> like a lock (<code>D-69</code>): the console sends <code>ExamMode</code>, the ownership gate judges it, the journal stamps the durations on the PC's clock, clamps the hard limit to 4 h, restores first and re-applies second at every service start, and ends it by itself (<code>D-75</code>).</td>
 </tr>
 <tr>
 <td>— timer</td>
@@ -910,7 +911,7 @@ limitation. Source files must remain unchanged and available until all jobs comp
 </tr>
 <tr>
 <td>— collect work</td>
-<td>At the end (or on demand) the agent zips <strong>one folder chosen when the exam is set up</strong> and uploads it through <code>PushFile</code>; the console files it under <code>&lt;exam&gt;/PC-07/</code>. The folder is a dedicated work directory, not the whole <code>student</code> desktop, so what is collected is predictable and small.</td>
+<td><strong>Built (M6 portion 5), not yet run on Windows.</strong> One folder inside the student's profile, chosen when the exam is set up — <code>Desktop\Exam</code> by default — is created on each PC at the start and collected when the exam ends there (the timer, <em>End exam</em>, the hard limit); a PC that never reports the end is asked for a minute after the deadline, and one not online then is reported <strong>missing</strong>, never retried (owner decision 2026-10-23). The same collection without an exam is <em>Collect files…</em>. The agent zips the folder under the student's own token into a private staging file, links left out, 256 MB / 5000 files at most, then asks the console for a grant with <code>RequestUpload</code> and uploads it through <code>PushFile</code> (<code>D-42</code>, <code>D-77</code>); the console checks every name and size and unpacks it into <code>&lt;destination&gt;/&lt;name date&gt;/PC-07/</code> with a <code>report.txt</code> (destination chosen by the teacher, default <code>~/Documents/LabControl/Collected</code>). The work belongs to the console instance that delivered the job (<code>D-57</code>).</td>
 </tr>
 <tr>
 <td>Package management</td>
@@ -918,7 +919,7 @@ limitation. Source files must remain unchanged and available until all jobs comp
 </tr>
 <tr>
 <td>Profile reset</td>
-<td>Agent logs <code>student</code> off, deletes the profile (<code>Win32_UserProfile.Delete</code>), reboots; auto-logon recreates a pristine profile. Optional &quot;light reset&quot; = wipe Desktop/Documents/Downloads only.</td>
+<td><strong>Built (M6 portion 5), not yet run on Windows</strong> (<code>D-78</code>). Only the student account Setup created (<code>D-40</code>), never during an exam. <em>Full</em>: the agent logs <code>student</code> off, deletes the profile by its recorded SID with <code>DeleteProfile</code> (as Setup's removal does — not <code>Win32_UserProfile.Delete</code>), retried for up to a minute, and reboots whatever happened; automatic sign-in creates a pristine profile. <em>Light</em>: Desktop, Documents and Downloads emptied under the student's token — Materials included, links removed and never entered, <code>desktop.ini</code> kept — while the student stays signed in.</td>
 </tr>
 <tr>
 <td>Self-update</td>
@@ -1227,7 +1228,7 @@ console, Linux/macOS student agents
 build it now), grading/LMS integration.</p>
 
 </article>
-<footer>Generated 2026-10-23 11:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-23 16:56 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#physical-picture">1. Physical picture</a></li><li class="lvl2"><a href="#components">2. Components</a></li><li class="lvl2"><a href="#trust-model-and-connection">3. Trust model and connection</a></li><li class="lvl3"><a href="#separate-identities">3.1 Separate identities</a></li><li class="lvl3"><a href="#how-the-lab-key-is-protected">3.2 How the lab key is protected</a></li><li class="lvl3"><a href="#what-a-student-pc-knows">3.3 What a student PC knows</a></li><li class="lvl3"><a href="#connection">3.4 Connection</a></li><li class="lvl3"><a href="#enrollment-the-usb-stick-carries-no-secret">3.5 Enrollment — the USB stick carries no secret</a></li><li class="lvl3"><a href="#replacing-the-teacher-machine">3.6 Replacing the teacher machine</a></li><li class="lvl3"><a href="#several-teacher-machines-one-at-a-time">3.7 Several teacher machines, one at a time</a></li><li class="lvl3"><a href="#certificate-lifetimes-and-renewal">3.8 Certificate lifetimes and renewal</a></li><li class="lvl3"><a href="#saved-labs-and-one-active-room-m5-d-53.d-60-designed-being-implemented">3.9 Saved labs and one active room (M5, D-53…D-60 — designed, being implemented)</a></li><li class="lvl2"><a href="#data-on-the-console">4. Data on the console</a></li><li class="lvl2"><a href="#data-on-a-student-pc">5. Data on a student PC</a></li><li class="lvl2"><a href="#feature-mechanism-map">6. Feature → mechanism map</a></li><li class="lvl3"><a href="#exam-mode-is-a-set-of-switches">6.1 Exam mode is a set of switches</a></li><li class="lvl3"><a href="#internet-control-open-whitelist-blocked">6.2 Internet control: open, whitelist, blocked</a></li><li class="lvl2"><a href="#updating-labcontrol-itself">7. Updating LabControl itself</a></li><li class="lvl3"><a href="#the-rule-that-makes-updates-safe">7.1 The rule that makes updates safe</a></li><li class="lvl3"><a href="#updating-an-agent">7.2 Updating an agent</a></li><li class="lvl3"><a href="#updating-the-console">7.3 Updating the console</a></li><li class="lvl2"><a href="#console-ui-avalonia">8. Console UI (Avalonia)</a></li><li class="lvl2"><a href="#threat-model-short">9. Threat model (short)</a></li><li class="lvl2"><a href="#non-goals">10. Non-goals</a></li></ul></nav>
 </div>

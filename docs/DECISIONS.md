@@ -4237,6 +4237,94 @@ name (a renamed or deleted internet preset would silently change an exam); persi
 exam in the console (a restarted console would send an exam nobody is watching to PCs that come
 online later — the room may have moved on).
 
+## D-77 — Collected work: the agent asks for its grant, the console that delivered the job owns the work (M6 portion 5)
+
+Context (2026-10-23): the exam's fourth switch (`D-16`, ARCHITECTURE §6.1) and a standalone
+*Collect files…* need the per-PC upload transport of `D-42`, whose grant needs a size and a hash
+the console cannot know: the PC makes the archive. Owner decisions of 2026-10-23: the folder is
+`Desktop\Exam` by default, created at the exam's start, and the teacher may name another folder
+inside the student profile (saved in the preset); the console unpacks into
+`<destination>/<name date>/PC-07/`, destination chosen by the teacher, default
+`~/Documents/LabControl/Collected`; a standalone *Collect files…* exists; there is **no** "collect
+now" during an exam and **no** automatic retry for a PC that was off — it is reported missing.
+
+Decisions:
+
+1. **`RequestUpload(UploadRequest{job_id, size, sha256}) → UploadGrant{reference, problem}`**, a
+   new additive RPC. The console grants only for a running `collect_files` job of that PC that
+   this instance delivered — collected work belongs to the delivering instance like every result
+   (`D-57`) — within the cap; a repeated request for the same archive returns the same grant. The
+   job's `JobResult.artifact_ref` names the grant; the console unpacks only a complete,
+   hash-checked grant whose reference matches. Grants stay in memory (`D-42`): a console restart
+   loses a collection in progress, and `collect_files` is never re-sent (`InFlightJobPolicy`).
+2. **The folder** is relative to the student's profile (`CollectRequest`): plain Windows names,
+   never `..`, at most eight parts; `Desktop`, `Documents`, `Downloads` as a first part mean the
+   known folder (OneDrive or a policy may move it). The agent resolves it from the recorded
+   student's token (`ManagedStudentAccess`), refuses anything outside the profile, and an
+   installation without the managed student (`D-40`) refuses like handouts do.
+3. **The agent reads as the student.** The archive is a private staging file under
+   `%ProgramData%\LabControl\collect` opened as SYSTEM; every read of the student's files runs
+   under `WindowsIdentity.RunImpersonated` with the student's token, so nothing the student could
+   not open is collected, and links and junctions are left out rather than followed
+   (`WorkArchive.Create`). Files that cannot be read (open in a program) are skipped and named.
+   Caps: 256 MB uncompressed, 5000 files (`Defaults.CollectMaxBytes`, `CollectMaxFiles`); a folder
+   past either is refused whole with its reason — half an exam is worse than a clear "too big". A
+   missing folder is `ok` with no artifact: *nothing to collect*.
+4. **The console trusts nothing in the archive** (`WorkArchive.Extract`): each name part must be a
+   plain Windows name, rooted names and `..` are refused, every target must stay under the PC's
+   folder, sizes are counted as written rather than read from the headers, and the files go to a
+   `.partial` sibling renamed into place only when all of it was written.
+5. **Exams collect at their end, from the console's memory** (`WorkCollections`, like the
+   lab-wide exam of `D-76`): `ExamMode.collect` tells the PC the folder, which it creates at
+   apply, best effort. The console collects a PC when that PC reports the exam over — the timer,
+   *End exam*, the hard limit, another console ending it — and, once the exam's deadline (or the
+   moment the teacher ended it) plus `Defaults.CollectAfterDeadlineGrace` (1 min) has passed, asks
+   every PC that never answered; one not online then is missing. A late PC joining a lab-wide
+   exam is collected with it. An exam without a timer is collected when it is ended.
+6. **`report.txt`** beside the PCs' folders says per PC: collected (with the file count), nothing
+   to collect, missing, or failed and why; it is rewritten on every change. `collect.done` names
+   the PCs not collected and where the work is.
+
+Rejected: the agent choosing a console path or a bucket id (`CollectSpec.destination_id` is never
+sent — the destination is the console's alone); the console pulling files from the PC (the PC is
+the client, `D-05`); uploading the folder file by file (thousands of grants and no all-or-nothing
+answer); following links as SYSTEM (a junction to `C:\Windows\System32\config` would upload the
+registry); retrying a PC that was off when it comes back (owner decision); persisting exam
+collections across a console restart (the exam itself is in memory on the console, `D-76`).
+
+## D-78 — Profile reset uses DeleteProfile by the recorded SID; a light reset empties three known folders under the student's token (M6 portion 5)
+
+Context (2026-10-23): `ARCHITECTURE` §6 promised `Win32_UserProfile.Delete`; the corrected M6
+plan (2026-09-16) settled on `DeleteProfile`, which Setup's removal already uses (`D-52`).
+Owner decision of 2026-10-23: a light reset empties Desktop, Documents and Downloads, **Materials
+included**.
+
+Decisions:
+
+1. **Only the recorded student** of an installation that created it (`D-40`, `D-45`) is ever
+   reset; an account-off installation refuses with a plain reason. **Refused while an exam is
+   held** (`PolicyEnforcer.HoldsExam`, a failed read counts as held): it would delete the work the
+   exam is about to collect.
+2. **Light** resolves the three known folders from the student's token (inside the profile, local,
+   no link among their ancestors) and empties each under `RunImpersonated`: a link or junction is
+   removed as a link and never entered, read-only files are cleared first, each folder itself and
+   its top-level `desktop.ini` stay. Bounded at `Defaults.ProfileWipeMaxEntries` (200 000) and
+   `ProfileWipeMaxDuration` (2 min); what was left — usually files open in a program — makes the
+   job not `ok` and is counted, with "log the student off and reset again". The student stays
+   signed in.
+3. **Full** logs the student off, retries `DeleteProfile(recorded SID)` every 2 s for
+   `Defaults.ProfileUnloadTimeout` (60 s) — a loaded profile is refused by Windows, never removed
+   by path — treats "no such profile" as done, answers, and reboots `Defaults.PowerJobDelay` later,
+   **also when the profile could not be removed**, so the PC always comes back online by itself;
+   automatic sign-in then creates a new profile from Default (including Setup's add-only document
+   seed, `D-52`). The reboot pauses an exam's whitelist like any power job (none can be held).
+4. Both are online-only jobs and never re-sent (`InFlightJobPolicy`).
+
+Rejected: `Win32_UserProfile.Delete` (WMI for one call Setup already makes natively); deleting the
+profile directory by path (`D-52`'s rule: never a path from an account name); a light reset that
+logs the student off first (the owner's light reset is between groups, with the student signed in);
+a reset during an exam.
+
 ## D-80 — Public repository: MIT, a README that is a project page, links that work in the mirror
 
 Context (2026-10-09): the repository is being prepared to become public. The README had

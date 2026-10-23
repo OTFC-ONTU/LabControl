@@ -84,6 +84,9 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
     /// <summary>True while an internet policy is applied; <c>self_update</c> is refused then (D-69 item 6). Set by the service once the enforcer runs.</summary>
     public Func<bool>? NetworkPolicyHeld { get; set; }
 
+    /// <summary>True while an exam is held; <c>reset_profile</c> is refused then (D-78). Set by the service once the enforcer runs.</summary>
+    public Func<bool>? ExamHeld { get; set; }
+
     public async Task<JobResult> RunJobAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
     {
         _log.LogInformation("{Pc}: job {Kind} {Id}", Link.Name, job.Kind, job.Id);
@@ -105,6 +108,12 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             case Job.Types.Kind.SendFile:
                 return await new HandoutRunner(Link).RunAsync(job, report, token);
 
+            case Job.Types.Kind.CollectFiles:
+                return await new CollectRunner(Link).RunAsync(job, report, token);
+
+            case Job.Types.Kind.ResetProfile:
+                return await new ProfileResetRunner(Link, _log) { ExamHeld = ExamHeld }.RunAsync(job, report, token);
+
             case Job.Types.Kind.SelfUpdate:
                 if (NetworkPolicyHeld?.Invoke() == true)
                 {
@@ -120,8 +129,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
                 return await _updater.RunAsync(job, report, token);
 
             default:
-                // Packages, profile reset and files land in M4 (ROADMAP). Until then the
-                // console hears "not in this build".
+                // Packages land in M7 (ROADMAP). Until then the console hears "not in this build".
                 return new JobResult
                 {
                     JobId = job.Id,

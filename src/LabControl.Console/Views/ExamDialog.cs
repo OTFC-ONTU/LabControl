@@ -12,8 +12,8 @@ namespace LabControl.Console.Views;
 
 /// <summary>
 /// The <i>Exam</i> dialog (M6 portion 4, D-75, D-76): the four switches composed into one exam
-/// — the message, the timer, the allowed programs and the internet (collecting work arrives in
-/// portion 5) — with the named presets, and every plain sentence the room needs said before
+/// — the message, the timer, the allowed programs, the internet and collecting work (portion 5,
+/// D-77) — with the named presets, and every plain sentence the room needs said before
 /// <i>Start</i>: what happens to programs that are open, what happens when the time is up,
 /// and that every PC ends the exam by itself after <see cref="Defaults.ExamHardLimit"/>.
 /// </summary>
@@ -32,6 +32,8 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
     private readonly RadioButton _internetBlocked = new() { GroupName = "internet" };
     private readonly RadioButton _internetWhitelist = new() { GroupName = "internet" };
     private readonly ComboBox _internetPresets = new() { MinWidth = 220 };
+    private readonly CheckBox _collect = new();
+    private readonly CollectFields _collectFields;
     private readonly TextBlock _problem = new() { Foreground = Brushes.DarkOrange, TextWrapping = TextWrapping.Wrap, MaxWidth = 460, IsVisible = false };
     private bool _choosing;
 
@@ -39,6 +41,7 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
     {
         _model = model;
         Title = Strings.Get("Exam.Title");
+        _collectFields = new CollectFields(this);
         var ceilingMinutes = (int)Defaults.ExamHardLimit.TotalMinutes;
         _minutes = new NumericUpDown
         {
@@ -59,6 +62,7 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
         _internetUntouched.Content = Strings.Get("Exam.InternetUntouched");
         _internetBlocked.Content = Strings.Get("Internet.ModeBlocked");
         _internetWhitelist.Content = Strings.Get("Exam.InternetWhitelist");
+        _collect.Content = Strings.Get("Exam.CollectWork");
 
         var savePreset = new Button { Content = Strings.Get("Internet.SavePreset") };
         var deletePreset = new Button { Content = Strings.Get("Internet.DeletePreset") };
@@ -93,6 +97,15 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
         _programs.TextChanged += (_, _) => CheckBrowser();
         noBrowser.IsVisible = false;
 
+        var collect = new StackPanel { Spacing = 6, Margin = new Avalonia.Thickness(24, 0, 0, 0) };
+        collect.Children.Add(Label(Strings.Get("Collect.FolderLabel")));
+        collect.Children.Add(_collectFields.Folder);
+        collect.Children.Add(Label(Strings.Get("Collect.DestinationLabel")));
+        collect.Children.Add(_collectFields.DestinationRow());
+        collect.Children.Add(Label(Strings.Get("Exam.CollectNote")));
+        _collect.IsCheckedChanged += (_, _) => collect.IsEnabled = _collect.IsChecked == true;
+        collect.IsEnabled = false;
+
         var start = Primary(Strings.Get("Exam.Start"));
         var cancel = Secondary(Strings.Get("Common.Cancel"));
         start.Click += (_, _) =>
@@ -119,6 +132,8 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
             _internetBlocked,
             whitelistRow,
             noBrowser,
+            _collect,
+            collect,
             saveRow,
             Label(Strings.Format("Exam.Ceiling", (int)Defaults.ExamHardLimit.TotalHours)),
             Label(Strings.Get(model.WholeLab ? "Exam.LateJoin" : "Exam.Offline")),
@@ -193,10 +208,24 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
         TimeSpan? timer = _timer.IsChecked == true && _minutes.Value is { } value
             ? TimeSpan.FromMinutes((double)Math.Clamp(value, 1, (decimal)Defaults.ExamHardLimit.TotalMinutes))
             : null;
+        string? collectFolder = null;
+        string? collectDestination = null;
+        if (_collect.IsChecked == true)
+        {
+            var (folder, destination, collectProblem) = _collectFields.Read();
+            if (collectProblem is not null)
+            {
+                Show(collectProblem);
+                return null;
+            }
+
+            (collectFolder, collectDestination) = (folder, destination);
+        }
+
         var presetName = _presets.SelectedItem is PresetItem { Preset: { } preset } ? preset.Name : string.Empty;
         _problem.IsVisible = false;
         return new ExamRequest((_message.Text ?? string.Empty).Trim(), timer, _restrict.IsChecked == true,
-            _restrict.IsChecked == true ? programs : [], mode, hosts, internetName, presetName);
+            _restrict.IsChecked == true ? programs : [], mode, hosts, internetName, presetName, collectFolder, collectDestination);
     }
 
     private void FillPresets(string? selectId)
@@ -233,6 +262,8 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
         _internetUntouched.IsChecked = preset.InternetMode == ExamInternetModes.Untouched;
         _internetBlocked.IsChecked = preset.InternetMode == ExamInternetModes.Blocked;
         _internetWhitelist.IsChecked = preset.InternetMode == ExamInternetModes.Whitelist;
+        _collect.IsChecked = preset.CollectWork;
+        _collectFields.Folder.Text = preset.CollectFolder;
         if (preset.InternetMode == ExamInternetModes.Whitelist && _internetPresets.ItemsSource is IEnumerable<InternetItem> internet)
         {
             _internetPresets.SelectedItem = internet.FirstOrDefault(i => string.Equals(i.Preset.Name, preset.InternetPresetName, StringComparison.OrdinalIgnoreCase))

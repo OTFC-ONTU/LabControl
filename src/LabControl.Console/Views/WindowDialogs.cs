@@ -54,6 +54,21 @@ public sealed class WindowDialogs : IDialogs
     public async Task<TimeSpan?> ExtendExamAsync(int pcCount) =>
         await Show(new ExtendExamDialog(pcCount));
 
+    public async Task<CollectFilesAnswer?> CollectFilesAsync(int pcCount) =>
+        await Show(new CollectFilesDialog(pcCount));
+
+    public async Task<LabControl.Shared.Jobs.ResetMode?> ResetProfileAsync(int pcCount) =>
+        await Show(new ResetProfileDialog(pcCount));
+
+    /// <summary>Finder, Explorer or the desktop's file manager, through Avalonia's launcher; a refusal is ignored — the path is also in the status line.</summary>
+    public async Task OpenFolderAsync(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            await _owner.Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(path));
+        }
+    }
+
     public void ShowScreen(ScreenViewModel screen) => new ScreenWindow(screen).Show();
 
     public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string extension)

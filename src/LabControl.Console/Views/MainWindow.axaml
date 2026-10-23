@@ -66,6 +66,9 @@
         <Button Content="{loc:Localize Action.Reboot}" Command="{Binding RebootCommand}" />
         <Button Content="{loc:Localize Action.Logoff}" Command="{Binding LogoffCommand}" />
         <Button Content="{loc:Localize Action.SendFiles}" Command="{Binding SendFilesCommand}" />
+        <!-- Collected work and profile reset (M6 portion 5, D-77, D-78): the selection; each PC answers in the jobs panel. -->
+        <Button Content="{loc:Localize Action.CollectFiles}" Command="{Binding CollectFilesCommand}" />
+        <Button Content="{loc:Localize Action.ResetProfile}" Command="{Binding ResetProfileCommand}" />
         <!-- Lock (M6 portion 1, D-70): the selection, or the whole lab; the tile badge follows what each PC reports. -->
         <Button Content="{loc:Localize Action.LockScreens}" Command="{Binding LockScreensCommand}" />
         <Button Content="{loc:Localize Action.UnlockScreens}" Command="{Binding UnlockScreensCommand}" />

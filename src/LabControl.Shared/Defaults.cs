@@ -1153,6 +1153,44 @@ public static class Defaults
     public const string MaterialsFolderName = "Materials";
     public const string MaterialsRelativePath = @"Desktop\" + MaterialsFolderName;
 
+    // ---------------------------------------------------------------- collected work and profile reset (M6 portion 5)
+
+    /// <summary>
+    /// The most a collected folder may hold, uncompressed, and the most files: a dedicated
+    /// work folder is small; an IDE project with its build output still fits; a folder past
+    /// either is refused with its size rather than half collected (D-77).
+    /// </summary>
+    public const long CollectMaxBytes = 256L * 1024 * 1024;
+    public const int CollectMaxFiles = 5000;
+
+    /// <summary>The private directory under the agent's data where a collected folder is zipped before it is uploaded.</summary>
+    public const string CollectStagingDirectoryName = "collect";
+
+    /// <summary>Where the console puts collected work unless the teacher picks another place, under the user's Documents (owner decision 2026-10-23).</summary>
+    public const string CollectedWorkRelativePath = "LabControl/Collected";
+
+    /// <summary>The per-collection summary the console writes next to the PCs' folders.</summary>
+    public const string CollectReportFileName = "report.txt";
+
+    /// <summary>How long a collect job may be silent: zipping a large folder sends no progress.</summary>
+    public static readonly TimeSpan CollectJobTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>While a collected archive is uploading, the agent sends a progress line this often, so the job is never silent.</summary>
+    public static readonly TimeSpan CollectProgressInterval = TimeSpan.FromSeconds(10);
+
+    /// <summary>After an exam's remembered deadline, PCs that never reported its end are collected (or reported missing) this much later.</summary>
+    public static readonly TimeSpan CollectAfterDeadlineGrace = TimeSpan.FromMinutes(1);
+
+    /// <summary>A light reset removes at most this many entries and stops after this long; what is left is reported (D-78).</summary>
+    public const int ProfileWipeMaxEntries = 200_000;
+    public static readonly TimeSpan ProfileWipeMaxDuration = TimeSpan.FromMinutes(2);
+
+    /// <summary>A full reset waits this long after log off for Windows to unload the profile before it gives up and reboots anyway (D-78).</summary>
+    public static readonly TimeSpan ProfileUnloadTimeout = TimeSpan.FromSeconds(60);
+
+    public static readonly Guid StudentDocumentsKnownFolderId = new("FDD39AD0-238F-46AF-ADB4-6C85480369C7");
+    public static readonly Guid StudentDownloadsKnownFolderId = new("374DE290-123F-4565-9164-39C4925E467B");
+
     public const string SetupExecutableName = "Setup.exe";
     public const string UninstallExecutableName = "Uninstall.exe";
     public const string UsbBinariesDirectoryName = "payload";

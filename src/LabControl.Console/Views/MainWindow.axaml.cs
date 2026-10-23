@@ -80,6 +80,12 @@ public partial class MainWindow : Window, IDialogs
 
     public Task<TimeSpan?> ExtendExamAsync(int pcCount) => _dialogs.ExtendExamAsync(pcCount);
 
+    public Task<CollectFilesAnswer?> CollectFilesAsync(int pcCount) => _dialogs.CollectFilesAsync(pcCount);
+
+    public Task<LabControl.Shared.Jobs.ResetMode?> ResetProfileAsync(int pcCount) => _dialogs.ResetProfileAsync(pcCount);
+
+    public Task OpenFolderAsync(string path) => _dialogs.OpenFolderAsync(path);
+
     public Task<LabControl.Shared.Setup.AgentBuild?> PushAgentBuildAsync(int pcCount) => _dialogs.PushAgentBuildAsync(pcCount);
 
     public void ShowScreen(ScreenViewModel screen) => _dialogs.ShowScreen(screen);

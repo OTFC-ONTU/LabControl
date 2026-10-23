@@ -198,7 +198,7 @@ public sealed partial class MainViewModel : ObservableObject
     public partial bool IsUnlocked { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand), nameof(LockScreensCommand), nameof(UnlockScreensCommand), nameof(ShowScreenCommand), nameof(InternetCommand), nameof(ExamCommand))]
+    [NotifyCanExecuteChangedFor(nameof(WakeCommand), nameof(ShutdownCommand), nameof(RebootCommand), nameof(LogoffCommand), nameof(PushBuildCommand), nameof(SendFilesCommand), nameof(RemoveSelectedCommand), nameof(LockScreensCommand), nameof(UnlockScreensCommand), nameof(ShowScreenCommand), nameof(InternetCommand), nameof(ExamCommand), nameof(CollectFilesCommand), nameof(ResetProfileCommand))]
     public partial int SelectedCount { get; set; }
 
     [ObservableProperty]
@@ -609,6 +609,43 @@ public sealed partial class MainViewModel : ObservableObject
         {
             await _dialogs.ShowMessageAsync(Strings.Get("Action.SendFiles"), Strings.Format("Files.Failed", ex.Message));
         }
+    }
+
+    // ------------------------------------------------------------------ collected work and profile reset (M6 portion 5)
+
+    /// <summary><i>Collect files…</i> outside an exam (D-77): one folder from the selected PCs; what is not online is reported missing.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task CollectFilesAsync()
+    {
+        var targets = Selected.Select(t => t.AgentId).ToArray();
+        var answer = await _dialogs.CollectFilesAsync(targets.Length);
+        if (answer is null) return;
+        WorkCollection collection;
+        try
+        {
+            collection = await Task.Run(() => _session.CollectFiles(targets, answer.Name, answer.Destination, answer.Folder));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            await _dialogs.ShowMessageAsync(Strings.Get("Collect.Title"), Strings.Format("Collect.Failed", ex.Message));
+            return;
+        }
+
+        StatusLine = Strings.Format("Collect.Started", targets.Length, collection.Directory);
+        if (await _dialogs.ConfirmAsync(Strings.Get("Collect.Title"), StatusLine, Strings.Get("Collect.OpenFolder")))
+        {
+            await _dialogs.OpenFolderAsync(collection.Directory);
+        }
+    }
+
+    /// <summary><i>Reset profile…</i> (D-78): light or full on the selected PCs, online only; each PC answers in the jobs panel.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task ResetProfileAsync()
+    {
+        var targets = Selected.Select(t => t.AgentId).ToArray();
+        if (await _dialogs.ResetProfileAsync(targets.Length) is not { } mode) return;
+        var jobs = _session.ResetProfiles(targets, mode);
+        StatusLine = Strings.Format("Reset.Sent", jobs.Count(j => j.State != JobState.NotDelivered), targets.Length);
     }
 
     // ------------------------------------------------------------------ lock (M6 portion 1)

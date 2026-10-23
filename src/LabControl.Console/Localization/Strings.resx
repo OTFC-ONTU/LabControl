@@ -699,4 +699,53 @@ java.exe</value></data>
   <data name="Exam.ExtendSent" xml:space="preserve"><value>Extension sent to {0} of {1} PC(s).</value></data>
   <data name="Exam.EndSent" xml:space="preserve"><value>End of the exam sent to {0} of {1} PC(s).</value></data>
   <data name="Exam.NoBrowser" xml:space="preserve"><value>No browser is on the list of allowed programs, so the allowed sites cannot be opened: the browser is closed the moment it starts. Add msedge.exe (or chrome.exe, firefox.exe).</value></data>
+  <data name="Collect.FolderInvalid" xml:space="preserve"><value>Name a folder inside the student's profile, such as Desktop\Exam or Documents\Java\Lab3 — not a drive, not a path that leaves the profile.</value></data>
+  <data name="Collect.GrantRefusedSize" xml:space="preserve"><value>The collected work is larger than a collection may be.</value></data>
+  <data name="Collect.GrantRefusedJob" xml:space="preserve"><value>This console is not collecting work from this PC with that job.</value></data>
+  <data name="Collect.GrantRefusedDisk" xml:space="preserve"><value>This computer could not store the collected work: {0}</value></data>
+  <data name="Collect.Missing" xml:space="preserve"><value>The PC was not online when its work was collected.</value></data>
+  <data name="Collect.NoUpload" xml:space="preserve"><value>The PC said it sent its work, but nothing complete arrived.</value></data>
+  <data name="Collect.UnpackFailed" xml:space="preserve"><value>The collected work could not be unpacked: {0}</value></data>
+  <data name="Collect.ReportTitle" xml:space="preserve"><value>{0} — folder {1} — {2}</value></data>
+  <data name="Collect.State.Waiting" xml:space="preserve"><value>waiting for the end</value></data>
+  <data name="Collect.State.Collecting" xml:space="preserve"><value>collecting</value></data>
+  <data name="Collect.State.Collected" xml:space="preserve"><value>collected</value></data>
+  <data name="Collect.State.Empty" xml:space="preserve"><value>nothing to collect</value></data>
+  <data name="Collect.State.Missing" xml:space="preserve"><value>MISSING (not online)</value></data>
+  <data name="Collect.State.Failed" xml:space="preserve"><value>FAILED</value></data>
+  <data name="Collect.Files" xml:space="preserve"><value>{0} file(s)</value></data>
+  <data name="Collect.DefaultName" xml:space="preserve"><value>Collected</value></data>
+  <data name="Collect.ExamName" xml:space="preserve"><value>Exam</value></data>
+  <data name="Event.CollectFailed" xml:space="preserve"><value>{0}: collecting work failed: {1}</value></data>
+  <data name="Event.CollectDone" xml:space="preserve"><value>{0}: work collected from {1} of {2} PC(s). Not collected: {3}. Saved in {4}.</value></data>
+  <data name="Event.CollectReportFailed" xml:space="preserve"><value>The collection report could not be written in {0}: {1}</value></data>
+  <data name="Action.CollectFiles" xml:space="preserve"><value>Collect files…</value></data>
+  <data name="Action.ResetProfile" xml:space="preserve"><value>Reset profile…</value></data>
+  <data name="Collect.Title" xml:space="preserve"><value>Collect files</value></data>
+  <data name="Collect.Targets" xml:space="preserve"><value>Collect a folder from {0} PC(s)</value></data>
+  <data name="Collect.NameLabel" xml:space="preserve"><value>Name of this collection (the folder it is saved in, with the date and time):</value></data>
+  <data name="Collect.NameMissing" xml:space="preserve"><value>Give the collection a name.</value></data>
+  <data name="Collect.FolderLabel" xml:space="preserve"><value>Folder on each student PC, inside the student's profile:</value></data>
+  <data name="Collect.FolderHint" xml:space="preserve"><value>For example Desktop\Exam or Documents\Java\Lab3. Desktop, Documents and Downloads mean the student's own folders, wherever Windows keeps them.</value></data>
+  <data name="Collect.DestinationLabel" xml:space="preserve"><value>Save on this computer in:</value></data>
+  <data name="Collect.DestinationMissing" xml:space="preserve"><value>Choose a folder on this computer to save the collected work in.</value></data>
+  <data name="Collect.Browse" xml:space="preserve"><value>Browse…</value></data>
+  <data name="Collect.OfflineNote" xml:space="preserve"><value>PCs that are not online now are listed as missing in report.txt; they are not asked again later. Each PC's work goes into its own folder (PC-07).</value></data>
+  <data name="Collect.Caps" xml:space="preserve"><value>At most {0} MB and {1} files per PC; a larger folder is refused with its size. Files open in a program are skipped and named; links are never followed.</value></data>
+  <data name="Collect.Start" xml:space="preserve"><value>Collect</value></data>
+  <data name="Collect.Started" xml:space="preserve"><value>Collecting from {0} PC(s) into {1}.</value></data>
+  <data name="Collect.OpenFolder" xml:space="preserve"><value>Open folder</value></data>
+  <data name="Collect.Failed" xml:space="preserve"><value>Could not start the collection: {0}</value></data>
+  <data name="Reset.Title" xml:space="preserve"><value>Reset profile</value></data>
+  <data name="Reset.Targets" xml:space="preserve"><value>Reset the student profile on {0} PC(s)</value></data>
+  <data name="Reset.Light" xml:space="preserve"><value>Light: empty Desktop, Documents and Downloads</value></data>
+  <data name="Reset.LightNote" xml:space="preserve"><value>Everything in these three folders is deleted, Materials included. Installed programs and settings stay, and the student stays signed in. Files open in a program are left and reported.</value></data>
+  <data name="Reset.Full" xml:space="preserve"><value>Full: delete the whole profile and reboot</value></data>
+  <data name="Reset.FullNote" xml:space="preserve"><value>The student is logged off, the profile is deleted and the PC reboots; automatic sign-in creates a new, clean profile. Everything the student saved and every setting they changed are lost.</value></data>
+  <data name="Reset.Warning" xml:space="preserve"><value>This cannot be undone. A PC in an exam refuses (end the exam first), and so does a PC installed without the LabControl student account. PCs that are not online are skipped.</value></data>
+  <data name="Reset.ConfirmLight" xml:space="preserve"><value>Empty the three folders</value></data>
+  <data name="Reset.ConfirmFull" xml:space="preserve"><value>Delete the profiles and reboot</value></data>
+  <data name="Reset.Sent" xml:space="preserve"><value>Profile reset sent to {0} of {1} PC(s); the jobs panel shows each PC's answer.</value></data>
+  <data name="Exam.CollectWork" xml:space="preserve"><value>Collect work at the end</value></data>
+  <data name="Exam.CollectNote" xml:space="preserve"><value>The folder is created on each student's PC when the exam starts and collected when it ends — when the timer runs out or you end it. PCs not online then are listed as missing.</value></data>
 </root>

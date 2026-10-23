@@ -347,7 +347,7 @@ update first; (3) the VM drill on an owned-installation clone and the physical l
 2 are built (2026-10-20) and portion 2 passed its VM drill</strong> — an owned installation moved over the
 network, kept its agent id and number and enrolled into the new lab on its own (ROADMAP <em>Lab key
 recovery</em>). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.</p>
-<p><strong>M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portion 4 built; portions 5–6 remain:</strong> the owner decisions of 2026-09-09 (lock hard limit 1 h,
+<p><strong>M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portion 4 VM-verified, portion 5 built; portion 6 remains:</strong> the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, <em>Settled before implementation</em>; M6 reserves <code>D-69</code>…<code>D-79</code>.</p>
@@ -540,7 +540,19 @@ and power jobs pause it (<code>ExamCoordination</code>). Console: <em>Exam…</e
 five defects: protected processes (Defender's session helper) are never judged; <code>AgentLink</code> ages
 <code>remaining_seconds</code> when it re-sends a state after <code>Welcome</code> and <em>Extend</em> ages it on the console;
 the strip widens for its text; a new exam forgets the last one's closed programs; more quiet
-helpers. Tests: 972 Shared + 289 Console. Next: the physical lab, then portion 5.</p>
+helpers. Tests: 972 Shared + 289 Console. Next: the physical lab (alongside portion 5).</p>
+<p><strong>M6 portion 5 is built (2026-10-23, <code>D-77</code>, <code>D-78</code>), review-fixed, not yet run on Windows.</strong> Owner
+decisions of 2026-10-23: the exam's folder is <code>Desktop\Exam</code> by default (created at the start; another
+folder inside the profile may be named, saved in the preset), the console unpacks into
+<code>&lt;destination&gt;/&lt;name date&gt;/PC-07/</code> (default <code>~/Documents/LabControl/Collected</code>) with a <code>report.txt</code>, a
+standalone <em>Collect files…</em>, no collect-now during an exam and no retry for a PC that was off (missing),
+a light reset removes Materials too. The agent asks for its upload grant with the additive
+<code>RequestUpload</code> once its archive exists (<code>WorkArchive</code>, packed under the student's token by
+<code>CollectRunner</code>, links left out, 256 MB / 5000 files); <code>WorkCollections</code> on the console grants only for a
+running job of that PC delivered by this instance and unpacks with every name checked. <code>reset_profile</code>
+(<code>ProfileResetRunner</code>): refused during an exam and on account-off; light = Desktop/Documents/Downloads
+emptied under the token (<code>ProfileWipe</code>, iterative, links never entered); full = log off, <code>DeleteProfile</code>
+by the recorded SID, reboot. Tests: 998 Shared + 300 Console. Next: the VM drill, then portion 6.</p>
 <p><strong>M0 is done (2026-09-04). M1 is done (2026-09-05)</strong>: the trust model, beacon discovery,
 mutual TLS, enrolment, the <code>Link</code> stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, <code>FakeAgent</code> and the console UI — see the M1 <em>Progress</em> and
@@ -784,7 +796,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-23 11:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-23 16:56 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

@@ -103,3 +103,6 @@ PROCESS_PROTECTION_LEVEL
 PROCESS_ACCESS_RIGHTS
 PROCESS_NAME_FORMAT
 TOKEN_USER
+
+// Full profile reset: the recorded student's profile deleted by SID, never by a path (ProfileResetRunner, D-78)
+DeleteProfile

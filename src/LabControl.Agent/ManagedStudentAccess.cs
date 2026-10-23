@@ -33,14 +33,14 @@ internal sealed class ManagedStudentAccess : IDisposable
         RequirePrivateFile(journal);
         var lockFile = Path.Combine(directory, Defaults.SetupLockFileName);
         if (File.Exists(lockFile)) RequirePrivateFile(lockFile);
-        var lease = new FileStream(lockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var lease = Lease(lockFile);
         SafeAccessTokenHandle? token = null;
         try
         {
             var state = new InstallationState(directory);
             // Opt-out and legacy installs fail before SAM or token access.
             if (state.Read()?.CreateStudentAccount != true)
-                throw new InvalidOperationException("This installation has no managed student account. Handout delivery is unavailable.");
+                throw new InvalidOperationException("This installation has no managed student account; handouts, collected work and profile reset are unavailable.");
             var sid = state.RequireManagedStudent(FindStudentSid());
             var session = InteractiveSession.Snapshot();
             uint? sessionId = null;
@@ -76,6 +76,26 @@ internal sealed class ManagedStudentAccess : IDisposable
         catch { token?.Dispose(); lease.Dispose(); throw; }
     }
 
+    /// <summary>
+    /// The Setup lock, waited for a little: a handout, a collection's packing and a reset each
+    /// hold it briefly, and one must not fail because another was mid-way (review 2026-10-23).
+    /// Setup itself holds it for minutes; then this still fails, as it should.
+    /// </summary>
+    private static FileStream Lease(string lockFile)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return new FileStream(lockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                Thread.Sleep(500);
+            }
+        }
+    }
+
     internal static void RequireStandardIdentity(WindowsIdentity identity, string expectedSid)
     {
         // UAC-filtered administrators have a deny-only Administrators SID: IsInRole
@@ -87,29 +107,50 @@ internal sealed class ManagedStudentAccess : IDisposable
             throw new UnauthorizedAccessException("Handouts require the recorded standard student's token.");
     }
 
-    private static unsafe string Desktop(SafeAccessTokenHandle token)
+    /// <summary>
+    /// A known folder of the recorded student (Desktop, Documents, Downloads), wherever Windows
+    /// keeps it, refused unless it is local and inside that student's profile (M6, D-77, D-78).
+    /// </summary>
+    public string KnownFolder(Guid folder)
     {
-        var folder = Defaults.StudentDesktopKnownFolderId;
+        var path = Resolve(Token, folder);
+        HandoutDelivery.RejectReparseAncestors(path);
+        return path;
+    }
+
+    /// <summary>The recorded student's profile directory, resolved from the token, never from the account name.</summary>
+    public string ProfileDirectory() => ProfileRoot(Token);
+
+    private static string Desktop(SafeAccessTokenHandle token) => Resolve(token, Defaults.StudentDesktopKnownFolderId);
+
+    private static unsafe string ProfileRoot(SafeAccessTokenHandle token)
+    {
+        uint size = 0;
+        PInvoke.GetUserProfileDirectory((HANDLE)token.DangerousGetHandle(), default, &size);
+        if (size == 0 || size > 32768) throw new IOException("Windows could not resolve the managed student's profile.");
+        var buffer = new char[size];
+        fixed (char* profile = buffer)
+        {
+            if (!PInvoke.GetUserProfileDirectory((HANDLE)token.DangerousGetHandle(), profile, &size))
+                throw new IOException("Windows could not resolve the managed student's profile.");
+            return Path.GetFullPath(new string(profile)).TrimEnd(Path.DirectorySeparatorChar);
+        }
+    }
+
+    private static unsafe string Resolve(SafeAccessTokenHandle token, Guid known)
+    {
+        var folder = known;
         PWSTR path = default;
         var result = PInvoke.SHGetKnownFolderPath(&folder, 0, (HANDLE)token.DangerousGetHandle(), &path);
         try
         {
-            if (result.Failed) throw new IOException("Windows could not resolve the managed student's Desktop. Sign in as the managed student and retry.");
+            if (result.Failed) throw new IOException("Windows could not resolve the managed student's folder. Sign in as the managed student and retry.");
             var value = path.ToString();
             if (!Path.IsPathFullyQualified(value) || value.StartsWith("\\\\", StringComparison.Ordinal))
-                throw new IOException("Handout delivery requires a local managed Desktop.");
-            uint size = 0;
-            PInvoke.GetUserProfileDirectory((HANDLE)token.DangerousGetHandle(), default, &size);
-            if (size == 0 || size > 32768) throw new IOException("Windows could not resolve the managed student's profile.");
-            var buffer = new char[size];
-            fixed (char* profile = buffer)
-            {
-                if (!PInvoke.GetUserProfileDirectory((HANDLE)token.DangerousGetHandle(), profile, &size))
-                    throw new IOException("Windows could not resolve the managed student's profile.");
-                var root = Path.GetFullPath(new string(profile)).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-                if (!Path.GetFullPath(value).StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                    throw new IOException("The managed Desktop must remain inside the managed student's profile.");
-            }
+                throw new IOException("The managed student's folders must be local.");
+            var root = ProfileRoot(token) + Path.DirectorySeparatorChar;
+            if (!Path.GetFullPath(value).StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("The managed student's folders must remain inside the managed student's profile.");
             return value;
         }
         finally { Marshal.FreeCoTaskMem((nint)path.Value); }

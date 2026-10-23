@@ -53,6 +53,7 @@ service AgentService {
   rpc PullFile  (FileRequest)         returns (stream FileChunk);      // agent downloads
   rpc PushFile  (stream FileChunk)    returns (FileAck);               // agent uploads
   rpc GetUploadStatus (FileRequest)  returns (FileAck);               // committed upload offset
+  rpc RequestUpload (UploadRequest)  returns (UploadGrant);           // the agent asks for a grant once its file exists (M6, D-77)
   rpc Renew     (RenewRequest)        returns (RenewResponse);         // certificate renewal (D-25)
   rpc PullBroadcast (BroadcastRequest) returns (stream VideoFrame);    // teacher's screen, agent dials (M6, D-71)
 }
@@ -355,9 +356,9 @@ message OverlayState {
 // ---------------------------------------------------------------------------
 
 message CollectSpec {
-  string folder         = 1;  // chosen when the exam is set up, not the whole desktop
-  string destination_id = 2;  // console-side bucket: <exam>/PC-07/
-  bool   on_end         = 3;
+  string folder         = 1;  // relative to the student profile (CollectRequest), chosen when the exam is set up, not the whole desktop
+  string destination_id = 2;  // never sent: where the work lands is the console's alone (D-77)
+  bool   on_end         = 3;  // informational; the console collects when the exam ends
 }
 
 message ExamMode {
@@ -370,7 +371,7 @@ message ExamMode {
   string message                    = 5;  // the teacher's line in the strip on the student's screen
   reserved 6;                             // was block_internet; now an InternetPolicy (D-22)
   repeated string allowed_programs  = 7;  // executable names (idea64.exe); matched by name only, case-insensitively
-  CollectSpec collect               = 8;  // M6 portion 5; carried and kept, not acted on before it
+  CollectSpec collect               = 8;  // M6 portion 5: the folder created at the start; the console collects it at the end (D-77)
   InternetPolicy internet           = 9;  // absent or OPEN = internet untouched; its own limits are ignored -- it lives and dies with the exam
   int64  until_seconds              = 10; // the timer: how long from arrival, stamped on the PC's clock; 0 = no timer; negative = refused
   int64  hard_limit_seconds         = 11; // a proposed duration; the agent clamps it to ExamHardLimit on its own clock; <= 0 = the ceiling
@@ -524,6 +525,20 @@ message FileAck {
   int64  bytes_stored = 3;
   string message      = 4;
   string sha256       = 5;  // expected content hash bound to the upload grant
+}
+
+// M6 portion 5 (D-77): a job whose upload's size and hash are known only once the agent has
+// made the file (collect_files zips a folder) asks the console for its D-42 grant. The console
+// grants only for an in-flight job of that kind, for that PC, that this console delivered.
+message UploadRequest {
+  string job_id = 1;
+  int64  size   = 2;
+  string sha256 = 3;
+}
+
+message UploadGrant {
+  string reference = 1;  // the grant to PushFile to; empty = refused
+  string problem   = 2;  // why it was refused, plain language; empty when granted
 }
 
 // ---------------------------------------------------------------------------

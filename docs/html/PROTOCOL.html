@@ -336,6 +336,7 @@ rpc PushVideo(stream VideoFrame) returns (VideoAck);              // opened on d
 rpc PullFile(FileRequest) returns (stream FileChunk);             // agent downloads from console
 rpc PushFile(stream FileChunk) returns (FileAck);                 // agent uploads results/logs
 rpc GetUploadStatus(FileRequest) returns (FileAck);               // committed upload offset
+rpc RequestUpload(UploadRequest) returns (UploadGrant);           // the grant for an upload the agent just made (M6, D-77)
 rpc PullBroadcast(BroadcastRequest) returns (stream VideoFrame);  // teacher's screen, agent dials (M6, D-71)
 </code></pre>
 <p>The console validates the agent certificate against the lab CA <strong>and</strong> against the
@@ -561,13 +562,49 @@ an already completed upload is not written again. The agent retries transient tr
 failures within a 30-second inactivity budget; retransmitting the same prefix does not
 reset it. Caller cancellation and agent shutdown interrupt the retry. Server reads and
 writes also have a 30-second inactivity budget.</p>
-<p>This is a transport API, not yet a collect-files or diagnostic-upload action. The per-PC
-job log bundles (D-43) use output already received on <code>Link</code>. Its caller owns the
+<p>Collected work (<code>collect_files</code>, below) is the first consumer; diagnostic uploads are not built.
+The per-PC job log bundles (D-43) use output already received on <code>Link</code>. Its caller owns the
 readable/writable/seekable staging stream, must keep it private until verified completion,
 and must discard it on failure. It disposes the grant before closing the stream. Grants
 and resume state are local to this console process and are not backed up or restored after
 restart or take-over. The additive <code>GetUploadStatus</code> RPC and <code>FileAck.sha256</code> preserve existing fields;
 an older console answers <code>Unimplemented</code>, which is reported as an upload failure.</p>
+<h3 id="requestupload-and-collect_files-m6-portion-5-d-77"><code>RequestUpload</code> and <code>collect_files</code> (M6 portion 5, <code>D-77</code>)<a class="anchor" href="#requestupload-and-collect_files-m6-portion-5-d-77" aria-label="Link to this section">#</a></h3>
+<pre><code>message UploadRequest { string job_id = 1; int64 size = 2; string sha256 = 3; }
+message UploadGrant   { string reference = 1; string problem = 2; }   // empty reference = refused
+</code></pre>
+<p>An upload whose size and hash exist only once the agent has made the file asks for its
+<code>PushFile</code> grant itself. The console grants only for a <strong>running <code>collect_files</code> job of that
+PC that this console instance delivered</strong> (results are bound to the delivering instance,
+<code>D-57</code>), within <code>Defaults.CollectMaxBytes</code> plus a sixteenth for the archive's overhead; the
+peer is validated like on <code>Link</code>. The same request repeated — the agent lost the answer — gets
+the same grant; a different size or hash replaces it. A refusal is final for the job. The
+console stages the archive beside the destination and unpacks it only after <code>PushFile</code>'s hash
+check and the job's <code>JobResult{ok, artifact_ref = reference}</code>; any other result discards it.
+An agent waits through a dropped link for an answer for up to <code>Defaults.FileChunkTimeout</code>, like
+an upload; an older console answers <code>Unimplemented</code>, reported as a failed collection.</p>
+<p><code>collect_files</code> args: <code>folder</code> — relative to the student's profile, parts joined by <code>\</code>, each a
+plain Windows name, never <code>..</code>, at most eight parts (<code>CollectRequest</code>); a first part of
+<code>Desktop</code>, <code>Documents</code> or <code>Downloads</code> means that known folder wherever Windows keeps it. The
+default is <code>Desktop\Exam</code> (owner decision 2026-10-23). Delivery is online only: a PC that is not
+linked is <code>not_delivered</code> on the spot and reported <strong>missing</strong> — never retried. The agent
+zips the folder under the recorded student's token into a private staging file opened as
+SYSTEM, leaves out symbolic links and junctions, skips and names files it cannot read, and
+refuses a folder past <code>Defaults.CollectMaxBytes</code> (256 MB) or <code>CollectMaxFiles</code> (5000) whole.
+A missing folder is <code>ok</code> with an empty <code>artifact_ref</code>: nothing to collect. An installation
+without the managed student (<code>D-40</code>) fails the job. On the console the archive lands in
+<code>&lt;destination&gt;/&lt;name yyyy-MM-dd HH-mm&gt;/PC-07/</code> (names checked part by part, nothing outside the
+PC's folder, sizes counted as written) with a <code>report.txt</code> beside the PCs' folders.</p>
+<h3 id="reset_profile-m6-portion-5-d-78"><code>reset_profile</code> (M6 portion 5, <code>D-78</code>)<a class="anchor" href="#reset_profile-m6-portion-5-d-78" aria-label="Link to this section">#</a></h3>
+<p>Args: <code>mode</code> = <code>light</code> | <code>full</code>. Online only. Refused while the PC holds an exam and on an
+installation without the managed student. <code>light</code> empties Desktop, Documents and Downloads
+(Materials included; each folder's <code>desktop.ini</code> kept) under the student's token, links
+removed and never entered, within <code>Defaults.ProfileWipeMaxEntries</code> / <code>ProfileWipeMaxDuration</code>;
+what could not be removed makes the result not <code>ok</code> and is counted. <code>full</code> logs the student off,
+deletes the profile by the recorded SID with <code>DeleteProfile</code> (retried for
+<code>Defaults.ProfileUnloadTimeout</code>), answers, and reboots <code>Defaults.PowerJobDelay</code> later — also when
+Windows still held the profile, so the PC always comes back by itself; automatic sign-in creates
+a new profile.</p>
 <h3 id="files-install_package-and-send_file">Files: <code>install_package</code> and <code>send_file</code><a class="anchor" href="#files-install_package-and-send_file" aria-label="Link to this section">#</a></h3>
 <p>Both pull the file with <code>PullFile</code> (hash-verified, resumable from M4) and differ only in
 where it lands and what happens next (<code>D-23</code>):</p>
@@ -671,7 +708,7 @@ message.</p>
   string message;                 // the teacher's line in the strip
   reserved 6;                     // was block_internet
   repeated string allowed_programs;   // executable names, matched by file name only
-  CollectSpec collect;            // portion 5; carried and kept, not acted on yet
+  CollectSpec collect;            // portion 5: folder created on the PC at the start; the console collects it at the end
   InternetPolicy internet;        // absent or OPEN = untouched; its own limits are ignored
   int64  until_seconds;           // the timer, a duration from arrival; 0 = none; negative = refused
   int64  hard_limit_seconds;      // proposed; clamped to ExamHardLimit (4 h) on the PC's clock; &lt;= 0 = the ceiling
@@ -1442,9 +1479,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-23 11:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-23 16:56 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>
 </body>
 </html>

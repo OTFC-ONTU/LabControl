@@ -187,7 +187,17 @@ the documents relevant to the task:
   end. The ARM64 VM drill (2026-10-23, `D-75`, *VM drill*) fixed five defects — protected processes
   never judged, `remaining_seconds` aged on a re-send after `Welcome` and on *Extend*, the strip
   widening for its text, a new exam forgetting the last one's closed programs, more quiet helpers.
-  Tests: 972 Shared + 289 Console. Next: the physical lab, then portion 5.
+  Tests: 972 Shared + 289 Console. Next: the physical lab (alongside portion 5).
+- **M6 portion 5 is built (2026-10-23, `D-77`, `D-78`), review-fixed, not yet run on Windows.**
+  Collect work and profile reset: the additive `RequestUpload` RPC (the agent asks for its D-42 grant
+  once its archive exists), `WorkArchive` / `CollectRunner` packing under the student's token with links
+  left out, `WorkCollections` granting only for a running job of that PC delivered by this instance and
+  unpacking into `<destination>/<name date>/PC-07/` with every name checked and a `report.txt`; exams
+  collect each PC when it reports the end, PCs off are missing and never retried; `ProfileResetRunner`
+  refuses during an exam and on account-off (light = three folders emptied under the token by the
+  iterative `ProfileWipe`; full = log off, `DeleteProfile` by SID, reboot). Keep student-file reads under
+  the token and never follow links as SYSTEM. Tests: 998 Shared + 300 Console. Next: the VM drill, then
+  portion 6.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the

@@ -199,6 +199,10 @@ public sealed class LabSession : IAsyncDisposable
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
         Jobs.Updated += OnJobUpdated;
+        Collections = new WorkCollections(
+            (ids, request) => CreateJobs(ids, Job.Types.Kind.CollectFiles, request.ToArgs(), Defaults.CollectJobTimeout, JobDelivery.OnlineOnly),
+            id => Registry.FindByAgentId(id)?.Number ?? 0, Events, Uploads, _clock);
+        Jobs.Updated += Collections.OnJobUpdated;
         RestoreInFlightJobs();
 
         var self = Registry.RecordInstance(instance.InstanceId, instance.InstanceName, instance.CertificateSerial, _clock(), isThisMachine: true);
@@ -244,6 +248,9 @@ public sealed class LabSession : IAsyncDisposable
     public FileOffers Files { get; }
 
     public FileUploads Uploads { get; } = new();
+
+    /// <summary>Collected work (M6 portion 5, D-77): standalone collections and the exams that collect at their end.</summary>
+    public WorkCollections Collections { get; }
 
     /// <summary>Every PC's screen as last seen (M3): thumbnails for the mosaic, the full picture for the single-PC view.</summary>
     public ScreenStore Screens { get; }
@@ -381,6 +388,9 @@ public sealed class LabSession : IAsyncDisposable
                     _server = null;
                     await server.DisposeAsync().ConfigureAwait(false);
                 }
+
+                // No PC can upload any more: collections in progress give back their grants and staging files (D-77).
+                Collections.Close();
             }).ConfigureAwait(false);
 
             // 5. Housekeeping joins.
@@ -1428,6 +1438,23 @@ public sealed class LabSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// <i>Collect files…</i> outside an exam (owner decision 2026-10-23): <paramref name="folder"/>
+    /// from every PC in <paramref name="agentIds"/> into a new <c>&lt;name date&gt;</c> folder under
+    /// <paramref name="destinationRoot"/>; a PC that is not linked is reported missing.
+    /// </summary>
+    public WorkCollection CollectFiles(IEnumerable<string> agentIds, string name, string destinationRoot, string folder) =>
+        Collections.Start(name, destinationRoot, folder, agentIds);
+
+    /// <summary>
+    /// <i>Reset profile…</i> (D-78): a <c>reset_profile</c> job per PC, online only — a reset is
+    /// meant for now, never for a PC switched on tomorrow. The PC refuses during an exam and on
+    /// an installation without the managed student.
+    /// </summary>
+    public IReadOnlyList<JobRecord> ResetProfiles(IEnumerable<string> agentIds, ResetMode mode) =>
+        CreateJobs(agentIds, Job.Types.Kind.ResetProfile, new ResetProfileRequest(mode).ToArgs(),
+            Defaults.ProfileUnloadTimeout + Defaults.ProfileWipeMaxDuration + Defaults.JobTimeoutGrace, JobDelivery.OnlineOnly);
+
+    /// <summary>
     /// Runs a library script on the given PCs (D-31): the text is offered through
     /// <c>PullFile</c> under its hash and a <c>run_script</c> job goes to each PC with the
     /// script's shell, run-as and timeout. The console's inactivity timeout is the script's
@@ -2180,6 +2207,17 @@ public sealed class LabSession : IAsyncDisposable
             HardLimitSeconds = 0,
         };
         template.AllowedPrograms.AddRange(LabControl.Shared.Exam.ProgramNames.NormalizeAll(request.AllowedPrograms));
+        string? collectFolder = null;
+        if (request.CollectFolder is { } folder)
+        {
+            if (!CollectRequest.TryNormalize(folder, out var normalized))
+            {
+                throw new ArgumentException(Localization.Strings.Get("Collect.FolderInvalid"));
+            }
+
+            collectFolder = normalized;
+            template.Collect = new CollectSpec { Folder = normalized, OnEnd = true };
+        }
         if (request.InternetMode is InternetPolicy.Types.Mode.Whitelist or InternetPolicy.Types.Mode.Blocked)
         {
             var internet = new InternetPolicy { Mode = request.InternetMode, PresetName = request.InternetPresetName ?? string.Empty };
@@ -2198,7 +2236,16 @@ public sealed class LabSession : IAsyncDisposable
                 : _labExam;
         }
 
-        var (sent, skipped) = SendExam(agentIds, connection =>
+        var targets = agentIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (collectFolder is not null)
+        {
+            // Remembered before the first PC can answer, so its very first state is seen.
+            Collections.RememberExam(template.SessionId, template.PresetName.Length > 0 ? template.PresetName : Localization.Strings.Get("Collect.ExamName"),
+                request.CollectDestination ?? WorkCollections.DefaultDestination, collectFolder, targets,
+                template.UntilSeconds > 0 ? now.AddSeconds(template.UntilSeconds) : null);
+        }
+
+        var (sent, skipped) = SendExam(targets, connection =>
         {
             connection.ExamSessionsSeen.Add(template.SessionId);
             return template.Clone();
@@ -2241,6 +2288,7 @@ public sealed class LabSession : IAsyncDisposable
                 var left = Math.Max(0, (long)Math.Ceiling((deadline - _clock()).TotalSeconds)) + extra;
                 template.UntilSeconds = left;
                 _labExam = exam with { Template = template, Deadline = deadline.AddSeconds(extra) };
+                Collections.MoveExamDeadline(template.SessionId, deadline.AddSeconds(extra));
             }
         }
 
@@ -2262,6 +2310,7 @@ public sealed class LabSession : IAsyncDisposable
             _labExam = null;
         }
 
+        Collections.ExamEndedByTeacher(ids.Select(id => FindLinked(id)?.ExamState).OfType<ExamState>().Where(s => s.Active).Select(s => s.SessionId).Distinct().ToArray());
         var (sent, skipped) = SendExam(ids, connection =>
             connection.ExamState is { Active: true } state ? new ExamMode { Active = false, SessionId = state.SessionId } : null);
         Events.Info("exam.end_sent", Localization.Strings.Format("Event.ExamEndSent", sent, skipped));
@@ -2347,6 +2396,7 @@ public sealed class LabSession : IAsyncDisposable
 
         if (connection.TrySend(new ConsoleMessage { ExamMode = mode }))
         {
+            Collections.AddToExam(mode!.SessionId, connection.AgentId);
             Events.Info("exam.late_join", Localization.Strings.Format("Event.ExamLateJoin", string.Format(System.Globalization.CultureInfo.InvariantCulture, Defaults.MachineNameFormat, connection.Number)), connection.AgentId, connection.Number);
         }
     }
@@ -2379,6 +2429,7 @@ public sealed class LabSession : IAsyncDisposable
 
         if (state.Problem.Length == 0)
         {
+            Collections.ExamStateOf(connection.AgentId, state.Active, state.SessionId);
             JoinLabExamIfLate(connection);
         }
 
@@ -2651,6 +2702,10 @@ public sealed class LabSession : IAsyncDisposable
 
     public Task<FileAck> UploadStatusAsync(X509Certificate2? peer, FileRequest request, CancellationToken token) =>
         Uploads.StatusAsync(RequireAgent(peer).Id, request.Reference, token);
+
+    /// <summary>A PC asks for the grant of an upload its job produced (D-77); only collected work asks today.</summary>
+    public Task<UploadGrant> RequestUploadAsync(X509Certificate2? peer, UploadRequest request) =>
+        Task.FromResult(Collections.RequestUpload(RequireAgent(peer).Id, request));
 
     public async Task ServeFileAsync(X509Certificate2? peer, FileRequest request, IServerStreamWriter<FileChunk> outgoing, CancellationToken token)
     {
@@ -3143,6 +3198,7 @@ public sealed class LabSession : IAsyncDisposable
                 }
 
                 TimeOutWakes(now);
+                Collections.Tick();
 
                 var gone = false;
                 lock (_gate)

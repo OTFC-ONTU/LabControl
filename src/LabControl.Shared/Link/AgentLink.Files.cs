@@ -7,6 +7,66 @@ namespace LabControl.Shared.Link;
 
 public sealed partial class AgentLink
 {
+    /// <summary>
+    /// Asks the console for the D-42 grant of an upload this job produced (M6, D-77): the size
+    /// and hash exist only now. Waits through a dropped link like an upload does; a refusal is
+    /// final and thrown as <see cref="FilePushException"/> with the console's words.
+    /// </summary>
+    public async Task<string> RequestUploadAsync(string jobId, long size, string sha256, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(jobId) || size < 0 || !FileHash.LooksLikeSha256(sha256))
+        {
+            throw new ArgumentException("An upload request needs a job, a size and a SHA-256.");
+        }
+
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token, _stopping.Token);
+        lifetime.CancelAfter(Defaults.FileChunkTimeout);
+        try
+        {
+            while (true)
+            {
+                AgentService.AgentServiceClient? client;
+                CancellationToken sessionToken;
+                lock (_gateLock)
+                {
+                    client = _client;
+                    sessionToken = _session?.Token ?? new CancellationToken(true);
+                }
+
+                if (client is not null && !sessionToken.IsCancellationRequested)
+                {
+                    using var attempt = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, sessionToken);
+                    try
+                    {
+                        var grant = await client.RequestUploadAsync(new UploadRequest { JobId = jobId, Size = size, Sha256 = sha256 }, cancellationToken: attempt.Token);
+                        if (grant.Reference.Length == 0)
+                        {
+                            throw new FilePushException(grant.Problem.Length > 0 ? grant.Problem : "The console refused the upload.");
+                        }
+
+                        return grant.Reference;
+                    }
+                    catch (RpcException ex) when (ex.StatusCode is StatusCode.Unavailable or StatusCode.Cancelled or StatusCode.DeadlineExceeded)
+                    {
+                    }
+                    catch (OperationCanceledException) when (sessionToken.IsCancellationRequested && !lifetime.IsCancellationRequested)
+                    {
+                    }
+                    catch (RpcException ex)
+                    {
+                        throw new FilePushException($"The console refused the upload: {ex.Status.Detail}");
+                    }
+                }
+
+                await Task.Delay(Defaults.FileRetryDelay, lifetime.Token);
+            }
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested && !_stopping.IsCancellationRequested)
+        {
+            throw new FilePushException($"No console answered the upload request for {Defaults.FileChunkTimeout.TotalSeconds:0} s, including reconnects.");
+        }
+    }
+
     /// <summary>Upload to an explicit console grant (D-42). Keep the source unchanged
     /// and seekable until completion. A reconnect resumes at the console's stored offset.</summary>
     public async Task<long> PushFileAsync(string reference, string sha256, Stream source, CancellationToken token)

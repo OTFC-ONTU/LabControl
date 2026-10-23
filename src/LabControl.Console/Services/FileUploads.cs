@@ -135,6 +135,9 @@ public sealed class FileUploads
 
         internal bool IsDisposed => _disposed;
 
+        /// <summary>The whole file arrived and passed its hash, and the grant is still open.</summary>
+        public bool IsComplete => Complete && !_disposed && !Failed;
+
         internal Upload(FileUploads owner, string agentId, Stream destination, long size, string sha256)
         {
             _owner = owner;

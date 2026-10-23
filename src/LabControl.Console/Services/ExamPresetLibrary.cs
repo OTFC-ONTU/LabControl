@@ -125,6 +125,9 @@ public sealed class ExamPresetLibrary
             saved.AllowedPrograms = ProgramNames.NormalizeAll(saved.AllowedPrograms);
             saved.InternetPresetName ??= string.Empty;
             saved.InternetHosts = saved.InternetMode == ExamInternetModes.Whitelist ? saved.InternetHosts.ToList() : [];
+            saved.CollectFolder = Shared.Jobs.CollectRequest.TryNormalize(saved.CollectFolder, out var collectFolder)
+                ? collectFolder
+                : Shared.Jobs.CollectRequest.DefaultFolder;
             saved.ModifiedAtUnix = now;
             var index = id is null ? -1 : _document.Presets.FindIndex(p => string.Equals(p.Id, id, StringComparison.Ordinal));
             if (index < 0)
@@ -176,4 +179,6 @@ public sealed record ExamRequest(
     LabControl.Shared.Protocol.InternetPolicy.Types.Mode InternetMode,
     IReadOnlyList<string> InternetHosts,
     string InternetPresetName,
-    string PresetName);
+    string PresetName,
+    string? CollectFolder = null,
+    string? CollectDestination = null);

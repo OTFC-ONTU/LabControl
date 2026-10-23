@@ -340,6 +340,26 @@ public sealed class PolicyEnforcer : IAsyncDisposable
         });
     }
 
+    /// <summary>
+    /// True while an exam is held: a profile reset is refused then (D-78) — it would delete the
+    /// work the exam is about to collect. A failure to read says yes, the safe answer.
+    /// </summary>
+    public bool HoldsExam
+    {
+        get
+        {
+            try
+            {
+                return Journal.ExamStateOf(_clock().ToUnixTimeSeconds()).Active;
+            }
+            catch (Exception ex)
+            {
+                _log.LogDebug(ex, "reading the held exam failed: {Message}", ex.Message);
+                return true;
+            }
+        }
+    }
+
     /// <summary>True while a firewall or DNS policy is held: the agent refuses <c>self_update</c> then (D-69 item 6). Never throws.</summary>
     public bool HoldsNetworkPolicy
     {

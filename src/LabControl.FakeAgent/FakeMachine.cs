@@ -1,6 +1,7 @@
 using System.Globalization;
 using Google.Protobuf;
 using LabControl.Shared;
+using LabControl.Shared.Files;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
@@ -86,7 +87,16 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         // The policy journal (M6, D-69) is the real one over policy.json in this PC's own
         // directory; only what the machine does with a lock is simulated. The mutex name is
         // per PC so thirty of them in one process never queue behind one another.
-        _machineState = new FakeMachineState(() => _desktop, log);
+        _machineState = new FakeMachineState(() => _desktop, log)
+        {
+            PrepareCollectFolder = folder =>
+            {
+                if (CollectRequest.TryNormalize(folder, out var normalized))
+                {
+                    Directory.CreateDirectory(FolderOf(new CollectRequest(normalized)));
+                }
+            },
+        };
         _policy = new PolicyEnforcer(Link, _machineState, store.Directory, store.Config.LabId, log,
             mutexName: PolicyMutexName(store.Config.AgentId), mutexWait: policyMutexWait, broadcastCeiling: broadcastCeiling,
             broadcastStallTimeout: broadcastStallTimeout);
@@ -159,7 +169,26 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         return desktop;
     }
 
-    public string MaterialsDirectory => Path.Combine(_store.Directory, Defaults.MaterialsFolderName);
+    /// <summary>The simulated student profile (M6 portion 5): Desktop, Documents and Downloads under it, Materials on the Desktop as on a real PC.</summary>
+    public string ProfileDirectory => Path.Combine(_store.Directory, "profile");
+
+    public string DesktopDirectory => Path.Combine(ProfileDirectory, "Desktop");
+
+    public string MaterialsDirectory => Path.Combine(DesktopDirectory, Defaults.MaterialsFolderName);
+
+    /// <summary>A collected folder in the simulated profile; the known folders are the profile's own subfolders here.</summary>
+    public string FolderOf(CollectRequest request)
+    {
+        var (root, below) = request.Split();
+        var start = root switch
+        {
+            CollectRoot.Desktop => DesktopDirectory,
+            CollectRoot.Documents => Path.Combine(ProfileDirectory, "Documents"),
+            CollectRoot.Downloads => Path.Combine(ProfileDirectory, "Downloads"),
+            _ => ProfileDirectory,
+        };
+        return Path.Combine([start, .. below]);
+    }
 
     public int Number => _store.Config.Number;
 
@@ -312,10 +341,87 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
             case Job.Types.Kind.SelfUpdate:
                 return await SelfUpdateAsync(job, report, token);
 
+            case Job.Types.Kind.CollectFiles:
+                return await CollectAsync(job, report, token);
+
+            case Job.Types.Kind.ResetProfile:
+                return ResetProfile(job);
+
             default:
                 await Task.Delay(TimeSpan.FromMilliseconds(300), token);
                 return Ok(job, $"{job.Kind} done (simulated).");
         }
+    }
+
+    /// <summary>The real archive and upload over the simulated profile (D-77): only the folder's place is simulated.</summary>
+    private async Task<JobResult> CollectAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
+    {
+        JobResult Fail(string message) => new() { JobId = job.Id, ExitCode = -1, Message = message };
+        if (!CollectRequest.TryParse(job, out var request, out var error)) return Fail(error);
+        var folder = FolderOf(request);
+        if (!Directory.Exists(folder)) return Ok(job, $"{request.Folder} does not exist on this PC: nothing to collect.");
+        var staged = Path.Combine(_store.Directory, Guid.NewGuid().ToString("n") + ".collect.zip");
+        try
+        {
+            await using var output = new FileStream(staged, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, Defaults.FileChunkBytes, FileOptions.Asynchronous);
+            var summary = WorkArchive.Create(folder, output, Defaults.CollectMaxBytes, Defaults.CollectMaxFiles, token);
+            await output.FlushAsync(token);
+            output.Position = 0;
+            var sha256 = FileHash.Sha256Hex(output);
+            output.Position = 0;
+            var reference = await Link.RequestUploadAsync(job.Id, output.Length, sha256, token);
+            await report(new JobProgress { JobId = job.Id, Percent = 50, Line = $"Sending {summary.Files} file(s)." });
+            await Link.PushFileAsync(reference, sha256, output, token);
+            return new JobResult { JobId = job.Id, Ok = true, Message = $"Collected {summary.Files} file(s), {summary.Bytes} bytes (simulated PC).", ArtifactRef = reference };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilePushException)
+        {
+            return Fail($"Could not collect {request.Folder}: {ex.Message}");
+        }
+        finally
+        {
+            try { File.Delete(staged); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Link.ReportForJob(job.Id, Event.Types.Severity.Warning, "files.cleanup_failed", ex.Message);
+            }
+        }
+    }
+
+    /// <summary>A simulated reset (D-78): refused during an exam like a real PC; light empties the three folders, full deletes the profile and reboots.</summary>
+    private JobResult ResetProfile(Job job)
+    {
+        if (!ResetProfileRequest.TryParse(job, out var request, out var error)) return new JobResult { JobId = job.Id, ExitCode = -1, Message = error };
+        if (_policy.HoldsExam)
+        {
+            return new JobResult { JobId = job.Id, ExitCode = -1, Message = "An exam is in progress on this PC; end it before resetting the profile, or its work would be lost." };
+        }
+
+        if (request.Mode == ResetMode.Light)
+        {
+            var removed = 0;
+            var left = 0;
+            foreach (var folder in new[] { DesktopDirectory, Path.Combine(ProfileDirectory, "Documents"), Path.Combine(ProfileDirectory, "Downloads") })
+            {
+                var summary = ProfileWipe.Clear(folder, Defaults.ProfileWipeMaxEntries, Defaults.ProfileWipeMaxDuration, CancellationToken.None);
+                removed += summary.Removed;
+                left += summary.Left;
+            }
+
+            return new JobResult { JobId = job.Id, Ok = left == 0, ExitCode = left == 0 ? 0 : 1, Message = $"Emptied Desktop, Documents and Downloads: {removed} item(s) removed (simulated PC)." };
+        }
+
+        try
+        {
+            if (Directory.Exists(ProfileDirectory)) Directory.Delete(ProfileDirectory, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new JobResult { JobId = job.Id, ExitCode = -1, Message = $"Could not delete the simulated profile: {ex.Message}" };
+        }
+
+        _ = PowerCycleAsync(TimeSpan.FromSeconds(8), "rebooted after a profile reset");
+        return Ok(job, "The student's profile was deleted; rebooting into a new one (simulated).");
     }
 
     private async Task<JobResult> SendFileAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)

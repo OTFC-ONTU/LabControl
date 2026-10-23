@@ -66,4 +66,8 @@ public sealed class AgentGrpcService : AgentService.AgentServiceBase
 
     public override Task<FileAck> GetUploadStatus(FileRequest request, ServerCallContext context) =>
         _session.UploadStatusAsync(context.GetHttpContext().Connection.ClientCertificate, request, context.CancellationToken);
+
+    /// <summary>A PC asks for the grant of an upload its job produced (M6 portion 5, D-77).</summary>
+    public override Task<UploadGrant> RequestUpload(UploadRequest request, ServerCallContext context) =>
+        _session.RequestUploadAsync(context.GetHttpContext().Connection.ClientCertificate, request);
 }

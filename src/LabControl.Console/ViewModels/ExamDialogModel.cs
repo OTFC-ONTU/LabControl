@@ -116,5 +116,11 @@ public sealed class ExamDialogModel
         },
         InternetPresetName = request.InternetPresetName,
         InternetHosts = request.InternetHosts.ToList(),
+        CollectWork = request.CollectFolder is not null,
+        CollectFolder = request.CollectFolder ?? LabControl.Shared.Jobs.CollectRequest.DefaultFolder,
     };
+
+    /// <summary>A folder on the PCs as typed, normalized, or the problem in words (M6 portion 5).</summary>
+    public static (string? Folder, string? Problem) ParseCollectFolder(string? text) =>
+        LabControl.Shared.Jobs.CollectRequest.TryNormalize(text, out var folder) ? (folder, null) : (null, Strings.Get("Collect.FolderInvalid"));
 }

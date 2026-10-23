@@ -327,7 +327,17 @@ the internet switch before the exam, and never count a process as closed that th
 end. The ARM64 VM drill (2026-10-23, <code>D-75</code>, <em>VM drill</em>) fixed five defects — protected processes
 never judged, <code>remaining_seconds</code> aged on a re-send after <code>Welcome</code> and on <em>Extend</em>, the strip
 widening for its text, a new exam forgetting the last one's closed programs, more quiet helpers.
-Tests: 972 Shared + 289 Console. Next: the physical lab, then portion 5.</li>
+Tests: 972 Shared + 289 Console. Next: the physical lab (alongside portion 5).</li>
+<li><strong>M6 portion 5 is built (2026-10-23, <code>D-77</code>, <code>D-78</code>), review-fixed, not yet run on Windows.</strong>
+Collect work and profile reset: the additive <code>RequestUpload</code> RPC (the agent asks for its D-42 grant
+once its archive exists), <code>WorkArchive</code> / <code>CollectRunner</code> packing under the student's token with links
+left out, <code>WorkCollections</code> granting only for a running job of that PC delivered by this instance and
+unpacking into <code>&lt;destination&gt;/&lt;name date&gt;/PC-07/</code> with every name checked and a <code>report.txt</code>; exams
+collect each PC when it reports the end, PCs off are missing and never retried; <code>ProfileResetRunner</code>
+refuses during an exam and on account-off (light = three folders emptied under the token by the
+iterative <code>ProfileWipe</code>; full = log off, <code>DeleteProfile</code> by SID, reboot). Keep student-file reads under
+the token and never follow links as SYSTEM. Tests: 998 Shared + 300 Console. Next: the VM drill, then
+portion 6.</li>
 <li>The Windows student agent must survive reboots and must not let a failed Win32
 operation escape the service loop.</li>
 <li>Physical lab status (2026-09-08 evening): five PCs installed and linked from the
@@ -483,7 +493,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-23 11:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-23 16:56 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

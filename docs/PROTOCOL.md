@@ -162,6 +162,7 @@ rpc PushVideo(stream VideoFrame) returns (VideoAck);              // opened on d
 rpc PullFile(FileRequest) returns (stream FileChunk);             // agent downloads from console
 rpc PushFile(stream FileChunk) returns (FileAck);                 // agent uploads results/logs
 rpc GetUploadStatus(FileRequest) returns (FileAck);               // committed upload offset
+rpc RequestUpload(UploadRequest) returns (UploadGrant);           // the grant for an upload the agent just made (M6, D-77)
 rpc PullBroadcast(BroadcastRequest) returns (stream VideoFrame);  // teacher's screen, agent dials (M6, D-71)
 ```
 
@@ -363,13 +364,56 @@ failures within a 30-second inactivity budget; retransmitting the same prefix do
 reset it. Caller cancellation and agent shutdown interrupt the retry. Server reads and
 writes also have a 30-second inactivity budget.
 
-This is a transport API, not yet a collect-files or diagnostic-upload action. The per-PC
-job log bundles (D-43) use output already received on `Link`. Its caller owns the
+Collected work (`collect_files`, below) is the first consumer; diagnostic uploads are not built.
+The per-PC job log bundles (D-43) use output already received on `Link`. Its caller owns the
 readable/writable/seekable staging stream, must keep it private until verified completion,
 and must discard it on failure. It disposes the grant before closing the stream. Grants
 and resume state are local to this console process and are not backed up or restored after
 restart or take-over. The additive `GetUploadStatus` RPC and `FileAck.sha256` preserve existing fields;
 an older console answers `Unimplemented`, which is reported as an upload failure.
+
+### `RequestUpload` and `collect_files` (M6 portion 5, `D-77`)
+
+```
+message UploadRequest { string job_id = 1; int64 size = 2; string sha256 = 3; }
+message UploadGrant   { string reference = 1; string problem = 2; }   // empty reference = refused
+```
+
+An upload whose size and hash exist only once the agent has made the file asks for its
+`PushFile` grant itself. The console grants only for a **running `collect_files` job of that
+PC that this console instance delivered** (results are bound to the delivering instance,
+`D-57`), within `Defaults.CollectMaxBytes` plus a sixteenth for the archive's overhead; the
+peer is validated like on `Link`. The same request repeated — the agent lost the answer — gets
+the same grant; a different size or hash replaces it. A refusal is final for the job. The
+console stages the archive beside the destination and unpacks it only after `PushFile`'s hash
+check and the job's `JobResult{ok, artifact_ref = reference}`; any other result discards it.
+An agent waits through a dropped link for an answer for up to `Defaults.FileChunkTimeout`, like
+an upload; an older console answers `Unimplemented`, reported as a failed collection.
+
+`collect_files` args: `folder` — relative to the student's profile, parts joined by `\`, each a
+plain Windows name, never `..`, at most eight parts (`CollectRequest`); a first part of
+`Desktop`, `Documents` or `Downloads` means that known folder wherever Windows keeps it. The
+default is `Desktop\Exam` (owner decision 2026-10-23). Delivery is online only: a PC that is not
+linked is `not_delivered` on the spot and reported **missing** — never retried. The agent
+zips the folder under the recorded student's token into a private staging file opened as
+SYSTEM, leaves out symbolic links and junctions, skips and names files it cannot read, and
+refuses a folder past `Defaults.CollectMaxBytes` (256 MB) or `CollectMaxFiles` (5000) whole.
+A missing folder is `ok` with an empty `artifact_ref`: nothing to collect. An installation
+without the managed student (`D-40`) fails the job. On the console the archive lands in
+`<destination>/<name yyyy-MM-dd HH-mm>/PC-07/` (names checked part by part, nothing outside the
+PC's folder, sizes counted as written) with a `report.txt` beside the PCs' folders.
+
+### `reset_profile` (M6 portion 5, `D-78`)
+
+Args: `mode` = `light` | `full`. Online only. Refused while the PC holds an exam and on an
+installation without the managed student. `light` empties Desktop, Documents and Downloads
+(Materials included; each folder's `desktop.ini` kept) under the student's token, links
+removed and never entered, within `Defaults.ProfileWipeMaxEntries` / `ProfileWipeMaxDuration`;
+what could not be removed makes the result not `ok` and is counted. `full` logs the student off,
+deletes the profile by the recorded SID with `DeleteProfile` (retried for
+`Defaults.ProfileUnloadTimeout`), answers, and reboots `Defaults.PowerJobDelay` later — also when
+Windows still held the profile, so the PC always comes back by itself; automatic sign-in creates
+a new profile.
 
 ### Files: `install_package` and `send_file`
 
@@ -464,7 +508,7 @@ ExamMode {                        console → agent, on Link
   string message;                 // the teacher's line in the strip
   reserved 6;                     // was block_internet
   repeated string allowed_programs;   // executable names, matched by file name only
-  CollectSpec collect;            // portion 5; carried and kept, not acted on yet
+  CollectSpec collect;            // portion 5: folder created on the PC at the start; the console collects it at the end
   InternetPolicy internet;        // absent or OPEN = untouched; its own limits are ignored
   int64  until_seconds;           // the timer, a duration from arrival; 0 = none; negative = refused
   int64  hard_limit_seconds;      // proposed; clamped to ExamHardLimit (4 h) on the PC's clock; <= 0 = the ceiling

@@ -81,6 +81,30 @@ public sealed class ExamPresetLibraryTests
 
     /// <summary>A restored console gets the exam presets from the backup; a teacher device importing the lab file gets none of them (D-76).</summary>
     [Fact]
+    public void The_collect_switch_is_kept_with_a_normalized_folder_and_a_bad_one_falls_back_to_the_default()
+    {
+        var directory = TestConsole.TempDirectory();
+        var store = new LabStore(directory);
+        store.EnsureDirectories();
+        try
+        {
+            var library = Open(store);
+            var saved = library.Save(null, new ExamPreset { Name = "Lab 3", CollectWork = true, CollectFolder = "Documents/Java/Lab3" }).Saved!;
+            Assert.True(saved.CollectWork);
+            Assert.Equal(@"Documents\Java\Lab3", saved.CollectFolder);
+            var bad = library.Save(null, new ExamPreset { Name = "Bad", CollectWork = true, CollectFolder = @"C:\Windows" }).Saved!;
+            Assert.Equal(LabControl.Shared.Jobs.CollectRequest.DefaultFolder, bad.CollectFolder);
+            var reopened = Open(store).Presets.Single(p => p.Name == "Lab 3");
+            Assert.True(reopened.CollectWork);
+            Assert.Equal(@"Documents\Java\Lab3", reopened.CollectFolder);
+        }
+        finally
+        {
+            TestConsole.DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
     public async Task The_backup_carries_the_presets_and_the_lab_file_does_not()
     {
         await using var room = await TestConsole.CreateLabAsync("Room 214");

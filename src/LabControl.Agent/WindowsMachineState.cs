@@ -144,8 +144,34 @@ internal sealed class WindowsMachineState : IMachineState
         return [windows, Path.Combine(programFiles, "WindowsApps"), Path.Combine(programFilesX86, "Microsoft", "EdgeWebView"), Path.Combine(programFiles, "Microsoft", "EdgeWebView")];
     }
 
-    /// <summary>The strip down the pipe and the allowed-programs watch in this service (M6 portion 4, D-75).</summary>
-    public MachineResult ApplyExam(ExamSession session) => _exam.Apply(session);
+    /// <summary>
+    /// The strip down the pipe and the allowed-programs watch in this service (M6 portion 4,
+    /// D-75), and the folder the console will collect created for the student (portion 5,
+    /// D-77) — off the policy's path and best effort: an exam never fails because a folder
+    /// could not be made, and the collection says so later.
+    /// </summary>
+    public MachineResult ApplyExam(ExamSession session)
+    {
+        var result = _exam.Apply(session);
+        if (session.CollectFolder is { Length: > 0 } folder && LabControl.Shared.Jobs.CollectRequest.TryNormalize(folder, out var normalized))
+        {
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    using var student = ManagedStudentAccess.Open();
+                    var path = CollectRunner.Resolve(student, new LabControl.Shared.Jobs.CollectRequest(normalized));
+                    System.Security.Principal.WindowsIdentity.RunImpersonated(student.Token, () => Directory.CreateDirectory(path));
+                }
+                catch (Exception ex)
+                {
+                    _log.LogInformation("the exam's folder {Folder} was not created: {Message}", normalized, ex.Message);
+                }
+            });
+        }
+
+        return result;
+    }
 
     public MachineResult LiftExam() => _exam.Lift();
 

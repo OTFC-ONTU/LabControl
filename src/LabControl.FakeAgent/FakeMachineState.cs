@@ -31,8 +31,11 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
     public FakeMachineState(Func<FakeScreen?> desktop, ILogger log)
     {
         _desktop = desktop;
+        _log = log;
         Picture = new BroadcastPicture(log);
     }
+
+    private readonly ILogger _log;
 
     /// <summary>The teacher's screen as this PC decoded it (M6 portion 2).</summary>
     public BroadcastPicture Picture { get; }
@@ -229,8 +232,23 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
     /// what is open to close — and simulated programs always comply — and a program the student
     /// starts afterwards is ended at once, as on a real PC. The strip is drawn onto the desktop.
     /// </summary>
+    /// <summary>Creates the exam's folder to collect in the simulated profile; best effort, like a real PC.</summary>
+    public Action<string>? PrepareCollectFolder { get; init; }
+
     public MachineResult ApplyExam(ExamSession session)
     {
+        if (session.CollectFolder is { Length: > 0 } folder)
+        {
+            try
+            {
+                PrepareCollectFolder?.Invoke(folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log.LogInformation("the exam's folder {Folder} was not created: {Message}", folder, ex.Message);
+            }
+        }
+
         lock (_lock)
         {
             if (_exam?.SessionId != session.SessionId)

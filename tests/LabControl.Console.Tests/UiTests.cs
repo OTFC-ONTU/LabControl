@@ -753,6 +753,61 @@ public sealed class UiTests
         await console.DisposeAsync();
     }
 
+    [Fact]
+    public async Task The_collect_and_reset_dialogs_say_what_happens_and_the_exam_collects_with_its_folder()
+    {
+        // Dispatch has no Func<Task> overload: the body returns a value so it is awaited, not run as async void.
+        var done = await Session.Dispatch(async () =>
+        {
+            // Collect files… (M6 portion 5, D-77): the defaults, the missing-PC rule, the caps, a bad folder refused.
+            var collect = new CollectFilesDialog(3);
+            collect.Show();
+            await Render(collect, "collect-files");
+            var collectText = string.Join("\n", collect.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Assert.Contains("missing", collectText, StringComparison.Ordinal);
+            Assert.Contains($"{Defaults.CollectMaxBytes / (1024 * 1024)} MB", collectText, StringComparison.Ordinal);
+            var boxes = collect.GetVisualDescendants().OfType<TextBox>().ToList();
+            Assert.Contains(boxes, b => b.Text == LabControl.Shared.Jobs.CollectRequest.DefaultFolder);
+            Assert.Contains(boxes, b => b.Text == WorkCollections.DefaultDestination);
+            boxes.Single(b => b.Text == LabControl.Shared.Jobs.CollectRequest.DefaultFolder).Text = @"..\Windows";
+            collect.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, Localization.Strings.Get("Collect.Start")))
+                .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.False(collect.Completion.IsCompleted);
+            Assert.Contains(collect.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text == Localization.Strings.Get("Collect.FolderInvalid"));
+            collect.Close();
+
+            // Reset profile… (D-78): both modes in words, the warning, the confirm label following the choice.
+            var reset = new ResetProfileDialog(2);
+            reset.Show();
+            await Render(reset, "reset-profile");
+            var resetText = string.Join("\n", reset.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Assert.Contains("cannot be undone", resetText, StringComparison.Ordinal);
+            Assert.Contains("Materials included", resetText, StringComparison.Ordinal);
+            reset.GetVisualDescendants().OfType<RadioButton>().Single(r => Equals(r.Content, Localization.Strings.Get("Reset.Full"))).IsChecked = true;
+            var confirm = reset.GetVisualDescendants().OfType<Button>().Single(b => b.Classes.Contains("danger"));
+            Assert.Equal(Localization.Strings.Get("Reset.ConfirmFull"), confirm.Content);
+            confirm.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(LabControl.Shared.Jobs.ResetMode.Full, await reset.Completion);
+
+            // The exam dialog's collect switch, from a preset that has it on.
+            var preset = new ExamPreset { Id = "p1", Name = "Practical", TimerMinutes = 40, CollectWork = true, CollectFolder = @"Documents\Lab3" };
+            var exam = new ExamDialog(new ExamDialogModel([preset], [], 4, wholeLab: false));
+            exam.Show();
+            await Render(exam, "exam-collect");
+            Assert.True(exam.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Localization.Strings.Get("Exam.CollectWork"))).IsChecked);
+            Assert.Contains(exam.GetVisualDescendants().OfType<TextBox>(), b => b.Text == @"Documents\Lab3");
+            exam.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, Localization.Strings.Get("Exam.Start")))
+                .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var request = await exam.Completion;
+            Assert.NotNull(request);
+            Assert.Equal(@"Documents\Lab3", request.CollectFolder);
+            Assert.Equal(WorkCollections.DefaultDestination, request.CollectDestination);
+            Assert.True(ExamDialogModel.ToPreset("x", request).CollectWork);
+            return true;
+        }, TestContext.Current.CancellationToken);
+        Assert.True(done);
+    }
+
     private static async Task Render(Window window, string name)
     {
         for (var i = 0; i < 3; i++)

@@ -95,4 +95,22 @@ public sealed class OverlayTextTests
         Assert.NotEmpty(OverlayText.CountdownText(long.MaxValue));
         Assert.NotEmpty(OverlayText.CountdownText(long.MinValue));
     }
+
+    [Fact]
+    public void The_exam_strip_widens_for_the_sweep_warning_and_stays_put_as_the_countdown_ticks()
+    {
+        // VM drill 2026-10-23: at a third of a 1312 px screen the warning was cut before "save your work".
+        var plain = OverlayText.StripSize(1312, 805);
+        var warning = new ExamStripContent("Test", 599, OverlayText.ClosingText(["Notepad.exe"], 10));
+        var wide = OverlayText.StripSize(1312, 805, warning);
+        Assert.True(wide.Width > plain.Width, $"{wide.Width} <= {plain.Width}");
+        Assert.True(wide.Width <= 1312 * 9 / 10);
+        Assert.Equal(plain.Height, wide.Height);
+        Assert.Equal(wide, OverlayText.StripSize(1312, 805, warning with { RemainingSeconds = 588 }));
+
+        // A long list still fits the screen, ellipsized; a short message keeps the third.
+        var many = new ExamStripContent("", null, OverlayText.ClosingText(Enumerable.Range(1, 40).Select(n => $"program{n}.exe"), 10));
+        Assert.Equal(1312 * 9 / 10, OverlayText.StripSize(1312, 805, many).Width);
+        Assert.Equal(plain, OverlayText.StripSize(1312, 805, new ExamStripContent("Test", 60, "")));
+    }
 }

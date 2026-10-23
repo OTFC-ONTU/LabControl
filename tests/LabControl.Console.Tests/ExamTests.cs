@@ -112,6 +112,11 @@ public class ExamTests
             Assert.All(machines, m => Assert.Null(m.Lock));
             Assert.False(Tile(console, first.AgentId).InExam);
             Assert.Contains(console.Session.Events.Recent, e => e.Code == "exam.ended");
+
+            // The next exam starts with nothing closed: what this one closed was its own (VM drill 2026-10-23).
+            var (next, _) = console.Session.StartExam([first.AgentId], Request(null, restrict: false), wholeLab: false);
+            Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(first.AgentId)?.ExamState is { Active: true } s && s.SessionId == next, TimeSpan.FromSeconds(10)));
+            Assert.Empty(console.Session.FindLinked(first.AgentId)!.ExamState!.TerminatedRecently);
         }
         finally
         {
@@ -152,6 +157,30 @@ public class ExamTests
 
         Assert.Equal(1, console.Session.Unlock([id]));
         Assert.True(await Wait.UntilAsync(() => machine.Lock is null && console.Session.FindLinked(id)?.OverlayLocked == false, TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
+    public async Task Extend_counts_from_what_is_left_now_not_from_the_last_state_the_pc_sent()
+    {
+        // VM drill 2026-10-23: the PC re-sends ExamState only on change, so its remaining_seconds
+        // ages; ten console minutes after the last state, +5 min must leave 35 of 40, not 45.
+        var ahead = TimeSpan.Zero;
+        await using var console = await TestConsole.CreateLabAsync(clock: () => DateTimeOffset.UtcNow + ahead);
+        var payload = SetupPayload.Open(console.Session.WritePayload(TestConsole.TempDirectory(), pcCount: 1));
+        var store = FakeMachine.Install(Path.Combine(TestConsole.TempDirectory(), "PC-05"), 5, payload, System.Net.IPAddress.Loopback.ToString(), console.Port, burnedCode: false);
+        await using var machine = new FakeMachine(store, null, TestLogging.Factory.CreateLogger("PC-05"));
+        machine.Start();
+        var id = machine.AgentId;
+        Assert.True(await Wait.UntilAsync(() => console.Session.IsLinked(id), TimeSpan.FromSeconds(20)));
+
+        console.Session.StartExam([id], Request(TimeSpan.FromMinutes(40), restrict: false), wholeLab: false);
+        Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(id)?.InExam == true, TimeSpan.FromSeconds(10)));
+        var before = console.Session.FindLinked(id)!.ExamState!.UntilUnix;
+
+        ahead = TimeSpan.FromMinutes(10);
+        Assert.Equal(1, console.Session.ExtendExam([id], TimeSpan.FromMinutes(5)));
+        Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(id)!.ExamState!.UntilUnix < before - 4 * 60, TimeSpan.FromSeconds(10)));
+        Assert.InRange(console.Session.FindLinked(id)!.ExamState!.UntilUnix, before - 5 * 60 - 5, before - 5 * 60 + 5);
     }
 
     [Fact]

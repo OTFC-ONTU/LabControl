@@ -374,6 +374,52 @@ internal static class TestLabHost
                                 if (command.Paths is not [var name]) throw new ArgumentException("Name one host in paths.");
                                 result = new { ok = true, asked = session.AllowRefusedName(name) };
                                 break;
+                            // M6 portion 4 exam drill (D-75): `seconds` is the timer (0 = none), `paths` the allowed
+                            // programs with `restrict`, `internet` "blocked" or "whitelist" with `hosts`, `whole_lab`.
+                            case "exam-start":
+                            {
+                                if (command.AgentId is null || !session.IsLinked(command.AgentId))
+                                    throw new InvalidOperationException("Choose a linked fixture agent.");
+                                if (command.Seconds is < 0 or > 14400) throw new ArgumentException("Invalid exam timer.");
+                                var internetMode = command.Internet switch
+                                {
+                                    null or "" => LabControl.Shared.Protocol.InternetPolicy.Types.Mode.Unspecified,
+                                    "blocked" => LabControl.Shared.Protocol.InternetPolicy.Types.Mode.Blocked,
+                                    "whitelist" => LabControl.Shared.Protocol.InternetPolicy.Types.Mode.Whitelist,
+                                    _ => throw new ArgumentException("Invalid internet switch."),
+                                };
+                                var request = new ExamRequest("Контрольна робота — перевірка", command.Seconds is > 0 ? TimeSpan.FromSeconds(command.Seconds.Value) : null,
+                                    command.Restrict, (command.Paths ?? []).Take(32).ToArray(), internetMode, (command.Hosts ?? []).Take(32).ToArray(),
+                                    internetMode == LabControl.Shared.Protocol.InternetPolicy.Types.Mode.Unspecified ? string.Empty : "Drill", "Drill");
+                                var (examSession, examSent) = session.StartExam([command.AgentId], request, command.WholeLab);
+                                result = new { ok = examSent == 1, session_id = examSession };
+                                break;
+                            }
+                            // `instance` names the power job: logoff or reboot (an exam's whitelist pauses for it).
+                            case "power":
+                                if (command.AgentId is null || !session.IsLinked(command.AgentId))
+                                    throw new InvalidOperationException("Choose a linked fixture agent.");
+                                var powerKind = command.Instance switch
+                                {
+                                    "logoff" => LabControl.Shared.Protocol.Job.Types.Kind.Logoff,
+                                    "reboot" => LabControl.Shared.Protocol.Job.Types.Kind.Reboot,
+                                    _ => throw new ArgumentException("Invalid power job."),
+                                };
+                                session.CreateJobs([command.AgentId], powerKind, null, null);
+                                result = new { ok = true };
+                                break;
+                            case "exam-extend":
+                            case "exam-end":
+                                if (command.AgentId is null || !session.IsLinked(command.AgentId))
+                                    throw new InvalidOperationException("Choose a linked fixture agent.");
+                                if (command.Action == "exam-end")
+                                    result = new { ok = session.EndExam([command.AgentId]) == 1 };
+                                else
+                                {
+                                    if (command.Seconds is not (> 0 and <= 3600)) throw new ArgumentException("Invalid extension.");
+                                    result = new { ok = session.ExtendExam([command.AgentId], TimeSpan.FromSeconds(command.Seconds.Value)) == 1 };
+                                }
+                                break;
                             // D-82 drill: a new lab B in this root (instance directory "moved"), remembered with the
                             // file protector, and the PC sent its move. Start a second host with
                             // --root <root> --instance moved --port <this port> to serve B afterwards.
@@ -430,6 +476,11 @@ internal static class TestLabHost
                             allowed = internet.AllowedHosts.ToArray(), refused = internet.RefusedRecently.ToArray(),
                             internet.Problem, internet.Reason, internet.SetByInstance } : null,
                         internet_problem = pc.InternetProblem,
+                        exam = pc.ExamState is { } exam ? new { exam.SessionId, exam.Active, exam.WhitelistEnforced,
+                            terminated = exam.TerminatedRecently.ToArray(), exam.SinceUnix, exam.UntilUnix, exam.HardLimitUnix,
+                            exam.RemainingSeconds, exam.SetByInstance, exam.PresetName, allowed = exam.AllowedPrograms.ToArray(),
+                            exam.RestrictPrograms, exam.Problem, exam.Reason } : null,
+                        lab_exam = session.LabExamSessionId,
                         readiness_codes = pc.Machine.SetupReadinessCodes,
                         screen = ScreenStatus(session.Screens.Find(pc.AgentId)) }).ToArray(),
                     jobs = session.Jobs.All().Select(job => new { id = job.Id, agent_id = job.AgentId, state = job.State.ToString(),
@@ -477,5 +528,6 @@ internal static class TestLabHost
         File.Move(temporary, path, overwrite: true);
     }
     private sealed record Command(string Action, string? AgentId, string? BuildDirectory, string? BaseVersion,
-        string? MinimumInstalledVersion, string[]? Paths, bool Open, int? Seconds, string? Instance, bool Teacher);
+        string? MinimumInstalledVersion, string[]? Paths, bool Open, int? Seconds, string? Instance, bool Teacher,
+        bool Restrict, string? Internet, string[]? Hosts, bool WholeLab);
 }

@@ -216,6 +216,19 @@ against a list saved before, the interface DNS in both families, the watchdog ta
 Never disable the virtio NIC to simulate a late interface (it bugchecks the guest); reset its
 DNS by hand instead.
 
+## M6 exam drill
+
+The exam drill (M6 portion 4, `D-75`) runs on the internet clone too, since the exam's internet
+switch needs a guest that reaches the internet. Commands: `exam-start` (`agent_id`; `seconds` the
+timer, 0 or absent for none; `restrict` with the allowed programs in `paths`; `internet`
+`"blocked"` or `"whitelist"` with its hosts in `hosts`; `whole_lab` to remember it for late PCs),
+`exam-extend` (`agent_id`, `seconds` 1…3600) and `exam-end` (`agent_id`); `power` (`agent_id`,
+`instance` `"logoff"` or `"reboot"`) sends a real power job, which pauses the whitelist. Status
+carries each agent's `exam` state and the console's `lab_exam`. Start student programs from the
+guest with an `Interactive` scheduled task for the signed-in student (no password), never as
+SYSTEM; the agent's own `session-script` is exempt from the whitelist and proves nothing. Look at
+the strip with `full-screen` and `save-screen`. Remove any renamed copies afterwards.
+
 ## Lab key move drill (D-82)
 
 `move-new-key` (`agent_id`) creates a second disposable lab B in the same root (instance

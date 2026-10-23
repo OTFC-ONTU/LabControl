@@ -121,4 +121,31 @@ public class OverlayLinkTests
         first.Close("test: relink");
         Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(pc.AgentId) is { } again && !ReferenceEquals(again, first) && again.OverlayState is { SessionId: "before-relink" }, TimeSpan.FromSeconds(30)));
     }
+
+    [Fact]
+    public async Task A_resent_state_counts_its_remaining_time_down_to_the_moment_of_sending()
+    {
+        // VM drill 2026-10-23: a relinked PC repeated an exam's remaining time as it was minutes
+        // earlier, so the badge was behind and Extend added those minutes to the exam.
+        var ahead = TimeSpan.Zero;
+        await using var console = await TestConsole.CreateLabAsync();
+        await using var pc = TestAgent.Install(console, 15, console.IssueCodes(1)[0], options: new AgentLinkOptions { Clock = () => DateTimeOffset.UtcNow + ahead }).Start();
+        Assert.True(await Wait.UntilAsync(() => console.Session.IsLinked(pc.AgentId), TimeSpan.FromSeconds(20)));
+        var first = console.Session.FindLinked(pc.AgentId)!;
+
+        pc.Link.PublishOverlayState(new OverlayState { Kind = Overlay.Types.Kind.Lock, SessionId = "lock", SetByInstance = "earlier", RemainingSeconds = 3000 });
+        pc.Link.PublishInternetState(new InternetState { Mode = InternetPolicy.Types.Mode.Blocked, SessionId = "net", RemainingSeconds = 3000 });
+        pc.Link.PublishExamState(new ExamState { Active = true, SessionId = "exam", RemainingSeconds = 3000 });
+        Assert.True(await Wait.UntilAsync(() => first.ExamState is { SessionId: "exam" } && first.InternetState is { SessionId: "net" } && first.OverlayState is { SessionId: "lock" }, TimeSpan.FromSeconds(10)));
+
+        ahead = TimeSpan.FromMinutes(10);
+        first.Close("test: relink");
+        Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(pc.AgentId) is { ExamState.SessionId: "exam" } again && !ReferenceEquals(again, first), TimeSpan.FromSeconds(30)));
+        var again = console.Session.FindLinked(pc.AgentId)!;
+        Assert.True(await Wait.UntilAsync(() => again.InternetState is { SessionId: "net" } && again.OverlayState is { SessionId: "lock" }, TimeSpan.FromSeconds(10)));
+        Assert.InRange(again.ExamState!.RemainingSeconds, 2390, 2400);
+        Assert.InRange(again.InternetState!.RemainingSeconds, 2390, 2400);
+        Assert.InRange(again.OverlayState!.RemainingSeconds, 2390, 2400);
+        Assert.Equal(3000, pc.Link.LatestExamState!.RemainingSeconds);
+    }
 }

@@ -226,14 +226,37 @@ public static class OverlayText
 
     /// <summary>
     /// The strip's size on a screen of <paramref name="screenWidth"/> × <paramref name="screenHeight"/>:
-    /// a third of the width (at least 480 px, at most the screen), one line of text high.
+    /// one line of text high, a third of the width (at least 480 px), and wider when
+    /// <paramref name="content"/> needs it, up to nine tenths of the screen — the sweep's warning
+    /// ends with "save your work now", the part a student must read (VM drill 2026-10-23: at a
+    /// third of 1312 px it was cut after the program's name).
     /// </summary>
-    public static (int Width, int Height) StripSize(int screenWidth, int screenHeight)
+    public static (int Width, int Height) StripSize(int screenWidth, int screenHeight, ExamStripContent? content = null)
     {
         screenWidth = Math.Clamp(screenWidth, 1, Defaults.OverlayMaxDimension);
         screenHeight = Math.Clamp(screenHeight, 1, Defaults.OverlayMaxDimension);
         var height = Math.Clamp(screenHeight / 22, 28, 96);
         var width = Math.Min(screenWidth, Math.Max(480, screenWidth / 3));
+        if (content is not null && width < screenWidth)
+        {
+            try
+            {
+                var (size, margin) = (height * 0.46f, height * 0.45f);
+                var remaining = StripRemainingText(content.RemainingSeconds);
+                var line = content.Notice.Length > 0 ? content.Notice : ClampMessage(content.Message).Replace('\n', ' ');
+                var needed = margin + Measure(Text("ExamTitle"), size) + margin + (line.Length > 0 ? Measure(line, size) : 0f)
+                    + (remaining.Length > 0 ? margin + Measure(remaining, size) : 0f) + margin;
+                // In steps of two heights, so a countdown's changing digits do not jiggle the strip every second.
+                var step = height * 2;
+                var stepped = (int)Math.Ceiling(needed / step) * step;
+                width = Math.Max(width, Math.Min(stepped, screenWidth * 9 / 10));
+            }
+            catch (Exception)
+            {
+                // Measuring is a nicety: the third-of-the-screen strip still ellipsizes.
+            }
+        }
+
         return (width, height);
     }
 

@@ -313,7 +313,7 @@ list as an original, and never re-apply a whitelist from a short-lived process. 
 physical-lab drill passed on 2026-10-20 after the lab fixes (<code>D-73</code> item 12). A lock or a
 broadcast holds the student's display on through the helper's <code>DisplayKeeper</code> (<code>D-84</code>, not yet
 run on Windows); the exam strip reuses it.</li>
-<li><strong>M6 portion 4 is built (2026-10-23, <code>D-75</code>, <code>D-76</code>), review-fixed, not yet run on Windows.</strong>
+<li><strong>M6 portion 4 is built (2026-10-23, <code>D-75</code>, <code>D-76</code>), review-fixed and passed its ARM64 VM drill the same day.</strong>
 Exam mode: <code>ExamMode</code>/<code>ExamState</code> with durations, the journal's <code>SetExam</code> (internet switch first as
 its own <code>ExamInternet</code> session that hands a standalone policy back, the exam last), a &quot;Time is up&quot;
 lock when the timer — not the hard limit — runs out, the allowed-programs whitelist in the
@@ -324,7 +324,10 @@ teacher's scripts exempt), the strip in the helper (<code>ExamStripWindow</code>
 a lock or broadcast), presets in <code>exam-presets.json</code> (backup only, never the lab file), late PCs
 joining an exam <em>for all</em> from the console's memory. Keep the whitelist out of the helper, keep
 the internet switch before the exam, and never count a process as closed that this call did not
-end. Next: the VM drill, then portion 5.</li>
+end. The ARM64 VM drill (2026-10-23, <code>D-75</code>, <em>VM drill</em>) fixed five defects — protected processes
+never judged, <code>remaining_seconds</code> aged on a re-send after <code>Welcome</code> and on <em>Extend</em>, the strip
+widening for its text, a new exam forgetting the last one's closed programs, more quiet helpers.
+Tests: 972 Shared + 289 Console. Next: the physical lab, then portion 5.</li>
 <li>The Windows student agent must survive reboots and must not let a failed Win32
 operation escape the service loop.</li>
 <li>Physical lab status (2026-09-08 evening): five PCs installed and linked from the
@@ -480,7 +483,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-23 09:52 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-23 11:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

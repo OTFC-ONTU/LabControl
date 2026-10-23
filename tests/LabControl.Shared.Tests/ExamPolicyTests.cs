@@ -349,6 +349,8 @@ public sealed class ProgramWatchTests
         Assert.False(ProgramWhitelist.ShouldClose(P(7, "explorer.exe"), Context, allowed));
         Assert.False(ProgramWhitelist.ShouldClose(P(8, "conhost.exe"), Context, allowed));
         Assert.False(ProgramWhitelist.ShouldClose(P(9, "session.exe", path: @"C:\Program Files\LabControl\app\1.0.0\session.exe"), Context, allowed));
+        // A protected process under the student's token (Defender's session helper, VM drill 2026-10-23) cannot be ended.
+        Assert.False(ProgramWhitelist.ShouldClose(P(10, "DefenderSessionHelper.exe") with { IsProtectedProcess = true }, Context, allowed));
     }
 
     [Fact]

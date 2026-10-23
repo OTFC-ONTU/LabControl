@@ -9,6 +9,13 @@ namespace LabControl.Shared.Exam;
 /// <param name="StartedAt">The process creation time (FILETIME ticks), or 0 when unknown.</param>
 public sealed record ProcessInfo(int ProcessId, string Name, int SessionId, string? UserSid, string? ImagePath, long StartedAt)
 {
+    /// <summary>
+    /// Windows runs it as a protected process (an antimalware session helper, for one): it may
+    /// carry the student's token, but nobody can end it, so it is never judged (VM drill
+    /// 2026-10-23: Defender's <c>DefenderSessionHelper.exe</c> was warned about and refused).
+    /// </summary>
+    public bool IsProtectedProcess { get; init; }
+
     /// <summary>Process id and creation time: a reused id is another process.</summary>
     public (int, long) Key => (ProcessId, StartedAt);
 }
@@ -36,7 +43,7 @@ public sealed record SessionContext(int SessionId, string? UserSid, IReadOnlyLis
 /// <summary>
 /// The allowed-programs judgement (M6 portion 4, D-75): <b>session and token before name</b>.
 /// A process is closed only when it runs in the student's session, under the student's own
-/// token, is not LabControl's, is not in the hard-coded <see cref="NeverTouch"/> set of shell
+/// token, is not a protected process, is not LabControl's, is not in the hard-coded <see cref="NeverTouch"/> set of shell
 /// and Windows processes, and is not on the teacher's list. Matching is by executable name
 /// only (no process tree): a program the allowed IDE starts is judged by its own name, and a
 /// renamed executable passes. Pure, so the whole judgement is tested on the Mac.
@@ -77,7 +84,7 @@ public static class ProgramWhitelist
         "phoneexperiencehost.exe", "yourphone.exe", "crossdeviceresume.exe", "crossdeviceservice.exe",
         "widgets.exe", "widgetservice.exe", "gamebar.exe", "gamebarftserver.exe", "gamebarpresencewriter.exe",
         "skypebackgroundhost.exe", "skypeapp.exe", "hxtsr.exe", "hxoutlook.exe", "hxaccounts.exe",
-        "microsoft.photos.exe", "photosapp.exe", "msteamsupdate.exe",
+        "microsoft.photos.exe", "photosapp.exe", "msteamsupdate.exe", "softlandingtask.exe", "slui.exe", "mobsync.exe", "m365copilot.exe", "m365copilot_autostarter.exe",
         "teams.exe", "ms-teams.exe", "msteams.exe", "adobearm.exe", "jusched.exe", "igfxem.exe", "igfxext.exe",
         "rtkauduservice64.exe", "ravbg64.exe", "nvcontainer.exe", "nvdisplay.container.exe", "amdrsserv.exe",
         "radeonsoftware.exe", "googledrivefs.exe", "dropbox.exe", "steamwebhelper.exe", "identity_helper.exe",
@@ -98,6 +105,11 @@ public static class ProgramWhitelist
         // Session and token first: nothing of another user, or outside the student's session, is ever judged.
         if (context.UserSid is null || process.SessionId != context.SessionId || process.UserSid is null
             || !string.Equals(process.UserSid, context.UserSid, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (process.IsProtectedProcess)
         {
             return false;
         }

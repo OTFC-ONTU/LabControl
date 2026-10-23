@@ -4160,6 +4160,45 @@ a stubborn process, exempt processes, the power-job pause, re-stated lists, a re
 Windows half (the process snapshot, `TerminateProcess`, `WM_CLOSE`, the strip window) is the VM
 drill.
 
+VM drill (2026-10-23, Windows 11 ARM64 clone *M6 isolated internet acceptance*, real `student`
+desktop with OneDrive, Widgets and M365 Copilot running) found five defects, all fixed and re-run:
+
+1. **Protected processes are never judged.** Defender's `DefenderSessionHelper.exe` runs under
+   the student's token as a protected process; the sweep warned about it and `TerminateProcess`
+   was refused (`exam.end_refused` on the tile). `WindowsProcesses` now reads the protection level
+   (`GetProcessInformation(ProcessProtectionLevelInfo)`) and `ProcessInfo.IsProtectedProcess`
+   makes `ProgramWhitelist.ShouldClose` answer no — nobody can end such a process anyway.
+2. **Extend counted from a stale remaining time, twice over.** The PC re-sends `ExamState` only
+   on change, and after `Welcome` `AgentLink` repeated the last state verbatim, so
+   `remaining_seconds` could be minutes old; *Extend* by 30 s gave 43 s, by 60 s after a relink
+   99 s. Now `AgentLink` counts each re-sent `OverlayState`, `InternetState` and `ExamState`'s
+   `remaining_seconds` down on the PC's clock to the moment of sending, and `LabSession.ExtendExam`
+   ages the reported value on the console's clock since it arrived (`ExamStateAt`). Re-run: +61 s
+   for +60 s after a relink.
+3. **The strip cut the warning before "save your work now"** — at a third of a 1312 px screen the
+   line ended after the program's name. `OverlayText.StripSize` takes the content and widens the
+   strip to what it says, up to nine tenths of the screen, in steps of two strip heights so the
+   countdown's digits do not jiggle it every second; a longer line is still ellipsized.
+4. **A new exam reported the last one's closed programs.** `WindowsExamControl` (and the
+   simulator) forget the closed list when the exam is lifted or a different session is applied.
+5. **More background helpers are quiet**: `softlandingtask.exe`, `slui.exe`, `mobsync.exe`,
+   `m365copilot.exe`, `m365copilot_autostarter.exe` start with Windows at sign-in and were
+   announced as "not allowed".
+
+Passed on the VM: the timer alone with the strip's countdown and message; *Extend*; the timer's
+end leaving the "Time is up" lock until unlocked; the opening sweep's warning, read in full, and
+an unsaved Notepad closed politely (Windows 11 Notepad keeps its unsaved tab); a program started
+during the exam ended at once with the line on the strip; `cmd.exe` copied as
+`C:\Users\Public\conhost.exe` ended while System32's `conhost.exe` was kept, and the same copy as
+`msedge.exe` passing as the dialog states; the allowed Edge running throughout; the strip hidden
+under a lock and back after unlocking; `sc stop` and a replaced build mid-exam (re-applied with
+the same deadline); sign-out (`exam.no_user`, nothing on the sign-in screen); a reboot and a
+console *Reboot* job (re-applied, the strip and the whitelist back after autologon); a console
+*Log off* job under the whitelist (`exam.whitelist_suspended`, succeeded); an exam with an
+internet whitelist over a standalone *blocked* (`internet.exam_wins`, the allowed site 200, the
+rest unresolved) handing the block back at its end; the console restarting mid-exam; and the end
+of every exam leaving `policy.json` empty and the firewall profiles at *Allow*.
+
 ## D-76 — Exam presets, and the exam's internet switch handing back to a standalone policy (M6 portion 4)
 
 Context (2026-10-23): `ARCHITECTURE` §6.1 saves exam switch combinations as named presets, and

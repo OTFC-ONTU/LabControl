@@ -2225,8 +2225,11 @@ public sealed class LabSession : IAsyncDisposable
                 return null;
             }
 
+            // remaining_seconds is as of sending; the PC re-sends only on change, so age it on
+            // this console's clock (VM drill 2026-10-23: an unaged value gave +43 s for +30 s).
             var mode = FromState(state);
-            mode.UntilSeconds = state.RemainingSeconds + extra;
+            var aged = (long)Math.Floor((_clock() - connection.ExamStateAt).TotalSeconds);
+            mode.UntilSeconds = Math.Max(1, state.RemainingSeconds - Math.Max(0, aged)) + extra;
             return mode;
         });
 

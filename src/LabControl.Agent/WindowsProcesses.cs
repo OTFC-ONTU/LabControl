@@ -18,7 +18,8 @@ namespace LabControl.Agent;
 /// <see cref="End"/> ends one only if it is still the same process. The list comes from
 /// <see cref="Process.GetProcesses()"/> (one system call); the per-process details are read
 /// once per process and cached, so a look every second costs a few new processes, not all of
-/// them. A process whose token cannot be read has no user here and is never judged.
+/// them. A process whose token cannot be read has no user here and is never judged, and
+/// neither is a protected process.
 /// </summary>
 internal enum EndOutcome
 {
@@ -152,6 +153,7 @@ internal sealed class WindowsProcesses
         string? sid = null;
         string? path = null;
         long started = 0;
+        var isProtected = false;
         var handle = PInvoke.OpenProcess(PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)id);
         if (!handle.IsNull)
         {
@@ -160,6 +162,7 @@ internal sealed class WindowsProcesses
                 started = CreationTime(handle) ?? 0;
                 path = ImagePath(handle);
                 sid = TokenUser(handle);
+                isProtected = IsProtectedProcess(handle);
             }
             catch (Exception)
             {
@@ -172,7 +175,17 @@ internal sealed class WindowsProcesses
         }
 
         var file = path is { Length: > 0 } ? Path.GetFileName(path) : name + ".exe";
-        return new ProcessInfo(id, file, session, sid, path, started);
+        return new ProcessInfo(id, file, session, sid, path, started) { IsProtectedProcess = isProtected };
+    }
+
+    /// <summary>True when Windows protects the process (PPL or full): <c>TerminateProcess</c> is refused whatever the caller.</summary>
+    private static unsafe bool IsProtectedProcess(HANDLE handle)
+    {
+        const uint ProtectionLevelNone = 0xFFFFFFFE;
+        PROCESS_PROTECTION_LEVEL_INFORMATION information = default;
+        return OperatingSystem.IsWindowsVersionAtLeast(8)
+            && PInvoke.GetProcessInformation(handle, PROCESS_INFORMATION_CLASS.ProcessProtectionLevelInfo, &information, (uint)sizeof(PROCESS_PROTECTION_LEVEL_INFORMATION))
+            && (uint)information.ProtectionLevel != ProtectionLevelNone;
     }
 
     private static unsafe long? CreationTime(HANDLE handle)

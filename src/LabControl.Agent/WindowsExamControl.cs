@@ -109,6 +109,12 @@ internal sealed class WindowsExamControl : IDisposable
                 return MachineResult.Failed(PolicyEvents.RefusedStopped);
             }
 
+            if (_exam?.SessionId != session.SessionId)
+            {
+                // Another exam: what the last one closed is not this one's (VM drill 2026-10-23).
+                ForgetTerminatedLocked();
+            }
+
             _exam = session;
             if (session.RestrictPrograms)
             {
@@ -142,6 +148,7 @@ internal sealed class WindowsExamControl : IDisposable
         lock (_lock)
         {
             _exam = null;
+            ForgetTerminatedLocked();
             _watch.End();
             _timer.Change(Timeout.Infinite, Timeout.Infinite);
             _notice = string.Empty;
@@ -152,6 +159,15 @@ internal sealed class WindowsExamControl : IDisposable
         }
 
         return MachineResult.Done;
+    }
+
+    private void ForgetTerminatedLocked()
+    {
+        if (_terminated.Count > 0)
+        {
+            _terminated.Clear();
+            _terminatedVersion++;
+        }
     }
 
     public ExamRuntime Runtime()

@@ -79,6 +79,11 @@ public sealed partial class AgentLink : IAsyncDisposable
     private OverlayState? _latestOverlayState;
     private InternetState? _latestInternetState;
     private ExamState? _latestExamState;
+
+    // When each latest state was published, on this PC's clock: a re-send after Welcome counts its
+    // remaining_seconds down by what has passed since (VM drill 2026-10-23: a relinked PC repeated
+    // a minutes-old remaining time, and Extend added those minutes to the exam).
+    private DateTimeOffset _latestOverlayStateAt, _latestInternetStateAt, _latestExamStateAt;
     private VideoUplink? _video;
     private VideoControl? _videoControl;
 
@@ -425,6 +430,7 @@ public sealed partial class AgentLink : IAsyncDisposable
         lock (_gateLock)
         {
             _latestOverlayState = state;
+            _latestOverlayStateAt = _options.Clock();
             _outgoing?.TryWrite(new AgentMessage { OverlayState = state });
         }
     }
@@ -477,6 +483,7 @@ public sealed partial class AgentLink : IAsyncDisposable
         lock (_gateLock)
         {
             _latestInternetState = state;
+            _latestInternetStateAt = _options.Clock();
             _outgoing?.TryWrite(new AgentMessage { InternetState = state });
         }
     }
@@ -520,6 +527,7 @@ public sealed partial class AgentLink : IAsyncDisposable
         lock (_gateLock)
         {
             _latestExamState = state;
+            _latestExamStateAt = _options.Clock();
             _outgoing?.TryWrite(new AgentMessage { ExamState = state });
         }
     }
@@ -532,6 +540,18 @@ public sealed partial class AgentLink : IAsyncDisposable
         {
             _outgoing?.TryWrite(new AgentMessage { ExamState = problem });
         }
+    }
+
+    /// <summary><paramref name="remaining"/> as of <paramref name="publishedAt"/>, counted down to now on this PC's clock; never below 0.</summary>
+    private long Aged(long remaining, DateTimeOffset publishedAt)
+    {
+        if (remaining <= 0)
+        {
+            return remaining;
+        }
+
+        var elapsed = (long)Math.Floor((_options.Clock() - publishedAt).TotalSeconds);
+        return Math.Max(0, remaining - Math.Max(0, elapsed));
     }
 
     /// <summary>The last state given to <see cref="PublishExamState"/>; <c>null</c> until the enforcer said anything.</summary>
@@ -919,17 +939,23 @@ public sealed partial class AgentLink : IAsyncDisposable
 
                 if (_latestOverlayState is { } overlayState)
                 {
-                    outgoing.Writer.TryWrite(new AgentMessage { OverlayState = overlayState });
+                    var aged = overlayState.Clone();
+                    aged.RemainingSeconds = Aged(aged.RemainingSeconds, _latestOverlayStateAt);
+                    outgoing.Writer.TryWrite(new AgentMessage { OverlayState = aged });
                 }
 
                 if (_latestInternetState is { } internetState)
                 {
-                    outgoing.Writer.TryWrite(new AgentMessage { InternetState = internetState });
+                    var aged = internetState.Clone();
+                    aged.RemainingSeconds = Aged(aged.RemainingSeconds, _latestInternetStateAt);
+                    outgoing.Writer.TryWrite(new AgentMessage { InternetState = aged });
                 }
 
                 if (_latestExamState is { } examState)
                 {
-                    outgoing.Writer.TryWrite(new AgentMessage { ExamState = examState });
+                    var aged = examState.Clone();
+                    aged.RemainingSeconds = Aged(aged.RemainingSeconds, _latestExamStateAt);
+                    outgoing.Writer.TryWrite(new AgentMessage { ExamState = aged });
                 }
 
                 // Events wait like results do (M5 portion 8): one bound to a console goes only

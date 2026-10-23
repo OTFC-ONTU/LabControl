@@ -233,6 +233,11 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
     {
         lock (_lock)
         {
+            if (_exam?.SessionId != session.SessionId)
+            {
+                ForgetTerminatedLocked();
+            }
+
             _exam = session;
             if (session.RestrictPrograms)
             {
@@ -249,11 +254,22 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
         return MachineResult.Done;
     }
 
+    /// <summary>What one exam closed is not the next one's, as on a real PC.</summary>
+    private void ForgetTerminatedLocked()
+    {
+        if (_terminated.Count > 0)
+        {
+            _terminated.Clear();
+            _terminatedVersion++;
+        }
+    }
+
     public MachineResult LiftExam()
     {
         lock (_lock)
         {
             _exam = null;
+            ForgetTerminatedLocked();
             _watch.End();
             _notice = string.Empty;
         }

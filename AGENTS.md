@@ -173,7 +173,7 @@ the documents relevant to the task:
   physical-lab drill passed on 2026-10-20 after the lab fixes (`D-73` item 12). A lock or a
   broadcast holds the student's display on through the helper's `DisplayKeeper` (`D-84`, not yet
   run on Windows); the exam strip reuses it.
-- **M6 portion 4 is built (2026-10-23, `D-75`, `D-76`), review-fixed, not yet run on Windows.**
+- **M6 portion 4 is built (2026-10-23, `D-75`, `D-76`), review-fixed and passed its ARM64 VM drill the same day.**
   Exam mode: `ExamMode`/`ExamState` with durations, the journal's `SetExam` (internet switch first as
   its own `ExamInternet` session that hands a standalone policy back, the exam last), a "Time is up"
   lock when the timer — not the hard limit — runs out, the allowed-programs whitelist in the
@@ -184,7 +184,10 @@ the documents relevant to the task:
   a lock or broadcast), presets in `exam-presets.json` (backup only, never the lab file), late PCs
   joining an exam *for all* from the console's memory. Keep the whitelist out of the helper, keep
   the internet switch before the exam, and never count a process as closed that this call did not
-  end. Next: the VM drill, then portion 5.
+  end. The ARM64 VM drill (2026-10-23, `D-75`, *VM drill*) fixed five defects — protected processes
+  never judged, `remaining_seconds` aged on a re-send after `Welcome` and on *Extend*, the strip
+  widening for its text, a new exam forgetting the last one's closed programs, more quiet helpers.
+  Tests: 972 Shared + 289 Console. Next: the physical lab, then portion 5.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the

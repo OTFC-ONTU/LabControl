@@ -670,7 +670,10 @@ console puts into words from its resources like the capture reasons — `overlay
 `BlockInput` both failed) — never free text; `set_by_instance` is the validated instance
 id of the console that set it; `problem` is why an `Overlay` was refused or could not be
 applied, empty otherwise. A `problem` answer for a busy mutex or a pass that failed does
-not replace the latest state the PC re-sends after `Welcome`.
+not replace the latest state the PC re-sends after `Welcome`. That re-sent `OverlayState`
+— like the re-sent `InternetState` and `ExamState` — carries `remaining_seconds` counted down
+on the PC's clock to the moment of sending, not the value it was first published with (VM
+drill 2026-10-23, `D-75`); a console still ages any state on its own clock from its arrival.
 
 **Who may send it.** The ownership gate (`D-69`) is judged in the agent's read loop —
 the same loop that merges `RevocationState` — *before* the enforcer sees the message: the

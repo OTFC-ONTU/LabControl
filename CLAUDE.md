@@ -397,7 +397,7 @@ held. Console: *Internet…* / *Internet for all…*, `InternetDialog`, `Interne
 alone. Tests: 930 Shared + 262 Console (13 skipping); review fixes in `D-73` item 11, `D-74` item 9. Next: the physical lab (ROADMAP M6),
 then portion 4.
 
-**M6 portion 4 is built (2026-10-23, `D-75`, `D-76`), review-fixed, not yet run on Windows.**
+**M6 portion 4 is built (2026-10-23, `D-75`, `D-76`), review-fixed and passed its ARM64 VM drill the same day.**
 Owner decisions of 2026-10-23: the timer's end locks the screen with "Time is up" until the teacher
 unlocks it (an ordinary lock, session id = exam id + `:time-up`; the hard limit only restores);
 programs open at the start are asked to close (`WM_CLOSE` through the helper) and ended after
@@ -415,8 +415,11 @@ standalone policy back) and the exam last. The whitelist runs in the **service**
 `%SystemRoot%`/`WindowsApps`/Edge WebView — and `ProgramWatch`); the teacher's own scripts are exempt
 and power jobs pause it (`ExamCoordination`). Console: *Exam…*/*Exam for all…*, `ExamDialog`,
 *Extend exam…*, *End exam*, the *EXAM* badge from `ExamState` alone, `ExamPresetLibrary`
-(`exam-presets.json`, in the backup, never in the lab file). Tests: 970 Shared + 286 Console
-(13 skipping). Next: the VM drill (ROADMAP M6, portion 4), then portion 5.
+(`exam-presets.json`, in the backup, never in the lab file). The VM drill (`D-75`, *VM drill*) fixed
+five defects: protected processes (Defender's session helper) are never judged; `AgentLink` ages
+`remaining_seconds` when it re-sends a state after `Welcome` and *Extend* ages it on the console;
+the strip widens for its text; a new exam forgets the last one's closed programs; more quiet
+helpers. Tests: 972 Shared + 289 Console. Next: the physical lab, then portion 5.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

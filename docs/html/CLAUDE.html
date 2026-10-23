@@ -518,7 +518,7 @@ held. Console: <em>Internet…</em> / <em>Internet for all…</em>, <code>Intern
 (<code>internet-presets.json</code>, in the backup and the lab file), the tile badge from <code>InternetState</code>
 alone. Tests: 930 Shared + 262 Console (13 skipping); review fixes in <code>D-73</code> item 11, <code>D-74</code> item 9. Next: the physical lab (ROADMAP M6),
 then portion 4.</p>
-<p><strong>M6 portion 4 is built (2026-10-23, <code>D-75</code>, <code>D-76</code>), review-fixed, not yet run on Windows.</strong>
+<p><strong>M6 portion 4 is built (2026-10-23, <code>D-75</code>, <code>D-76</code>), review-fixed and passed its ARM64 VM drill the same day.</strong>
 Owner decisions of 2026-10-23: the timer's end locks the screen with &quot;Time is up&quot; until the teacher
 unlocks it (an ordinary lock, session id = exam id + <code>:time-up</code>; the hard limit only restores);
 programs open at the start are asked to close (<code>WM_CLOSE</code> through the helper) and ended after
@@ -536,8 +536,11 @@ standalone policy back) and the exam last. The whitelist runs in the <strong>ser
 <code>%SystemRoot%</code>/<code>WindowsApps</code>/Edge WebView — and <code>ProgramWatch</code>); the teacher's own scripts are exempt
 and power jobs pause it (<code>ExamCoordination</code>). Console: <em>Exam…</em>/<em>Exam for all…</em>, <code>ExamDialog</code>,
 <em>Extend exam…</em>, <em>End exam</em>, the <em>EXAM</em> badge from <code>ExamState</code> alone, <code>ExamPresetLibrary</code>
-(<code>exam-presets.json</code>, in the backup, never in the lab file). Tests: 970 Shared + 286 Console
-(13 skipping). Next: the VM drill (ROADMAP M6, portion 4), then portion 5.</p>
+(<code>exam-presets.json</code>, in the backup, never in the lab file). The VM drill (<code>D-75</code>, <em>VM drill</em>) fixed
+five defects: protected processes (Defender's session helper) are never judged; <code>AgentLink</code> ages
+<code>remaining_seconds</code> when it re-sends a state after <code>Welcome</code> and <em>Extend</em> ages it on the console;
+the strip widens for its text; a new exam forgets the last one's closed programs; more quiet
+helpers. Tests: 972 Shared + 289 Console. Next: the physical lab, then portion 5.</p>
 <p><strong>M0 is done (2026-09-04). M1 is done (2026-09-05)</strong>: the trust model, beacon discovery,
 mutual TLS, enrolment, the <code>Link</code> stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, <code>FakeAgent</code> and the console UI — see the M1 <em>Progress</em> and
@@ -781,7 +784,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-23 09:52 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-23 11:51 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

@@ -190,12 +190,22 @@ internal sealed class ExamStripWindow : IDisposable
         _log.LogWarning("exam strip: {Problem}", problem);
     }
 
-    /// <summary>The strip's place: top centre of the primary monitor.</summary>
+    /// <summary>The strip's place: top centre of the primary monitor, as wide as what it says needs.</summary>
     private void Measure()
     {
         var screenWidth = Math.Max(1, PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXSCREEN));
         var screenHeight = Math.Max(1, PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYSCREEN));
-        (_width, _height) = OverlayText.StripSize(screenWidth, screenHeight);
+        ExamStripContent? content = null;
+        try
+        {
+            content = _content();
+        }
+        catch (Exception)
+        {
+            // Sized for no content; Recompose reports the failure.
+        }
+
+        (_width, _height) = OverlayText.StripSize(screenWidth, screenHeight, content);
         _x = (screenWidth - _width) / 2;
         _y = 0;
     }

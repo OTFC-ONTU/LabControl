@@ -2806,6 +2806,10 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   new identity after every console build, so macOS *Screen Recording* must be reset by hand
   (`tccutil reset ScreenCapture org.ontfk.labcontrol.console`) and granted again; a stable local
   signing identity was offered and deferred by the owner.
+  **Second retest on `1.0.0+cc39651`, the same day: passed** — PC-13 now refuses the mouse and the
+  Win key under a broadcast after a lock lifted on the Ctrl+Alt+Del screen (`D-81` addendum), and
+  its collection works again after the `icacls` repair. What remains open in M6: teacher access in
+  the lab (no second teacher device yet).
 ---
 
 ## M7 — Software catalog, localization, polish

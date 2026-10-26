@@ -38,6 +38,7 @@ internal sealed class WindowsProcesses
     {
         var result = new List<ProcessInfo>();
         var alive = new HashSet<int>();
+        var parents = ParentIds();
         foreach (var process in Process.GetProcesses())
         {
             using (process)
@@ -72,7 +73,7 @@ internal sealed class WindowsProcesses
                     continue;
                 }
 
-                var info = Describe(id, name, session);
+                var info = Describe(id, name, session) with { ParentProcessId = parents.GetValueOrDefault(id) };
                 _known[id] = info;
                 result.Add(info);
             }
@@ -127,6 +128,43 @@ internal sealed class WindowsProcesses
         {
             PInvoke.CloseHandle(handle);
         }
+    }
+
+    /// <summary>
+    /// Every process's parent id, from one Toolhelp snapshot; empty when it cannot be taken, and
+    /// then nothing is allowed by its parent — the watch falls back to names alone. A parent id
+    /// is fixed for a process's life, so a cached entry keeps the one it was described with.
+    /// </summary>
+    private static unsafe Dictionary<int, int> ParentIds()
+    {
+        var parents = new Dictionary<int, int>();
+        try
+        {
+            var raw = PInvoke.CreateToolhelp32Snapshot(Windows.Win32.System.Diagnostics.ToolHelp.CREATE_TOOLHELP_SNAPSHOT_FLAGS.TH32CS_SNAPPROCESS, 0);
+            using var snapshot = new Microsoft.Win32.SafeHandles.SafeFileHandle((IntPtr)raw.Value, ownsHandle: true);
+            if (snapshot.IsInvalid)
+            {
+                return parents;
+            }
+
+            var entry = new Windows.Win32.System.Diagnostics.ToolHelp.PROCESSENTRY32W { dwSize = (uint)sizeof(Windows.Win32.System.Diagnostics.ToolHelp.PROCESSENTRY32W) };
+            if (!PInvoke.Process32FirstW(snapshot, ref entry))
+            {
+                return parents;
+            }
+
+            do
+            {
+                parents[(int)entry.th32ProcessID] = (int)entry.th32ParentProcessID;
+            }
+            while (PInvoke.Process32NextW(snapshot, ref entry));
+        }
+        catch (Exception)
+        {
+            // No tree this time: every process is judged by its own name, as before.
+        }
+
+        return parents;
     }
 
     /// <summary>The creation time of process <paramref name="id"/>, or 0 when it cannot be read.</summary>

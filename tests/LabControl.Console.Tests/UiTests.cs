@@ -286,6 +286,14 @@ public sealed class UiTests
                 Assert.Contains("*.jetbrains.com", internetDialog.GetVisualDescendants().OfType<TextBox>().First(t => t.AcceptsReturn).Text, StringComparison.Ordinal);
                 internetDialog.Close();
 
+                // PCs in an exam that switches the internet: the dialog says the exam wins there until it ends (a lab, 2026-10-26).
+                var examInternet = new InternetDialog(new InternetDialogModel(console.Session, 8, [3, 5]));
+                examInternet.Show();
+                await Render(examInternet, "internet-exam");
+                Assert.Contains(examInternet.GetVisualDescendants().OfType<TextBlock>(),
+                    t => t.IsVisible && t.Text?.StartsWith("PC-03, PC-05: an exam controls the internet there.", StringComparison.Ordinal) == true);
+                examInternet.Close();
+
                 // The internet badge follows InternetState: PC-07 under a block, PC-08 under a whitelist with refusals.
                 agents[6].Link.PublishInternetState(new InternetState { Mode = InternetPolicy.Types.Mode.Blocked, SessionId = "i7", SetByInstance = console.Session.Instance.InstanceId, RemainingSeconds = 5400 });
                 var whitelist = new InternetState { Mode = InternetPolicy.Types.Mode.Whitelist, SessionId = "i8", SetByInstance = "other-console", PresetName = "Java docs", RemainingSeconds = 2700, ResolverActive = true };

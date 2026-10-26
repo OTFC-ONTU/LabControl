@@ -2020,7 +2020,8 @@ physical lab. Then M6 portion 4.
   - *Timer* — absolute deadline, countdown on the student screen, auto-end, extend and
     end-early from the console.
   - *Allowed programs* — whitelist enforced by the helper via process-start events,
-    matched by **executable name only** (no process-tree following), with a hard-coded
+    matched by **executable name** — and, since 2026-10-26, whatever an allowed program
+    starts (`D-75` item 12) — with a hard-coded
     never-touch set (session, shell and OS processes, LabControl itself).
   - *Internet* — the internet policy of `D-22` (*blocked* or a *whitelist* preset) for the
     exam's lifetime, overriding any standalone policy and handing back to it at the end.
@@ -2766,6 +2767,25 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   (*The portion-6 drills*). Tests: `DepartureTests`, `FailSafeTests`, the teacher-access test, the
   departure dialog render — 1003 Shared + 308 Console. **Not yet run on Windows.** **Next:** the
   portion-6 drills on the VM, then every M6 drill in the physical lab after pushing this build.
+- *Physical lab, 2026-10-26 (all 14 PCs, the portion-6 build `1.0.0+68d0ae5` pushed over the
+  network; checklist sections 0–6).* **Passed:** the push and protocol 2 on every PC; the lock
+  with message, countdown, refused keys and mouse, remote control under it, a reboot mid-lock, its
+  own expiry; the broadcast on all fourteen, readable from the back; exam mode with each switch
+  alone, the opening sweep, *Extend*, a reboot mid-exam, a clean shutdown under the whitelist,
+  *End exam*, the "Time is up" lock; a standalone block outliving an exam; collect work with a PC
+  off reported missing; both profile resets; the console gone, `taskkill`, `sc stop` and the power
+  pulled under an exam; the departure dialog with *Unlock, open the internet and leave*.
+  **Found and fixed the same day:** the whitelist closed the allowed IDE's own helpers
+  (`jetbrainsd.exe`, `ssh.exe`) — what an allowed program starts is now allowed (`D-75` item 12);
+  *Unlock all* with a PC off left it locked after boot — the end is now sent when it returns with
+  the same lock, and likewise *Open* (`D-79` item 8); *Open* during an exam with an internet switch
+  appeared to do nothing — the *Internet* dialog now names those PCs (`D-79` item 9); the student's
+  lock screen no longer shows the Ctrl+Alt+Del line (owner). **Open:** on **one** PC the mouse and
+  the Win key still worked under a broadcast (the other thirteen refused them; not critical, the
+  picture stays on top) — needs that PC's number and its `session-<date>.log` to tell a hook the
+  helper never installed from one Windows dropped; section 7 (teacher access) not run; the fixes
+  above not yet run on a PC. Failed actions (a profile reset refused during an exam, and the like)
+  surface only in *Jobs*; a visible answer to the teacher's action is recorded for M7 below.
 ---
 
 ## M7 — Software catalog, localization, polish
@@ -2798,6 +2818,12 @@ department. The catalog ships **empty** — the deliverable is the ease of filli
   computer.
 - Optional, and only if M3's measurements demand it: H.264 via Media Foundation behind
   the existing `VideoFrame` envelope. Decide with numbers, not taste.
+- **A visible answer to every teacher action that fails** (owner, physical lab 2026-10-26): a
+  refused or failed action — a profile reset during an exam, a lock refused by a PC, a job that
+  failed on some PCs — today shows only as a row in *Jobs* or a line in the events, so the
+  teacher pressing a button gets no answer. Add a notification the teacher sees where they
+  acted (a toast or a status strip with the reason and the PCs), as part of a UI redesign; **not
+  before M7** — no redesign during M6.
 
 **Acceptance criteria**
 

@@ -106,3 +106,10 @@ TOKEN_USER
 
 // Full profile reset: the recorded student's profile deleted by SID, never by a path (ProfileResetRunner, D-78)
 DeleteProfile
+
+// The exam's whitelist allows what an allowed program started: parent ids in one snapshot (WindowsProcesses, D-75 item 12)
+CreateToolhelp32Snapshot
+Process32FirstW
+Process32NextW
+PROCESSENTRY32W
+CREATE_TOOLHELP_SNAPSHOT_FLAGS

@@ -1874,7 +1874,9 @@ public sealed class LabSession : IAsyncDisposable
     public int Unlock(IEnumerable<string> agentIds)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
-        var (sent, skipped) = SendOverlay(agentIds, new Overlay { Kind = Overlay.Types.Kind.Unlock }, setting: false);
+        var ids = agentIds.ToArray();
+        RememberUnreached(ids, _heldLock, _pendingUnlock);
+        var (sent, skipped) = SendOverlay(ids, new Overlay { Kind = Overlay.Types.Kind.Unlock }, setting: false);
         Events.Info("overlay.unlock_sent", Localization.Strings.Format("Event.UnlockSent", sent, skipped));
         return sent;
     }
@@ -1900,6 +1902,85 @@ public sealed class LabSession : IAsyncDisposable
         }
 
         return (sent, skipped);
+    }
+
+    // ------------------------------------------------------------------ ends for PCs that were off (lab, 2026-10-26)
+
+    // The lock and the standalone internet session each PC was last seen holding, and the ends the
+    // teacher asked for while it was not linked. In memory only: they live as long as this session.
+    private readonly Dictionary<string, string> _heldLock = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _heldInternet = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _pendingUnlock = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _pendingOpen = new(StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsExamInternet(InternetState state) =>
+        state.SessionId.EndsWith(LabControl.Shared.Policy.PolicyJournal.ExamInternetSuffix, StringComparison.Ordinal);
+
+    /// <summary>The standalone internet session the PC reports holding, or <c>null</c> (open, or only an exam's switch).</summary>
+    private static string? StandaloneSessionOf(AgentConnection connection) =>
+        HoldsStandaloneInternet(connection) ? connection.InternetState!.SessionId : null;
+
+    /// <summary>
+    /// <i>Unlock</i> / <i>Open</i> reached only the linked PCs (owner decision 2026-10-26): a PC
+    /// that is not linked and was last seen holding a session is remembered with that session, and
+    /// when it comes back still holding <b>the same one</b> the end is sent then. A session set
+    /// afterwards — by this console or another — is never ended this way.
+    /// </summary>
+    private void RememberUnreached(IEnumerable<string> agentIds, Dictionary<string, string> held, Dictionary<string, string> pending)
+    {
+        lock (held)
+        {
+            foreach (var id in agentIds)
+            {
+                if (FindLinked(id) is null && held.TryGetValue(id, out var session))
+                {
+                    pending[id] = session;
+                }
+                else
+                {
+                    pending.Remove(id);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Keeps <paramref name="held"/> current from what the PC just reported, and sends a remembered
+    /// end when the PC came back with the session it was meant for. <paramref name="conclusive"/>
+    /// is false for a state that says nothing about the standalone session (a refusal, or an exam's
+    /// internet switch in front of it); the pending end then waits for the next state.
+    /// </summary>
+    private void FollowHeld(Dictionary<string, string> held, Dictionary<string, string> pending, AgentConnection connection, string? session,
+        bool conclusive, Func<bool> sendEnd, string code)
+    {
+        if (!conclusive)
+        {
+            return;
+        }
+
+        bool send;
+        lock (held)
+        {
+            if (session is null)
+            {
+                held.Remove(connection.AgentId);
+            }
+            else
+            {
+                held[connection.AgentId] = session;
+            }
+
+            // Only the very session it was meant for is ended; any other state leaves the request
+            // waiting, since the first word after a restart may come before the journal re-applied.
+            send = session is not null && pending.TryGetValue(connection.AgentId, out var meant) && string.Equals(meant, session, StringComparison.Ordinal)
+                && pending.Remove(connection.AgentId);
+        }
+
+        if (send && sendEnd())
+        {
+            Events.Info(code, Localization.Strings.Format("Event.EndOnReturn",
+                string.Format(System.Globalization.CultureInfo.InvariantCulture, Defaults.MachineNameFormat, connection.Number)), connection.AgentId, connection.Number);
+        }
     }
 
     /// <summary>
@@ -2047,7 +2128,9 @@ public sealed class LabSession : IAsyncDisposable
     public int LiftInternet(IEnumerable<string> agentIds)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
-        var (sent, skipped) = SendInternet(agentIds, _ => new InternetPolicy { Mode = InternetPolicy.Types.Mode.Open }, setting: false);
+        var ids = agentIds.ToArray();
+        RememberUnreached(ids, _heldInternet, _pendingOpen);
+        var (sent, skipped) = SendInternet(ids, _ => new InternetPolicy { Mode = InternetPolicy.Types.Mode.Open }, setting: false);
         Events.Info("internet.lift_sent", Localization.Strings.Format("Event.InternetLiftSent", sent, skipped));
         return sent;
     }
@@ -2148,6 +2231,8 @@ public sealed class LabSession : IAsyncDisposable
         var modeBefore = connection.InternetMode;
         var problemBefore = connection.InternetProblem;
         var changed = connection.ApplyInternetState(state);
+        FollowHeld(_heldInternet, _pendingOpen, connection, StandaloneSessionOf(connection), state.Problem.Length == 0 && !IsExamInternet(state),
+            () => connection.TrySend(new ConsoleMessage { InternetPolicy = new InternetPolicy { Mode = InternetPolicy.Types.Mode.Open } }), "internet.lift_on_return");
 
         if (connection.InternetProblem is { } problem && problem != problemBefore)
         {
@@ -2692,6 +2777,8 @@ public sealed class LabSession : IAsyncDisposable
         var lockedBefore = connection.OverlayLocked;
         var problemBefore = connection.OverlayProblem;
         var changed = connection.ApplyOverlayState(state);
+        FollowHeld(_heldLock, _pendingUnlock, connection, connection.OverlayLocked ? connection.OverlayState!.SessionId : null, state.Problem.Length == 0,
+            () => connection.TrySend(new ConsoleMessage { Overlay = new Overlay { Kind = Overlay.Types.Kind.Unlock } }), "overlay.unlock_on_return");
 
         if (connection.OverlayProblem is { } problem && problem != problemBefore)
         {
@@ -3189,6 +3276,20 @@ public sealed class LabSession : IAsyncDisposable
     private static bool HoldsStandaloneInternet(AgentConnection connection) =>
         connection.InternetMode != InternetPolicy.Types.Mode.Open
         && !connection.InternetState!.SessionId.EndsWith(LabControl.Shared.Policy.PolicyJournal.ExamInternetSuffix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The linked PCs among <paramref name="agentIds"/> whose exam switches the internet: there the
+    /// exam's setting wins until it ends, so <i>Open</i> or a new policy only takes effect after it
+    /// (a lab, 2026-10-26).
+    /// </summary>
+    public IReadOnlyList<int> ExamInternetPcs(IEnumerable<string> agentIds)
+    {
+        var ids = agentIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return Linked
+            .Where(c => ids.Contains(c.AgentId) && c.InternetMode != InternetPolicy.Types.Mode.Open
+                && c.InternetState!.SessionId.EndsWith(LabControl.Shared.Policy.PolicyJournal.ExamInternetSuffix, StringComparison.Ordinal))
+            .Select(c => c.Number).Distinct().Order().ToArray();
+    }
 
     /// <summary>
     /// <i>Unlock, open the internet and leave</i> (owner decision 2026-10-26, D-79 item 1): every

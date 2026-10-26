@@ -149,4 +149,51 @@ public class DepartureTests
         Assert.True((DepartureReport.Empty with { Internet = new DeparturePolicy([3], null) }).CanEndPolicies);
         Assert.False((DepartureReport.Empty with { UncollectedExamPcs = [5] }).IsEmpty);
     }
+
+    /// <summary>
+    /// <i>Unlock all</i> and <i>Open</i> while a PC is off (a lab, 2026-10-26; owner decision the
+    /// same day): the PC comes back still holding the very lock and block it was meant to lose,
+    /// and the console ends them then. A lock set after the request is never ended that way.
+    /// </summary>
+    [Fact]
+    public async Task An_unlock_and_an_open_asked_while_a_pc_was_off_are_sent_when_it_returns_with_the_same_sessions()
+    {
+        await using var console = await TestConsole.CreateLabAsync();
+        var payload = SetupPayload.Open(console.Session.WritePayload(TestConsole.TempDirectory(), pcCount: 1));
+        var directory = Path.Combine(TestConsole.TempDirectory(), "PC-05");
+        var store = FakeMachine.Install(directory, 5, payload, System.Net.IPAddress.Loopback.ToString(), console.Port, burnedCode: false);
+        var machine = new FakeMachine(store, null, TestLogging.Factory.CreateLogger("PC-05"));
+        string agentId;
+        try
+        {
+            machine.Start();
+            agentId = machine.AgentId;
+            Assert.True(await Wait.UntilAsync(() => console.Session.IsLinked(agentId), TimeSpan.FromSeconds(20)));
+            console.Session.Lock([agentId], "Look here", null);
+            console.Session.SetInternet([agentId], InternetPolicy.Types.Mode.Blocked, [], string.Empty, null);
+            Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agentId) is { OverlayLocked: true, InternetMode: InternetPolicy.Types.Mode.Blocked }, TimeSpan.FromSeconds(10)));
+        }
+        finally
+        {
+            await machine.DisposeAsync();
+        }
+
+        // Switched off; the teacher unlocks and opens everything meanwhile.
+        Assert.True(await Wait.UntilAsync(() => !console.Session.IsLinked(agentId), TimeSpan.FromSeconds(15)));
+        Assert.Equal(0, console.Session.Unlock([agentId]));
+        Assert.Equal(0, console.Session.LiftInternet([agentId]));
+
+        await using var returned = new FakeMachine(DirectoryAgentStore.Open(directory), null, TestLogging.Factory.CreateLogger("PC-05"));
+        returned.Start();
+        Assert.True(await Wait.UntilAsync(() => returned.Lock is null && returned.Internet is null
+            && console.Session.FindLinked(agentId) is { OverlayLocked: false, InternetMode: InternetPolicy.Types.Mode.Open }, TimeSpan.FromSeconds(20)));
+        Assert.Contains(console.Session.Events.Recent, e => e.Code == "overlay.unlock_on_return");
+        Assert.Contains(console.Session.Events.Recent, e => e.Code == "internet.lift_on_return");
+
+        // A new lock is the teacher's new decision: nothing remembered ends it.
+        console.Session.Lock([agentId], "Again", null);
+        Assert.True(await Wait.UntilAsync(() => console.Session.FindLinked(agentId)?.OverlayLocked == true, TimeSpan.FromSeconds(10)));
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        Assert.NotNull(returned.Lock);
+    }
 }

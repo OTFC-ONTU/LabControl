@@ -510,4 +510,49 @@ public sealed class ProgramWatchTests
         Assert.True(watch.Observe([P(4, "game.exe")], Context, T0).IsEmpty);
         Assert.False(watch.Active);
     }
+
+    /// <summary>A process started by <paramref name="parent"/>: its pid is later, so is its start.</summary>
+    private static ProcessInfo Child(int pid, string name, int parent) => P(pid, name) with { ParentProcessId = parent };
+
+    [Fact]
+    public void What_an_allowed_program_starts_is_allowed_at_any_depth_and_stays_allowed_after_its_parent_exits()
+    {
+        var watch = new ProgramWatch();
+        watch.Begin(["idea64.exe"]);
+        watch.Observe([P(1, "explorer.exe"), P(5, "idea64.exe")], Context, T0);
+
+        // The IDE starts its daemon and a git that starts ssh (a lab PC, 2026-10-26); a game started from Explorer is not.
+        var started = new[]
+        {
+            P(1, "explorer.exe"), P(5, "idea64.exe"), Child(6, "jetbrainsd.exe", 5), Child(7, "git.exe", 5), Child(8, "ssh.exe", 7),
+            Child(9, "game.exe", 1),
+        };
+        var decision = watch.Observe(started, Context, T0.AddSeconds(1));
+        Assert.Equal([9], decision.End.Select(p => p.ProcessId));
+
+        // The IDE and git are gone; the daemon and ssh it admitted keep running.
+        Assert.True(watch.Observe([P(1, "explorer.exe"), Child(6, "jetbrainsd.exe", 5), Child(8, "ssh.exe", 7)], Context, T0.AddSeconds(2)).IsEmpty);
+    }
+
+    [Fact]
+    public void A_reused_parent_id_or_an_unknown_parent_admits_nothing()
+    {
+        var watch = new ProgramWatch();
+        watch.Begin(["idea64.exe"]);
+        watch.Observe([P(1, "explorer.exe")], Context, T0);
+
+        // Pid 2's parent id is 50, but process 50 started after it: that id was reused, it is not the parent.
+        var orphan = P(2, "chrome.exe") with { ParentProcessId = 50 };
+        var decision = watch.Observe([P(1, "explorer.exe"), orphan, P(50, "idea64.exe"), P(3, "notes.exe") with { ParentProcessId = 77 }], Context, T0.AddSeconds(1));
+        Assert.Equal([2, 3], decision.End.Select(p => p.ProcessId).Order());
+    }
+
+    [Fact]
+    public void The_opening_sweep_spares_what_an_allowed_program_had_already_started()
+    {
+        var watch = new ProgramWatch(grace: TimeSpan.FromSeconds(10));
+        watch.Begin(["code.exe"]);
+        var decision = watch.Observe([P(1, "explorer.exe"), P(5, "code.exe"), Child(6, "node.exe", 5), P(7, "telegram.exe")], Context, T0);
+        Assert.Equal([7], decision.Warn.Select(p => p.ProcessId));
+    }
 }

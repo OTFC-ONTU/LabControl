@@ -455,6 +455,16 @@ drills — console gone, `sc stop`/kill/power loss, corrupt `policy.json`, depar
 are written in ROADMAP M6, *The portion-6 drills*. Tests: 1003 Shared + 308 Console. Next: those
 drills on the VM, then the physical lab.
 
+**M6 in the physical lab, 2026-10-26** (all 14 PCs, build `1.0.0+68d0ae5` pushed over the network):
+lock, broadcast, exam, collect/reset, the fail-safe checks and the departure dialog passed. Fixed the
+same day, not yet run on a PC: the whitelist now allows whatever an allowed program starts (Toolhelp
+parent ids, `D-75` item 12 — the IDE's `jetbrainsd.exe`/`ssh.exe` were closed); *Unlock*/*Open* asked
+while a PC was off is sent when it returns holding the same session (`D-79` item 8); the *Internet*
+dialog names PCs whose exam controls the internet (`D-79` item 9); no Ctrl+Alt+Del line on the
+student's lock screen. Open: mouse and Win worked under a broadcast on one PC (needs its log);
+teacher access not run. A visible answer to failed actions is an M7 item, no redesign in M6.
+Tests: 1006 Shared + 309 Console.
+
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, `FakeAgent` and the console UI — see the M1 *Progress* and

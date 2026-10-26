@@ -8,7 +8,6 @@
   <data name="LockDefaultMessage" xml:space="preserve"><value>Please look at the teacher.</value></data>
   <data name="CountdownFormat" xml:space="preserve"><value>Unlocks in {0}</value></data>
   <data name="CountdownUntilLifted" xml:space="preserve"><value>Until the teacher unlocks it</value></data>
-  <data name="SecureAttentionNote" xml:space="preserve"><value>Ctrl+Alt+Del still works.</value></data>
   <data name="PcNameFormat" xml:space="preserve"><value>{0}</value></data>
   <data name="ExamTimeUpMessage" xml:space="preserve"><value>Time is up. Please take your hands off the keyboard.</value></data>
   <data name="ExamRemainingFormat" xml:space="preserve"><value>{0} left</value></data>

@@ -566,7 +566,9 @@ ends them `ExamCloseGrace` (5 s) later; background helpers (`ProgramWhitelist.Qu
 without a word on the strip; later
 it ends a newly started program at once. Processes the agent started for the teacher are never
 judged; a shutdown, reboot or log off pauses the watch for `ExamPowerJobSuspension` (2 min).
-Matching is by name: a renamed executable passes.
+Matching is by name: a renamed executable passes. Whatever an allowed program starts — at any
+depth, judged by the parent ids of one Toolhelp snapshot — is allowed too, and stays allowed after
+its parent exits (`D-75` item 12).
 
 A console that started an exam for the whole lab sends it, with the remaining durations, to every
 PC of the lab that links before its end without showing that session (`D-76` item 4).
@@ -737,7 +739,9 @@ unlock before the links close (`D-79`). The agent reports `overlay.expired` when
 lock itself. The lock is persisted in `policy.json` (`D-69`): after a reboot the agent
 restores the machine first, then re-applies the lock only if it is still within its
 limits, re-clamping the stored hard limit against `LockHardLimit` again. Ctrl+Alt+Del
-cannot be blocked by design; the picture says so.
+cannot be blocked by design; the teacher's dialog says so (the student's picture no longer does,
+2026-10-26). An *Unlock* asked while the PC was off is sent when it returns still holding that
+same lock, and likewise *Open* for a standalone internet policy (`D-79` item 8).
 
 **Events.** `policy.reapplied` (a lock came back after a restart), `policy.apply_failed`
 (the machine could not show it: no interactive session, no helper), `policy.restore_failed`

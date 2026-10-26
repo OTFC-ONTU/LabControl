@@ -27,7 +27,11 @@ public sealed record WatchDecision(IReadOnlyList<ProcessInfo> AskToClose, IReadO
 /// once closed VS Code before anyone could read a word, since it exits without a question). Every later look ends a program it has not seen
 /// before <b>at once</b>. Judging is <see cref="ProgramWhitelist.ShouldClose"/>; an
 /// <paramref name="exempt"/> process (one the agent itself started for the teacher) is never
-/// judged. Not thread-safe; its owner calls it from one thread.
+/// judged, and neither is anything an allowed or exempt program started, at any depth — an IDE's
+/// own <c>jetbrainsd.exe</c>, <c>java.exe</c>, <c>git.exe</c>, <c>ssh.exe</c> (a lab PC,
+/// 2026-10-26; owner decision the same day). A process admitted that way stays admitted after
+/// its parent exits, so a helper that detaches from its launcher is not closed a second later.
+/// Not thread-safe; its owner calls it from one thread.
 /// </summary>
 public sealed class ProgramWatch
 {
@@ -35,6 +39,8 @@ public sealed class ProgramWatch
     private readonly TimeSpan _grace;
     private readonly TimeSpan _closeGrace;
     private readonly HashSet<(int, long)> _known = [];
+    // Processes allowed because an allowed (or exempt) program started them, kept while they live.
+    private readonly HashSet<(int, long)> _admitted = [];
     // Per swept process: the moment its next step is due, and whether it was already asked to close.
     private readonly Dictionary<(int, long), (DateTimeOffset Due, bool Asked)> _asked = [];
     private HashSet<string> _allowed = new(StringComparer.Ordinal);
@@ -75,6 +81,7 @@ public sealed class ProgramWatch
         _active = true;
         _sweepPending = true;
         _asked.Clear();
+        _admitted.Clear();
     }
 
     /// <summary>Ends the whitelist; nothing is judged until the next <see cref="Begin"/>.</summary>
@@ -84,6 +91,7 @@ public sealed class ProgramWatch
         _sweepPending = false;
         _asked.Clear();
         _known.Clear();
+        _admitted.Clear();
         _suspendedUntil = DateTimeOffset.MinValue;
         _resumeSweep = false;
     }
@@ -137,11 +145,17 @@ public sealed class ProgramWatch
         var end = new List<ProcessInfo>();
         var warn = new List<ProcessInfo>();
         var present = new HashSet<(int, long)>();
+        var byId = new Dictionary<int, ProcessInfo>();
+        foreach (var process in processes)
+        {
+            byId[process.ProcessId] = process;
+        }
+
         foreach (var process in processes)
         {
             present.Add(process.Key);
             var isNew = !_known.Contains(process.Key);
-            if (_exempt(process.ProcessId) || !ProgramWhitelist.ShouldClose(process, context, _allowed))
+            if (_exempt(process.ProcessId) || StartedByAllowed(process, byId) || !ProgramWhitelist.ShouldClose(process, context, _allowed))
             {
                 continue;
             }
@@ -184,11 +198,47 @@ public sealed class ProgramWatch
 
         _known.Clear();
         _known.UnionWith(present);
+        _admitted.IntersectWith(present);
         foreach (var gone in _asked.Keys.Where(k => !present.Contains(k)).ToList())
         {
             _asked.Remove(gone);
         }
 
         return new WatchDecision(ask, end, warn);
+    }
+
+    /// <summary>
+    /// True when an ancestor of <paramref name="process"/> is allowed by name, is exempt, or was
+    /// itself admitted — walked through the parents present in this look, each started no later
+    /// than its child (a reused id is another process). The answer is remembered for the process.
+    /// </summary>
+    private bool StartedByAllowed(ProcessInfo process, IReadOnlyDictionary<int, ProcessInfo> byId)
+    {
+        if (_admitted.Contains(process.Key))
+        {
+            return true;
+        }
+
+        var child = process;
+        for (var depth = 0; depth < 64; depth++)
+        {
+            if (child.ParentProcessId <= 0 || child.ParentProcessId == child.ProcessId
+                || !byId.TryGetValue(child.ParentProcessId, out var parent)
+                || parent.StartedAt == 0 || child.StartedAt == 0 || parent.StartedAt > child.StartedAt)
+            {
+                return false;
+            }
+
+            if (_admitted.Contains(parent.Key) || _exempt(parent.ProcessId)
+                || ProgramNames.TryNormalize(parent.Name, out var name) && _allowed.Contains(name))
+            {
+                _admitted.Add(process.Key);
+                return true;
+            }
+
+            child = parent;
+        }
+
+        return false;
     }
 }

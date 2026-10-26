@@ -2209,7 +2209,8 @@ as named presets:
 <li><em>Timer</em> — absolute deadline, countdown on the student screen, auto-end, extend and
 end-early from the console.</li>
 <li><em>Allowed programs</em> — whitelist enforced by the helper via process-start events,
-matched by <strong>executable name only</strong> (no process-tree following), with a hard-coded
+matched by <strong>executable name</strong> — and, since 2026-10-26, whatever an allowed program
+starts (<code>D-75</code> item 12) — with a hard-coded
 never-touch set (session, shell and OS processes, LabControl itself).</li>
 <li><em>Internet</em> — the internet policy of <code>D-22</code> (<em>blocked</em> or a <em>whitelist</em> preset) for the
 exam's lifetime, overriding any standalone policy and handing back to it at the end.</li>
@@ -2973,6 +2974,25 @@ and the fixture's <code>--hard-limit-seconds</code>; the drills themselves are w
 (<em>The portion-6 drills</em>). Tests: <code>DepartureTests</code>, <code>FailSafeTests</code>, the teacher-access test, the
 departure dialog render — 1003 Shared + 308 Console. <strong>Not yet run on Windows.</strong> <strong>Next:</strong> the
 portion-6 drills on the VM, then every M6 drill in the physical lab after pushing this build.</li>
+<li><em>Physical lab, 2026-10-26 (all 14 PCs, the portion-6 build <code>1.0.0+68d0ae5</code> pushed over the
+network; checklist sections 0–6).</em> <strong>Passed:</strong> the push and protocol 2 on every PC; the lock
+with message, countdown, refused keys and mouse, remote control under it, a reboot mid-lock, its
+own expiry; the broadcast on all fourteen, readable from the back; exam mode with each switch
+alone, the opening sweep, <em>Extend</em>, a reboot mid-exam, a clean shutdown under the whitelist,
+<em>End exam</em>, the &quot;Time is up&quot; lock; a standalone block outliving an exam; collect work with a PC
+off reported missing; both profile resets; the console gone, <code>taskkill</code>, <code>sc stop</code> and the power
+pulled under an exam; the departure dialog with <em>Unlock, open the internet and leave</em>.
+<strong>Found and fixed the same day:</strong> the whitelist closed the allowed IDE's own helpers
+(<code>jetbrainsd.exe</code>, <code>ssh.exe</code>) — what an allowed program starts is now allowed (<code>D-75</code> item 12);
+<em>Unlock all</em> with a PC off left it locked after boot — the end is now sent when it returns with
+the same lock, and likewise <em>Open</em> (<code>D-79</code> item 8); <em>Open</em> during an exam with an internet switch
+appeared to do nothing — the <em>Internet</em> dialog now names those PCs (<code>D-79</code> item 9); the student's
+lock screen no longer shows the Ctrl+Alt+Del line (owner). <strong>Open:</strong> on <strong>one</strong> PC the mouse and
+the Win key still worked under a broadcast (the other thirteen refused them; not critical, the
+picture stays on top) — needs that PC's number and its <code>session-&lt;date&gt;.log</code> to tell a hook the
+helper never installed from one Windows dropped; section 7 (teacher access) not run; the fixes
+above not yet run on a PC. Failed actions (a profile reset refused during an exam, and the like)
+surface only in <em>Jobs</em>; a visible answer to the teacher's action is recorded for M7 below.</li>
 </ul>
 <hr />
 <h2 id="m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish<a class="anchor" href="#m7-software-catalog-localization-polish" aria-label="Link to this section">#</a></h2>
@@ -3003,6 +3023,12 @@ lesson, what to do when a PC does not appear, how to move the console to a new
 computer.</li>
 <li>Optional, and only if M3's measurements demand it: H.264 via Media Foundation behind
 the existing <code>VideoFrame</code> envelope. Decide with numbers, not taste.</li>
+<li><strong>A visible answer to every teacher action that fails</strong> (owner, physical lab 2026-10-26): a
+refused or failed action — a profile reset during an exam, a lock refused by a PC, a job that
+failed on some PCs — today shows only as a row in <em>Jobs</em> or a line in the events, so the
+teacher pressing a button gets no answer. Add a notification the teacher sees where they
+acted (a toast or a status strip with the reason and the PCs), as part of a UI redesign; <strong>not
+before M7</strong> — no redesign during M6.</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -3215,7 +3241,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-26 10:48 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 13:31 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

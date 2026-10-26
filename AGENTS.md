@@ -211,6 +211,12 @@ the documents relevant to the task:
   before setting anything there. The `D-56` amendment (a teacher console may do all of M6). Drills
   use `LabSession.LockLimit`/`InternetLimit`/`ExamLimit` via `TestLabHost --hard-limit-seconds`;
   procedures in ROADMAP M6, *The portion-6 drills*. Tests: 1003 Shared + 308 Console.
+- **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
+  Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
+  item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),
+  the *Internet* dialog names PCs whose exam controls the internet (item 9), no Ctrl+Alt+Del line on
+  the student's lock screen. Open: mouse/Win under a broadcast on one PC; teacher access not run;
+  failed-action feedback is M7. Tests: 1006 Shared + 309 Console.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the

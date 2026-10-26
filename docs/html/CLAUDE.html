@@ -573,6 +573,15 @@ through <code>TestLabHost --hard-limit-seconds</code>, with the ceiling proven s
 drills — console gone, <code>sc stop</code>/kill/power loss, corrupt <code>policy.json</code>, departure, teacher access —
 are written in ROADMAP M6, <em>The portion-6 drills</em>. Tests: 1003 Shared + 308 Console. Next: those
 drills on the VM, then the physical lab.</p>
+<p><strong>M6 in the physical lab, 2026-10-26</strong> (all 14 PCs, build <code>1.0.0+68d0ae5</code> pushed over the network):
+lock, broadcast, exam, collect/reset, the fail-safe checks and the departure dialog passed. Fixed the
+same day, not yet run on a PC: the whitelist now allows whatever an allowed program starts (Toolhelp
+parent ids, <code>D-75</code> item 12 — the IDE's <code>jetbrainsd.exe</code>/<code>ssh.exe</code> were closed); <em>Unlock</em>/<em>Open</em> asked
+while a PC was off is sent when it returns holding the same session (<code>D-79</code> item 8); the <em>Internet</em>
+dialog names PCs whose exam controls the internet (<code>D-79</code> item 9); no Ctrl+Alt+Del line on the
+student's lock screen. Open: mouse and Win worked under a broadcast on one PC (needs its log);
+teacher access not run. A visible answer to failed actions is an M7 item, no redesign in M6.
+Tests: 1006 Shared + 309 Console.</p>
 <p><strong>M0 is done (2026-09-04). M1 is done (2026-09-05)</strong>: the trust model, beacon discovery,
 mutual TLS, enrolment, the <code>Link</code> stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, <code>FakeAgent</code> and the console UI — see the M1 <em>Progress</em> and
@@ -816,7 +825,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-26 10:48 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 13:31 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

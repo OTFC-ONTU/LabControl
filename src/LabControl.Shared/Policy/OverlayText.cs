@@ -45,8 +45,8 @@ public sealed class OverlayBitmap : IDisposable
 
 /// <summary>
 /// Composes the lock / countdown picture with SkiaSharp (M6, D-70): the title, the
-/// teacher's message, the PC name, the countdown and the one line that tells the truth —
-/// Ctrl+Alt+Del still works. The helper paints the result with a single blit on a thread
+/// teacher's message, the PC name and the countdown. Ctrl+Alt+Del still works, but the student's
+/// screen no longer says so (owner, 2026-10-26); the teacher's *Lock screens* dialog does. The helper paints the result with a single blit on a thread
 /// that is <b>not</b> the hook thread (a hook that takes longer than
 /// <c>LowLevelHooksTimeout</c>, 300 ms, is silently dropped by Windows). Every string is a
 /// resource in <c>OverlayStrings.resx</c>; the typeface is looked up per character so
@@ -186,7 +186,6 @@ public static class OverlayText
             DrawCentered(canvas, paint, CountdownText(content.RemainingSeconds), countdownSize, Accent, width, y, width - 2 * margin, floor);
 
             DrawLeft(canvas, paint, Text("PcNameFormat", content.PcName), smallSize, Muted, margin, bottom);
-            DrawRight(canvas, paint, Text("SecureAttentionNote"), smallSize, Muted, width - margin, bottom);
 
             return new OverlayBitmap(bitmap);
         }

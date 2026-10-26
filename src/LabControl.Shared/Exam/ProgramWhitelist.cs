@@ -16,6 +16,12 @@ public sealed record ProcessInfo(int ProcessId, string Name, int SessionId, stri
     /// </summary>
     public bool IsProtectedProcess { get; init; }
 
+    /// <summary>
+    /// The process that started this one, or 0 when unknown. Windows reuses ids, so a parent
+    /// counts only when it started no later than this process (<see cref="ProgramWatch"/>).
+    /// </summary>
+    public int ParentProcessId { get; init; }
+
     /// <summary>Process id and creation time: a reused id is another process.</summary>
     public (int, long) Key => (ProcessId, StartedAt);
 }
@@ -44,9 +50,10 @@ public sealed record SessionContext(int SessionId, string? UserSid, IReadOnlyLis
 /// The allowed-programs judgement (M6 portion 4, D-75): <b>session and token before name</b>.
 /// A process is closed only when it runs in the student's session, under the student's own
 /// token, is not a protected process, is not LabControl's, is not in the hard-coded <see cref="NeverTouch"/> set of shell
-/// and Windows processes, and is not on the teacher's list. Matching is by executable name
-/// only (no process tree): a program the allowed IDE starts is judged by its own name, and a
-/// renamed executable passes. Pure, so the whole judgement is tested on the Mac.
+/// and Windows processes, and is not on the teacher's list. Matching is by executable name,
+/// and a renamed executable passes. What an allowed program starts is allowed too, but that is
+/// <see cref="ProgramWatch"/>'s judgement over the process tree (owner decision 2026-10-26),
+/// not this one. Pure, so the whole judgement is tested on the Mac.
 /// </summary>
 public static class ProgramWhitelist
 {

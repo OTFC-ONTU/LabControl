@@ -709,7 +709,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        var answer = await _dialogs.InternetAsync(new InternetDialogModel(_session, targets.Count));
+        var answer = await _dialogs.InternetAsync(new InternetDialogModel(_session, targets.Count, _session.ExamInternetPcs(targets)));
         if (answer is null)
         {
             return;

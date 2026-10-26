@@ -762,7 +762,9 @@ ends them <code>ExamCloseGrace</code> (5 s) later; background helpers (<code>Pro
 without a word on the strip; later
 it ends a newly started program at once. Processes the agent started for the teacher are never
 judged; a shutdown, reboot or log off pauses the watch for <code>ExamPowerJobSuspension</code> (2 min).
-Matching is by name: a renamed executable passes.</p>
+Matching is by name: a renamed executable passes. Whatever an allowed program starts — at any
+depth, judged by the parent ids of one Toolhelp snapshot — is allowed too, and stays allowed after
+its parent exits (<code>D-75</code> item 12).</p>
 <p>A console that started an exam for the whole lab sends it, with the remaining durations, to every
 PC of the lab that links before its end without showing that session (<code>D-76</code> item 4).</p>
 <h2 id="video">Video<a class="anchor" href="#video" aria-label="Link to this section">#</a></h2>
@@ -950,7 +952,9 @@ unlock before the links close (<code>D-79</code>). The agent reports <code>overl
 lock itself. The lock is persisted in <code>policy.json</code> (<code>D-69</code>): after a reboot the agent
 restores the machine first, then re-applies the lock only if it is still within its
 limits, re-clamping the stored hard limit against <code>LockHardLimit</code> again. Ctrl+Alt+Del
-cannot be blocked by design; the picture says so.</p>
+cannot be blocked by design; the teacher's dialog says so (the student's picture no longer does,
+2026-10-26). An <em>Unlock</em> asked while the PC was off is sent when it returns still holding that
+same lock, and likewise <em>Open</em> for a standalone internet policy (<code>D-79</code> item 8).</p>
 <p><strong>Events.</strong> <code>policy.reapplied</code> (a lock came back after a restart), <code>policy.apply_failed</code>
 (the machine could not show it: no interactive session, no helper), <code>policy.restore_failed</code>
 (a lift failed; the lock is kept and retried), <code>policy.unreadable</code> (the saved policy file
@@ -1489,7 +1493,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-26 10:48 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 13:31 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

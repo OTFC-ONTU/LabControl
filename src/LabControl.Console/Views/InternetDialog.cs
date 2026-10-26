@@ -136,6 +136,7 @@ public sealed class InternetDialog : DialogWindow<InternetAnswer>
         // Apply ended up under the Dock (found in the lab, 2026-10-20).
         var form = Body(
             Heading(Strings.Format("Internet.Targets", model.PcCount)),
+            ExamWarning(model.ExamPcs),
             open,
             whitelist,
             sites,
@@ -168,6 +169,17 @@ public sealed class InternetDialog : DialogWindow<InternetAnswer>
         _refresh.Start();
         Closed += (_, _) => _refresh.Stop();
     }
+
+    /// <summary>The exam's internet switch wins on these PCs until the exam ends; nothing when there are none.</summary>
+    private static Control ExamWarning(IReadOnlyList<int> examPcs) => new TextBlock
+    {
+        Text = examPcs.Count == 0 ? string.Empty : Strings.Format("Internet.ExamWins",
+            string.Join(", ", examPcs.Select(n => string.Format(Strings.Culture, Defaults.MachineNameFormat, n)))),
+        Foreground = Brushes.DarkOrange,
+        TextWrapping = TextWrapping.Wrap,
+        MaxWidth = 460,
+        IsVisible = examPcs.Count > 0,
+    };
 
     /// <summary>One entry of the preset list: a saved preset, or the unsaved list being typed.</summary>
     private sealed record PresetItem(InternetPreset? Preset)

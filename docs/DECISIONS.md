@@ -171,7 +171,8 @@ internet or with programs being killed.
 Two scoping choices, both the owner's: the whitelist matches **executable names only**
 (a program launched by an allowed program is judged on its own name), because following
 process trees to allow "an IDE and whatever it spawns" is materially harder and was not
-worth it; and *collect work* takes **one folder chosen when the exam is set up**, a
+worth it — **reversed on 2026-10-26** after the lab (`D-75` item 12): what an allowed
+program starts is allowed; and *collect work* takes **one folder chosen when the exam is set up**, a
 dedicated work directory rather than the whole student desktop, so the result is
 predictable and small.
 Rejected: a single all-or-nothing "exam mode" (does not fit real lessons); enforcing the
@@ -3470,7 +3471,8 @@ Decisions:
 
 2. **The picture is one BGRA bitmap the helper blits.** `Policy/OverlayText.Compose`
    (SkiaSharp, already on every side for video) draws the title, the teacher's message,
-   the countdown, the PC's name and the one honest line — *Ctrl+Alt+Del still works* —
+   the countdown, the PC's name and the one honest line — *Ctrl+Alt+Del still works* (removed
+   from the student's screen on 2026-10-26 at the owner's request; the teacher's dialog keeps it) —
    at the virtual desktop's size, so one window covers every monitor. Every string is a
    resource in `OverlayStrings.resx`; the typeface is looked up per character through the
    font manager, so Cyrillic renders wherever the default face lacks it. The helper
@@ -4201,6 +4203,20 @@ internet whitelist over a standalone *blocked* (`internet.exam_wins`, the allowe
 rest unresolved) handing the block back at its end; the console restarting mid-exam; and the end
 of every exam leaving `policy.json` empty and the firewall profiles at *Allow*.
 
+12. **What an allowed program starts is allowed** (physical lab 2026-10-26; owner decision the
+    same day, reversing item 4's "no process tree" and the rejection below). The lab's whitelist
+    closed an allowed IDE's own helpers — `jetbrainsd.exe`, and `ssh.exe` started through
+    `git.exe` — which no teacher can list in advance. `ProcessInfo.ParentProcessId` comes from one
+    Toolhelp snapshot per look (`WindowsProcesses.ParentIds`), and `ProgramWatch` lets a process
+    pass when an ancestor present in the same look is allowed by name, exempt (started for the
+    teacher) or itself admitted, each ancestor started no later than its child — Windows reuses
+    ids. An admitted process stays admitted after its parent exits, so a daemon that detaches from
+    its launcher is not closed a second later; a new list forgets the admissions. The hole is
+    accepted and stated in the exam dialog: a student can start a browser from the allowed IDE's
+    terminal (switch the internet off as well when that matters). A snapshot that cannot be taken
+    leaves every process judged by its name alone. Tests: `ProgramWatchTests` (any depth, after
+    the parent exits, a reused parent id, the opening sweep). Not yet run on Windows.
+
 ## D-76 — Exam presets, and the exam's internet switch handing back to a standalone policy (M6 portion 4)
 
 Context (2026-10-23): `ARCHITECTURE` §6.1 saves exam switch combinations as named presets, and
@@ -4418,6 +4434,19 @@ raising `MinimumProtocolVersion` to 2 (every version-1 PC would become *outdated
 screens and the move to a new key until updated); gating the ends by version too (a portion-3 PC
 holding a whitelist could not be opened); a capability field in `Hello` (it is frozen, and the
 version says the same).
+
+8. **Ends asked while a PC was off are sent when it returns** (physical lab 2026-10-26: *Unlock
+   all* with a PC off left it locked after boot; owner decision the same day). The console
+   remembers, in memory for the session, the lock and the standalone internet session each PC
+   was last seen holding; *Unlock* / *Open* for a PC that is not linked records that session, and
+   when the PC links and reports **the same session** the end is sent then (`overlay.unlock_on_return`,
+   `internet.lift_on_return`). A session set afterwards — by this console or another — never
+   matches, and a state that says nothing about the standalone policy (an exam's internet switch
+   in front of it, a refusal) leaves the request waiting.
+9. **The exam's internet switch is named in the *Internet* dialog** (the same lab): *Open* on a PC
+   whose exam switches the internet lifted only the standalone policy behind it and appeared to do
+   nothing. The dialog now names those PCs and says the exam's setting stays until it ends and the
+   choice takes effect after it (`LabSession.ExamInternetPcs`).
 
 Validation (2026-10-26, on the Mac): `DepartureTests` — the report over three simulated PCs names a
 lock and a block on one, an exam with its own block and work to collect on another, a broadcast on

@@ -22,13 +22,20 @@ public sealed class InternetDialogModel
 {
     private readonly LabSession _session;
 
-    public InternetDialogModel(LabSession session, int pcCount)
+    public InternetDialogModel(LabSession session, int pcCount, IReadOnlyList<int>? examPcs = null)
     {
         _session = session;
         PcCount = pcCount;
+        ExamPcs = examPcs ?? [];
     }
 
     public int PcCount { get; }
+
+    /// <summary>
+    /// The chosen PCs in an exam that switches the internet: the exam's setting wins there until
+    /// it ends, so whatever is chosen here only takes effect after it (a lab, 2026-10-26).
+    /// </summary>
+    public IReadOnlyList<int> ExamPcs { get; }
 
     public IReadOnlyList<InternetPreset> Presets => _session.InternetPresets.Presets;
 

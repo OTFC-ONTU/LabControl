@@ -2896,6 +2896,23 @@ the three languages checked again. H.264 only if M3's measurements demand it.
   **Open:** the owner's read-through of both translations; clipping fixes wait for the
   redesign (portion 7) unless a screen is unusable; agent-originated text (events from a PC,
   job output) is still English until portion 2.
+- *Portion 2 built (2026-10-26), on the Mac; not yet run on Windows* (`D-87`). The console's
+  language travels in `Welcome.language`, and each lock and exam carries its own
+  (`Overlay.language`, `ExamMode.language`): the student's lock screen, exam strip, notices and
+  *Time is up* are in the language of the console that **set** them, kept with the session in
+  `policy.json` through a reboot and a take-over; the helper draws in it (`ExamStrip.language`,
+  `OverlayText` never reads the process culture). What the PC writes to the teacher — events,
+  job results, refusals, problems, the student's shutdown notice — is in the last `Welcome`'s
+  language (`PcLanguage`, kept in `agent.json`), from `PolicyStrings` and the new `PcStrings`
+  (140 keys); the session helper is told with `ServiceMessage.language`. Stable codes, the
+  developer log, Windows' own error text and teacher data stay as they are. Setup and removal
+  resolve the Windows display language before the first string; their dialogs, plan, warnings,
+  refusals and closing lines are resources (35 new `SetupStrings` keys), the step trace shared
+  with `setup.log` stays English. An older console or agent costs English, nothing else.
+  Tests: `StudentTextLanguageTests`, `PcLanguageTests` (Shared and Console). **Open:** the VM
+  run in all three languages — a lock, an exam with a closed program and *Time is up*, a refused
+  job, Setup and removal under each Windows display language — and the owner's read-through of
+  the new texts.
 
 **Acceptance criteria**
 

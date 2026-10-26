@@ -4941,3 +4941,69 @@ once); the language in `profiles.json` (a lab index, not a preference — and a 
 it); the PC's Windows language for student text (an English Windows would show English whatever
 the teacher chose).
 
+
+## D-87 — Languages on the PC: the setting console's language for the student, the linked console's for the teacher, Windows' for Setup (M7 portion 2)
+
+Context (2026-10-26): `D-86` item 5 settled that stock text on a student's screen is in the
+teacher console's language, carried over the link. The PC also writes text the teacher reads —
+event messages, job results, refusals, the `problem` of a refused lock or exam — and until now
+wrote it in English, and Setup/removal still printed much of their own text as literals. Two
+programs draw the student's text: the service (the strip's notices, *Time is up*) and the
+session helper, a separate process whose culture is whatever Windows started it with.
+
+Decisions:
+
+1. **Three additive fields** (PROTOCOL, *M7 additions*): `Welcome.language = 7` for what the PC
+   writes on that link, and `Overlay.language = 6` / `ExamMode.language = 14` for the stock
+   words of that lock or exam. On the pipe the service passes the session's language down as
+   `Overlay.language` and `ExamStrip.language = 6`. Codes are `uk`, `en`, `ru`; empty or unknown
+   is English (`ProductLanguages.Of`), so an older console or a newer build's language costs
+   nothing but English. No field is in the frozen subset.
+2. **The setting console's language decides the student's words**, and it rides in the message
+   that sets them rather than being read off the link: a lock outlives its link, and a take-over
+   by a console in another language must not change the words on a screen the student is
+   already reading. The journal keeps it on the session (`PolicySession.Language`, `language` in
+   `policy.json`), so a lock re-applied after a reboot is in the language it was set in, and the
+   *time is up* lock takes the exam's. The member is optional, so a file from an older build is
+   English and no schema bump is needed (unknown members are ignored, so a rolled-back agent
+   still reads a newer file).
+3. **`OverlayText` takes the language explicitly** — `OverlayContent.Language`,
+   `ExamStripContent.Language`, a `language` argument on every word it returns — and never reads
+   `CultureInfo.CurrentUICulture`: the helper and the service run as SYSTEM or as the student,
+   whose cultures say nothing about the teacher.
+4. **What the PC writes to the teacher is in the language of the last `Welcome`**, held in one
+   process-wide `PcLanguage` and kept in `agent.json` (`console_language`) so what the PC reports
+   after a restart, before any console is back, is still in it. Process-wide on purpose: a real
+   PC has one link, and the simulator's PCs share one console. A message is written when it is
+   reported, so one queued before a language change keeps the language it was written in.
+   `PolicyEvents.Text` and the new `Shared/Localization/PcStrings.resx` (`PcText.Get`, 140 keys)
+   read it. The session helper is another process and cannot see `Welcome`, so the service
+   tells it with `ServiceMessage.language` on connect and after every `Welcome`. Left English:
+   the link's local status while no console is linked (it never reaches one), the reasons the
+   service restarts a helper (the log's), and `VideoUplink` / beacon-socket details.
+   `UpdateTerminalReport` re-sends `update.stable` once after a language change, because it
+   re-sends a message that differs from the last.
+5. **Stable things stay English.** Event codes, `reason` codes and every other identifier the
+   console keys on never change with the language; the developer log (`ILogger`) stays English
+   (`D-67` item 2). Teacher-typed text, program names, paths and Windows' or .NET's own error
+   text are data, passed through untranslated inside a translated sentence.
+6. **Setup and removal follow the Windows display language** (`D-67` item 3): `Program.Main`
+   resolves `ProductLanguages.Resolve(null, CurrentUICulture)` before the first string and makes
+   it the UI culture — no stored choice and no switch, the stick carries no preference. Their
+   dialogs, plan, warnings, refusals and closing lines come from `SetupStrings`. The step trace
+   (`[AlreadyDone] Firewall Discovery`, `[Conflict] PC name: …`) stays English in the window as
+   in `setup.log`: the step names are diagnostic identifiers and the detail is usually Windows'
+   own text. The native adapters' integrity failures (`Windows*Store`, staging and ownership
+   checks) stay English for the same reason; they reach the window only after a translated
+   headline or the translated failure dialog.
+7. **Tests.** Both test projects pin English (`D-86` item 7); a test that changes what the PC
+   writes runs in the non-parallel language collection and puts English back.
+
+Rejected: reading the student's language off the link at the moment of drawing (a take-over or a
+relink would change a lock on screen, and a lock re-applied at boot has no link); threading a
+language argument through every report site of the agent (one PC, one link — the process-wide
+value is the PC's reality, and the argument would reach code that has no link to ask); the PC's
+own Windows language for anything (`D-86`); a `--language` switch for Setup (the owner's rule is
+the Windows display language, and a switch is one more thing to get wrong on fourteen PCs).
+
+Status: built 2026-10-26 on the Mac; the VM run in all three languages is pending.

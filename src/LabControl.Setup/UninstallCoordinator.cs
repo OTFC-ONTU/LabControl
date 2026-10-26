@@ -9,19 +9,19 @@ internal static class UninstallCoordinator
     {
         if (arguments.DryRun)
         {
-            System.Console.WriteLine("[plan] Stop the owned service; restore recorded settings without overwriting later edits; keep personal accounts and profiles; remove owned LabControl files.");
+            System.Console.WriteLine(SetupDialog.Text("PlanUninstall"));
             return 0;
         }
         if (!SetupDialog.Confirm("Uninstall")) return 2;
         if (arguments.RemoveStudent && !arguments.ConfirmRemoveStudent && !SetupDialog.Confirm("RemoveStudent")) return 2;
         using var scope = AccountSetupScope.Open();
         var state = new InstallationState(Defaults.AgentDataDirectory);
-        var document = state.Read() ?? throw new InvalidOperationException("Removal ownership history is missing. Existing accounts and settings were preserved.");
-        if (!document.InstallDirectoryOwned && Directory.Exists(Defaults.AgentInstallDirectory)) throw new InvalidOperationException("The installed directory is not proven to belong to this installation.");
+        var document = state.Read() ?? throw new InvalidOperationException(SetupDialog.Text("RemovalHistoryMissing"));
+        if (!document.InstallDirectoryOwned && Directory.Exists(Defaults.AgentInstallDirectory)) throw new InvalidOperationException(SetupDialog.Text("InstallDirectoryNotOwned"));
         if (document.RemovalReady)
         {
             UninstallCleanup.Start(document.InstallationId);
-            System.Console.WriteLine("Previously authorized removal cleanup has been restarted.");
+            System.Console.WriteLine(SetupDialog.Text("RemovalRestarted"));
             return 0;
         }
         using var updateLease = new UpdateTrial(Defaults.AgentDataDirectory).AcquireRemovalLease(out var terminalUpdate);
@@ -43,7 +43,7 @@ internal static class UninstallCoordinator
             catch (Exception)
             {
                 failed = true;
-                System.Console.Error.WriteLine($"[Conflict] {name}: could not safely restore; the protected history was kept.");
+                System.Console.Error.WriteLine(SetupDialog.Format("RestoreConflict", name));
             }
         }
         var pendingAccount = scope.PendingRestorationIds();
@@ -68,7 +68,7 @@ internal static class UninstallCoordinator
             }
         }
         else if (pendingAccount.Any(id => id.StartsWith("student.", StringComparison.Ordinal)))
-            System.Console.WriteLine("[Skipped] Account and sign-in changes retained because managed-account mode is off.");
+            System.Console.WriteLine(SetupDialog.Text("AccountChangesRetained"));
         if (document.CreateStudentAccount == true)
         {
             foreach (var result in scope.RestoreProfileTemplate())
@@ -103,7 +103,7 @@ internal static class UninstallCoordinator
         if (pending.Length > 0)
         {
             failed = true;
-            System.Console.Error.WriteLine("Some settings still require restoration; removal history and the standalone uninstaller were retained.");
+            System.Console.Error.WriteLine(SetupDialog.Text("RestorationPending"));
         }
         if (failed || WindowsSetupService.Exists()) return 1;
         UpdateRecoveryTaskCleanup.RemoveRecovery(terminalUpdate);
@@ -118,7 +118,7 @@ internal static class UninstallCoordinator
         SetupInstallationFiles.RemoveOwnedStaging(document.InstallationId);
         state.MarkRemovalReady();
         UninstallCleanup.Start(document.InstallationId);
-        System.Console.WriteLine("Removal cleanup will finish after this process closes. Reboot will be required for temporary cleanup.");
+        System.Console.WriteLine(SetupDialog.Text("RemovalFinishing"));
         return 0;
     }
 }

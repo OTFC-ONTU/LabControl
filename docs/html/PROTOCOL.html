@@ -409,7 +409,8 @@ discarded — all of these are facts about the PC that whoever is in the room ne
 wire is unchanged; the binding is the agent's own bookkeeping. The departure notice
 <code>link.taken_over</code> (above) travels the same way, unbound, on the link being left.</p>
 <p><code>ConsoleMessage</code> (oneof): <code>Welcome</code> (server time, instance id and name, the serials the
-console holds revoked, and <code>console_access</code> — informational, see <em>M5 additions</em>),
+console holds revoked, <code>console_access</code> — informational, see <em>M5 additions</em> — and
+<code>language</code>, the console's interface language, see <em>M7 additions</em>),
 <code>Ping</code>, <code>Job</code> (see below), <code>VideoControl</code> (start/stop, mode
 <code>thumbnail|full</code>, fps, quality), <code>Input</code> (mouse move/button/wheel, key down/up, unicode
 text), <code>Overlay</code> (lock / unlock / broadcast start / broadcast stop, message text),
@@ -715,6 +716,7 @@ message.</p>
   int64  hard_limit_seconds;      // proposed; clamped to ExamHardLimit (4 h) on the PC's clock; &lt;= 0 = the ceiling
   bool   restrict_programs;       // the allowed-programs switch
   string preset_name;             // for the tile badge
+  string language;                // M7 (D-87): the strip's stock words, its notices and &quot;time is up&quot;, in the setting console's language
 }
 
 ExamState {                       agent → console
@@ -898,7 +900,8 @@ message and ignores it; the console greys <em>Control</em> out for an outdated a
 interactive session and a PC whose helper is down.</p>
 <h2 id="overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, <code>D-69</code>, <code>D-70</code>)<a class="anchor" href="#overlay-lock-screen-m6-portion-1-d-69-d-70" aria-label="Link to this section">#</a></h2>
 <pre><code>Overlay { kind: LOCK | UNLOCK | BROADCAST_START | BROADCAST_STOP, message,
-          session_id, until_seconds, hard_limit_seconds }            console → agent
+          session_id, until_seconds, hard_limit_seconds,
+          language }                                                 console → agent
 OverlayState { kind, session_id, since_unix, until_unix, hard_limit_unix,
                input_blocked, reason, set_by_instance, problem,
                remaining_seconds }                                   agent → console
@@ -1034,7 +1037,7 @@ at most <code>SessionPipeMaxMessageBytes</code> (16 MiB); a frame cut short or o
 protocol error and ends the connection. <code>LabControl.Shared/Session/PipeFraming.cs</code> is the
 one implementation both sides use.</p>
 <p><strong>Envelopes.</strong></p>
-<pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms }  service → helper
+<pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms | language }  service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
 HelperHello  { session_id, process_id, version }         first message after connecting
@@ -1107,7 +1110,7 @@ up and no lock is held; the service tells a helper that shows a broadcast nobody
 running to stop, and re-asserts one the helper does not show.</p>
 <p><strong>The exam over the pipe (M6 portion 4, <code>D-75</code>).</strong> The service owns the exam and the
 whitelist; the helper only shows the strip and asks windows to close.
-<code>ExamStrip { show, message, until_seconds, notice, session_id }</code> is sent when the exam starts,
+<code>ExamStrip { show, message, until_seconds, notice, session_id, language }</code> is sent when the exam starts,
 is re-stated or ends (<code>show</code> false), when the whitelist closed something (<code>notice</code>: &quot;X is not
 allowed during the exam&quot;, shown for <code>ExamNoticeDuration</code>, 8 s) and to every freshly connected
 helper (the journal's re-assert). The helper stamps <code>until_seconds</code> onto its clock and shows a
@@ -1344,6 +1347,32 @@ An older console meeting an M5 agent sees an <code>instance:</code> entry as an 
 <code>Welcome</code> field it did not send; both are harmless.</li>
 <li><strong>Files exchanged offline</strong> <em>(implemented, portion 3)</em> — the section above.</li>
 </ol>
+<h3 id="m7-additions-portion-2-d-87">M7 additions (portion 2, <code>D-87</code>)<a class="anchor" href="#m7-additions-portion-2-d-87" aria-label="Link to this section">#</a></h3>
+<p>The console's language reaches the PC (<code>D-86</code> item 5). Three additive fields, none in the
+frozen subset; an older agent ignores them and keeps writing English, an older console sends
+none and the PC writes English:</p>
+<ol>
+<li><strong><code>Welcome.language = 7</code></strong> — the console's interface language, <code>uk</code>, <code>en</code> or <code>ru</code>. The agent
+writes what it sends on that link in it — event messages, <code>JobResult.message</code>, refusals,
+<code>problem</code> texts — and keeps it in <code>agent.json</code> (<code>console_language</code>), so what it reports
+after a restart, before any console is back, is still in it. Empty or unknown is English.
+Stable codes (<code>Event.code</code>, <code>reason</code> codes, <code>OverlayReasons</code>, <code>ExamReasons</code>) never change
+with the language; teacher-typed text, program names, paths and Windows' own error text
+are data and are passed through untranslated.</li>
+<li><strong><code>Overlay.language = 6</code></strong> (on <code>LOCK</code>) and <strong><code>ExamMode.language = 14</code></strong> — the language of
+the stock words on the student's screen (the lock's title, default message, countdown and
+PC name line; the strip's title, countdown and notices; <em>Time is up</em>). The PC keeps it with
+the session in <code>policy.json</code> (<code>language</code>, optional — a file without it is English), so a
+lock re-applied after a reboot is in the language it was set in; the <em>time is up</em> lock
+takes the exam's. The <strong>setting</strong> console's language decides, not the linked one's: a lock
+set in Ukrainian stays Ukrainian after a Russian console takes the PC over.</li>
+<li><strong>On the pipe</strong>, the service passes the session's language down as <code>Overlay.language</code> and
+<code>ExamStrip.language = 6</code>; the helper draws in it, never in the process culture of
+<code>session.exe</code> (which is whoever Windows started it as). For the helper's own events
+(<code>input.*</code>, <code>capture.*</code>) the service sends <code>ServiceMessage.language = 8</code> — the PC's language
+from <code>Welcome</code> — to every helper that connects and again after every <code>Welcome</code>. Helper and
+service are always the same build (<code>app\&lt;version&gt;</code>), so no helper meets it unknown.</li>
+</ol>
 <h3 id="the-frozen-subset">The frozen subset<a class="anchor" href="#the-frozen-subset" aria-label="Link to this section">#</a></h3>
 <p>Four things are <strong>frozen at wire version 1 and may never change</strong>: the <code>Hello</code> message,
 the <code>Heartbeat</code> message, <code>Job</code> with <code>kind: self_update</code>, and <code>JobResult</code>. Fields may be
@@ -1494,9 +1523,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-26 16:09 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 16:38 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#m7-additions-portion-2-d-87">M7 additions (portion 2, D-87)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>
 </body>
 </html>

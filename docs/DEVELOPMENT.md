@@ -316,6 +316,13 @@ language is chosen in *Settings* or the lab chooser, saved in `preferences.json`
 root, and applied at the next start; with no choice the OS display language decides
 (`ru-UA` → Russian), anything unsupported is English. Both test projects pin English, so the
 tests are the same on any Mac. To look at the three languages, run the console tests with
-`LABCONTROL_UI_SHOTS=<dir>` and open the `lang-uk-*` / `lang-ru-*` PNGs. On the PC, stock
-student text and agent messages follow the console's language from portion 2 on; Setup
-follows the Windows display language.
+`LABCONTROL_UI_SHOTS=<dir>` and open the `lang-uk-*` / `lang-ru-*` PNGs.
+
+On the PC (M7 portion 2, `D-87`) the console's language arrives in `Welcome.language`: the
+agent writes its events and job results in it (`PcLanguage`, kept in `agent.json` as
+`console_language`; the texts are `Shared/Localization/PcStrings.resx` and `PolicyStrings`),
+and each lock and exam carries its own `language` for the stock words on the student's screen
+(`OverlayText` takes it explicitly, never the process culture; `policy.json` keeps it). The
+simulator follows the same rule, so `FakeAgent` against a Ukrainian console draws a Ukrainian
+lock. `PcLanguage` is process-wide: a test that sets it runs in the language collection and
+puts English back. Setup follows the Windows display language (INSTALLER, *What Setup.exe does*).

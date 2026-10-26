@@ -139,7 +139,7 @@ more are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | **M4** | Deployment: USB installer, files, self-update | 🔨 in progress — `1.0.0` release candidate in the first lab |
 | **M5** | Lab files, teacher access, fast switching between rooms | 🔨 in progress — all portions built, field acceptance remains |
 | **M6** | Classroom control: broadcast, lock, exam mode | ✅ done (2026-10-26) — accepted in the lab on all 14 PCs; teacher access not yet checked there |
-| **M7** | Software catalog, localization (uk / en / ru), polish, UI/UX redesign | 🔨 in progress — the console speaks Ukrainian, English and Russian |
+| **M7** | Software catalog, localization (uk / en / ru), polish, UI/UX redesign | 🔨 in progress — the console, its student screens and Setup speak Ukrainian, English and Russian |
 
 The detailed acceptance criteria and verification ledger are in the
 [roadmap](docs/ROADMAP.md).

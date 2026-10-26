@@ -364,8 +364,8 @@ Console → Settings → *Write USB payload* writes `ca.crt` and `setup.json` (a
                         enrollment_codes: ["...", ...],    // single-use, one per PC + spares
                         used_enrollment_codes: ["..."],    // moved here by Setup as it spends them
                         written_by, written_at }           // which console, when
-   INSTALL.txt        human instructions (English today; generated in the console's
-                      selected Ukrainian, English or Russian language in M7, D-67)
+   INSTALL.txt        human instructions, in the language of the console that
+                      wrote the stick (Ukrainian, English or Russian; M7, D-86)
 ```
 
 **The stick carries no secret.** `ca.crt` is public by nature and the enrollment codes
@@ -391,6 +391,16 @@ Each step is a class implementing `ISetupStep { Name; Check(); Apply(); }`, exec
 sequentially, logged to `C:\ProgramData\LabControl\setup.log` and echoed to the
 console window. `Check()` returning "already done" skips `Apply()` — this is what
 makes re-runs safe. `--dry-run` prints the plan only; `--number 7` skips the prompt.
+
+**Language (M7 portion 2, `D-87`).** Setup and removal speak the **Windows display language**
+of the administrator running them when it is Ukrainian, English or Russian (or a regional
+variant, `uk-UA` → Ukrainian), English otherwise — the console's rule with no stored choice,
+since the stick carries no preference. The dialogs, the plan, the warnings, the refusals and
+the closing lines are translated (`SetupStrings.resx` and its `.uk` / `.ru` siblings). The
+step trace — `[AlreadyDone] Firewall Discovery`, `[Conflict] PC name: …` — stays English in
+the window as in `setup.log`: the step names are diagnostic identifiers, and the detail after
+the colon is often Windows' own error text. To check a language, switch the Windows display
+language of the administrator account and sign in again.
 
 1. **Preflight** — is admin (else self-elevate via `runas`), Windows 10 1809+ x64,
    free disk ≥ 2 GB, stop existing `LabControl` service if present.

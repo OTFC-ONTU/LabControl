@@ -1,3 +1,4 @@
+using LabControl.Shared.Localization;
 using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
 
@@ -43,7 +44,7 @@ internal sealed class ScreenSourceFactory
         {
             _announcedFallback = why;
             _log.LogWarning("desktop duplication is not available ({Why}); capturing with GDI instead", why);
-            _report(Shared.Protocol.Event.Types.Severity.Info, "capture.fallback", $"Desktop duplication is not available on this PC ({why}); the screen is captured with GDI, which costs more CPU.");
+            _report(Shared.Protocol.Event.Types.Severity.Info, "capture.fallback", PcText.Get("CaptureFallback", why));
         }
 
         return GdiScreenSource.Open();

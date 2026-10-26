@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Pipes;
 using LabControl.Shared;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Session;
 using LabControl.Shared.Video;
@@ -229,6 +230,10 @@ internal static class Program
                         exam.Close(message.ClosePrograms);
                         break;
 
+                    case ServiceMessage.PayloadOneofCase.Language:
+                        PcLanguage.Set(message.Language);
+                        break;
+
                     default:
                         // A message this build does not know; say so once per message.
                         log.LogWarning("the service sent {What}, which this build does not do yet", message.PayloadCase);
@@ -238,7 +243,7 @@ internal static class Program
                             {
                                 Severity = Event.Types.Severity.Warning,
                                 Code = "session.not_in_this_build",
-                                Message = $"The session helper {Version} does not handle {message.PayloadCase} yet.",
+                                Message = PcText.Get("HelperNotInThisBuild", Version, message.PayloadCase),
                                 AtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                             },
                         });

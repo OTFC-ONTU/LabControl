@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="JobCannotRun" xml:space="preserve"><value>This job cannot run: {0}.</value></data>
+  <data name="JobAgentFailed" xml:space="preserve"><value>The agent failed to run this job: {0}</value></data>
+  <data name="JobNotInThisBuild" xml:space="preserve"><value>This agent build ({0}) does not run {1} jobs yet.</value></data>
+  <data name="NobodyLoggedOnScript" xml:space="preserve"><value>The script was to run as the logged-on user, but nobody is logged on to this PC right now.</value></data>
+  <data name="ExamBlocksReset" xml:space="preserve"><value>An exam is in progress on this PC; end it before resetting the profile, or its work would be lost.</value></data>
+  <data name="RefusedTeacherAccess" xml:space="preserve"><value>refused: this console has teacher access</value></data>
+  <data name="RefusedUnknownAccess" xml:space="preserve"><value>refused: this console's certificate carries no known access level</value></data>
+  <data name="JobRefusedByRole" xml:space="preserve"><value>{0} job {1} {2}; only an administrator console can send it.</value></data>
+  <data name="RefusedOtherInstance" xml:space="preserve"><value>refused: this job was delivered by another console; its result is kept for that console</value></data>
+  <data name="JobOtherInstance" xml:space="preserve"><value>Job {0} was delivered by another console; its result is kept for that console.</value></data>
+  <data name="JobResultsDropped" xml:space="preserve"><value>This PC keeps at most {0} finished job results for consoles that have not come back; {1} of the oldest were dropped and cannot be shown any more.</value></data>
+  <data name="InstanceMismatch" xml:space="preserve"><value>The console's certificate names instance {0} but its Welcome says {1}; the certificate is the one this PC uses.</value></data>
+  <data name="ConsoleRevokedCertificate" xml:space="preserve"><value>the linked console's certificate {0} is revoked</value></data>
+  <data name="ConsoleRevokedAccess" xml:space="preserve"><value>the linked console's access ({0}) was withdrawn</value></data>
+  <data name="LeavingConsole" xml:space="preserve"><value>Leaving {0}: {1}.</value></data>
+  <data name="UpdateOperationRunning" xml:space="preserve"><value>Another update operation is running.</value></data>
+  <data name="UpdateWrongLayout" xml:space="preserve"><value>This agent runs from {0}, not from {1}\&lt;version&gt;\; install it with dev-install.ps1 (or Setup) first, then push builds to it.</value></data>
+  <data name="UpdateUnknownPath" xml:space="preserve"><value>an unknown path</value></data>
+  <data name="UpdateRefusedEvent" xml:space="preserve"><value>The update failed signature or compatibility validation. The running version was kept; see the job result.</value></data>
+  <data name="UpdateRefused" xml:space="preserve"><value>The update was refused: {0}.</value></data>
+  <data name="UpdatePrivilegedBusy" xml:space="preserve"><value>Setup, removal or another privileged operation is running.</value></data>
+  <data name="UpdateOnProbation" xml:space="preserve"><value>Running {0} on probation until {1}; external rollback is armed.</value></data>
+  <data name="UpdateRunningNow" xml:space="preserve"><value>Running {0} now.</value></data>
+  <data name="UpdateRunningNowWas" xml:space="preserve"><value>Running {0} now (was {1}; app\previous still names it).</value></data>
+  <data name="UpdatePruned" xml:space="preserve"><value> Removed older version directories: {0}.</value></data>
+  <data name="UpdateStillOnProbation" xml:space="preserve"><value>Another update is still on probation or awaiting rollback.</value></data>
+  <data name="UpdateSameVersion" xml:space="preserve"><value>That version is the one this PC runs or would roll back to; use a distinct build version to preserve recovery files.</value></data>
+  <data name="UpdateSizeMismatch" xml:space="preserve"><value>{0} is {1} bytes but the manifest says {2}; nothing was installed.</value></data>
+  <data name="UpdatePulled" xml:space="preserve"><value>pulled {0} ({1})</value></data>
+  <data name="UpdateNothingInstalled" xml:space="preserve"><value>{0} Nothing was installed.</value></data>
+  <data name="UpdateWriteFailed" xml:space="preserve"><value>Could not write the update under {0}: {1}</value></data>
+  <data name="UpdateNotInstalled" xml:space="preserve"><value>The new {0} was not installed: {1}</value></data>
+  <data name="UpdateVersionMismatch" xml:space="preserve"><value>The new {0} reports version {1}, but the bundle is named {2}; correct the version in the push dialog. Nothing was installed.</value></data>
+  <data name="UpdateRunsHere" xml:space="preserve"><value>{0} {1} runs on this PC</value></data>
+  <data name="UpdatePlaceFailed" xml:space="preserve"><value>Could not place the new version in {0}: {1}</value></data>
+  <data name="UpdateInstalledNotService" xml:space="preserve"><value>Installed into {0}. This agent is not running as a service, so nothing was repointed or restarted; start the new version yourself.</value></data>
+  <data name="UpdateRecoveryFailed" xml:space="preserve"><value>Could not arm external update recovery: {0}. The running version was kept.</value></data>
+  <data name="UpdatePointersFailed" xml:space="preserve"><value>Could not write app\current and app\previous: {0}. Nothing was changed.</value></data>
+  <data name="UpdateRepointFailed" xml:space="preserve"><value>Could not repoint the service: {0}. Nothing was changed.</value></data>
+  <data name="UpdateRestarting" xml:space="preserve"><value>installed into app\{0}; service repointed, restarting it now</value></data>
+  <data name="UpdateSpawnFailed" xml:space="preserve"><value>{0}. The service was pointed back at {1}; nothing was changed.</value></data>
+  <data name="UpdateRestartTimeout" xml:space="preserve"><value>The service was not restarted within {0} s. It was pointed back at {1} and the new version removed; look at the agent log on the PC.</value></data>
+  <data name="PreflightWontStart" xml:space="preserve"><value>it does not start on this PC ({0}); a build for the wrong architecture?</value></data>
+  <data name="PreflightSilent" xml:space="preserve"><value>it printed nothing for {0} s when asked for its version</value></data>
+  <data name="PreflightNothing" xml:space="preserve"><value>nothing</value></data>
+  <data name="PreflightExitCode" xml:space="preserve"><value>`{0}` exited with code {1} and printed {2}</value></data>
+  <data name="UpdateFilesLocked" xml:space="preserve"><value>waiting for the new files to be released ({0}; an antivirus scan?)</value></data>
+  <data name="UpdateHistoryUnavailable" xml:space="preserve"><value>Update history is temporarily unavailable; the agent will retry.</value></data>
+  <data name="UpdateProbationFailed" xml:space="preserve"><value>The update did not finish its linked probation; the previous version was restored.</value></data>
+  <data name="UpdateProbationExtended" xml:space="preserve"><value>The PC rebooted during the probation of {0}; the probation restarts and ends by {1} UTC.</value></data>
+  <data name="UpdateStable" xml:space="preserve"><value>The running version is stable.</value></data>
+  <data name="PowerCannotReboot" xml:space="preserve"><value>Cannot reboot: {0}</value></data>
+  <data name="PowerCannotShutdown" xml:space="preserve"><value>Cannot shutdown: {0}</value></data>
+  <data name="RebootDidNotHappen" xml:space="preserve"><value>The reboot did not happen: {0}</value></data>
+  <data name="ShutdownDidNotHappen" xml:space="preserve"><value>The shutdown did not happen: {0}</value></data>
+  <data name="PowerRebooting" xml:space="preserve"><value>Rebooting in {0} s (forced; applications are closed without saving).</value></data>
+  <data name="PowerShuttingDown" xml:space="preserve"><value>Shutting down in {0} s (forced; applications are closed without saving).</value></data>
+  <data name="LogoffNobody" xml:space="preserve"><value>Nobody is logged on to this PC; there is no session to log off.</value></data>
+  <data name="LogoffFailed" xml:space="preserve"><value>Could not log {0} off: {1}</value></data>
+  <data name="LogoffStarted" xml:space="preserve"><value>Logging {0} off (session {1}); the session helper follows the new session.</value></data>
+  <data name="ShutdownNotice" xml:space="preserve"><value>LabControl: the teacher is switching this PC off.</value></data>
+  <data name="RebootNotice" xml:space="preserve"><value>LabControl: the teacher is restarting this PC.</value></data>
+  <data name="InventoryFailed" xml:space="preserve"><value>Could not gather the inventory: {0}</value></data>
+  <data name="ScriptWriteFailed" xml:space="preserve"><value>Could not write the script to {0}: {1}</value></data>
+  <data name="ScriptStartInSessionFailed" xml:space="preserve"><value>Could not start the script in session {0} as the logged-on user: {1}</value></data>
+  <data name="ScriptStartFailed" xml:space="preserve"><value>Could not start {0}: {1}</value></data>
+  <data name="ScriptKilled" xml:space="preserve"><value>Killed after {0} s without output ({1} line(s) received, {2} s in total). The script and everything it started were terminated.</value></data>
+  <data name="ScriptAgentStopped" xml:space="preserve"><value>The agent was stopped while the script was running; the script was terminated.</value></data>
+  <data name="ScriptExited" xml:space="preserve"><value>exit {0} after {1} s, {2} line(s)</value></data>
+  <data name="ResetNoStudentAccount" xml:space="preserve"><value>This PC was installed without the LabControl student account, so its profiles are never reset.</value></data>
+  <data name="ResetFailed" xml:space="preserve"><value>Could not reset the profile: {0}</value></data>
+  <data name="ResetFolderProgress" xml:space="preserve"><value>{0}: {1} removed, {2} left.</value></data>
+  <data name="ResetEmptied" xml:space="preserve"><value>Emptied Desktop, Documents and Downloads: {0} item(s) removed.</value></data>
+  <data name="ResetLeft" xml:space="preserve"><value> {0} could not be removed (open in a program?); log the student off and reset again.</value></data>
+  <data name="ResetCannotReboot" xml:space="preserve"><value>Cannot reboot after the reset: {0}</value></data>
+  <data name="ResetLogoffFailed" xml:space="preserve"><value>Could not log the student off: {0}</value></data>
+  <data name="ResetLoggingOff" xml:space="preserve"><value>Logging the student off.</value></data>
+  <data name="ResetRebootFailed" xml:space="preserve"><value>The reboot after the profile reset did not happen: {0}</value></data>
+  <data name="ResetDeleted" xml:space="preserve"><value>The student's profile was deleted; rebooting in {0} s into a new one.</value></data>
+  <data name="ResetStillHeld" xml:space="preserve"><value>Windows still held the student's profile ({0}); rebooting anyway — reset again once the PC is back.</value></data>
+  <data name="CollectWaiting" xml:space="preserve"><value>Waiting for this PC's previous collection.</value></data>
+  <data name="CollectMissingFolder" xml:space="preserve"><value>{0} does not exist on this PC: nothing to collect.</value></data>
+  <data name="CollectPacking" xml:space="preserve"><value>Packing {0}.</value></data>
+  <data name="CollectSending" xml:space="preserve"><value>Sending {0} file(s), {1} bytes packed.</value></data>
+  <data name="CollectStillSending" xml:space="preserve"><value>Still sending the collected work.</value></data>
+  <data name="CollectFailed" xml:space="preserve"><value>Could not collect {0}: {1}</value></data>
+  <data name="CollectCleanupFailed" xml:space="preserve"><value>A private staged collection could not be removed.</value></data>
+  <data name="CollectDone" xml:space="preserve"><value>Collected {0} file(s), {1} bytes.</value></data>
+  <data name="CollectInUse" xml:space="preserve"><value> Could not read (open in a program?): {0}.</value></data>
+  <data name="CollectLinks" xml:space="preserve"><value> {0} link(s) left out.</value></data>
+  <data name="CollectSkipped" xml:space="preserve"><value> Left out (a name or depth the console cannot store): {0}.</value></data>
+  <data name="HandoutWaiting" xml:space="preserve"><value>Waiting for this PC's previous handout delivery.</value></data>
+  <data name="HandoutReceiving" xml:space="preserve"><value>Receiving {0}: {1} bytes.</value></data>
+  <data name="HandoutVerified" xml:space="preserve"><value>Delivered {0}: {1} verified bytes.</value></data>
+  <data name="HandoutNotSignedIn" xml:space="preserve"><value>Delivered {0}. It was not opened because the managed student is not signed in.</value></data>
+  <data name="HandoutOpenFailed" xml:space="preserve"><value>Delivered {0}, but Windows could not open it: {1}</value></data>
+  <data name="HandoutOpening" xml:space="preserve"><value>Delivered {0}; requested opening in the managed student session.</value></data>
+  <data name="HandoutDelivered" xml:space="preserve"><value>Delivered {0} to the managed student's Materials folder.</value></data>
+  <data name="HandoutFailed" xml:space="preserve"><value>Could not deliver {0}: {1}</value></data>
+  <data name="HandoutCleanupFailed" xml:space="preserve"><value>A private staged handout could not be removed.</value></data>
+  <data name="SasFailed" xml:space="preserve"><value>Ctrl+Alt+Del could not be sent: {0}</value></data>
+  <data name="HelperExitedCode" xml:space="preserve"><value>session.exe exited with code {0}</value></data>
+  <data name="HelperSilent" xml:space="preserve"><value>session.exe has been silent for {0} s</value></data>
+  <data name="HelperNoConnect" xml:space="preserve"><value>session.exe did not connect within {0} s</value></data>
+  <data name="HelperCrashLoop" xml:space="preserve"><value>session.exe keeps dying ({0} times in {1} s; last: {2}); retrying every {3} s. Screens, control and lock will not work on this PC until it stays up.</value></data>
+  <data name="HelperRestarting" xml:space="preserve"><value>{0}; restarting it.</value></data>
+  <data name="HelperSpawnFailed" xml:space="preserve"><value>Could not start {0} in session {1}: {2}</value></data>
+  <data name="HelperPipeUnavailable" xml:space="preserve"><value>Cannot open the pipe \\.\pipe\{0} for the session helper: {1}. Another process holds the name (a second agent instance?); the helper will not run until it is freed.</value></data>
+  <data name="HelperReady" xml:space="preserve"><value>Session helper {0} is up in session {1} ({2}×{3}, desktop {4}).</value></data>
+  <data name="HelperMissing" xml:space="preserve"><value>{0} is missing next to the agent ({1}); screens, control and lock will not work on this PC. Reinstall it.</value></data>
+  <data name="DataDirMissing" xml:space="preserve"><value>{0} does not exist.</value></data>
+  <data name="DataDirReadable" xml:space="preserve"><value>{0} lets '{1}' read it{2}; the private key and configuration must be readable by SYSTEM and Administrators only. Re-run Setup, or: {3}</value></data>
+  <data name="DataDirInherited" xml:space="preserve"><value> (inherited from the parent)</value></data>
+  <data name="DataDirNoKey" xml:space="preserve"><value>{0} is missing; this PC has no private key and cannot connect. Run Setup again.</value></data>
+  <data name="DataDirUnverified" xml:space="preserve"><value>Could not verify the permissions on {0}: {1}</value></data>
+  <data name="CaptureFailed" xml:space="preserve"><value>Screen capture stopped: {0}</value></data>
+  <data name="CaptureRecovered" xml:space="preserve"><value>Screen capture is back ({0}).</value></data>
+  <data name="CaptureProblem" xml:space="preserve"><value>Cannot capture the screen: {0}</value></data>
+  <data name="SimSas" xml:space="preserve"><value>Ctrl+Alt+Del sent to the interactive session (simulated).</value></data>
+  <data name="SimRefuseAll" xml:space="preserve"><value>Simulated failure: this PC refuses every job.</value></data>
+  <data name="SimShutdown" xml:space="preserve"><value>Shutting down (simulated; back in 30 s as if someone pressed the button).</value></data>
+  <data name="SimReboot" xml:space="preserve"><value>Rebooting (simulated).</value></data>
+  <data name="SimLogoff" xml:space="preserve"><value>Logged the student off (simulated; auto-logon brings them back in 5 s).</value></data>
+  <data name="SimJobDone" xml:space="preserve"><value>{0} done (simulated).</value></data>
+  <data name="SimSending" xml:space="preserve"><value>Sending {0} file(s).</value></data>
+  <data name="SimCollected" xml:space="preserve"><value>Collected {0} file(s), {1} bytes (simulated PC).</value></data>
+  <data name="SimEmptied" xml:space="preserve"><value>Emptied Desktop, Documents and Downloads: {0} item(s) removed (simulated PC).</value></data>
+  <data name="SimProfileDeleteFailed" xml:space="preserve"><value>Could not delete the simulated profile: {0}</value></data>
+  <data name="SimProfileDeleted" xml:space="preserve"><value>The student's profile was deleted; rebooting into a new one (simulated).</value></data>
+  <data name="SimHandoutOpening" xml:space="preserve"><value>Delivered {0}; opening in the student session (simulated).</value></data>
+  <data name="SimHandoutNotOpened" xml:space="preserve"><value>Delivered {0}; not opened (simulated PC).</value></data>
+  <data name="SimRunningNow" xml:space="preserve"><value>Running {0} now. (simulated)</value></data>
+  <data name="SimRunningNowWas" xml:space="preserve"><value>Running {0} now (was {1}; app\previous still names it). (simulated)</value></data>
+  <data name="SimRestarting" xml:space="preserve"><value>installed into app\{0}; service repointed, restarting it now (simulated)</value></data>
+  <data name="SimScriptKilled" xml:space="preserve"><value>Killed after {0} s without output ({1} line(s) received, {2} s in total). The script and everything it started were terminated. (simulated)</value></data>
+  <data name="SimScriptExited" xml:space="preserve"><value>exit {0} after {1} s, {2} line(s) (simulated)</value></data>
+  <data name="InputNotReaching" xml:space="preserve"><value>Input from the console is not reaching the desktop: {0}</value></data>
+  <data name="InputRecovered" xml:space="preserve"><value>Input from the console reaches the desktop again.</value></data>
+  <data name="CaptureFallback" xml:space="preserve"><value>Desktop duplication is not available on this PC ({0}); the screen is captured with GDI, which costs more CPU.</value></data>
+  <data name="HelperNotInThisBuild" xml:space="preserve"><value>The session helper {0} does not handle {1} yet.</value></data>
+</root>

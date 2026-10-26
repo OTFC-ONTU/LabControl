@@ -5,6 +5,7 @@ using LabControl.Shared;
 using LabControl.Shared.Files;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 
 namespace LabControl.Agent;
@@ -16,7 +17,7 @@ internal sealed class HandoutRunner(AgentLink link)
     public async Task<JobResult> RunAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
     {
         while (!await DeliveryGate.WaitAsync(TimeSpan.FromSeconds(10), token))
-            await report(new JobProgress { JobId = job.Id, Line = "Waiting for this PC's previous handout delivery." });
+            await report(new JobProgress { JobId = job.Id, Line = PcText.Get("HandoutWaiting") });
         try { return await RunCoreAsync(job, report, token); }
         finally { DeliveryGate.Release(); }
     }
@@ -43,7 +44,7 @@ internal sealed class HandoutRunner(AgentLink link)
                     var now = DateTimeOffset.UtcNow;
                     if (now - lastReport < TimeSpan.FromSeconds(1)) return;
                     lastReport = now;
-                    await report(new JobProgress { JobId = job.Id, Line = $"Receiving {request.Name}: {received} bytes." });
+                    await report(new JobProgress { JobId = job.Id, Line = PcText.Get("HandoutReceiving", request.Name, received) });
                 });
                 await destination.FlushAsync(token);
             }
@@ -52,22 +53,22 @@ internal sealed class HandoutRunner(AgentLink link)
             using var source = File.OpenRead(staged);
             var bytes = WindowsIdentity.RunImpersonated(student.Token,
                 () => HandoutDelivery.Deliver(source, student.MaterialsDirectory, request, token));
-            await report(new JobProgress { JobId = job.Id, Percent = 100, Line = $"Delivered {request.Name}: {bytes} verified bytes." });
+            await report(new JobProgress { JobId = job.Id, Percent = 100, Line = PcText.Get("HandoutVerified", request.Name, bytes) });
             if (request.MayOpen)
             {
                 if (student.SessionId is not { } id)
-                    return Result(true, $"Delivered {request.Name}. It was not opened because the managed student is not signed in.");
+                    return Result(true, PcText.Get("HandoutNotSignedIn", request.Name));
                 try { UserProcessLauncher.OpenDocument(id, student.Sid, Path.Combine(student.MaterialsDirectory, request.Name)); }
                 catch (Exception ex) when (ex is Win32Exception or UnauthorizedAccessException or IOException)
-                { return Result(true, $"Delivered {request.Name}, but Windows could not open it: {ex.Message}"); }
-                return Result(true, $"Delivered {request.Name}; requested opening in the managed student session.");
+                { return Result(true, PcText.Get("HandoutOpenFailed", request.Name, ex.Message)); }
+                return Result(true, PcText.Get("HandoutOpening", request.Name));
             }
-            return Result(true, $"Delivered {request.Name} to the managed student's Materials folder.");
+            return Result(true, PcText.Get("HandoutDelivered", request.Name));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilePullException
             or InvalidOperationException or Win32Exception or SecurityException or System.Text.Json.JsonException)
         {
-            return Result(false, $"Could not deliver {request.Name}: {ex.Message}");
+            return Result(false, PcText.Get("HandoutFailed", request.Name, ex.Message));
         }
         finally
         {
@@ -75,7 +76,7 @@ internal sealed class HandoutRunner(AgentLink link)
             {
                 try { File.Delete(staged); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                { link.ReportForJob(job.Id, Event.Types.Severity.Warning, "files.cleanup_failed", "A private staged handout could not be removed."); }
+                { link.ReportForJob(job.Id, Event.Types.Severity.Warning, "files.cleanup_failed", PcText.Get("HandoutCleanupFailed")); }
             }
         }
     }

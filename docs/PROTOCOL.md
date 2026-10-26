@@ -220,7 +220,8 @@ wire is unchanged; the binding is the agent's own bookkeeping. The departure not
 `link.taken_over` (above) travels the same way, unbound, on the link being left.
 
 `ConsoleMessage` (oneof): `Welcome` (server time, instance id and name, the serials the
-console holds revoked, and `console_access` — informational, see *M5 additions*),
+console holds revoked, `console_access` — informational, see *M5 additions* — and
+`language`, the console's interface language, see *M7 additions*),
 `Ping`, `Job` (see below), `VideoControl` (start/stop, mode
 `thumbnail|full`, fps, quality), `Input` (mouse move/button/wheel, key down/up, unicode
 text), `Overlay` (lock / unlock / broadcast start / broadcast stop, message text),
@@ -515,6 +516,7 @@ ExamMode {                        console → agent, on Link
   int64  hard_limit_seconds;      // proposed; clamped to ExamHardLimit (4 h) on the PC's clock; <= 0 = the ceiling
   bool   restrict_programs;       // the allowed-programs switch
   string preset_name;             // for the tile badge
+  string language;                // M7 (D-87): the strip's stock words, its notices and "time is up", in the setting console's language
 }
 
 ExamState {                       agent → console
@@ -681,7 +683,8 @@ interactive session and a PC whose helper is down.
 
 ```
 Overlay { kind: LOCK | UNLOCK | BROADCAST_START | BROADCAST_STOP, message,
-          session_id, until_seconds, hard_limit_seconds }            console → agent
+          session_id, until_seconds, hard_limit_seconds,
+          language }                                                 console → agent
 OverlayState { kind, session_id, since_unix, until_unix, hard_limit_unix,
                input_blocked, reason, set_by_instance, problem,
                remaining_seconds }                                   agent → console
@@ -836,7 +839,7 @@ one implementation both sides use.
 **Envelopes.**
 
 ```
-ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms }  service → helper
+ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms | language }  service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
 HelperHello  { session_id, process_id, version }         first message after connecting
@@ -914,7 +917,7 @@ running to stop, and re-asserts one the helper does not show.
 
 **The exam over the pipe (M6 portion 4, `D-75`).** The service owns the exam and the
 whitelist; the helper only shows the strip and asks windows to close.
-`ExamStrip { show, message, until_seconds, notice, session_id }` is sent when the exam starts,
+`ExamStrip { show, message, until_seconds, notice, session_id, language }` is sent when the exam starts,
 is re-stated or ends (`show` false), when the whitelist closed something (`notice`: "X is not
 allowed during the exam", shown for `ExamNoticeDuration`, 8 s) and to every freshly connected
 helper (the journal's re-assert). The helper stamps `until_seconds` onto its clock and shows a
@@ -1139,6 +1142,33 @@ item 6 — the versioning wording — is untouched by this portion.
    An older console meeting an M5 agent sees an `instance:` entry as an odd serial and a
    `Welcome` field it did not send; both are harmless.
 7. **Files exchanged offline** *(implemented, portion 3)* — the section above.
+
+### M7 additions (portion 2, `D-87`)
+
+The console's language reaches the PC (`D-86` item 5). Three additive fields, none in the
+frozen subset; an older agent ignores them and keeps writing English, an older console sends
+none and the PC writes English:
+
+1. **`Welcome.language = 7`** — the console's interface language, `uk`, `en` or `ru`. The agent
+   writes what it sends on that link in it — event messages, `JobResult.message`, refusals,
+   `problem` texts — and keeps it in `agent.json` (`console_language`), so what it reports
+   after a restart, before any console is back, is still in it. Empty or unknown is English.
+   Stable codes (`Event.code`, `reason` codes, `OverlayReasons`, `ExamReasons`) never change
+   with the language; teacher-typed text, program names, paths and Windows' own error text
+   are data and are passed through untranslated.
+2. **`Overlay.language = 6`** (on `LOCK`) and **`ExamMode.language = 14`** — the language of
+   the stock words on the student's screen (the lock's title, default message, countdown and
+   PC name line; the strip's title, countdown and notices; *Time is up*). The PC keeps it with
+   the session in `policy.json` (`language`, optional — a file without it is English), so a
+   lock re-applied after a reboot is in the language it was set in; the *time is up* lock
+   takes the exam's. The **setting** console's language decides, not the linked one's: a lock
+   set in Ukrainian stays Ukrainian after a Russian console takes the PC over.
+3. **On the pipe**, the service passes the session's language down as `Overlay.language` and
+   `ExamStrip.language = 6`; the helper draws in it, never in the process culture of
+   `session.exe` (which is whoever Windows started it as). For the helper's own events
+   (`input.*`, `capture.*`) the service sends `ServiceMessage.language = 8` — the PC's language
+   from `Welcome` — to every helper that connects and again after every `Welcome`. Helper and
+   service are always the same build (`app\<version>`), so no helper meets it unknown.
 
 ### The frozen subset
 

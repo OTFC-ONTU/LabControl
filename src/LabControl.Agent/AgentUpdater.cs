@@ -1,13 +1,15 @@
 using System.ComponentModel;
-using System.Security.Cryptography.X509Certificates;
 using System.Diagnostics;
+using System.Globalization;
+using System.Security.Cryptography.X509Certificates;
 using LabControl.Shared;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Setup;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting.WindowsServices;
+using Microsoft.Extensions.Logging;
 
 namespace LabControl.Agent;
 
@@ -31,7 +33,7 @@ internal sealed class AgentUpdater
 
     public async Task<JobResult> RunAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
     {
-        if (!await OperationGate.WaitAsync(0, token)) return Fail(job, "Another update operation is running.");
+        if (!await OperationGate.WaitAsync(0, token)) return Fail(job, PcText.Get("UpdateOperationRunning"));
         try { return await RunCoreAsync(job, report, token); }
         finally { OperationGate.Release(); }
     }
@@ -40,7 +42,7 @@ internal sealed class AgentUpdater
     {
         if (!SelfUpdateRequest.TryParse(job, out var request, out var error))
         {
-            return Fail(job, $"This job cannot run: {error}.");
+            return Fail(job, PcText.Get("JobCannotRun", error));
         }
 
         var running = Program.InstalledVersion;
@@ -48,8 +50,7 @@ internal sealed class AgentUpdater
         var executable = Environment.ProcessPath;
         if (executable is null || _layout.VersionOf(executable) is null)
         {
-            return Fail(job, $"This agent runs from {executable ?? "an unknown path"}, not from {_layout.AppDirectory}\\<version>\\; " +
-                             $"install it with dev-install.ps1 (or Setup) first, then push builds to it.");
+            return Fail(job, PcText.Get("UpdateWrongLayout", executable ?? PcText.Get("UpdateUnknownPath"), _layout.AppDirectory));
         }
 
         // ---- the manifest
@@ -63,8 +64,8 @@ internal sealed class AgentUpdater
             {
                 // Fixed teacher-facing event: never echo signed or untrusted manifest fields here.
                 _link.Report(Event.Types.Severity.Warning, "update.refused",
-                    "The update failed signature or compatibility validation. The running version was kept; see the job result.");
-                return Fail(job, $"The update was refused: {problem}.");
+                    PcText.Get("UpdateRefusedEvent"));
+                return Fail(job, PcText.Get("UpdateRefused", problem));
             }
         }
         catch (FilePullException ex)
@@ -81,7 +82,7 @@ internal sealed class AgentUpdater
             installationLease = new FileStream(Path.Combine(Defaults.AgentDataDirectory, Defaults.SetupLockFileName),
                 FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         }
-        catch (IOException) { return Fail(job, "Setup, removal or another privileged operation is running."); }
+        catch (IOException) { return Fail(job, PcText.Get("UpdatePrivilegedBusy")); }
         using var heldInstallationLease = installationLease;
         token.ThrowIfCancellationRequested();
 
@@ -92,15 +93,15 @@ internal sealed class AgentUpdater
             var trial = new UpdateTrial(Defaults.AgentDataDirectory).Read();
             if (trial is not null && trial.Version == running && trial.Phase == UpdateTrialPhase.OnProbation)
                 return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0,
-                    Message = $"Running {running} on probation until {trial.Deadline:u}; external rollback is armed." };
+                    Message = PcText.Get("UpdateOnProbation", running, trial.Deadline.ToString("u", CultureInfo.InvariantCulture)) };
             var previous = _layout.ReadPrevious();
             var pruned = PruneOldVersions(running, previous);
             var message = previous is null || previous == running
-                ? $"Running {running} now."
-                : $"Running {running} now (was {previous}; app\\previous still names it).";
+                ? PcText.Get("UpdateRunningNow", running)
+                : PcText.Get("UpdateRunningNowWas", running, previous);
             if (pruned.Count > 0)
             {
-                message += $" Removed older version director{(pruned.Count == 1 ? "y" : "ies")}: {string.Join(", ", pruned)}.";
+                message += PcText.Get("UpdatePruned", string.Join(", ", pruned));
             }
 
             return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = message };
@@ -108,11 +109,11 @@ internal sealed class AgentUpdater
 
         var pendingTrial = new UpdateTrial(Defaults.AgentDataDirectory).Read();
         if (pendingTrial?.Phase is UpdateTrialPhase.OnProbation or UpdateTrialPhase.RollbackPending)
-            return Fail(job, "Another update is still on probation or awaiting rollback.");
+            return Fail(job, PcText.Get("UpdateStillOnProbation"));
         // A leftover directory of the same version (rolled back from, or half-placed) is replaced when
         // the files are placed below; only the running version and the rollback target are kept.
         if (Directory.Exists(_layout.VersionDirectory(request.Version)) && _layout.HoldsRecovery(request.Version))
-            return Fail(job, "That version is the one this PC runs or would roll back to; use a distinct build version to preserve recovery files.");
+            return Fail(job, PcText.Get("UpdateSameVersion"));
 
         // ---- the files, into the staging directory
 
@@ -138,22 +139,22 @@ internal sealed class AgentUpdater
                 if (received != file.Size)
                 {
                     TryDelete(staging);
-                    return Fail(job, $"{file.RelativePath} is {received} bytes but the manifest says {file.Size}; nothing was installed.");
+                    return Fail(job, PcText.Get("UpdateSizeMismatch", file.RelativePath, received, file.Size));
                 }
 
                 done += received;
-                await report(new JobProgress { JobId = job.Id, Percent = Percent(done, total), Line = $"pulled {file.RelativePath} ({AgentBuild.Megabytes(received)})" });
+                await report(new JobProgress { JobId = job.Id, Percent = Percent(done, total), Line = PcText.Get("UpdatePulled", file.RelativePath, AgentBuild.Megabytes(received)) });
             }
         }
         catch (FilePullException ex)
         {
             TryDelete(staging);
-            return Fail(job, ex.Message + " Nothing was installed.");
+            return Fail(job, PcText.Get("UpdateNothingInstalled", ex.Message));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             TryDelete(staging);
-            return Fail(job, $"Could not write the update under {staging}: {ex.Message}");
+            return Fail(job, PcText.Get("UpdateWriteFailed", staging, ex.Message));
         }
 
         // ---- preflight: does the new agent.exe run on this PC, and is it the version it claims?
@@ -163,17 +164,16 @@ internal sealed class AgentUpdater
         if (preflight.Error is not null)
         {
             TryDelete(staging);
-            return Fail(job, $"The new {Defaults.AgentExecutableName} was not installed: {preflight.Error}");
+            return Fail(job, PcText.Get("UpdateNotInstalled", Defaults.AgentExecutableName, preflight.Error));
         }
 
         if (!string.Equals(preflight.Version, expectedBase, StringComparison.Ordinal))
         {
             TryDelete(staging);
-            return Fail(job, $"The new {Defaults.AgentExecutableName} reports version {preflight.Version}, but the bundle is named {request.Version}; " +
-                             "correct the version in the push dialog. Nothing was installed.");
+            return Fail(job, PcText.Get("UpdateVersionMismatch", Defaults.AgentExecutableName, preflight.Version, request.Version));
         }
 
-        await report(new JobProgress { JobId = job.Id, Percent = 100, Line = $"{Defaults.AgentExecutableName} {preflight.Version} runs on this PC" });
+        await report(new JobProgress { JobId = job.Id, Percent = 100, Line = PcText.Get("UpdateRunsHere", Defaults.AgentExecutableName, preflight.Version) });
 
         // ---- into app\<version>
 
@@ -187,7 +187,7 @@ internal sealed class AgentUpdater
         {
             TryDelete(staging);
             TryDelete(target);
-            return Fail(job, $"Could not place the new version in {target}: {ex.Message}");
+            return Fail(job, PcText.Get("UpdatePlaceFailed", target, ex.Message));
         }
 
         if (!WindowsServiceHelpers.IsWindowsService())
@@ -199,7 +199,7 @@ internal sealed class AgentUpdater
                 JobId = job.Id,
                 Ok = true,
                 ExitCode = 0,
-                Message = $"Installed into {target}. This agent is not running as a service, so nothing was repointed or restarted; start the new version yourself.",
+                Message = PcText.Get("UpdateInstalledNotService", target),
             };
         }
 
@@ -213,7 +213,7 @@ internal sealed class AgentUpdater
         catch (Exception ex)
         {
             TryDelete(target);
-            return Fail(job, $"Could not arm external update recovery: {ex.Message}. The running version was kept.");
+            return Fail(job, PcText.Get("UpdateRecoveryFailed", ex.Message));
         }
 
         var previousMarker = _layout.ReadPrevious();
@@ -227,24 +227,24 @@ internal sealed class AgentUpdater
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Revert(job.Id, running, previousMarker, executable, target);
-            return Fail(job, $"Could not write app\\current and app\\previous: {ex.Message}. Nothing was changed.");
+            return Fail(job, PcText.Get("UpdatePointersFailed", ex.Message));
         }
 
         var repoint = ServiceControl.SetBinaryPath(newExecutable);
         if (repoint is not null)
         {
             Revert(job.Id, running, previousMarker, executable, target);
-            return Fail(job, $"Could not repoint the service: {repoint}. Nothing was changed.");
+            return Fail(job, PcText.Get("UpdateRepointFailed", repoint));
         }
 
         _log.LogInformation("{Pc}: service repointed at {Executable}; asking for a restart", _link.Name, newExecutable);
-        await report(new JobProgress { JobId = job.Id, Percent = 100, Line = $"installed into app\\{request.Version}; service repointed, restarting it now" });
+        await report(new JobProgress { JobId = job.Id, Percent = 100, Line = PcText.Get("UpdateRestarting", request.Version) });
 
         var spawn = ServiceControl.SpawnRestart(executable);
         if (spawn is not null)
         {
             Revert(job.Id, running, previousMarker, executable, target);
-            return Fail(job, $"{spawn}. The service was pointed back at {running}; nothing was changed.");
+            return Fail(job, PcText.Get("UpdateSpawnFailed", spawn, running));
         }
 
         // The stop arrives as cancellation: the link is disposed, this throws, no result is
@@ -261,7 +261,7 @@ internal sealed class AgentUpdater
 
         _log.LogError("{Pc}: the service was not restarted within {Seconds:0} s; putting {Running} back", _link.Name, Defaults.ServiceRestartWait.TotalSeconds, running);
         Revert(job.Id, running, previousMarker, executable, target);
-        return Fail(job, $"The service was not restarted within {Defaults.ServiceRestartWait.TotalSeconds:0} s. It was pointed back at {running} and the new version removed; look at the agent log on the PC.");
+        return Fail(job, PcText.Get("UpdateRestartTimeout", Defaults.ServiceRestartWait.TotalSeconds.ToString("0", CultureInfo.InvariantCulture), running));
     }
 
     // ------------------------------------------------------------------ helpers
@@ -287,19 +287,19 @@ internal sealed class AgentUpdater
         }
         catch (Win32Exception ex)
         {
-            return new Preflight(null, $"it does not start on this PC ({ex.Message}); a build for the wrong architecture?");
+            return new Preflight(null, PcText.Get("PreflightWontStart", ex.Message));
         }
 
         if (outcome.TimedOut)
         {
-            return new Preflight(null, $"it printed nothing for {Defaults.UpdatePreflightTimeout.TotalSeconds:0} s when asked for its version");
+            return new Preflight(null, PcText.Get("PreflightSilent", Defaults.UpdatePreflightTimeout.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)));
         }
 
         var version = lines.LastOrDefault(l => l.Length > 0 && !l.StartsWith(ProcessRunner.StderrPrefix, StringComparison.Ordinal))?.Trim();
         if (outcome.ExitCode != 0 || version is null || !InstallLayout.IsValidVersion(version))
         {
-            var said = lines.Count == 0 ? "nothing" : string.Join(" | ", lines.TakeLast(3));
-            return new Preflight(null, $"`{Defaults.AgentVersionSwitch}` exited with code {outcome.ExitCode} and printed {said}");
+            var said = lines.Count == 0 ? PcText.Get("PreflightNothing") : string.Join(" | ", lines.TakeLast(3));
+            return new Preflight(null, PcText.Get("PreflightExitCode", Defaults.AgentVersionSwitch, outcome.ExitCode, said));
         }
 
         return new Preflight(version, null);
@@ -385,7 +385,7 @@ internal sealed class AgentUpdater
                 {
                     waiting = true;
                     _log.LogWarning("{Pc}: cannot place the new version yet ({Message}); retrying for up to {Seconds:0} s", _link.Name, ex.Message, Defaults.UpdatePlaceTimeout.TotalSeconds);
-                    await report(new JobProgress { JobId = job.Id, Percent = 100, Line = $"waiting for the new files to be released ({ex.Message}; an antivirus scan?)" });
+                    await report(new JobProgress { JobId = job.Id, Percent = 100, Line = PcText.Get("UpdateFilesLocked", ex.Message) });
                 }
 
                 TryDelete(target);

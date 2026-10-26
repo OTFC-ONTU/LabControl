@@ -47,6 +47,13 @@ public static class ProductLanguages
             : All.FirstOrDefault(language => string.Equals(language.Code, code.Trim(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// The language a code from the wire or a file names, English for anything else — an empty
+    /// field from an older console, a newer build's language (D-87): the neutral resource
+    /// always exists, so a PC never shows nothing.
+    /// </summary>
+    public static ProductLanguage Of(string? code) => Find(code) ?? English;
+
+    /// <summary>
     /// The language to render in: <paramref name="stored"/> when it is a supported code, else the
     /// OS display language when supported, else English. An unknown stored code (a newer build's
     /// language) is ignored rather than refused.

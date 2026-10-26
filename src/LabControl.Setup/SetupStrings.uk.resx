@@ -32,4 +32,39 @@
   <data name="StudentRemovalResuming" xml:space="preserve"><value>Продовження видалення студента, раніше підтвердженого для цього встановлення.</value></data>
   <data name="SignInSidBaselineUnknown" xml:space="preserve"><value>[Попередження] Це встановлення не записало початковий SID автоматичного входу Windows. AutoLogonSID збережено; його початкове значення неможливо відновити автоматично. Інші записані налаштування входу зберігають свою захищену історію відновлення.</value></data>
   <data name="PendingHostnameChange" xml:space="preserve"><value>Windows очікує завершення попередньої зміни назви ПК. Перезапустіть Windows, а потім знову запустіть інсталятор.</value></data>
+  <data name="PlanRekey" xml:space="preserve"><value>[план] Зупинити службу, замінити лише довіру лабораторії, зберігши ідентичність цього ПК, і запустити її знову.</value></data>
+  <data name="RekeyNeedsInstallation" xml:space="preserve"><value>Перенесення на новий ключ лабораторії можливе лише для встановлення, зробленого цим інсталятором.</value></data>
+  <data name="RekeyFinishRemoval" xml:space="preserve"><value>Завершіть розпочате видалення, перш ніж замінювати довіру лабораторії.</value></data>
+  <data name="RekeyNeedsService" xml:space="preserve"><value>Для перенесення на новий ключ лабораторії потрібна служба агента, встановлена цим інсталятором.</value></data>
+  <data name="RekeyDone" xml:space="preserve"><value>Довіру лабораторії замінено; ідентичність ПК, режим облікового запису й налаштування комп'ютера збережено.</value></data>
+  <data name="AnotherSetupRunning" xml:space="preserve"><value>На цьому ПК уже виконується інше встановлення або видалення.</value></data>
+  <data name="UsbOlder" xml:space="preserve"><value>Ця флешка старіша за встановлений агент. Для відновлення використайте ту саму або новішу збірку флешки.</value></data>
+  <data name="LegacyInstallation" xml:space="preserve"><value>Це раннє розробницьке встановлення без запису володіння інсталятора. Збережіть його й запускайте інсталятор на свіжому тестовому знімку.</value></data>
+  <data name="FinishRemovalFirst" xml:space="preserve"><value>Завершіть видалення, перш ніж встановлювати або відновлювати цей ПК.</value></data>
+  <data name="NumberInvalid" xml:space="preserve"><value>Номер ПК неправильний або відрізняється від цього встановлення.</value></data>
+  <data name="StudentNotOwned" xml:space="preserve"><value>Обліковий запис студента створено не цим встановленням; для нового встановлення вимкніть створення облікового запису.</value></data>
+  <data name="PlanAccountOff" xml:space="preserve"><value>[Пропущено] Усі кроки облікового запису, пароля, входу та профілю: створення облікового запису вимкнено.</value></data>
+  <data name="FinishUpdateRecovery" xml:space="preserve"><value>Дочекайтеся завершення відновлення після оновлення агента, перш ніж встановлювати або відновлювати з флешки.</value></data>
+  <data name="FilesConflict" xml:space="preserve"><value>Встановлені файли не збігаються з цією флешкою; наявні файли збережено.</value></data>
+  <data name="AntivirusExclude" xml:space="preserve"><value>[Попередження] Антивірус {0}: додайте {1} до винятків цієї програми.</value></data>
+  <data name="AntivirusUnavailable" xml:space="preserve"><value>[Попередження] Список антивірусів недоступний. Перевірте винятки антивірусу, перш ніж покладатися на це встановлення.</value></data>
+  <data name="VerificationFailed" xml:space="preserve"><value>Перевірка встановлення не пройшла.</value></data>
+  <data name="EnrollmentDiffers" xml:space="preserve"><value>Встановлена ідентичність лабораторії інша. Перенесіть цей ПК командою Setup.exe --rekey.</value></data>
+  <data name="WindowsTooOld" xml:space="preserve"><value>Потрібна Windows 10 1809 або новіша.</value></data>
+  <data name="RunAsAdministrator" xml:space="preserve"><value>Запустіть інсталятор від імені адміністратора.</value></data>
+  <data name="NotEnoughDisk" xml:space="preserve"><value>Потрібно щонайменше 2 ГБ вільного місця на диску.</value></data>
+  <data name="SettingChangePreserved" xml:space="preserve"><value>Пізнішу або перервану зміну налаштування збережено.</value></data>
+  <data name="RebootNotStarted" xml:space="preserve"><value>Windows не вдалося почати перезапуск.</value></data>
+  <data name="WindowsOperationFailed" xml:space="preserve"><value>Інсталятор не зміг завершити операцію Windows. Наявні облікові записи й незавершені налаштування збережено; відновлення може повторити спробу.</value></data>
+  <data name="PlanUninstall" xml:space="preserve"><value>[план] Зупинити власну службу; відновити записані налаштування, не перезаписуючи пізніших змін; зберегти особисті облікові записи й профілі; видалити власні файли LabControl.</value></data>
+  <data name="RemovalHistoryMissing" xml:space="preserve"><value>Історія володіння для видалення відсутня. Наявні облікові записи й налаштування збережено.</value></data>
+  <data name="InstallDirectoryNotOwned" xml:space="preserve"><value>Не доведено, що папка встановлення належить цьому встановленню.</value></data>
+  <data name="RemovalRestarted" xml:space="preserve"><value>Раніше дозволене прибирання після видалення запущено знову.</value></data>
+  <data name="RestoreConflict" xml:space="preserve"><value>[Конфлікт] {0}: не вдалося безпечно відновити; захищену історію збережено.</value></data>
+  <data name="AccountChangesRetained" xml:space="preserve"><value>[Пропущено] Зміни облікового запису й входу залишено, бо режим керованого облікового запису вимкнено.</value></data>
+  <data name="RestorationPending" xml:space="preserve"><value>Деякі налаштування ще потребують відновлення; історію видалення й окремий деінсталятор збережено.</value></data>
+  <data name="RemovalFinishing" xml:space="preserve"><value>Прибирання після видалення завершиться, коли цей процес закриється. Для тимчасового прибирання знадобиться перезапуск.</value></data>
+  <data name="Removed" xml:space="preserve"><value>LabControl видалено. Перезапустіть комп'ютер, щоб видалити захищений тимчасовий файл прибирання.</value></data>
+  <data name="CleanupMetadataRemains" xml:space="preserve"><value>Агент і його дані видалено, але службові дані прибирання залишилися. Перезапустіть комп'ютер, а потім перевірте приватну папку LabControl Removal, якщо вона залишилася.</value></data>
+  <data name="CleanupIncomplete" xml:space="preserve"><value>Прибирання після видалення не завершено. Повторіть видалення LabControl в «Інстальованих програмах»; захищений файл прибирання й незавершену історію збережено.</value></data>
 </root>

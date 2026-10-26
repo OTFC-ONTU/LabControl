@@ -1,4 +1,5 @@
 using Google.Protobuf;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 
@@ -294,7 +295,7 @@ public sealed class ScreenProducer : IAsyncDisposable
         catch (Exception ex)
         {
             _log.LogError(ex, "{Pc}: the screen producer stopped: {Message}", _name, ex.Message);
-            Report(Event.Types.Severity.Error, "capture.failed", $"Screen capture stopped: {ex.Message}");
+            Report(Event.Types.Severity.Error, "capture.failed", PcText.Get("CaptureFailed", ex.Message));
         }
         finally
         {
@@ -318,7 +319,7 @@ public sealed class ScreenProducer : IAsyncDisposable
             _log.LogInformation("{Pc}: capturing the screen with {Kind}", _name, source.Kind);
             if (lastFailure is not null)
             {
-                Report(Event.Types.Severity.Info, "capture.recovered", $"Screen capture is back ({source.Kind}).");
+                Report(Event.Types.Severity.Info, "capture.recovered", PcText.Get("CaptureRecovered", source.Kind));
                 lastFailure = null;
             }
 
@@ -346,7 +347,7 @@ public sealed class ScreenProducer : IAsyncDisposable
 
         lastFailure = text;
         _log.LogWarning("{Pc}: cannot capture the screen ({Reason}): {Message}", _name, reason, message);
-        Report(Event.Types.Severity.Warning, $"capture.{reason}", $"Cannot capture the screen: {message}");
+        Report(Event.Types.Severity.Warning, $"capture.{reason}", PcText.Get("CaptureProblem", message));
     }
 
     private void CloseSource(ref IScreenSource? source)

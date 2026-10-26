@@ -224,6 +224,15 @@ the documents relevant to the task:
   Owner decisions: language applies on restart, the student sees the console's language
   (portion 2 carries it to the PC), "lab" = лабораторія / лаборатория. Seven portions in ROADMAP
   M7. Tests: 1032 Shared + 316 Console. Next: the owner reads the translations; portion 2.
+- **M7 portion 2 is built (2026-10-26, `D-87`), on the Mac; not yet run on Windows**: the console's
+  language reaches the PC. `Welcome.language` sets `Shared/Localization/PcLanguage` (kept in
+  `agent.json`), in which the PC writes events, job results and refusals (`PolicyStrings`, the new
+  `PcStrings` via `PcText.Get`; the helper learns it from `ServiceMessage.language`). Each lock and
+  exam carries its own `language` (kept in `policy.json`, passed down as `ExamStrip.language`): the
+  student's words are in the setting console's language and `OverlayText` never reads the process
+  culture. Setup/removal follow the Windows display language; the step trace stays English.
+  A test that changes `PcLanguage` runs in the language collection and restores English.
+  Tests: 1050 Shared + 317 Console. Next: the VM run in all three languages; portion 3.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

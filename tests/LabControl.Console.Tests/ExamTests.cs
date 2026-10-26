@@ -152,7 +152,7 @@ public class ExamTests
         Assert.Equal(sessionId + PolicyJournal.TimeUpSuffix, overlay.SessionId);
         Assert.Equal(console.Session.Instance.InstanceId, overlay.SetByInstance);
         Assert.Equal(0, overlay.UntilUnix);
-        Assert.Equal(OverlayText.TimeUpMessage, machine.Lock!.Message);
+        Assert.Equal(OverlayText.TimeUpMessage("en"), machine.Lock!.Message);
         Assert.Equal("locked by this console", Tile(console, id).LockText);
 
         Assert.Equal(1, console.Session.Unlock([id]));

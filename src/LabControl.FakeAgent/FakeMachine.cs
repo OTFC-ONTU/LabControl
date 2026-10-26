@@ -4,11 +4,12 @@ using LabControl.Shared;
 using LabControl.Shared.Files;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
-using LabControl.Shared.Video;
 using LabControl.Shared.Setup;
+using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.FakeAgent;
@@ -221,7 +222,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         if (input.Kind == Input.Types.Kind.CtrlAltDel)
         {
             Interlocked.Increment(ref _sasCount);
-            Link.Report(Event.Types.Severity.Info, "input.sas", "Ctrl+Alt+Del sent to the interactive session (simulated).");
+            Link.Report(Event.Types.Severity.Info, "input.sas", PcText.Get("SimSas"));
             return;
         }
 
@@ -309,18 +310,18 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
         if (Failure == FailureKind.JobError)
         {
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = 1, Message = "Simulated failure: this PC refuses every job." };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = 1, Message = PcText.Get("SimRefuseAll") };
         }
 
         switch (job.Kind)
         {
             case Job.Types.Kind.Shutdown:
                 _ = PowerCycleAsync(TimeSpan.FromSeconds(30), "shut down");
-                return Ok(job, "Shutting down (simulated; back in 30 s as if someone pressed the button).");
+                return Ok(job, PcText.Get("SimShutdown"));
 
             case Job.Types.Kind.Reboot:
                 _ = PowerCycleAsync(TimeSpan.FromSeconds(8), "rebooted");
-                return Ok(job, "Rebooting (simulated).");
+                return Ok(job, PcText.Get("SimReboot"));
 
             case Job.Types.Kind.Logoff:
                 LoggedOnUser = null;
@@ -330,7 +331,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
                     LoggedOnUser = Defaults.StudentAccountName;
                     PublishSession(SessionState.Types.Kind.Logon);
                 }, TaskScheduler.Default);
-                return Ok(job, "Logged the student off (simulated; auto-logon brings them back in 5 s).");
+                return Ok(job, PcText.Get("SimLogoff"));
 
             case Job.Types.Kind.SendFile:
                 return await SendFileAsync(job, report, token);
@@ -349,7 +350,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
             default:
                 await Task.Delay(TimeSpan.FromMilliseconds(300), token);
-                return Ok(job, $"{job.Kind} done (simulated).");
+                return Ok(job, PcText.Get("SimJobDone", job.Kind));
         }
     }
 
@@ -359,7 +360,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         JobResult Fail(string message) => new() { JobId = job.Id, ExitCode = -1, Message = message };
         if (!CollectRequest.TryParse(job, out var request, out var error)) return Fail(error);
         var folder = FolderOf(request);
-        if (!Directory.Exists(folder)) return Ok(job, $"{request.Folder} does not exist on this PC: nothing to collect.");
+        if (!Directory.Exists(folder)) return Ok(job, PcText.Get("CollectMissingFolder", request.Folder));
         var staged = Path.Combine(_store.Directory, Guid.NewGuid().ToString("n") + ".collect.zip");
         try
         {
@@ -370,13 +371,13 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
             var sha256 = FileHash.Sha256Hex(output);
             output.Position = 0;
             var reference = await Link.RequestUploadAsync(job.Id, output.Length, sha256, token);
-            await report(new JobProgress { JobId = job.Id, Percent = 50, Line = $"Sending {summary.Files} file(s)." });
+            await report(new JobProgress { JobId = job.Id, Percent = 50, Line = PcText.Get("SimSending", summary.Files) });
             await Link.PushFileAsync(reference, sha256, output, token);
-            return new JobResult { JobId = job.Id, Ok = true, Message = $"Collected {summary.Files} file(s), {summary.Bytes} bytes (simulated PC).", ArtifactRef = reference };
+            return new JobResult { JobId = job.Id, Ok = true, Message = PcText.Get("SimCollected", summary.Files, summary.Bytes), ArtifactRef = reference };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilePushException)
         {
-            return Fail($"Could not collect {request.Folder}: {ex.Message}");
+            return Fail(PcText.Get("CollectFailed", request.Folder, ex.Message));
         }
         finally
         {
@@ -394,7 +395,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         if (!ResetProfileRequest.TryParse(job, out var request, out var error)) return new JobResult { JobId = job.Id, ExitCode = -1, Message = error };
         if (_policy.HoldsExam)
         {
-            return new JobResult { JobId = job.Id, ExitCode = -1, Message = "An exam is in progress on this PC; end it before resetting the profile, or its work would be lost." };
+            return new JobResult { JobId = job.Id, ExitCode = -1, Message = PcText.Get("ExamBlocksReset") };
         }
 
         if (request.Mode == ResetMode.Light)
@@ -408,7 +409,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
                 left += summary.Left;
             }
 
-            return new JobResult { JobId = job.Id, Ok = left == 0, ExitCode = left == 0 ? 0 : 1, Message = $"Emptied Desktop, Documents and Downloads: {removed} item(s) removed (simulated PC)." };
+            return new JobResult { JobId = job.Id, Ok = left == 0, ExitCode = left == 0 ? 0 : 1, Message = PcText.Get("SimEmptied", removed) };
         }
 
         try
@@ -417,11 +418,11 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new JobResult { JobId = job.Id, ExitCode = -1, Message = $"Could not delete the simulated profile: {ex.Message}" };
+            return new JobResult { JobId = job.Id, ExitCode = -1, Message = PcText.Get("SimProfileDeleteFailed", ex.Message) };
         }
 
         _ = PowerCycleAsync(TimeSpan.FromSeconds(8), "rebooted after a profile reset");
-        return Ok(job, "The student's profile was deleted; rebooting into a new one (simulated).");
+        return Ok(job, PcText.Get("SimProfileDeleted"));
     }
 
     private async Task<JobResult> SendFileAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
@@ -442,20 +443,20 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
                     var now = DateTimeOffset.UtcNow;
                     if (now - lastReport < TimeSpan.FromSeconds(1)) return;
                     lastReport = now;
-                    await report(new JobProgress { JobId = job.Id, Line = $"Receiving {request.Name}: {bytes} bytes." });
+                    await report(new JobProgress { JobId = job.Id, Line = PcText.Get("HandoutReceiving", request.Name, bytes) });
                 });
                 await stream.FlushAsync(token);
             }
             token.ThrowIfCancellationRequested();
             File.Move(temporary, Path.Combine(MaterialsDirectory, request.Name), overwrite: true);
-            await report(new JobProgress { JobId = job.Id, Percent = 100, Line = $"Delivered {request.Name}: {received} verified bytes." });
+            await report(new JobProgress { JobId = job.Id, Percent = 100, Line = PcText.Get("HandoutVerified", request.Name, received) });
             return Ok(job, request.MayOpen
-                ? $"Delivered {request.Name}; opening in the student session (simulated)."
-                : $"Delivered {request.Name}; not opened (simulated PC)." );
+                ? PcText.Get("SimHandoutOpening", request.Name)
+                : PcText.Get("SimHandoutNotOpened", request.Name));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilePullException)
         {
-            return Fail($"Could not deliver {request.Name}: {ex.Message}");
+            return Fail(PcText.Get("HandoutFailed", request.Name, ex.Message));
         }
         finally
         {
@@ -480,14 +481,14 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     {
         if (!SelfUpdateRequest.TryParse(job, out var request, out var error))
         {
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"This job cannot run: {error}." };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("JobCannotRun", error) };
         }
 
         if (string.Equals(request.Version, _version, StringComparison.Ordinal))
         {
             return Ok(job, _previousVersion is null
-                ? $"Running {_version} now. (simulated)"
-                : $"Running {_version} now (was {_previousVersion}; app\\previous still names it). (simulated)");
+                ? PcText.Get("SimRunningNow", _version)
+                : PcText.Get("SimRunningNowWas", _version, _previousVersion));
         }
 
         UpdateManifest manifest;
@@ -497,7 +498,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
             await Link.PullFileAsync(request.ManifestReference, request.ManifestSha256, buffer, token);
             if (!UpdateBundle.TryReadVerified(buffer.ToArray(), request, _store.Authority, _version, out manifest, out var problem))
             {
-                return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"The update was refused: {problem}." };
+                return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("UpdateRefused", problem) };
             }
 
             var total = manifest.Files.Sum(f => f.Size);
@@ -507,19 +508,19 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
                 var received = await Link.PullFileAsync(file.Sha256, file.Sha256, Stream.Null, token);
                 if (received != file.Size)
                 {
-                    return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"{file.RelativePath} is {received} bytes but the manifest says {file.Size}; nothing was installed." };
+                    return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("UpdateSizeMismatch", file.RelativePath, received, file.Size) };
                 }
 
                 done += received;
-                await report(new JobProgress { JobId = job.Id, Percent = total > 0 ? (int)(done * 100 / total) : 0, Line = $"pulled {file.RelativePath} ({AgentBuild.Megabytes(received)})" });
+                await report(new JobProgress { JobId = job.Id, Percent = total > 0 ? (int)(done * 100 / total) : 0, Line = PcText.Get("UpdatePulled", file.RelativePath, AgentBuild.Megabytes(received)) });
             }
         }
         catch (FilePullException ex)
         {
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = ex.Message + " Nothing was installed." };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("UpdateNothingInstalled", ex.Message) };
         }
 
-        await report(new JobProgress { JobId = job.Id, Percent = 100, Line = $"installed into app\\{request.Version}; service repointed, restarting it now (simulated)" });
+        await report(new JobProgress { JobId = job.Id, Percent = 100, Line = PcText.Get("SimRestarting", request.Version) });
         _log.LogInformation("{Pc}: restarting as {Version} (simulated)", Name, request.Version);
 
         _previousVersion = _version;
@@ -543,7 +544,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     {
         if (!RunScriptRequest.TryParse(job, out var request, out var error))
         {
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"This job cannot run: {error}." };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("JobCannotRun", error) };
         }
 
         string text;
@@ -561,7 +562,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
         if (request.RunAs == ScriptRunAs.User && LoggedOnUser is null)
         {
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = "The script was to run as the logged-on user, but nobody is logged on to this PC right now." };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("NobodyLoggedOnScript") };
         }
 
         var started = DateTimeOffset.UtcNow;
@@ -613,7 +614,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
                     JobId = job.Id,
                     Ok = false,
                     ExitCode = -1,
-                    Message = $"Killed after {request.Timeout.TotalSeconds:0} s without output ({lines} line(s) received, {(DateTimeOffset.UtcNow - started).TotalSeconds:0} s in total). The script and everything it started were terminated. (simulated)",
+                    Message = PcText.Get("SimScriptKilled", request.Timeout.TotalSeconds.ToString("0", CultureInfo.InvariantCulture), lines, (DateTimeOffset.UtcNow - started).TotalSeconds.ToString("0", CultureInfo.InvariantCulture)),
                 };
             }
 
@@ -637,7 +638,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         }
 
         var elapsed = (DateTimeOffset.UtcNow - started).TotalSeconds.ToString("0", CultureInfo.InvariantCulture);
-        return new JobResult { JobId = job.Id, Ok = exitCode == 0, ExitCode = exitCode, Message = $"exit {exitCode} after {elapsed} s, {lines} line(s) (simulated)" };
+        return new JobResult { JobId = job.Id, Ok = exitCode == 0, ExitCode = exitCode, Message = PcText.Get("SimScriptExited", exitCode, elapsed, lines) };
     }
 
     private void PublishSession(SessionState.Types.Kind kind) => Link.PublishSessionState(new SessionState

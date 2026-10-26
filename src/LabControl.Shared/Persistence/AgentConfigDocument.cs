@@ -41,6 +41,13 @@ public sealed class AgentConfigDocument : ISchemaVersioned
     public string? LastInstanceId { get; set; }
 
     /// <summary>
+    /// The language the last console announced in <c>Welcome.language</c> (M7, D-87): what this PC
+    /// writes its events and job results in, kept so a restart before the next link still uses
+    /// it. <c>null</c> = never told, English.
+    /// </summary>
+    public string? ConsoleLanguage { get; set; }
+
+    /// <summary>
     /// The union of every signed revocation this PC has seen. Sent right after <c>Hello</c>,
     /// so a console that was switched off when another teacher machine revoked something
     /// learns of it from the first agent that connects (D-21).

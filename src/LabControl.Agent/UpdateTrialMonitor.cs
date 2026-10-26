@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using LabControl.Shared;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Setup;
 using Microsoft.Extensions.Logging;
@@ -67,7 +68,7 @@ internal sealed class UpdateTrialMonitor : IAsyncDisposable
         if (state is null || state.Phase == UpdateTrialPhase.Stable) return new() { Phase = UpdateState.Types.Phase.Stable };
         if (state.Phase == UpdateTrialPhase.RolledBack && running == state.Previous)
             return new() { Phase = UpdateState.Types.Phase.RolledBack, FailedVersion = state.Version,
-                Reason = "The update did not finish its linked probation; the previous version was restored." };
+                Reason = PcText.Get("UpdateProbationFailed") };
         return new() { Phase = UpdateState.Types.Phase.OnProbation, ProbationEndsUnix = state.Deadline.ToUnixTimeSeconds() };
     }
 

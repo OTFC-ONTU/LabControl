@@ -417,12 +417,12 @@ internal sealed class OverlayController : IDisposable
         var window = _window;
         if (window is { IsShowing: true, IsBroadcast: false })
         {
-            window.Update(overlay.Message, until, hardLimit);
+            window.Update(overlay.Message, until, hardLimit, overlay.Language);
         }
         else
         {
             window?.Dispose();
-            _window = new OverlayWindow(_log, overlay.Message, _pcName, until, hardLimit);
+            _window = new OverlayWindow(_log, overlay.Message, _pcName, until, hardLimit, overlay.Language);
         }
 
         _current = overlay;

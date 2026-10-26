@@ -1,5 +1,7 @@
+using System.Globalization;
 using LabControl.Shared;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
@@ -62,7 +64,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         {
             _log.LogWarning("Could not read update state: {Message}", ex.Message);
             hello.UpdateState = new UpdateState { Phase = UpdateState.Types.Phase.Unspecified,
-                Reason = "Update history is temporarily unavailable; the agent will retry." };
+                Reason = PcText.Get("UpdateHistoryUnavailable") };
         }
     }
 
@@ -76,7 +78,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         {
             // An inventory is nice to have; a failure to gather one must never cost the link.
             _log.LogWarning(ex, "{Pc}: inventory failed: {Message}", Link.Name, ex.Message);
-            Link.Report(Event.Types.Severity.Warning, "agent.inventory_failed", $"Could not gather the inventory: {ex.Message}");
+            Link.Report(Event.Types.Severity.Warning, "agent.inventory_failed", PcText.Get("InventoryFailed", ex.Message));
             return new Inventory { Hostname = Environment.MachineName };
         }
     }
@@ -135,7 +137,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
                     JobId = job.Id,
                     Ok = false,
                     ExitCode = -1,
-                    Message = $"This agent build ({Program.InstalledVersion}) does not run {job.Kind} jobs yet.",
+                    Message = PcText.Get("JobNotInThisBuild", Program.InstalledVersion, job.Kind),
                 };
         }
     }
@@ -153,7 +155,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         if (problem is not null)
         {
             _log.LogError("{Pc}: cannot {What}: {Problem}", Link.Name, what, problem);
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"Cannot {what}: {problem}" };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get(reboot ? "PowerCannotReboot" : "PowerCannotShutdown", problem) };
         }
 
         _ = Task.Run(async () =>
@@ -167,7 +169,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             if (failure is not null)
             {
                 _log.LogError("{Pc}: {What} failed: {Failure}", Link.Name, what, failure);
-                Link.ReportForJob(job.Id, Event.Types.Severity.Error, "power.failed", $"The {what} did not happen: {failure}");
+                Link.ReportForJob(job.Id, Event.Types.Severity.Error, "power.failed", PcText.Get(reboot ? "RebootDidNotHappen" : "ShutdownDidNotHappen", failure));
             }
         });
 
@@ -177,8 +179,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             Ok = true,
             ExitCode = 0,
             Message = reboot
-                ? $"Rebooting in {Defaults.PowerJobDelay.TotalSeconds:0} s (forced; applications are closed without saving)."
-                : $"Shutting down in {Defaults.PowerJobDelay.TotalSeconds:0} s (forced; applications are closed without saving).",
+                ? PcText.Get("PowerRebooting", Defaults.PowerJobDelay.TotalSeconds.ToString("0", CultureInfo.InvariantCulture))
+                : PcText.Get("PowerShuttingDown", Defaults.PowerJobDelay.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)),
         };
     }
 
@@ -187,19 +189,19 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         var session = InteractiveSession.Snapshot();
         if (!session.HasSession || !session.HasUser)
         {
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = "Nobody is logged on to this PC; there is no session to log off." };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("LogoffNobody") };
         }
 
         var failure = PowerControl.Logoff(session.SessionId!.Value);
         if (failure is not null)
         {
             _log.LogError("{Pc}: logoff failed: {Failure}", Link.Name, failure);
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"Could not log {session.User} off: {failure}" };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("LogoffFailed", session.User, failure) };
         }
 
         // The log off runs on in Windows: an exam's whitelist pauses while it closes everything (D-75).
         ExamCoordination.PauseForPowerJob();
-        return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = $"Logging {session.User} off (session {session.SessionId}); the session helper follows the new session." };
+        return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = PcText.Get("LogoffStarted", session.User, session.SessionId) };
     }
 
     public async ValueTask DisposeAsync()

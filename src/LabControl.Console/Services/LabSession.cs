@@ -11,6 +11,7 @@ using LabControl.Shared.Identity;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Setup;
 using LabControl.Shared.Lab;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Link;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protection;
@@ -1026,6 +1027,9 @@ public sealed class LabSession : IAsyncDisposable
             // certificate the agent has just validated, so it can never claim more than the
             // OU does — and the agent refuses jobs from the certificate, not from this field.
             ConsoleAccess = AnnouncedAccess(Instance.Access),
+
+            // M7 (D-87): the PC writes what it sends on this link in the teacher's language.
+            Language = Language.Code,
         };
         welcome.RevokedSerials.AddRange(Registry.Revocations.Serials);
         BeforeWelcome?.Invoke(welcome);
@@ -1863,6 +1867,7 @@ public sealed class LabSession : IAsyncDisposable
             SessionId = Guid.NewGuid().ToString("n"),
             UntilSeconds = duration is { } d && d > TimeSpan.Zero ? (long)Math.Ceiling(d.TotalSeconds) : 0,
             HardLimitSeconds = (long)Math.Ceiling(LockLimit.TotalSeconds),
+            Language = Language.Code,
         };
 
         var (sent, skipped) = SendOverlay(agentIds, overlay, setting: true);
@@ -2309,6 +2314,7 @@ public sealed class LabSession : IAsyncDisposable
             RestrictPrograms = request.RestrictPrograms,
             UntilSeconds = request.Timer is { } timer && timer > TimeSpan.Zero ? (long)Math.Ceiling(timer.TotalSeconds) : 0,
             HardLimitSeconds = (long)Math.Ceiling(ExamLimit.TotalSeconds),
+            Language = Language.Code,
         };
         template.AllowedPrograms.AddRange(LabControl.Shared.Exam.ProgramNames.NormalizeAll(request.AllowedPrograms));
         string? collectFolder = null;
@@ -2379,6 +2385,7 @@ public sealed class LabSession : IAsyncDisposable
             // remaining_seconds is as of sending; the PC re-sends only on change, so age it on
             // this console's clock (VM drill 2026-10-23: an unaged value gave +43 s for +30 s).
             var mode = FromState(state);
+            mode.Language = Language.Code;
             var aged = (long)Math.Floor((_clock() - connection.ExamStateAt).TotalSeconds);
             mode.UntilSeconds = Math.Max(1, state.RemainingSeconds - Math.Max(0, aged)) + extra;
             return mode;
@@ -2553,6 +2560,13 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary><see cref="Defaults.BroadcastHardLimit"/> unless a test wants it sooner.</summary>
     public TimeSpan BroadcastLimit { get; set; } = Defaults.BroadcastHardLimit;
+
+    /// <summary>
+    /// The language this console speaks to its PCs (M7, D-86 item 5, D-87): sent in every
+    /// <c>Welcome</c> for what the PC reports, and on every lock and exam for the stock words the
+    /// student sees. The running console language unless a test says otherwise.
+    /// </summary>
+    public ProductLanguage Language { get; set; } = ConsoleLanguage.Running;
 
     /// <summary>
     /// The hard limit a lock proposes: <see cref="Defaults.LockHardLimit"/> unless a test or the

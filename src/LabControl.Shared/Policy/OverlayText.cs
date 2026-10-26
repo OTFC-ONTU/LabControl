@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Resources;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Video;
 using SkiaSharp;
 
@@ -9,10 +10,12 @@ namespace LabControl.Shared.Policy;
 /// <param name="Message">The teacher's message; the default text when empty.</param>
 /// <param name="PcName">The PC's own name (<c>PC-07</c>), so a student knows which screen is which.</param>
 /// <param name="RemainingSeconds">Seconds until the lock lifts, or <c>null</c> for "until lifted".</param>
-public sealed record OverlayContent(string Message, string PcName, long? RemainingSeconds);
+/// <param name="Language">The language of the stock words — the setting console's (D-87); empty or unknown is English.</param>
+public sealed record OverlayContent(string Message, string PcName, long? RemainingSeconds, string Language = "");
 
 /// <summary>What the exam strip shows (M6 portion 4, D-75): the teacher's line, the countdown when there is a timer, and a passing notice.</summary>
-public sealed record ExamStripContent(string Message, long? RemainingSeconds, string Notice)
+/// <param name="Language">The language of the stock words — the setting console's (D-87); a notice arrives already in it.</param>
+public sealed record ExamStripContent(string Message, long? RemainingSeconds, string Notice, string Language = "")
 {
     /// <summary>Nothing to show: no timer, no message, no notice — the strip is hidden (owner decision 2026-10-23).</summary>
     public bool IsEmpty => RemainingSeconds is null && Message.Length == 0 && Notice.Length == 0;
@@ -62,11 +65,11 @@ public static class OverlayText
     private static readonly SKColor Accent = new(0xF0, 0xB4, 0x2C);
 
     /// <summary>The words for the countdown line, so a test can prove they change at a second boundary.</summary>
-    public static string CountdownText(long? remainingSeconds)
+    public static string CountdownText(long? remainingSeconds, string language = "")
     {
         if (remainingSeconds is null)
         {
-            return Text("CountdownUntilLifted");
+            return Text(language, "CountdownUntilLifted");
         }
 
         // TimeSpan.FromSeconds overflows past ~2.9e11 s; a limit that far off is "until lifted" in every practical sense.
@@ -75,7 +78,7 @@ public static class OverlayText
         var clock = remaining.TotalHours >= 1
             ? string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}", (long)remaining.TotalHours, remaining.Minutes, remaining.Seconds)
             : string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}", remaining.Minutes, remaining.Seconds);
-        return Text("CountdownFormat", clock);
+        return Text(language, "CountdownFormat", clock);
     }
 
     /// <summary>Seconds left at <paramref name="nowUnix"/> for a lock with these limits; <c>null</c> when it never ends on its own.</summary>
@@ -171,10 +174,10 @@ public static class OverlayText
             var floor = bottom - smallSize * 1.6f;
 
             var y = height * 0.28f;
-            y = DrawCentered(canvas, paint, Text("LockTitle"), titleSize, Foreground, width, y, width - 2 * margin, floor);
+            y = DrawCentered(canvas, paint, Text(content.Language, "LockTitle"), titleSize, Foreground, width, y, width - 2 * margin, floor);
 
             var clamped = ClampMessage(content.Message);
-            var message = clamped.Length > 0 ? clamped : Text("LockDefaultMessage");
+            var message = clamped.Length > 0 ? clamped : Text(content.Language, "LockDefaultMessage");
             y += messageSize * 0.8f;
 
             // The countdown keeps its place: the message may take the room above it only.
@@ -183,9 +186,9 @@ public static class OverlayText
             y = DrawCentered(canvas, paint, message, messageSize, Foreground, width, y, width - 2 * margin, floor - countdownRoom);
 
             y += smallSize * 1.6f;
-            DrawCentered(canvas, paint, CountdownText(content.RemainingSeconds), countdownSize, Accent, width, y, width - 2 * margin, floor);
+            DrawCentered(canvas, paint, CountdownText(content.RemainingSeconds, content.Language), countdownSize, Accent, width, y, width - 2 * margin, floor);
 
-            DrawLeft(canvas, paint, Text("PcNameFormat", content.PcName), smallSize, Muted, margin, bottom);
+            DrawLeft(canvas, paint, Text(content.Language, "PcNameFormat", content.PcName), smallSize, Muted, margin, bottom);
 
             return new OverlayBitmap(bitmap);
         }
@@ -198,17 +201,17 @@ public static class OverlayText
 
     // ------------------------------------------------------------------ the exam strip (portion 4)
 
-    /// <summary>The lock's message when an exam's timer runs out (owner decision 2026-10-23, D-75).</summary>
-    public static string TimeUpMessage => Text("ExamTimeUpMessage");
+    /// <summary>The lock's message when an exam's timer runs out (owner decision 2026-10-23, D-75), in the exam's language.</summary>
+    public static string TimeUpMessage(string language) => Text(language, "ExamTimeUpMessage");
 
     /// <summary>The strip's passing line after the whitelist closed <paramref name="program"/>.</summary>
-    public static string NotAllowedText(string program) => Text("ExamNotAllowedFormat", program);
+    public static string NotAllowedText(string program, string language) => Text(language, "ExamNotAllowedFormat", program);
 
     /// <summary>The strip's warning before the opening sweep closes <paramref name="programs"/>.</summary>
-    public static string ClosingText(IEnumerable<string> programs, int seconds) => Text("ExamClosingFormat", string.Join(", ", programs.Distinct(StringComparer.OrdinalIgnoreCase)), seconds);
+    public static string ClosingText(IEnumerable<string> programs, int seconds, string language) => Text(language, "ExamClosingFormat", string.Join(", ", programs.Distinct(StringComparer.OrdinalIgnoreCase)), seconds);
 
     /// <summary>The strip's countdown: <c>42:17 left</c>, or empty when the exam has no timer.</summary>
-    public static string StripRemainingText(long? remainingSeconds)
+    public static string StripRemainingText(long? remainingSeconds, string language = "")
     {
         if (remainingSeconds is null)
         {
@@ -220,7 +223,7 @@ public static class OverlayText
         var clock = remaining.TotalHours >= 1
             ? string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}", (long)remaining.TotalHours, remaining.Minutes, remaining.Seconds)
             : string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}", remaining.Minutes, remaining.Seconds);
-        return Text("ExamRemainingFormat", clock);
+        return Text(language, "ExamRemainingFormat", clock);
     }
 
     /// <summary>
@@ -241,9 +244,9 @@ public static class OverlayText
             try
             {
                 var (size, margin) = (height * 0.46f, height * 0.45f);
-                var remaining = StripRemainingText(content.RemainingSeconds);
+                var remaining = StripRemainingText(content.RemainingSeconds, content.Language);
                 var line = content.Notice.Length > 0 ? content.Notice : ClampMessage(content.Message).Replace('\n', ' ');
-                var needed = margin + Measure(Text("ExamTitle"), size) + margin + (line.Length > 0 ? Measure(line, size) : 0f)
+                var needed = margin + Measure(Text(content.Language, "ExamTitle"), size) + margin + (line.Length > 0 ? Measure(line, size) : 0f)
                     + (remaining.Length > 0 ? margin + Measure(remaining, size) : 0f) + margin;
                 // In steps of two heights, so a countdown's changing digits do not jiggle the strip every second.
                 var step = height * 2;
@@ -281,14 +284,14 @@ public static class OverlayText
             var margin = height * 0.45f;
             var baseline = height * 0.5f + size * 0.36f;
 
-            var remaining = StripRemainingText(content.RemainingSeconds);
+            var remaining = StripRemainingText(content.RemainingSeconds, content.Language);
             var remainingWidth = remaining.Length > 0 ? Measure(remaining, size) : 0f;
             if (remaining.Length > 0)
             {
                 DrawRight(canvas, paint, remaining, size, Accent, width - margin, baseline);
             }
 
-            var title = Text("ExamTitle");
+            var title = Text(content.Language, "ExamTitle");
             DrawLeft(canvas, paint, title, size, Muted, margin, baseline);
             var x = margin + Measure(title, size) + margin;
             var room = width - margin - x - (remainingWidth > 0 ? remainingWidth + margin : 0);
@@ -454,12 +457,13 @@ public static class OverlayText
         }
     }
 
-    private static string Text(string name, params object?[] arguments)
+    /// <summary>A stock word in <paramref name="language"/> — never the process's culture: the helper and the service run as whoever Windows chose, and the words are the setting console's (D-87).</summary>
+    private static string Text(string language, string name, params object?[] arguments)
     {
         string? template;
         try
         {
-            template = Resources.GetString(name, CultureInfo.CurrentUICulture);
+            template = Resources.GetString(name, ProductLanguages.Of(language).Culture);
         }
         catch (MissingManifestResourceException)
         {

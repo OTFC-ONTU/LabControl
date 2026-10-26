@@ -72,6 +72,7 @@ internal sealed class WindowsMachineState : IMachineState
             SessionId = session.SessionId,
             UntilSeconds = session.UntilUnix > 0 ? Math.Max(1, session.UntilUnix - now) : 0,
             HardLimitSeconds = Math.Max(1, session.HardLimitUnix - now),
+            Language = session.Language ?? string.Empty,
         };
 
         if (!_sendToHelper(new ServiceMessage { Overlay = overlay }))

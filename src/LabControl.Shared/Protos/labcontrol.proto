@@ -160,6 +160,12 @@ message Welcome {
     TEACHER                    = 2;
   }
   ConsoleAccess console_access = 6;
+
+  // M7 portion 2 (D-87): the console's interface language -- "uk", "en" or "ru". The PC writes
+  // the words it sends on this link (event messages, job results, refusals) in it, and keeps it
+  // for the words it sends before the next Welcome. Empty or unknown = English. Agents that do
+  // not know the field ignore it and keep writing English.
+  string language = 7;
 }
 
 message Heartbeat { int64 sent_at_unix = 1; }
@@ -332,6 +338,7 @@ message Overlay {
   string session_id         = 3;  // M6: one per lock, so a re-sent LOCK is the same lock
   int64  until_seconds      = 4;  // M6: how long from arrival, a duration -- the agent stamps it on ITS clock (no NTP in the lab); 0 = until lifted; negative = refused
   int64  hard_limit_seconds = 5;  // M6: a proposed duration; the agent clamps it to LockHardLimit on its own clock and reports what it holds; <= 0 = the ceiling
+  string language           = 6;  // M7 (D-87): LOCK only -- the language of the stock words on the lock screen ("uk", "en", "ru"), the setting console's; kept with the lock and passed down the pipe; empty or unknown = English
 }
 
 // Agent -> console (and helper -> service): what the PC is actually showing, sent on every
@@ -377,6 +384,7 @@ message ExamMode {
   int64  hard_limit_seconds         = 11; // a proposed duration; the agent clamps it to ExamHardLimit on its own clock; <= 0 = the ceiling
   bool   restrict_programs          = 12; // the allowed-programs switch; off = anything runs, whatever allowed_programs says
   string preset_name                = 13; // for the tile badge
+  string language                   = 14; // M7 (D-87): the language of the strip's stock words, its notices and the "time is up" lock ("uk", "en", "ru"), the setting console's; empty or unknown = English
 }
 
 // Agent -> console: the exam the PC enforces now, sent on every change, after every Welcome,
@@ -558,6 +566,7 @@ message ServiceMessage {
     VideoFrame   broadcast_frame = 5;  // M6 portion 2: the teacher's screen, as PullBroadcast delivered it (D-71)
     ExamStrip    exam_strip    = 6;  // M6 portion 4: the strip at the top of the student's screen; re-asserted to every fresh helper
     ClosePrograms close_programs = 7;  // M6 portion 4: ask these windows to close, before the service ends what is left (D-75)
+    string       language      = 8;  // M7 (D-87): the language the helper writes its events in -- the PC's (Welcome.language); sent on connect and after every Welcome
   }
 }
 
@@ -569,6 +578,7 @@ message ExamStrip {
   int64  until_seconds = 3;  // the countdown, a duration stamped on arrival; 0 = no timer
   string notice        = 4;  // a passing line -- "notepad.exe is not allowed during the exam" -- shown for ExamNoticeDuration; empty = none
   string session_id    = 5;
+  string language      = 6;  // M7 (D-87): the exam's language, for the strip's stock words; empty or unknown = English
 }
 
 // Service -> helper (M6 portion 4): post WM_CLOSE to the top-level windows of these processes,

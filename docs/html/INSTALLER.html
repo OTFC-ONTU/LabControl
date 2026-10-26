@@ -459,8 +459,8 @@ supplied during repair. This is a document seed, not a full golden Windows profi
                         enrollment_codes: [&quot;...&quot;, ...],    // single-use, one per PC + spares
                         used_enrollment_codes: [&quot;...&quot;],    // moved here by Setup as it spends them
                         written_by, written_at }           // which console, when
-   INSTALL.txt        human instructions (English today; generated in the console's
-                      selected Ukrainian, English or Russian language in M7, D-67)
+   INSTALL.txt        human instructions, in the language of the console that
+                      wrote the stick (Ukrainian, English or Russian; M7, D-86)
 </code></pre>
 <p><strong>The stick carries no secret.</strong> <code>ca.crt</code> is public by nature and the enrollment codes
 are single-use: whoever finds the stick can, at worst, enrol a bogus machine, which the
@@ -481,6 +481,15 @@ stick therefore marks the backup stale until it is exported again.</p>
 sequentially, logged to <code>C:\ProgramData\LabControl\setup.log</code> and echoed to the
 console window. <code>Check()</code> returning &quot;already done&quot; skips <code>Apply()</code> — this is what
 makes re-runs safe. <code>--dry-run</code> prints the plan only; <code>--number 7</code> skips the prompt.</p>
+<p><strong>Language (M7 portion 2, <code>D-87</code>).</strong> Setup and removal speak the <strong>Windows display language</strong>
+of the administrator running them when it is Ukrainian, English or Russian (or a regional
+variant, <code>uk-UA</code> → Ukrainian), English otherwise — the console's rule with no stored choice,
+since the stick carries no preference. The dialogs, the plan, the warnings, the refusals and
+the closing lines are translated (<code>SetupStrings.resx</code> and its <code>.uk</code> / <code>.ru</code> siblings). The
+step trace — <code>[AlreadyDone] Firewall Discovery</code>, <code>[Conflict] PC name: …</code> — stays English in
+the window as in <code>setup.log</code>: the step names are diagnostic identifiers, and the detail after
+the colon is often Windows' own error text. To check a language, switch the Windows display
+language of the administrator account and sign in again.</p>
 <ol>
 <li><strong>Preflight</strong> — is admin (else self-elevate via <code>runas</code>), Windows 10 1809+ x64,
 free disk ≥ 2 GB, stop existing <code>LabControl</code> service if present.</li>
@@ -988,7 +997,7 @@ and none of it may be reported as passing until it is run.</p>
 <a href="https://learn.microsoft.com/en-us/dotnet/core/install/linux-scripted-manual#dependencies">.NET Linux prerequisites</a>.</p>
 
 </article>
-<footer>Generated 2026-10-26 16:09 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 16:38 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#optional-student-account-planned-for-m4-portion-3-d-40">Optional student account (planned for M4 portion 3, D-40)</a></li><li class="lvl3"><a href="#protected-settings-journal-core-d-47">Protected settings journal core (D-47)</a></li><li class="lvl3"><a href="#first-machine-registry-adapters-d-48">First machine registry adapters (D-48)</a></li><li class="lvl3"><a href="#ac-power-plan-timeouts-d-49">AC power-plan timeouts (D-49)</a></li><li class="lvl3"><a href="#windows-update-active-hours-d-50">Windows Update active hours (D-50)</a></li><li class="lvl3"><a href="#lsa-sign-in-secret-d-51">LSA sign-in secret (D-51)</a></li><li class="lvl2"><a href="#executable-integration-under-verification-d-52">Executable integration under verification (D-52)</a></li><li class="lvl2"><a href="#building-the-usb-payload-on-the-console">Building the USB payload (on the console)</a></li><li class="lvl2"><a href="#what-setup.exe-does-in-order">What Setup.exe does, in order</a></li><li class="lvl2"><a href="#uninstall-repair">Uninstall / repair</a></li><li class="lvl2"><a href="#things-the-installer-cannot-do">Things the installer cannot do</a></li><li class="lvl2"><a href="#testing-the-installer-without-a-room-full-of-real-pcs">Testing the installer without a room full of real PCs</a></li><li class="lvl2"><a href="#teacher-console-installation-m5-portion-7-d-59">Teacher console installation (M5 portion 7, D-59)</a></li><li class="lvl3"><a href="#building-the-packages">Building the packages</a></li><li class="lvl3"><a href="#windows-one-self-contained-setup-executable">Windows: one self-contained Setup executable</a></li><li class="lvl3"><a href="#lan-access-the-consoles-banner">LAN access: the console&#39;s banner</a></li><li class="lvl3"><a href="#macos-an-app-bundle-in-a-dmg">macOS: an app bundle in a DMG</a></li><li class="lvl3"><a href="#linux-a-per-user-tarball">Linux: a per-user tarball</a></li><li class="lvl3"><a href="#what-is-verified-and-what-is-not">What is verified, and what is not</a></li></ul></nav>
 </div>

@@ -364,6 +364,15 @@ and <code>*.ru.resx</code> beside every product <code>.resx</code>. A new key go
 Owner decisions: language applies on restart, the student sees the console's language
 (portion 2 carries it to the PC), &quot;lab&quot; = лабораторія / лаборатория. Seven portions in ROADMAP
 M7. Tests: 1032 Shared + 316 Console. Next: the owner reads the translations; portion 2.</li>
+<li><strong>M7 portion 2 is built (2026-10-26, <code>D-87</code>), on the Mac; not yet run on Windows</strong>: the console's
+language reaches the PC. <code>Welcome.language</code> sets <code>Shared/Localization/PcLanguage</code> (kept in
+<code>agent.json</code>), in which the PC writes events, job results and refusals (<code>PolicyStrings</code>, the new
+<code>PcStrings</code> via <code>PcText.Get</code>; the helper learns it from <code>ServiceMessage.language</code>). Each lock and
+exam carries its own <code>language</code> (kept in <code>policy.json</code>, passed down as <code>ExamStrip.language</code>): the
+student's words are in the setting console's language and <code>OverlayText</code> never reads the process
+culture. Setup/removal follow the Windows display language; the step trace stays English.
+A test that changes <code>PcLanguage</code> runs in the language collection and restores English.
+Tests: 1050 Shared + 317 Console. Next: the VM run in all three languages; portion 3.</li>
 <li><strong>M6 in the physical lab (2026-10-26, build <code>1.0.0+68d0ae5</code>)</strong> passed sections 0–6 of the checklist.
 Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (<code>D-75</code>
 item 12), ends asked while a PC was off are sent on its return with the same session (<code>D-79</code> item 8),
@@ -529,7 +538,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-26 16:09 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 16:38 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

@@ -25,6 +25,13 @@ public abstract class PolicySession
     /// <summary>The agent's own ceiling, re-clamped on every re-apply (D-69 step 5).</summary>
     public long HardLimitUnix { get; set; }
 
+    /// <summary>
+    /// The language of the stock words this session puts on the student's screen — the setting
+    /// console's, as a product code (M7, D-87). Optional: a file from an older build has none, and
+    /// none is English.
+    /// </summary>
+    public string? Language { get; set; }
+
     /// <summary>Still within its own limits: not past <see cref="UntilUnix"/> (if set) and not past <see cref="HardLimitUnix"/>.</summary>
     public bool IsStillValid(long nowUnix) => (UntilUnix <= 0 || nowUnix < UntilUnix) && nowUnix < HardLimitUnix;
 

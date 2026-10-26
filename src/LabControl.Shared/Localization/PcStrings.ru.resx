@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="JobCannotRun" xml:space="preserve"><value>Это задание не может выполниться: {0}.</value></data>
+  <data name="JobAgentFailed" xml:space="preserve"><value>Агенту не удалось выполнить это задание: {0}</value></data>
+  <data name="JobNotInThisBuild" xml:space="preserve"><value>Эта сборка агента ({0}) ещё не выполняет задания {1}.</value></data>
+  <data name="NobodyLoggedOnScript" xml:space="preserve"><value>Скрипт должен был выполниться от имени вошедшего пользователя, но сейчас на этом ПК никто не вошёл.</value></data>
+  <data name="ExamBlocksReset" xml:space="preserve"><value>На этом ПК идёт экзамен; завершите его перед сбросом профиля, иначе работа будет потеряна.</value></data>
+  <data name="RefusedTeacherAccess" xml:space="preserve"><value>отказано: у этой консоли доступ преподавателя</value></data>
+  <data name="RefusedUnknownAccess" xml:space="preserve"><value>отказано: сертификат этой консоли не содержит известного уровня доступа</value></data>
+  <data name="JobRefusedByRole" xml:space="preserve"><value>Задание {0} {1} — {2}; отправить его может только консоль администратора.</value></data>
+  <data name="RefusedOtherInstance" xml:space="preserve"><value>отказано: это задание отправила другая консоль; его результат хранится для неё</value></data>
+  <data name="JobOtherInstance" xml:space="preserve"><value>Задание {0} отправила другая консоль; его результат хранится для неё.</value></data>
+  <data name="JobResultsDropped" xml:space="preserve"><value>Этот ПК хранит не более {0} результатов заданий для консолей, которые не вернулись; {1} самых старых отброшено, их больше нельзя показать.</value></data>
+  <data name="InstanceMismatch" xml:space="preserve"><value>Сертификат консоли называет экземпляр {0}, а её Welcome — {1}; этот ПК использует сертификат.</value></data>
+  <data name="ConsoleRevokedCertificate" xml:space="preserve"><value>сертификат подключённой консоли {0} отозван</value></data>
+  <data name="ConsoleRevokedAccess" xml:space="preserve"><value>доступ подключённой консоли ({0}) отозван</value></data>
+  <data name="LeavingConsole" xml:space="preserve"><value>Отключение от {0}: {1}.</value></data>
+  <data name="UpdateOperationRunning" xml:space="preserve"><value>Выполняется другая операция обновления.</value></data>
+  <data name="UpdateWrongLayout" xml:space="preserve"><value>Этот агент запущен из {0}, а не из {1}\&lt;version&gt;\; сначала установите его через dev-install.ps1 (или Setup), затем отправляйте ему сборки.</value></data>
+  <data name="UpdateUnknownPath" xml:space="preserve"><value>неизвестного пути</value></data>
+  <data name="UpdateRefusedEvent" xml:space="preserve"><value>Обновление не прошло проверку подписи или совместимости. Текущая версия сохранена; см. результат задания.</value></data>
+  <data name="UpdateRefused" xml:space="preserve"><value>Обновление отклонено: {0}.</value></data>
+  <data name="UpdatePrivilegedBusy" xml:space="preserve"><value>Выполняется установка, удаление или другая привилегированная операция.</value></data>
+  <data name="UpdateOnProbation" xml:space="preserve"><value>Работает {0} на испытании до {1}; внешний откат подготовлен.</value></data>
+  <data name="UpdateRunningNow" xml:space="preserve"><value>Сейчас работает {0}.</value></data>
+  <data name="UpdateRunningNowWas" xml:space="preserve"><value>Сейчас работает {0} (было {1}; app\previous всё ещё указывает на неё).</value></data>
+  <data name="UpdatePruned" xml:space="preserve"><value> Удалены каталоги старых версий: {0}.</value></data>
+  <data name="UpdateStillOnProbation" xml:space="preserve"><value>Другое обновление ещё на испытании или ожидает отката.</value></data>
+  <data name="UpdateSameVersion" xml:space="preserve"><value>Эту версию этот ПК уже запускает или откатился бы к ней; используйте другую версию сборки, чтобы сохранить файлы восстановления.</value></data>
+  <data name="UpdateSizeMismatch" xml:space="preserve"><value>{0} занимает {1} байт, а в манифесте — {2}; ничего не установлено.</value></data>
+  <data name="UpdatePulled" xml:space="preserve"><value>получено {0} ({1})</value></data>
+  <data name="UpdateNothingInstalled" xml:space="preserve"><value>{0} Ничего не установлено.</value></data>
+  <data name="UpdateWriteFailed" xml:space="preserve"><value>Не удалось записать обновление в {0}: {1}</value></data>
+  <data name="UpdateNotInstalled" xml:space="preserve"><value>Новый {0} не установлен: {1}</value></data>
+  <data name="UpdateVersionMismatch" xml:space="preserve"><value>Новый {0} сообщает версию {1}, а пакет называется {2}; исправьте версию в диалоге отправки. Ничего не установлено.</value></data>
+  <data name="UpdateRunsHere" xml:space="preserve"><value>{0} {1} запускается на этом ПК</value></data>
+  <data name="UpdatePlaceFailed" xml:space="preserve"><value>Не удалось разместить новую версию в {0}: {1}</value></data>
+  <data name="UpdateInstalledNotService" xml:space="preserve"><value>Установлено в {0}. Этот агент работает не как служба, поэтому ничего не перенаправлено и не перезапущено; запустите новую версию сами.</value></data>
+  <data name="UpdateRecoveryFailed" xml:space="preserve"><value>Не удалось подготовить внешнее восстановление обновления: {0}. Текущая версия сохранена.</value></data>
+  <data name="UpdatePointersFailed" xml:space="preserve"><value>Не удалось записать app\current и app\previous: {0}. Ничего не изменено.</value></data>
+  <data name="UpdateRepointFailed" xml:space="preserve"><value>Не удалось перенаправить службу: {0}. Ничего не изменено.</value></data>
+  <data name="UpdateRestarting" xml:space="preserve"><value>установлено в app\{0}; служба перенаправлена, перезапуск</value></data>
+  <data name="UpdateSpawnFailed" xml:space="preserve"><value>{0}. Служба возвращена к {1}; ничего не изменено.</value></data>
+  <data name="UpdateRestartTimeout" xml:space="preserve"><value>Служба не перезапущена за {0} с. Она возвращена к {1}, а новая версия удалена; посмотрите журнал агента на ПК.</value></data>
+  <data name="PreflightWontStart" xml:space="preserve"><value>он не запускается на этом ПК ({0}); сборка не для той архитектуры?</value></data>
+  <data name="PreflightSilent" xml:space="preserve"><value>на запрос версии он ничего не вывел за {0} с</value></data>
+  <data name="PreflightNothing" xml:space="preserve"><value>ничего</value></data>
+  <data name="PreflightExitCode" xml:space="preserve"><value>`{0}` завершился с кодом {1} и вывел {2}</value></data>
+  <data name="UpdateFilesLocked" xml:space="preserve"><value>ожидание освобождения новых файлов ({0}; проверка антивирусом?)</value></data>
+  <data name="UpdateHistoryUnavailable" xml:space="preserve"><value>История обновлений временно недоступна; агент попробует ещё раз.</value></data>
+  <data name="UpdateProbationFailed" xml:space="preserve"><value>Обновление не завершило испытание с подключением; восстановлена предыдущая версия.</value></data>
+  <data name="UpdateProbationExtended" xml:space="preserve"><value>ПК перезагрузился во время испытания {0}; испытание начинается заново и закончится до {1} UTC.</value></data>
+  <data name="UpdateStable" xml:space="preserve"><value>Текущая версия стабильна.</value></data>
+  <data name="PowerCannotReboot" xml:space="preserve"><value>Невозможно перезагрузить: {0}</value></data>
+  <data name="PowerCannotShutdown" xml:space="preserve"><value>Невозможно выключить: {0}</value></data>
+  <data name="RebootDidNotHappen" xml:space="preserve"><value>Перезагрузка не произошла: {0}</value></data>
+  <data name="ShutdownDidNotHappen" xml:space="preserve"><value>Выключение не произошло: {0}</value></data>
+  <data name="PowerRebooting" xml:space="preserve"><value>Перезагрузка через {0} с (принудительно; программы закрываются без сохранения).</value></data>
+  <data name="PowerShuttingDown" xml:space="preserve"><value>Выключение через {0} с (принудительно; программы закрываются без сохранения).</value></data>
+  <data name="LogoffNobody" xml:space="preserve"><value>На этом ПК никто не вошёл; нет сеанса для выхода.</value></data>
+  <data name="LogoffFailed" xml:space="preserve"><value>Не удалось завершить сеанс {0}: {1}</value></data>
+  <data name="LogoffStarted" xml:space="preserve"><value>Завершение сеанса {0} (сеанс {1}); помощник сеанса перейдёт в новый сеанс.</value></data>
+  <data name="ShutdownNotice" xml:space="preserve"><value>LabControl: преподаватель выключает этот ПК.</value></data>
+  <data name="RebootNotice" xml:space="preserve"><value>LabControl: преподаватель перезагружает этот ПК.</value></data>
+  <data name="InventoryFailed" xml:space="preserve"><value>Не удалось собрать сведения о ПК: {0}</value></data>
+  <data name="ScriptWriteFailed" xml:space="preserve"><value>Не удалось записать скрипт в {0}: {1}</value></data>
+  <data name="ScriptStartInSessionFailed" xml:space="preserve"><value>Не удалось запустить скрипт в сеансе {0} от имени пользователя: {1}</value></data>
+  <data name="ScriptStartFailed" xml:space="preserve"><value>Не удалось запустить {0}: {1}</value></data>
+  <data name="ScriptKilled" xml:space="preserve"><value>Остановлено после {0} с без вывода (получено строк: {1}, всего {2} с). Скрипт и всё, что он запустил, завершены.</value></data>
+  <data name="ScriptAgentStopped" xml:space="preserve"><value>Агент остановлен во время выполнения скрипта; скрипт завершён.</value></data>
+  <data name="ScriptExited" xml:space="preserve"><value>код {0} через {1} с, строк: {2}</value></data>
+  <data name="ResetNoStudentAccount" xml:space="preserve"><value>Этот ПК установлен без учётной записи студента LabControl, поэтому его профили никогда не сбрасываются.</value></data>
+  <data name="ResetFailed" xml:space="preserve"><value>Не удалось сбросить профиль: {0}</value></data>
+  <data name="ResetFolderProgress" xml:space="preserve"><value>{0}: удалено {1}, осталось {2}.</value></data>
+  <data name="ResetEmptied" xml:space="preserve"><value>Очищены Рабочий стол, Документы и Загрузки: удалено элементов — {0}.</value></data>
+  <data name="ResetLeft" xml:space="preserve"><value> {0} не удалось удалить (открыто в программе?); завершите сеанс студента и сбросьте ещё раз.</value></data>
+  <data name="ResetCannotReboot" xml:space="preserve"><value>Невозможно перезагрузить после сброса: {0}</value></data>
+  <data name="ResetLogoffFailed" xml:space="preserve"><value>Не удалось завершить сеанс студента: {0}</value></data>
+  <data name="ResetLoggingOff" xml:space="preserve"><value>Завершение сеанса студента.</value></data>
+  <data name="ResetRebootFailed" xml:space="preserve"><value>Перезагрузка после сброса профиля не произошла: {0}</value></data>
+  <data name="ResetDeleted" xml:space="preserve"><value>Профиль студента удалён; перезагрузка через {0} с в новый.</value></data>
+  <data name="ResetStillHeld" xml:space="preserve"><value>Windows ещё удерживала профиль студента ({0}); перезагрузка всё равно — сбросьте ещё раз, когда ПК вернётся.</value></data>
+  <data name="CollectWaiting" xml:space="preserve"><value>Ожидание предыдущего сбора с этого ПК.</value></data>
+  <data name="CollectMissingFolder" xml:space="preserve"><value>{0} нет на этом ПК: нечего собирать.</value></data>
+  <data name="CollectPacking" xml:space="preserve"><value>Упаковка {0}.</value></data>
+  <data name="CollectSending" xml:space="preserve"><value>Отправка файлов: {0}, упаковано байт: {1}.</value></data>
+  <data name="CollectStillSending" xml:space="preserve"><value>Собранные работы ещё отправляются.</value></data>
+  <data name="CollectFailed" xml:space="preserve"><value>Не удалось собрать {0}: {1}</value></data>
+  <data name="CollectCleanupFailed" xml:space="preserve"><value>Не удалось удалить временную копию собранных работ.</value></data>
+  <data name="CollectDone" xml:space="preserve"><value>Собрано файлов: {0}, байт: {1}.</value></data>
+  <data name="CollectInUse" xml:space="preserve"><value> Не удалось прочитать (открыто в программе?): {0}.</value></data>
+  <data name="CollectLinks" xml:space="preserve"><value> Пропущено ссылок: {0}.</value></data>
+  <data name="CollectSkipped" xml:space="preserve"><value> Пропущено (имя или глубина, которую консоль не может сохранить): {0}.</value></data>
+  <data name="HandoutWaiting" xml:space="preserve"><value>Ожидание предыдущей доставки материалов на этот ПК.</value></data>
+  <data name="HandoutReceiving" xml:space="preserve"><value>Получение {0}: {1} байт.</value></data>
+  <data name="HandoutVerified" xml:space="preserve"><value>Доставлено {0}: проверено байт — {1}.</value></data>
+  <data name="HandoutNotSignedIn" xml:space="preserve"><value>Доставлено {0}. Не открыто, так как студент не вошёл.</value></data>
+  <data name="HandoutOpenFailed" xml:space="preserve"><value>Доставлено {0}, но Windows не смогла его открыть: {1}</value></data>
+  <data name="HandoutOpening" xml:space="preserve"><value>Доставлено {0}; запрошено открытие в сеансе студента.</value></data>
+  <data name="HandoutDelivered" xml:space="preserve"><value>Доставлено {0} в папку Materials студента.</value></data>
+  <data name="HandoutFailed" xml:space="preserve"><value>Не удалось доставить {0}: {1}</value></data>
+  <data name="HandoutCleanupFailed" xml:space="preserve"><value>Не удалось удалить временную копию материала.</value></data>
+  <data name="SasFailed" xml:space="preserve"><value>Не удалось отправить Ctrl+Alt+Del: {0}</value></data>
+  <data name="HelperExitedCode" xml:space="preserve"><value>session.exe завершился с кодом {0}</value></data>
+  <data name="HelperSilent" xml:space="preserve"><value>session.exe молчит уже {0} с</value></data>
+  <data name="HelperNoConnect" xml:space="preserve"><value>session.exe не подключился за {0} с</value></data>
+  <data name="HelperCrashLoop" xml:space="preserve"><value>session.exe постоянно аварийно завершается ({0} раз за {1} с; последнее: {2}); повтор каждые {3} с. Экран, управление и блокировка на этом ПК не будут работать, пока он не стабилизируется.</value></data>
+  <data name="HelperRestarting" xml:space="preserve"><value>{0}; перезапуск.</value></data>
+  <data name="HelperSpawnFailed" xml:space="preserve"><value>Не удалось запустить {0} в сеансе {1}: {2}</value></data>
+  <data name="HelperPipeUnavailable" xml:space="preserve"><value>Невозможно открыть канал \\.\pipe\{0} для помощника сеанса: {1}. Имя занято другим процессом (второй экземпляр агента?); помощник не будет работать, пока его не освободят.</value></data>
+  <data name="HelperReady" xml:space="preserve"><value>Помощник сеанса {0} работает в сеансе {1} ({2}×{3}, рабочий стол {4}).</value></data>
+  <data name="HelperMissing" xml:space="preserve"><value>{0} отсутствует рядом с агентом ({1}); экран, управление и блокировка на этом ПК не будут работать. Переустановите его.</value></data>
+  <data name="DataDirMissing" xml:space="preserve"><value>{0} не существует.</value></data>
+  <data name="DataDirReadable" xml:space="preserve"><value>{0} разрешает '{1}' читать его{2}; закрытый ключ и конфигурацию должны читать только SYSTEM и Administrators. Запустите Setup снова или: {3}</value></data>
+  <data name="DataDirInherited" xml:space="preserve"><value> (унаследовано от родительской папки)</value></data>
+  <data name="DataDirNoKey" xml:space="preserve"><value>{0} отсутствует; у этого ПК нет закрытого ключа, и он не может подключиться. Запустите Setup снова.</value></data>
+  <data name="DataDirUnverified" xml:space="preserve"><value>Не удалось проверить разрешения на {0}: {1}</value></data>
+  <data name="CaptureFailed" xml:space="preserve"><value>Захват экрана остановился: {0}</value></data>
+  <data name="CaptureRecovered" xml:space="preserve"><value>Захват экрана восстановлен ({0}).</value></data>
+  <data name="CaptureProblem" xml:space="preserve"><value>Невозможно захватить экран: {0}</value></data>
+  <data name="SimSas" xml:space="preserve"><value>Ctrl+Alt+Del отправлено в интерактивный сеанс (симуляция).</value></data>
+  <data name="SimRefuseAll" xml:space="preserve"><value>Симулированная ошибка: этот ПК отклоняет все задания.</value></data>
+  <data name="SimShutdown" xml:space="preserve"><value>Выключение (симуляция; вернётся через 30 с, как будто кто-то нажал кнопку).</value></data>
+  <data name="SimReboot" xml:space="preserve"><value>Перезагрузка (симуляция).</value></data>
+  <data name="SimLogoff" xml:space="preserve"><value>Сеанс студента завершён (симуляция; автовход вернёт его через 5 с).</value></data>
+  <data name="SimJobDone" xml:space="preserve"><value>{0} выполнено (симуляция).</value></data>
+  <data name="SimSending" xml:space="preserve"><value>Отправка файлов: {0}.</value></data>
+  <data name="SimCollected" xml:space="preserve"><value>Собрано файлов: {0}, байт: {1} (симулированный ПК).</value></data>
+  <data name="SimEmptied" xml:space="preserve"><value>Очищены Рабочий стол, Документы и Загрузки: удалено элементов — {0} (симулированный ПК).</value></data>
+  <data name="SimProfileDeleteFailed" xml:space="preserve"><value>Не удалось удалить симулированный профиль: {0}</value></data>
+  <data name="SimProfileDeleted" xml:space="preserve"><value>Профиль студента удалён; перезагрузка в новый (симуляция).</value></data>
+  <data name="SimHandoutOpening" xml:space="preserve"><value>Доставлено {0}; открывается в сеансе студента (симуляция).</value></data>
+  <data name="SimHandoutNotOpened" xml:space="preserve"><value>Доставлено {0}; не открыто (симулированный ПК).</value></data>
+  <data name="SimRunningNow" xml:space="preserve"><value>Сейчас работает {0}. (симуляция)</value></data>
+  <data name="SimRunningNowWas" xml:space="preserve"><value>Сейчас работает {0} (было {1}; app\previous всё ещё указывает на неё). (симуляция)</value></data>
+  <data name="SimRestarting" xml:space="preserve"><value>установлено в app\{0}; служба перенаправлена, перезапуск (симуляция)</value></data>
+  <data name="SimScriptKilled" xml:space="preserve"><value>Остановлено после {0} с без вывода (получено строк: {1}, всего {2} с). Скрипт и всё, что он запустил, завершены. (симуляция)</value></data>
+  <data name="SimScriptExited" xml:space="preserve"><value>код {0} через {1} с, строк: {2} (симуляция)</value></data>
+  <data name="InputNotReaching" xml:space="preserve"><value>Управление с консоли не доходит до рабочего стола: {0}</value></data>
+  <data name="InputRecovered" xml:space="preserve"><value>Управление с консоли снова доходит до рабочего стола.</value></data>
+  <data name="CaptureFallback" xml:space="preserve"><value>Дублирование рабочего стола на этом ПК недоступно ({0}); экран снимается через GDI, а это сильнее нагружает процессор.</value></data>
+  <data name="HelperNotInThisBuild" xml:space="preserve"><value>Помощник сеанса {0} ещё не обрабатывает {1}.</value></data>
+</root>

@@ -257,7 +257,7 @@ internal sealed class WindowsExamControl : IDisposable
                 // background helpers they never opened are not named.
                 lock (_lock)
                 {
-                    _notice = OverlayText.ClosingText(warned.Select(p => p.Name), (int)Defaults.ExamSweepGrace.TotalSeconds);
+                    _notice = OverlayText.ClosingText(warned.Select(p => p.Name), (int)Defaults.ExamSweepGrace.TotalSeconds, exam.Language ?? string.Empty);
                     _noticeUntil = DateTimeOffset.UtcNow + Defaults.ExamNoticeDuration;
                     SendStripLocked();
                 }
@@ -310,7 +310,7 @@ internal sealed class WindowsExamControl : IDisposable
                     _terminatedVersion++;
                     if (!ProgramWhitelist.IsQuiet(process.Name))
                     {
-                        _notice = OverlayText.NotAllowedText(process.Name);
+                        _notice = OverlayText.NotAllowedText(process.Name, _exam?.Language ?? string.Empty);
                         _noticeUntil = now + Defaults.ExamNoticeDuration;
                         SendStripLocked();
                     }
@@ -365,6 +365,7 @@ internal sealed class WindowsExamControl : IDisposable
             Message = exam.Message ?? string.Empty,
             UntilSeconds = exam.UntilUnix > 0 ? Math.Max(1, exam.UntilUnix - now.ToUnixTimeSeconds()) : 0,
             Notice = now < _noticeUntil ? _notice : string.Empty,
+            Language = exam.Language ?? string.Empty,
         };
 
         // Nothing to show is nothing missing: a strip with no timer, message or notice is hidden anyway.

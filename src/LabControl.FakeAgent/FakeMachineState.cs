@@ -356,7 +356,7 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
                 return null;
             }
 
-            return new FakeStrip(exam.Message, exam.UntilUnix, _notice, _noticeUntil);
+            return new FakeStrip(exam.Message, exam.UntilUnix, _notice, _noticeUntil, exam.Language ?? string.Empty);
         }
     }
 
@@ -387,17 +387,18 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
             _processes.RemoveAll(p => p.Key == process.Key);
             _terminated.Add((process.Name, now));
             _terminatedVersion++;
-            _notice = OverlayText.NotAllowedText(process.Name);
+            _notice = OverlayText.NotAllowedText(process.Name, _exam?.Language ?? string.Empty);
             _noticeUntil = now + Defaults.ExamNoticeDuration;
         }
     }
 }
 
 /// <summary>The exam strip as a simulated desktop draws it: the countdown is counted at every tick, the notice shown until <paramref name="NoticeUntil"/>.</summary>
-public sealed record FakeStrip(string Message, long UntilUnix, string Notice, DateTimeOffset NoticeUntil)
+public sealed record FakeStrip(string Message, long UntilUnix, string Notice, DateTimeOffset NoticeUntil, string Language = "")
 {
     public ExamStripContent At(DateTimeOffset now) => new(
         Message,
         UntilUnix > 0 ? Math.Max(0, UntilUnix - now.ToUnixTimeSeconds()) : null,
-        now < NoticeUntil ? Notice : string.Empty);
+        now < NoticeUntil ? Notice : string.Empty,
+        Language);
 }

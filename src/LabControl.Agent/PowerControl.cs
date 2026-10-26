@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using LabControl.Shared.Localization;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Security;
@@ -17,8 +18,9 @@ namespace LabControl.Agent;
 /// </summary>
 internal static class PowerControl
 {
-    private const string ShutdownMessage = "LabControl: the teacher is switching this PC off.";
-    private const string RebootMessage = "LabControl: the teacher is restarting this PC.";
+    // What Windows shows the student while the PC goes down: in the teacher's language (D-87).
+    private static string ShutdownMessage => PcText.Get("ShutdownNotice");
+    private static string RebootMessage => PcText.Get("RebootNotice");
 
     /// <summary>Enables the shutdown privilege now, so a job can fail early instead of after it answered.</summary>
     public static string? PrepareShutdown()

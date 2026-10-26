@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using LabControl.Shared;
 using LabControl.Shared.Control;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
 using Microsoft.Extensions.Logging;
@@ -267,7 +268,7 @@ internal sealed class InputInjector : IDisposable
 
         _lastProblem = text;
         _log.LogWarning("input not injected ({Reason}): {Message}", reason, message);
-        _report(Event.Types.Severity.Warning, $"input.{reason}", $"Input from the console is not reaching the desktop: {message}");
+        _report(Event.Types.Severity.Warning, $"input.{reason}", PcText.Get("InputNotReaching", message));
     }
 
     private void Recovered()
@@ -279,7 +280,7 @@ internal sealed class InputInjector : IDisposable
 
         _lastProblem = null;
         _log.LogInformation("input reaches the desktop again");
-        _report(Event.Types.Severity.Info, "input.recovered", "Input from the console reaches the desktop again.");
+        _report(Event.Types.Severity.Info, "input.recovered", PcText.Get("InputRecovered"));
     }
 
     public void Dispose()

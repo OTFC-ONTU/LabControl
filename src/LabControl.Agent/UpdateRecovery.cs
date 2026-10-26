@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Xml.Linq;
 using LabControl.Shared;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Setup;
 
 namespace LabControl.Agent;
@@ -120,7 +121,7 @@ internal static class UpdateRecovery
         var previous = InstallLayout.Default.AgentExecutable(state.Previous);
         CreateDeadlineTask(previous, deadline, state.JobId, replace: true);
         if (trial.Extend(state.JobId, deadline, boot))
-            log($"update.probation_extended The PC rebooted during the probation of {running}; the probation restarts and ends by {deadline:yyyy-MM-dd HH:mm:ss} UTC.");
+            log("update.probation_extended " + PcText.Get("UpdateProbationExtended", running, deadline.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)));
     }
 
     public static string TaskName(UpdateTrialDocument state) => UpdateTrial.RecoveryTaskName(state);

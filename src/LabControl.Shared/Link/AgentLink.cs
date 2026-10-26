@@ -7,6 +7,7 @@ using Google.Protobuf;
 using Grpc.Core;
 using LabControl.Shared.Discovery;
 using LabControl.Shared.Identity;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
@@ -114,6 +115,9 @@ public sealed partial class AgentLink : IAsyncDisposable
                 store.Config.Revocations.Remove(record);
             }
         }
+
+        // What this PC reports before the next Welcome is in the last console's language (D-87).
+        PcLanguage.Set(store.Config.ConsoleLanguage);
     }
 
     public LinkState State { get; private set; }
@@ -1111,7 +1115,7 @@ public sealed partial class AgentLink : IAsyncDisposable
         {
             _log.LogWarning("{Pc}: the console's certificate names instance {Certified} but its Welcome says {Claimed}; the certificate is the one that counts", Name, certified, welcome.InstanceId);
             Report(Event.Types.Severity.Warning, "console.instance_mismatch",
-                $"The console's certificate names instance {certified} but its Welcome says {welcome.InstanceId}; the certificate is the one this PC uses.");
+                PcText.Get("InstanceMismatch", certified, welcome.InstanceId));
         }
 
         lock (_gateLock)
@@ -1150,9 +1154,17 @@ public sealed partial class AgentLink : IAsyncDisposable
         _pinnedBackoff.Reset();
         _gate.Linked(instanceId, endpoint, now);
 
-        if (!string.Equals(_store.Config.LastInstanceId, instanceId, StringComparison.OrdinalIgnoreCase))
+        // The teacher's language for everything this PC writes from now on (D-87); an older
+        // console sends none, which is English.
+        var language = ProductLanguages.Of(welcome.Language).Code;
+        PcLanguage.Set(language);
+
+        var lastInstance = !string.Equals(_store.Config.LastInstanceId, instanceId, StringComparison.OrdinalIgnoreCase);
+        var lastLanguage = !string.Equals(_store.Config.ConsoleLanguage, language, StringComparison.Ordinal);
+        if (lastInstance || lastLanguage)
         {
             _store.Config.LastInstanceId = instanceId;
+            _store.Config.ConsoleLanguage = language;
             _store.SaveConfig();
         }
 
@@ -1448,11 +1460,11 @@ public sealed partial class AgentLink : IAsyncDisposable
         string? why = null;
         if (serial is not null && _revocations.IsRevoked(serial))
         {
-            why = $"the linked console's certificate {serial} is revoked";
+            why = PcText.Get("ConsoleRevokedCertificate", serial);
         }
         else if (_revocations.IsRevoked(LabCertificates.InstanceSerial(instanceId)))
         {
-            why = $"the linked console's access ({LinkedInstanceName ?? instanceId}) was withdrawn";
+            why = PcText.Get("ConsoleRevokedAccess", LinkedInstanceName ?? instanceId);
         }
 
         if (why is null)
@@ -1460,7 +1472,7 @@ public sealed partial class AgentLink : IAsyncDisposable
             return;
         }
 
-        Report(Event.Types.Severity.Warning, "console.revoked", $"Leaving {LinkedInstanceName ?? instanceId}: {why}.");
+        Report(Event.Types.Severity.Warning, "console.revoked", PcText.Get("LeavingConsole", LinkedInstanceName ?? instanceId, why));
         Disconnect(why);
     }
 
@@ -1476,10 +1488,10 @@ public sealed partial class AgentLink : IAsyncDisposable
             // the ledger: an administrator console re-sending the same job id later must be
             // admitted, not answered from a cache of this refusal.
             var refusal = LinkedConsoleAccess == ConsoleAccess.Teacher
-                ? "refused: this console has teacher access"
-                : "refused: this console's certificate carries no known access level";
+                ? PcText.Get("RefusedTeacherAccess")
+                : PcText.Get("RefusedUnknownAccess");
             _log.LogWarning("{Pc}: job {Job} ({Kind}) refused — {Reason}", Name, job.Id, job.Kind, refusal);
-            Report(Event.Types.Severity.Warning, "job.refused_by_role", $"{job.Kind} job {job.Id} {refusal}; only an administrator console can send it.", BoundInstanceId);
+            Report(Event.Types.Severity.Warning, "job.refused_by_role", PcText.Get("JobRefusedByRole", job.Kind, job.Id, refusal), BoundInstanceId);
             await outgoing.WriteAsync(new AgentMessage { JobResult = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = refusal } }, token);
             return;
         }
@@ -1504,9 +1516,9 @@ public sealed partial class AgentLink : IAsyncDisposable
             // Another console delivered this id (D-57 item 4). Its result — finished or still
             // to come — is that console's alone: not revealed, not run a second time, and not
             // silently swallowed either, so this console's row closes with the reason.
-            const string refusal = "refused: this job was delivered by another console; its result is kept for that console";
+            var refusal = PcText.Get("RefusedOtherInstance");
             _log.LogWarning("{Pc}: job {Job} was delivered by instance {Other}, not {This}; refused", Name, job.Id, admission.OtherInstanceId, instanceId);
-            Report(Event.Types.Severity.Warning, "job.other_instance", $"Job {job.Id} was delivered by another console; its result is kept for that console.", instanceId);
+            Report(Event.Types.Severity.Warning, "job.other_instance", PcText.Get("JobOtherInstance", job.Id), instanceId);
             await outgoing.WriteAsync(new AgentMessage { JobResult = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = refusal } }, token);
             return;
         }
@@ -1538,7 +1550,7 @@ public sealed partial class AgentLink : IAsyncDisposable
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                result = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"The agent failed to run this job: {ex.Message}" };
+                result = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("JobAgentFailed", ex.Message) };
             }
             catch (OperationCanceledException)
             {
@@ -1607,7 +1619,7 @@ public sealed partial class AgentLink : IAsyncDisposable
             // consoles that are not here, and this line says nothing about anyone's output —
             // it is the PC saying it ran out of room, which whoever is in the room should see.
             Report(Event.Types.Severity.Warning, "job.result_dropped",
-                $"This PC keeps at most {_options.MaxPendingResults} finished job results for consoles that have not come back; {evicted} of the oldest were dropped and cannot be shown any more.");
+                PcText.Get("JobResultsDropped", _options.MaxPendingResults, evicted));
         }
     }
 

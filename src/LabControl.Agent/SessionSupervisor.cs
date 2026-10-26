@@ -1,9 +1,11 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO.Pipes;
 using System.ServiceProcess;
 using LabControl.Shared;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Session;
@@ -131,6 +133,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         _changes.Changed += OnSessionChange;
         _link.VideoControlChanged += OnVideoControl;
         _link.InputReceived += OnInput;
+        _link.Linked += OnLinked;
         _loop = Task.Run(() => LoopAsync(_stopping.Token));
     }
 
@@ -144,6 +147,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         _changes.Changed -= OnSessionChange;
         _link.VideoControlChanged -= OnVideoControl;
         _link.InputReceived -= OnInput;
+        _link.Linked -= OnLinked;
         _stopping.Cancel();
         Wake();
 
@@ -247,7 +251,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                 else
                 {
                     _log.LogWarning("Ctrl+Alt+Del was not sent: {Problem}", problem);
-                    _link.Report(Event.Types.Severity.Warning, "input.sas_failed", $"Ctrl+Alt+Del could not be sent: {problem}");
+                    _link.Report(Event.Types.Severity.Warning, "input.sas_failed", PcText.Get("SasFailed", problem));
                 }
             });
             return;
@@ -387,18 +391,18 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                 helper.ExitNoticedAt ??= now;
                 if (now - helper.ExitNoticedAt.Value >= Defaults.HelperExitGrace)
                 {
-                    stop = $"session.exe exited with code {exitCode}";
+                    stop = PcText.Get("HelperExitedCode", exitCode);
                     crashed = true;
                 }
             }
             else if (helper.Connected && now - helper.LastHeard > Defaults.HelperSilenceTimeout)
             {
-                stop = $"session.exe has been silent for {(now - helper.LastHeard).TotalSeconds:0} s";
+                stop = PcText.Get("HelperSilent", (now - helper.LastHeard).TotalSeconds.ToString("0", CultureInfo.InvariantCulture));
                 crashed = true;
             }
             else if (!helper.Connected && now - helper.StartedAt > Defaults.HelperConnectTimeout)
             {
-                stop = $"session.exe did not connect within {Defaults.HelperConnectTimeout.TotalSeconds:0} s";
+                stop = PcText.Get("HelperNoConnect", Defaults.HelperConnectTimeout.TotalSeconds.ToString("0", CultureInfo.InvariantCulture));
                 crashed = true;
             }
 
@@ -488,7 +492,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             if (!_crashLoopReported)
             {
                 _crashLoopReported = true;
-                var message = $"session.exe keeps dying ({_recentExits.Count} times in {Defaults.HelperCrashLoopWindow.TotalSeconds:0} s; last: {what}); retrying every {Defaults.HelperCrashLoopBackoff.TotalSeconds:0} s. Screens, control and lock will not work on this PC until it stays up.";
+                var message = PcText.Get("HelperCrashLoop", _recentExits.Count, Defaults.HelperCrashLoopWindow.TotalSeconds.ToString("0", CultureInfo.InvariantCulture), what, Defaults.HelperCrashLoopBackoff.TotalSeconds.ToString("0", CultureInfo.InvariantCulture));
                 _log.LogError("{Message}", message);
                 _link.Report(Event.Types.Severity.Error, "session.helper_crash_loop", message);
             }
@@ -497,7 +501,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         {
             _nextSpawnAt = now + Defaults.HelperRestartDelay;
             _log.LogWarning("{What}; restarting in {Seconds:0.#} s", what, Defaults.HelperRestartDelay.TotalSeconds);
-            _link.Report(Event.Types.Severity.Warning, "session.helper_exited", $"{what}; restarting it.");
+            _link.Report(Event.Types.Severity.Warning, "session.helper_exited", PcText.Get("HelperRestarting", what));
         }
     }
 
@@ -515,7 +519,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
-            var message = $"Could not start {Defaults.SessionExecutableName} in session {sessionId}: {ex.Message}";
+            var message = PcText.Get("HelperSpawnFailed", Defaults.SessionExecutableName, sessionId, ex.Message);
             _log.LogError("{Message}", message);
             if (_lastSpawnFailure != message)
             {
@@ -605,7 +609,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             if (!_pipeFailureReported)
             {
                 _pipeFailureReported = true;
-                var message = $@"Cannot open the pipe \\.\pipe\{Defaults.SessionPipeName} for the session helper: {ex.Message}. Another process holds the name (a second agent instance?); the helper will not run until it is freed.";
+                var message = PcText.Get("HelperPipeUnavailable", Defaults.SessionPipeName, ex.Message);
                 _log.LogError("{Message}", message);
                 _link.Report(Event.Types.Severity.Error, "session.pipe_unavailable", message);
             }
@@ -677,6 +681,9 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                 _ = helper.SendAsync(new ServiceMessage { VideoControl = wanted }, _log);
             }
 
+            // The helper writes its events in the PC's language (D-87); it cannot see Welcome itself.
+            _ = helper.SendAsync(new ServiceMessage { Language = PcLanguage.Current.Code }, _log);
+
             // A helper born while a lock is held shows it at once (D-70 item 4): D-30 restarts
             // the helper at logon and logoff, and a lock must not vanish at the logon screen.
             // Off the read loop — the re-assert takes the policy mutex.
@@ -696,7 +703,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                         {
                             announced = true;
                             _link.Report(Event.Types.Severity.Info, "session.helper_ready",
-                                $"Session helper {helper.Version} is up in session {helper.SessionId} ({status.ScreenWidth}×{status.ScreenHeight}, desktop {status.InputDesktop}).");
+                                PcText.Get("HelperReady", helper.Version, helper.SessionId, status.ScreenWidth, status.ScreenHeight, status.InputDesktop));
                             Wake();
                         }
                         else if (changedDesktop)
@@ -851,6 +858,10 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             _log.LogWarning(ex, "relaying the helper's overlay state failed: {Message}", ex.Message);
         }
     }
+
+    /// <summary>A console linked: its language may be new, and the helper writes in it too (D-87).</summary>
+    private void OnLinked(string instanceId, string instanceName) =>
+        SendToHelper(new ServiceMessage { Language = PcLanguage.Current.Code });
 
     private void ReassertOverlay(string why, bool force = false)
     {

@@ -222,7 +222,8 @@ recovery*). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.
 
 **M6 is done (owner decision 2026-10-26)**: all six portions built, accepted in the physical lab on all
 14 PCs (builds `1.0.0+68d0ae5` → `1.0.0+cc39651`), the lab's findings fixed and retested; open check:
-teacher access in the lab (no second teacher device). Next by the roadmap: M7. The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
+teacher access in the lab (no second teacher device). Next by the roadmap: M7, whose last item is a UI/UX redesign of every screen
+(owner decision 2026-10-26) that also carries the visible answer to failed actions. The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, *Settled before implementation*; M6 reserves `D-69`…`D-79`.

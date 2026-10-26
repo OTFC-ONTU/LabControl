@@ -21,7 +21,7 @@ implement.
 | **M4** | Deployment: USB installer, files, self-update | **in progress — `1.0.0` is the physical-lab release candidate (owner decision 2026-09-08); script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
 | **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the `app.manifest` double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the `group=` argument that made the printed `netsh` line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest `PC-27`) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three `--remove-data` answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`; on Linux, the `SO_PEERCRED` path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | **done 2026-10-26 (owner decision)** — all six portions built (`D-69`…`D-79`), portions 1–5 VM-drilled, and the whole milestone accepted in the physical lab on all 14 PCs (2026-10-26, builds `1.0.0+68d0ae5` → `1.0.0+cc39651`): lock, broadcast, internet control, exam mode, collect work, profile reset, the fail-safe checks and the departure dialog; the lab's findings fixed and retested the same day (`D-75` item 12, `D-79` items 8–9, `D-81` and `D-83` addenda). **Open check:** teacher access in the lab — there is no second teacher device yet (proven over the real link on the Mac, `TeacherAccessTests`). The portion-6 VM drills were not run separately; the lab covered them | M5 |
-| **M7** | Software catalog, localization, polish | not started | M6 |
+| **M7** | Software catalog, localization, polish, UI/UX redesign | not started | M6 |
 
 Update the **State** column (`not started` / `in progress` / `done <date>`) in the same
 change that finishes the work, and regenerate the HTML mirror (see
@@ -2816,7 +2816,7 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   the lab (no second teacher device yet).
 ---
 
-## M7 — Software catalog, localization, polish
+## M7 — Software catalog, localization, polish, UI/UX redesign
 
 **Goal.** Everything that makes the system pleasant to own for one person with no IT
 department. The catalog ships **empty** — the deliverable is the ease of filling it.
@@ -2846,12 +2846,18 @@ department. The catalog ships **empty** — the deliverable is the ease of filli
   computer.
 - Optional, and only if M3's measurements demand it: H.264 via Media Foundation behind
   the existing `VideoFrame` envelope. Decide with numbers, not taste.
-- **A visible answer to every teacher action that fails** (owner, physical lab 2026-10-26): a
-  refused or failed action — a profile reset during an exam, a lock refused by a PC, a job that
-  failed on some PCs — today shows only as a row in *Jobs* or a line in the events, so the
-  teacher pressing a button gets no answer. Add a notification the teacher sees where they
-  acted (a toast or a status strip with the reason and the PCs), as part of a UI redesign; **not
-  before M7** — no redesign during M6.
+- **UI/UX redesign — the last M7 item** (owner decision 2026-10-26): a complete review of
+  every console screen, dialog and window — the mosaic and its tiles, full view, *My labs*,
+  *Scripts*, *Jobs*, the lock / broadcast / internet / exam / collect dialogs, the departure
+  dialog, *Teacher devices*, the package wizard — plus the student-facing lock screen and exam
+  strip, judged for what a teacher does before, during and after a lesson rather than one
+  screen at a time. It comes last so the screens M7 adds are reviewed with the rest, and it
+  absorbs:
+  - **A visible answer to every teacher action that fails** (owner, physical lab 2026-10-26): a
+    refused or failed action — a profile reset during an exam, a lock refused by a PC, a job
+    that failed on some PCs — today shows only as a row in *Jobs* or a line in the events, so
+    the teacher pressing a button gets no answer. Add a notification the teacher sees where
+    they acted (a toast or a status strip with the reason and the PCs); no redesign during M6.
 
 **Acceptance criteria**
 
@@ -2869,6 +2875,11 @@ department. The catalog ships **empty** — the deliverable is the ease of filli
   three instruction variants with English fallback for any unsupported culture.
 - The console runs a full 90-minute lesson without a restart, a leak, or a stuck job.
 - The recovery procedure is executed once for real, from the backup, and it works.
+- Every screen listed in the redesign item has been reviewed and the changes are in; every
+  teacher action that is refused or fails on some PCs shows its reason and those PCs where
+  the teacher acted, without opening *Jobs*.
+- The redesigned screens are re-rendered and re-checked in all three languages for clipping
+  and wrapping.
 
 **Rough size.** Medium.
 

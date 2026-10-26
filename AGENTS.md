@@ -213,7 +213,8 @@ the documents relevant to the task:
   procedures in ROADMAP M6, *The portion-6 drills*. Tests: 1003 Shared + 308 Console.
 - **M6 is done (owner decision 2026-10-26)**: accepted in the physical lab on all 14 PCs, the
   findings fixed and retested on `1.0.0+cc39651`; open check: teacher access in the lab (no second
-  teacher device). Next by the roadmap: M7.
+  teacher device). Next by the roadmap: M7; its last item is a UI/UX redesign of every screen
+  (owner decision 2026-10-26), which also carries the failed-action feedback.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

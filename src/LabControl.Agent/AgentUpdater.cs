@@ -109,8 +109,10 @@ internal sealed class AgentUpdater
         var pendingTrial = new UpdateTrial(Defaults.AgentDataDirectory).Read();
         if (pendingTrial?.Phase is UpdateTrialPhase.OnProbation or UpdateTrialPhase.RollbackPending)
             return Fail(job, "Another update is still on probation or awaiting rollback.");
-        if (Directory.Exists(_layout.VersionDirectory(request.Version)))
-            return Fail(job, "That version directory already exists; use a distinct build version to preserve recovery files.");
+        // A leftover directory of the same version (rolled back from, or half-placed) is replaced when
+        // the files are placed below; only the running version and the rollback target are kept.
+        if (Directory.Exists(_layout.VersionDirectory(request.Version)) && _layout.HoldsRecovery(request.Version))
+            return Fail(job, "That version is the one this PC runs or would roll back to; use a distinct build version to preserve recovery files.");
 
         // ---- the files, into the staging directory
 

@@ -95,6 +95,15 @@ public sealed class InstallLayout
     }
 
     /// <summary>Removes a version directory that is not the running one — a failed or repeated push.</summary>
+    /// <summary>
+    /// The version is what <c>app\current</c> or <c>app\previous</c> names: the running agent or the
+    /// one a rollback returns to, never replaced by a push. Any other version directory is a
+    /// leftover — a build this PC rolled back from, or a push that stopped half-way — and a push of
+    /// the same version may replace it (a lab, 2026-10-26: a re-push after a rollback was refused).
+    /// </summary>
+    public bool HoldsRecovery(string version) =>
+        string.Equals(version, ReadCurrent(), StringComparison.Ordinal) || string.Equals(version, ReadPrevious(), StringComparison.Ordinal);
+
     public void RemoveVersion(string version)
     {
         var directory = VersionDirectory(version);

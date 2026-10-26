@@ -2786,6 +2786,9 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   helper never installed from one Windows dropped; section 7 (teacher access) not run; the fixes
   above not yet run on a PC. Failed actions (a profile reset refused during an exam, and the like)
   surface only in *Jobs*; a visible answer to the teacher's action is recorded for M7 below.
+  The push of `1.0.0+109a040` rolled back on the PCs, and pushing it again was refused (*That
+  version directory already exists*); a leftover directory of a rolled-back version is now replaced
+  by the next push (`D-83` addendum). Why the probation failed is not yet known.
 ---
 
 ## M7 — Software catalog, localization, polish

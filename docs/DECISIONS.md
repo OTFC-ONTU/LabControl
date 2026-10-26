@@ -4758,6 +4758,13 @@ refused. VM drill (owned installation, Windows 11 ARM64): pushed, rebooted at mi
 version reported `update.probation_extended`, the rollback task moved to the new deadline, the old
 deadline passed without a rollback, and the update became stable ten minutes after the reboot.
 
+Addendum (physical lab, 2026-10-26): after PCs rolled back from `1.0.0+109a040`, pushing the same
+build again was refused on every PC — *That version directory already exists* — because the rolled-back
+version's directory stays in `app\`. Only the versions `app\current` and `app\previous` name hold
+recovery files; any other directory of the pushed version is a leftover and is now replaced when the
+files are placed (`InstallLayout.HoldsRecovery`). The rule lives in the agent, so a PC still running a
+build from before it needs a new version name for its next push (`1.0.0+<hash>.2`).
+
 ## D-84 — A lock or a broadcast keeps the student's monitor on
 
 Context (2026-10-20, physical lab): during a broadcast, a lock and other long overlays the

@@ -24,6 +24,31 @@ public sealed class InstallLayoutTests
     }
 
     [Fact]
+    public void Only_the_current_and_the_previous_version_hold_recovery_a_rolled_back_one_may_be_replaced()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "labcontrol-layout-" + Guid.NewGuid().ToString("n"));
+        var layout = new InstallLayout(root);
+        try
+        {
+            // After a rollback from 1.0.0+b: current names the restored version, previous the one before it.
+            layout.WriteCurrent("1.0.0+a");
+            layout.WritePrevious("1.0.0");
+            Directory.CreateDirectory(layout.VersionDirectory("1.0.0+b"));
+
+            Assert.True(layout.HoldsRecovery("1.0.0+a"));
+            Assert.True(layout.HoldsRecovery("1.0.0"));
+            Assert.False(layout.HoldsRecovery("1.0.0+b"));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void Markers_round_trip_and_clear()
     {
         var root = Path.Combine(Path.GetTempPath(), "labcontrol-layout-" + Guid.NewGuid().ToString("n"));

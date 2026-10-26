@@ -3002,7 +3002,13 @@ minutes (<code>D-83</code> second addendum).
 starts and still closes what the Start menu opens; <em>Unlock all</em> / <em>Open</em> asked while a PC was off
 reached it when it came back, and a lock set afterwards was kept; the <em>Internet</em> dialog names the
 PCs whose exam controls the internet; no Ctrl+Alt+Del line on the student's lock screen. Still
-open: the same one PC accepts the mouse and the Win key under a broadcast (reproduced again);
+open: the same one PC (PC-13) accepts the mouse and the Win key under a broadcast (reproduced
+again) — its session log showed the cause: a lock lifted on the Ctrl+Alt+Del screen left the input
+block on <code>Winlogon</code>, and the next broadcast reused it there; fixed, not yet run (<code>D-81</code> addendum);
+on PC-13 a collection also failed with <em>Installation storage must be private to SYSTEM and
+Administrators</em> after the log folder had been opened through Explorer's <em>Continue</em>, which adds the
+administrator's own account to the folder's ACL — refused by design (<code>D-46</code>), repaired by hand
+with <code>icacls</code> (DEVELOPMENT);
 teacher access not run — there is no second teacher device. The console's ad-hoc signature is a
 new identity after every console build, so macOS <em>Screen Recording</em> must be reset by hand
 (<code>tccutil reset ScreenCapture org.ontfk.labcontrol.console</code>) and granted again; a stable local
@@ -3255,7 +3261,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-26 14:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 14:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

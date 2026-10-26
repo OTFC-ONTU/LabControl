@@ -411,7 +411,7 @@ internal sealed class OverlayController : IDisposable
         Volatile.Write(ref _hardLimitUnix, hardLimit);
 
         // The hooks first, so no click lands between the request and the picture.
-        var block = _block ??= new InputBlock(_log);
+        var block = CurrentBlock();
         block.Block();
 
         var window = _window;
@@ -480,9 +480,40 @@ internal sealed class OverlayController : IDisposable
         }
     }
 
+    /// <summary>
+    /// The input block for the desktop the student is on now. One kept from an earlier overlay is
+    /// reused only while it sits on the same desktop: hooks are desktop-scoped, and a block left on
+    /// <c>Winlogon</c> by a lock lifted there reported "hooks in place" for the next broadcast on
+    /// <c>Default</c> while every physical key and click passed (PC-13, 2026-10-26).
+    /// </summary>
+    private InputBlock CurrentBlock()
+    {
+        if (_block is { } existing)
+        {
+            string desktop;
+            try
+            {
+                desktop = DesktopAccess.InputDesktopName();
+            }
+            catch (Exception)
+            {
+                desktop = "?";
+            }
+
+            if (existing.DesktopName is null || !desktop.StartsWith('?') && !string.Equals(existing.DesktopName, desktop, StringComparison.OrdinalIgnoreCase))
+            {
+                _log.LogInformation("input block on desktop {Old} replaced for desktop {New}", existing.DesktopName ?? "(none)", desktop);
+                existing.Dispose();
+                _block = null;
+            }
+        }
+
+        return _block ??= new InputBlock(_log);
+    }
+
     private void ShowBroadcastWindow()
     {
-        var block = _block ??= new InputBlock(_log);
+        var block = CurrentBlock();
         block.Block();
         _window?.Dispose();
         _window = new OverlayWindow(_log, _picture, _pcName);

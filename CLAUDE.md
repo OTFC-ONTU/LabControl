@@ -466,6 +466,8 @@ teacher access not run. A visible answer to failed actions is an M7 item, no red
 Tests: 1006 Shared + 309 Console. Later the same day: a re-push after a rollback replaces the leftover
 version directory, and the probation window is 30 minutes (ten continuous linked minutes inside it) —
 a ten-second Wi-Fi drop of the MacBook had rolled the lab back (`D-83` addenda). Tests: 1008 Shared.
+PC-13's broadcast let input through because a lock lifted on the Ctrl+Alt+Del screen left the input
+block on `Winlogon`; a kept block is now reused only on its own desktop (`D-81` addendum, not yet run).
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

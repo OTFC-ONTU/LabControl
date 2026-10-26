@@ -345,7 +345,13 @@ events, unlocking clears it; sign out — the tile reads <em>nobody logged on</e
 helper appears on the logon screen; sign in — the user is back. The helper's own log is
 <code>C:\ProgramData\LabControl\logs\session-&lt;date&gt;.log</code>; <code>session.exe --probe</code> from an
 elevated prompt prints what a process in the session sees. A standard user cannot end
-<code>session.exe</code> and cannot read the logs.</li>
+<code>session.exe</code> and cannot read the logs. Read them from an <strong>elevated</strong> Notepad (<em>Run as
+administrator</em> → <em>File → Open</em>), never by clicking <em>Continue</em> in Explorer's &quot;You don't currently
+have permission&quot; prompt: that adds your own account to the folder's ACL, and from then on
+handouts, <em>Collect files</em> and profile resets refuse with <em>Installation storage must be private
+to SYSTEM and Administrators</em> (<code>D-46</code>: a widened directory is never trusted or silently
+repaired). To repair it, in an elevated Command Prompt: <code>icacls C:\ProgramData\LabControl /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F</code>, then <code>icacls C:\ProgramData\LabControl</code> and <code>/remove &quot;&lt;name&gt;&quot;</code> for any other account it lists, then
+<code>icacls C:\ProgramData\LabControl\* /reset /T /C</code>.</li>
 <li><strong>Network updates now use the M4 signed recovery flow.</strong> For M4 acceptance, use a
 clean, installer-owned installation from <a href="INSTALLER.html">the USB Setup instructions</a>;
 Setup does not migrate the unowned development installation described above. Unlock
@@ -453,7 +459,7 @@ Setup/removal, stock student-facing text and generated USB instructions. The con
 have a saved language selector; English remains the safe fallback (<code>D-67</code>).</p>
 
 </article>
-<footer>Generated 2026-10-26 14:43 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 14:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#requirements">Requirements</a></li><li class="lvl2"><a href="#teacher-console-packages">Teacher-console packages</a></li><li class="lvl2"><a href="#console-command-line">Console command line</a></li><li class="lvl2"><a href="#the-simulator-fakeagent">The simulator: FakeAgent</a></li><li class="lvl2"><a href="#ui-screenshots-from-the-headless-tests">UI screenshots from the headless tests</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li><li class="lvl2"><a href="#downgrading-to-a-pre-m5-build">Downgrading to a pre-M5 build</a></li><li class="lvl2"><a href="#status-notes-by-milestone">Status notes by milestone</a></li></ul></nav>
 </div>

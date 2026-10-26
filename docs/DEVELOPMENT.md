@@ -181,7 +181,15 @@ get `win-x64`. `tools/publish-all.sh` produces both.
    helper appears on the logon screen; sign in — the user is back. The helper's own log is
    `C:\ProgramData\LabControl\logs\session-<date>.log`; `session.exe --probe` from an
    elevated prompt prints what a process in the session sees. A standard user cannot end
-   `session.exe` and cannot read the logs.
+   `session.exe` and cannot read the logs. Read them from an **elevated** Notepad (*Run as
+   administrator* → *File → Open*), never by clicking *Continue* in Explorer's "You don't currently
+   have permission" prompt: that adds your own account to the folder's ACL, and from then on
+   handouts, *Collect files* and profile resets refuse with *Installation storage must be private
+   to SYSTEM and Administrators* (`D-46`: a widened directory is never trusted or silently
+   repaired). To repair it, in an elevated Command Prompt: `icacls C:\ProgramData\LabControl
+   /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F`, then `icacls
+   C:\ProgramData\LabControl` and `/remove "<name>"` for any other account it lists, then
+   `icacls C:\ProgramData\LabControl\* /reset /T /C`.
 7. **Network updates now use the M4 signed recovery flow.** For M4 acceptance, use a
    clean, installer-owned installation from [the USB Setup instructions](INSTALLER.md);
    Setup does not migrate the unowned development installation described above. Unlock

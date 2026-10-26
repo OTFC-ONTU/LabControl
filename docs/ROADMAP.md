@@ -2795,7 +2795,13 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   starts and still closes what the Start menu opens; *Unlock all* / *Open* asked while a PC was off
   reached it when it came back, and a lock set afterwards was kept; the *Internet* dialog names the
   PCs whose exam controls the internet; no Ctrl+Alt+Del line on the student's lock screen. Still
-  open: the same one PC accepts the mouse and the Win key under a broadcast (reproduced again);
+  open: the same one PC (PC-13) accepts the mouse and the Win key under a broadcast (reproduced
+  again) — its session log showed the cause: a lock lifted on the Ctrl+Alt+Del screen left the input
+  block on `Winlogon`, and the next broadcast reused it there; fixed, not yet run (`D-81` addendum);
+  on PC-13 a collection also failed with *Installation storage must be private to SYSTEM and
+  Administrators* after the log folder had been opened through Explorer's *Continue*, which adds the
+  administrator's own account to the folder's ACL — refused by design (`D-46`), repaired by hand
+  with `icacls` (DEVELOPMENT);
   teacher access not run — there is no second teacher device. The console's ad-hoc signature is a
   new identity after every console build, so macOS *Screen Recording* must be reset by hand
   (`tccutil reset ScreenCapture org.ontfk.labcontrol.console`) and granted again; a stable local

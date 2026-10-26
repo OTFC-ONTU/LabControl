@@ -4539,6 +4539,15 @@ without disabling audit or changing the offline parser's role. This adds no stud
 dependency. D-71…D-79 remain reserved by the six-portion M6 plan (`D-71` and `D-72` were
 written with portion 2).
 
+Addendum (physical lab, 2026-10-26, PC-13): the mouse and the Win key worked under a broadcast
+while the helper logged *broadcast shown, hooks in place*. The log showed why: a lock had followed
+the student to `Winlogon` (Ctrl+Alt+Del, the checklist's own step), was lifted there, and the input
+block — kept for reuse — still lived on a thread joined to `Winlogon`; the next broadcast on
+`Default` reused it, so its hooks were installed where no input came. `InputBlock.DesktopName`
+records the desktop its thread joined, and `OverlayController.CurrentBlock` reuses a kept block only
+on that same desktop, otherwise disposes it and makes a fresh one (logged *input block on desktop X
+replaced for desktop Y*). The same applied to a second lock after such a lift. Not yet run on Windows.
+
 ## D-12 — Documentation: Markdown is the source, HTML is generated
 
 Context: the owner wants every document available as a readable `.html` next to the

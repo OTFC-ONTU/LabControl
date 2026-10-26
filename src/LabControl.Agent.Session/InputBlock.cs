@@ -48,6 +48,7 @@ internal sealed class InputBlock : IDisposable
     private readonly ManualResetEventSlim _applied = new(false);
     private uint _threadId;
     private nint _desktopHandle;
+    private volatile string? _desktopName;
 
     // Hook-thread state: only ever touched on the hook thread.
     private HHOOK _keyboard;
@@ -157,6 +158,14 @@ internal sealed class InputBlock : IDisposable
         return _applied.Wait(TimeSpan.FromSeconds(2));
     }
 
+    /// <summary>
+    /// The desktop the hook thread joined, or <c>null</c> if it could not join one. Low-level
+    /// hooks only see input on that desktop: a block made while the lock followed the student to
+    /// the Ctrl+Alt+Del screen stays there, and must not be reused for the next lock or broadcast
+    /// on the ordinary desktop (PC-13, 2026-10-26).
+    /// </summary>
+    public string? DesktopName => _desktopName;
+
     // ------------------------------------------------------------------ the hook thread
 
     private void Run()
@@ -165,7 +174,7 @@ internal sealed class InputBlock : IDisposable
         {
             // Hooks are desktop-scoped, just like the overlay window. A fresh pair after
             // a desktop change must join that desktop before creating its message queue.
-            DesktopAccess.AttachToInputDesktop(out _desktopHandle);
+            _desktopName = DesktopAccess.AttachToInputDesktop(out _desktopHandle);
             _threadId = PInvoke.GetCurrentThreadId();
             // A thread has no message queue until it asks for one; PostThreadMessage to a
             // thread without a queue fails with ERROR_INVALID_THREAD_ID.

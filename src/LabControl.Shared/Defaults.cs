@@ -215,6 +215,8 @@ public static class Defaults
     public const int ScriptsSchemaVersion = 1;
     /// <summary><c>internet-presets.json</c>, the teacher's named whitelist presets (M6, D-73).</summary>
     public const int InternetPresetsSchemaVersion = 1;
+    /// <summary><c>preferences.json</c>, this device's console preferences (M7, D-86).</summary>
+    public const int PreferencesSchemaVersion = 1;
     /// <summary><c>exam-presets.json</c>, the teacher's named exam presets (M6 portion 4, D-76).</summary>
     public const int ExamPresetsSchemaVersion = 1;
     /// <summary><c>device-key.json</c>, this computer's way into the lab key when it is remembered here (D-82).</summary>
@@ -300,6 +302,13 @@ public static class Defaults
 
     /// <summary>A teacher profile's authorization state (M5 portion 3); the name is reserved here.</summary>
     public const string AccessFileName = "access.json";
+
+    /// <summary>
+    /// This device's own console preferences at the data root (M7, D-86): today only the
+    /// interface language. Never in a backup or a lab file — it belongs to the person at
+    /// this computer, not to a lab.
+    /// </summary>
+    public const string PreferencesFileName = "preferences.json";
 
     /// <summary>The app-level Serilog file at the data root; Serilog inserts the date before the extension.</summary>
     public const string ConsoleLogFileName = ConsoleLogFilePrefix + ConsoleLogFileExtension;

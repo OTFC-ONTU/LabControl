@@ -243,6 +243,9 @@ public sealed partial class LabChooserViewModel : ObservableObject
 
     public event Action? QuitRequested;
 
+    /// <summary>The language selector (M7, D-86); set by the app so it is there before any lab exists.</summary>
+    public LanguageChoiceViewModel? Language { get; set; }
+
     /// <summary>Re-reads the index; the highlighted row is the last-used lab, or the most recently used one.</summary>
     public void Refresh()
     {

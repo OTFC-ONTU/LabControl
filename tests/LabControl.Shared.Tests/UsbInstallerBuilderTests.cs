@@ -29,7 +29,7 @@ public sealed class UsbInstallerBuilderTests : IDisposable
 
     [Theory]
     [InlineData("en-US")]
-    [InlineData("uk-UA")]
+    [InlineData("de-DE")]
     public void Generated_instructions_unlock_console_before_install_and_fall_back_to_English(string culture)
     {
         var previous = System.Globalization.CultureInfo.CurrentUICulture;
@@ -50,6 +50,28 @@ public sealed class UsbInstallerBuilderTests : IDisposable
             Assert.Contains("green and connected", lines[4]);
             Assert.DoesNotContain("single-use-test-code", text);
             Assert.DoesNotContain("Enrol PCs", text);
+        }
+        finally { System.Globalization.CultureInfo.CurrentUICulture = previous; }
+    }
+
+    /// <summary>The console's language reaches the stick (M7, D-67 item 3, D-86): the same five steps, in Ukrainian or Russian.</summary>
+    [Theory]
+    [InlineData("uk-UA", "ПК")]
+    [InlineData("ru-RU", "ПК")]
+    public void Generated_instructions_follow_the_console_language(string culture, string word)
+    {
+        var previous = System.Globalization.CultureInfo.CurrentUICulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentUICulture = new(culture);
+            var (source, payload) = Arrange();
+            new UsbInstallerBuilder(source, "1.2.3").Build(payload);
+            var text = File.ReadAllText(Path.Combine(payload, Defaults.UsbInstructionsFileName));
+            Assert.Equal(5, text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+            Assert.Contains(Defaults.SetupExecutableName, text);
+            Assert.Contains(word, text);
+            Assert.DoesNotContain("as an administrator", text);
+            Assert.DoesNotContain("single-use-test-code", text);
         }
         finally { System.Globalization.CultureInfo.CurrentUICulture = previous; }
     }

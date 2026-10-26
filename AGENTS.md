@@ -215,6 +215,15 @@ the documents relevant to the task:
   findings fixed and retested on `1.0.0+cc39651`; open check: teacher access in the lab (no second
   teacher device). Next by the roadmap: M7; its last item is a UI/UX redesign of every screen
   (owner decision 2026-10-26), which also carries the failed-action feedback.
+- **M7 portion 1 is built (2026-10-26, `D-86`), on the Mac**: the console in Ukrainian, English and
+  Russian — `Shared/Localization/ProductLanguages` (stored choice, else a supported OS language,
+  else English), `preferences.json` at the data root, `ConsoleLanguage` applied in `Program.Main`,
+  the selector in *Settings* and the chooser with *Restart now* through the quit path, `*.uk.resx`
+  and `*.ru.resx` beside every product `.resx`. A new key goes into all three files
+  (`ResourceTranslationTests`); both test projects pin English (the owner's Mac reports `ru-UA`).
+  Owner decisions: language applies on restart, the student sees the console's language
+  (portion 2 carries it to the PC), "lab" = лабораторія / лаборатория. Seven portions in ROADMAP
+  M7. Tests: 1032 Shared + 316 Console. Next: the owner reads the translations; portion 2.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),
@@ -315,6 +324,8 @@ or the generated HTML stale is not finished.
 - UI strings are resources, not hard-coded text. English is the neutral source and
   fallback locale. M7 must ship Ukrainian, English and Russian for every ordinary
   product-facing surface, with an explicit persistent console language choice (`D-67`).
+  Every new or changed key goes into the neutral `.resx` and its `.uk.resx` / `.ru.resx`
+  siblings in the same change; `ResourceTranslationTests` enforces it (`D-86`).
   Stable protocol identifiers, diagnostic codes and developer logs remain English.
 - Prefer simple, well-supported libraries. Record every new NuGet dependency and
   its reason in `docs/DECISIONS.md`.

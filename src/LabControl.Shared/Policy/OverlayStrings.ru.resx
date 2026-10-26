@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="LockTitle" xml:space="preserve"><value>Экран заблокирован преподавателем</value></data>
+  <data name="LockDefaultMessage" xml:space="preserve"><value>Пожалуйста, посмотрите на преподавателя.</value></data>
+  <data name="CountdownFormat" xml:space="preserve"><value>Разблокировка через {0}</value></data>
+  <data name="CountdownUntilLifted" xml:space="preserve"><value>Пока преподаватель не разблокирует</value></data>
+  <data name="PcNameFormat" xml:space="preserve"><value>{0}</value></data>
+  <data name="ExamTimeUpMessage" xml:space="preserve"><value>Время вышло. Пожалуйста, уберите руки с клавиатуры.</value></data>
+  <data name="ExamRemainingFormat" xml:space="preserve"><value>Осталось {0}</value></data>
+  <data name="ExamTitle" xml:space="preserve"><value>Экзамен</value></data>
+  <data name="ExamNotAllowedFormat" xml:space="preserve"><value>{0} нельзя использовать во время экзамена</value></data>
+  <data name="ExamClosingFormat" xml:space="preserve"><value>{0} закроется через {1} с — сохраните работу сейчас</value></data>
+</root>

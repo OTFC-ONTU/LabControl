@@ -21,7 +21,7 @@ implement.
 | **M4** | Deployment: USB installer, files, self-update | **in progress — `1.0.0` is the physical-lab release candidate (owner decision 2026-09-08); script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
 | **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the `app.manifest` double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the `group=` argument that made the printed `netsh` line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest `PC-27`) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three `--remove-data` answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`; on Linux, the `SO_PEERCRED` path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | **done 2026-10-26 (owner decision)** — all six portions built (`D-69`…`D-79`), portions 1–5 VM-drilled, and the whole milestone accepted in the physical lab on all 14 PCs (2026-10-26, builds `1.0.0+68d0ae5` → `1.0.0+cc39651`): lock, broadcast, internet control, exam mode, collect work, profile reset, the fail-safe checks and the departure dialog; the lab's findings fixed and retested the same day (`D-75` item 12, `D-79` items 8–9, `D-81` and `D-83` addenda). **Open check:** teacher access in the lab — there is no second teacher device yet (proven over the real link on the Mac, `TeacherAccessTests`). The portion-6 VM drills were not run separately; the lab covered them | M5 |
-| **M7** | Software catalog, localization, polish, UI/UX redesign | not started | M6 |
+| **M7** | Software catalog, localization, polish, UI/UX redesign | **in progress — portion 1 (the console's languages, `D-86`) built 2026-10-26 on the Mac; Ukrainian and Russian awaiting the owner's read-through** | M6 |
 
 Update the **State** column (`not started` / `in progress` / `done <date>`) in the same
 change that finishes the work, and regenerate the HTML mirror (see
@@ -2858,6 +2858,44 @@ department. The catalog ships **empty** — the deliverable is the ease of filli
     that failed on some PCs — today shows only as a row in *Jobs* or a line in the events, so
     the teacher pressing a button gets no answer. Add a notification the teacher sees where
     they acted (a toast or a status strip with the reason and the PCs); no redesign during M6.
+
+**Settled before implementation** (owner decisions 2026-10-26, `D-86`): a new language takes
+effect when the console starts again — the choice is saved at once and *Restart now* quits
+through the ordinary departure question; the student sees stock text (lock screen, exam strip,
+*Time is up*) in the **teacher console's** language, which therefore travels to the PC; "lab"
+is *лабораторія* / *лаборатория*.
+
+**How it is being built.** In seven portions, each committed and, where a PC is involved, run
+on the Windows VM before the next: **(1)** the console's languages — the selector in
+*Settings* and the lab chooser, `preferences.json`, the shared resolution rule, Ukrainian and
+Russian resources for every product `.resx`, the completeness tests and the per-language
+renders, `INSTALL.txt` in the console's language (`D-86`); **(2)** languages on the PC — the
+console's language over the link, the agent's stock overlay and exam text and its event
+messages in that language, Setup and removal following the Windows display language with
+their remaining literals moved to resources, a VM run in all three; **(3)** the package
+catalog and the *Add package* wizard on the console; **(4)** `install_package` on the agent,
+*Install on all missing*, the broken-package drill and the 14-PC measurement; **(5)** the
+robustness pass, the 90-minute lesson and the rehearsed recovery; **(6)** the README as a
+teacher's manual; **(7)** the UI/UX redesign with the visible answer to failed actions, and
+the three languages checked again. H.264 only if M3's measurements demand it.
+
+- *Portion 1 built (2026-10-26), on the Mac.* `Shared/Localization/ProductLanguages` (the
+  three languages under their own names and the rule: a stored choice, else a supported OS
+  display language, else English), `Persistence/PreferencesDocument` (`preferences.json` at
+  the data root, never in a backup or lab file), `Console/Services/ConsoleLanguage` (applied
+  in `Program.Main` before the first string; an unreadable or newer file means no choice and
+  is logged), `LanguageChoiceViewModel` + `LanguageSelector` in *Settings* and the chooser,
+  *Restart now* through the quit path and a relaunch after the lock is released;
+  `Strings.uk.resx` / `Strings.ru.resx` and the Ukrainian and Russian siblings of
+  `SetupStrings`, `OverlayStrings`, `PolicyStrings` and `UsbInstallerStrings`. Tests:
+  `ResourceTranslationTests` (every neutral `.resx` has both siblings with its keys and
+  placeholders), `ConsoleLanguageTests` (saving, a newer file not overwritten, every key the
+  code names exists), `LanguageRenderTests` (the chooser, every main-window tab and six
+  dialogs in each language; with `LABCONTROL_UI_SHOTS` the `lang-uk-…`/`lang-ru-…` PNGs are
+  the clipping check); both test projects pin English, since the owner's Mac reports `ru-UA`.
+  **Open:** the owner's read-through of both translations; clipping fixes wait for the
+  redesign (portion 7) unless a screen is unusable; agent-originated text (events from a PC,
+  job output) is still English until portion 2.
 
 **Acceptance criteria**
 

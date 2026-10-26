@@ -206,7 +206,7 @@ implement.</p>
 <tr>
 <td><strong>M7</strong></td>
 <td>Software catalog, localization, polish, UI/UX redesign</td>
-<td>not started</td>
+<td><strong>in progress — portion 1 (the console's languages, <code>D-86</code>) built 2026-10-26 on the Mac; Ukrainian and Russian awaiting the owner's read-through</strong></td>
 <td>M6</td>
 </tr>
 </tbody>
@@ -3066,6 +3066,43 @@ they acted (a toast or a status strip with the reason and the PCs); no redesign 
 </ul>
 </li>
 </ul>
+<p><strong>Settled before implementation</strong> (owner decisions 2026-10-26, <code>D-86</code>): a new language takes
+effect when the console starts again — the choice is saved at once and <em>Restart now</em> quits
+through the ordinary departure question; the student sees stock text (lock screen, exam strip,
+<em>Time is up</em>) in the <strong>teacher console's</strong> language, which therefore travels to the PC; &quot;lab&quot;
+is <em>лабораторія</em> / <em>лаборатория</em>.</p>
+<p><strong>How it is being built.</strong> In seven portions, each committed and, where a PC is involved, run
+on the Windows VM before the next: <strong>(1)</strong> the console's languages — the selector in
+<em>Settings</em> and the lab chooser, <code>preferences.json</code>, the shared resolution rule, Ukrainian and
+Russian resources for every product <code>.resx</code>, the completeness tests and the per-language
+renders, <code>INSTALL.txt</code> in the console's language (<code>D-86</code>); <strong>(2)</strong> languages on the PC — the
+console's language over the link, the agent's stock overlay and exam text and its event
+messages in that language, Setup and removal following the Windows display language with
+their remaining literals moved to resources, a VM run in all three; <strong>(3)</strong> the package
+catalog and the <em>Add package</em> wizard on the console; <strong>(4)</strong> <code>install_package</code> on the agent,
+<em>Install on all missing</em>, the broken-package drill and the 14-PC measurement; <strong>(5)</strong> the
+robustness pass, the 90-minute lesson and the rehearsed recovery; <strong>(6)</strong> the README as a
+teacher's manual; <strong>(7)</strong> the UI/UX redesign with the visible answer to failed actions, and
+the three languages checked again. H.264 only if M3's measurements demand it.</p>
+<ul>
+<li><em>Portion 1 built (2026-10-26), on the Mac.</em> <code>Shared/Localization/ProductLanguages</code> (the
+three languages under their own names and the rule: a stored choice, else a supported OS
+display language, else English), <code>Persistence/PreferencesDocument</code> (<code>preferences.json</code> at
+the data root, never in a backup or lab file), <code>Console/Services/ConsoleLanguage</code> (applied
+in <code>Program.Main</code> before the first string; an unreadable or newer file means no choice and
+is logged), <code>LanguageChoiceViewModel</code> + <code>LanguageSelector</code> in <em>Settings</em> and the chooser,
+<em>Restart now</em> through the quit path and a relaunch after the lock is released;
+<code>Strings.uk.resx</code> / <code>Strings.ru.resx</code> and the Ukrainian and Russian siblings of
+<code>SetupStrings</code>, <code>OverlayStrings</code>, <code>PolicyStrings</code> and <code>UsbInstallerStrings</code>. Tests:
+<code>ResourceTranslationTests</code> (every neutral <code>.resx</code> has both siblings with its keys and
+placeholders), <code>ConsoleLanguageTests</code> (saving, a newer file not overwritten, every key the
+code names exists), <code>LanguageRenderTests</code> (the chooser, every main-window tab and six
+dialogs in each language; with <code>LABCONTROL_UI_SHOTS</code> the <code>lang-uk-…</code>/<code>lang-ru-…</code> PNGs are
+the clipping check); both test projects pin English, since the owner's Mac reports <code>ru-UA</code>.
+<strong>Open:</strong> the owner's read-through of both translations; clipping fixes wait for the
+redesign (portion 7) unless a screen is unusable; agent-originated text (events from a PC,
+job output) is still English until portion 2.</li>
+</ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
 <li>The owner adds a package of his own choosing <strong>without reading the source code</strong>, using
@@ -3282,7 +3319,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-26 15:45 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 16:09 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish-uiux-redesign">M7 — Software catalog, localization, polish, UI/UX redesign</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

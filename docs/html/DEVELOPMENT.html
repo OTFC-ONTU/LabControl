@@ -453,13 +453,21 @@ undo a policy by hand: <code>netsh advfirewall set allprofiles firewallpolicy bl
 then <code>netsh advfirewall firewall delete rule name=&quot;LabControl Internet (sites)&quot;</code> and the same for
 <code>(loopback)</code>, <code>(local subnet)</code> and <code>(agent)</code> (<code>netsh</code> has no <code>group=</code> for deleting, the portion-7
 lesson); DNS then needs <code>netsh interface ip set dns &quot;&lt;adapter&gt;&quot; dhcp</code> per interface.</p>
-<p><strong>Languages.</strong> The product UI is English today. M7 must ship the complete product-facing
-experience in <strong>Ukrainian, English and Russian</strong>, including the teacher console, Windows
-Setup/removal, stock student-facing text and generated USB instructions. The console will
-have a saved language selector; English remains the safe fallback (<code>D-67</code>).</p>
+<p><strong>Languages.</strong> The console ships in <strong>Ukrainian, English and Russian</strong> (M7 portion 1, <code>D-86</code>):
+English is the neutral <code>*.resx</code>, Ukrainian and Russian are <code>*.uk.resx</code> / <code>*.ru.resx</code> beside it
+for every product resource set (console, Setup, overlay, policy texts, <code>INSTALL.txt</code>). A new
+key goes into all three files in the same change — <code>ResourceTranslationTests</code> fails otherwise,
+and <code>ConsoleLanguageTests</code> fails on a key the code names but the English file lacks. The
+language is chosen in <em>Settings</em> or the lab chooser, saved in <code>preferences.json</code> at the data
+root, and applied at the next start; with no choice the OS display language decides
+(<code>ru-UA</code> → Russian), anything unsupported is English. Both test projects pin English, so the
+tests are the same on any Mac. To look at the three languages, run the console tests with
+<code>LABCONTROL_UI_SHOTS=&lt;dir&gt;</code> and open the <code>lang-uk-*</code> / <code>lang-ru-*</code> PNGs. On the PC, stock
+student text and agent messages follow the console's language from portion 2 on; Setup
+follows the Windows display language.</p>
 
 </article>
-<footer>Generated 2026-10-26 15:45 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 16:09 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#requirements">Requirements</a></li><li class="lvl2"><a href="#teacher-console-packages">Teacher-console packages</a></li><li class="lvl2"><a href="#console-command-line">Console command line</a></li><li class="lvl2"><a href="#the-simulator-fakeagent">The simulator: FakeAgent</a></li><li class="lvl2"><a href="#ui-screenshots-from-the-headless-tests">UI screenshots from the headless tests</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li><li class="lvl2"><a href="#downgrading-to-a-pre-m5-build">Downgrading to a pre-M5 build</a></li><li class="lvl2"><a href="#status-notes-by-milestone">Status notes by milestone</a></li></ul></nav>
 </div>

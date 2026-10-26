@@ -168,7 +168,9 @@ Solution file: `LabControl.sln` at the root (create in M0).
 - Code, identifiers, commits, comments: English. English is the neutral resource and
   fallback locale; M7 must ship Ukrainian, English and Russian across the ordinary
   product-facing surfaces, with an explicit persistent console language choice (`D-67`).
-  Resource files are used from day one and UI text is never hard-coded.
+  Resource files are used from day one and UI text is never hard-coded. Every new or changed
+  key goes into the neutral `.resx` and its `.uk.resx` / `.ru.resx` siblings in the same change;
+  `ResourceTranslationTests` enforces it (`D-86`).
 - Agent must never crash the student's session: every Win32 call is wrapped, every
   failure is reported to the console as an event, never thrown out of the service loop.
 - Never log the `student` password, the lab key or its passphrase. Never commit
@@ -223,7 +225,18 @@ recovery*). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.
 **M6 is done (owner decision 2026-10-26)**: all six portions built, accepted in the physical lab on all
 14 PCs (builds `1.0.0+68d0ae5` → `1.0.0+cc39651`), the lab's findings fixed and retested; open check:
 teacher access in the lab (no second teacher device). Next by the roadmap: M7, whose last item is a UI/UX redesign of every screen
-(owner decision 2026-10-26) that also carries the visible answer to failed actions. The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
+(owner decision 2026-10-26) that also carries the visible answer to failed actions.
+**M7 portion 1 is built (2026-10-26, `D-86`), on the Mac:** the console speaks Ukrainian, English
+and Russian — `Shared/Localization/ProductLanguages` (stored choice, else a supported OS language,
+else English), `preferences.json` at the data root, `ConsoleLanguage` applied in `Program.Main`
+before the first string, the selector in *Settings* and the lab chooser with *Restart now* through
+the ordinary quit, and `*.uk.resx` / `*.ru.resx` beside every product `.resx` (console, Setup,
+overlay, policy texts, `INSTALL.txt`). Every new key goes into all three files in the same change
+(`ResourceTranslationTests`); both test projects pin English because the owner's Mac reports
+`ru-UA`. Owner decisions: the language applies on restart, the student sees the console's language
+(portion 2 carries it to the PC), "lab" = лабораторія / лаборатория. ROADMAP M7 holds the seven
+portions. Tests: 1032 Shared + 316 Console. Next: the owner reads both translations; portion 2.
+The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, *Settled before implementation*; M6 reserves `D-69`…`D-79`.

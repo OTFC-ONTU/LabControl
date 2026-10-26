@@ -762,4 +762,8 @@ java.exe</value></data>
   <data name="Reset.Sent" xml:space="preserve"><value>Profile reset sent to {0} of {1} PC(s); the jobs panel shows each PC's answer.</value></data>
   <data name="Exam.CollectWork" xml:space="preserve"><value>Collect work at the end</value></data>
   <data name="Exam.CollectNote" xml:space="preserve"><value>The folder is created on each student's PC when the exam starts and collected when it ends — when the timer runs out or you end it. PCs not online then are listed as missing.</value></data>
+  <data name="Language.Heading" xml:space="preserve"><value>Language</value></data>
+  <data name="Language.RestartHint" xml:space="preserve"><value>The console switches to {0} the next time it starts.</value></data>
+  <data name="Language.RestartNow" xml:space="preserve"><value>Restart now</value></data>
+  <data name="Language.SaveFailed" xml:space="preserve"><value>The language could not be saved: {0}</value></data>
 </root>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="RestoreFailed" xml:space="preserve"><value>Не вдалося повністю повернути ПК до звичайних налаштувань: {0}. Його залишено максимально відкритим; наступний запуск служби або завдання відновлення спробує знову.</value></data>
+  <data name="RefineFailed" xml:space="preserve"><value>Не вдалося точно повернути початкові налаштування ПК ({0}); застосовано типові налаштування Windows, а початкові збережено для наступного відновлення.</value></data>
+  <data name="ConfirmFailed" xml:space="preserve"><value>Не вдалося підтвердити відновлення повторним зчитуванням стану комп'ютера: {0}.</value></data>
+  <data name="UnreadableDocument" xml:space="preserve"><value>Не вдалося прочитати збережений файл обмежень ({0}); ПК повернуто до звичайного стану, нічого не застосовано повторно.</value></data>
+  <data name="UnreadableForeignLab" xml:space="preserve"><value>Збережений файл обмежень належить іншій лабораторії ({0}); ПК повернуто до звичайного стану, нічого не застосовано повторно.</value></data>
+  <data name="UnreadableNewerSchema" xml:space="preserve"><value>Збережений файл обмежень записала новіша збірка LabControl (схема {0}); ПК повернуто до звичайного стану, нічого не застосовано повторно.</value></data>
+  <data name="UnreadableIncomplete" xml:space="preserve"><value>Збережений файл обмежень неповний (немає {0}); ПК повернуто до звичайного стану, нічого не застосовано повторно.</value></data>
+  <data name="Reapplied" xml:space="preserve"><value>{0} {1}: знову діє після перезапуску; завершиться найпізніше {2}.</value></data>
+  <data name="ApplyFailed" xml:space="preserve"><value>{0} {1}: не вдалося застосувати: {2}.</value></data>
+  <data name="LiftFailed" xml:space="preserve"><value>{0} {1}: не вдалося зняти: {2}. Обмеження збережено, зняття буде повторено.</value></data>
+  <data name="NotInThisBuild" xml:space="preserve"><value>ця збірка агента ще не підтримує функцію «{0}»</value></data>
+  <data name="OverlayExpired" xml:space="preserve"><value>Блокування завершилося само після досягнення ліміту.</value></data>
+  <data name="SessionExpired" xml:space="preserve"><value>{0} {1}: завершено автоматично після досягнення ліміту.</value></data>
+  <data name="SaveFailed" xml:space="preserve"><value>Не вдалося зберегти файл обмежень ({0}); після перезапуску ПК повернеться без обмежень.</value></data>
+  <data name="Busy" xml:space="preserve"><value>На цьому ПК уже виконується інше відновлення чи застосування; це чекало {0} с і припинило спробу.</value></data>
+  <data name="MachineThrew" xml:space="preserve"><value>{0}: неочікувана помилка: {1}</value></data>
+  <data name="RefusedUnbound" xml:space="preserve"><value>відхилено: це з'єднання не прив'язане до перевіреної консолі</value></data>
+  <data name="RefusedRevoked" xml:space="preserve"><value>відхилено: сертифікат консолі анульовано</value></data>
+  <data name="RefusedWithdrawn" xml:space="preserve"><value>відхилено: доступ консолі до цієї лабораторії відкликано</value></data>
+  <data name="RefusedAlreadyEnded" xml:space="preserve"><value>відхилено: запитаний час завершення вже минув</value></data>
+  <data name="EnforcerFailed" xml:space="preserve"><value>Механізм застосування обмежень неочікувано збоїв під час {0}: {1}. ПК працює далі; наступний прохід спробує знову.</value></data>
+  <data name="RefusedUnknownKind" xml:space="preserve"><value>відхилено: ця збірка агента не знає такого типу накладання</value></data>
+  <data name="RefusedStopped" xml:space="preserve"><value>відхилено: служба агента зупиняється</value></data>
+  <data name="KindLock" xml:space="preserve"><value>Блокування</value></data>
+  <data name="KindExam" xml:space="preserve"><value>Іспит</value></data>
+  <data name="KindInternet" xml:space="preserve"><value>Обмеження інтернету</value></data>
+  <data name="KindExamInternet" xml:space="preserve"><value>Обмеження інтернету на іспиті</value></data>
+  <data name="KindBroadcast" xml:space="preserve"><value>Трансляція</value></data>
+  <data name="BroadcastExpired" xml:space="preserve"><value>Трансляція екрана на цьому ПК завершилася після досягнення ліміту.</value></data>
+  <data name="BroadcastFailed" xml:space="preserve"><value>Не вдалося показати трансляцію екрана: {0}.</value></data>
+  <data name="BroadcastStalled" xml:space="preserve"><value>Трансляція екрана не передавала зображення {0} с; цей ПК повернув собі екран.</value></data>
+  <data name="RefusedNoSession" xml:space="preserve"><value>відхилено: у трансляції не вказано сеанс</value></data>
+  <data name="StampNever" xml:space="preserve"><value>ніколи</value></data>
+  <data name="RefusedNoInternetSession" xml:space="preserve"><value>відхилено: на цьому ПК немає такого обмеження інтернету, щоб його змінити</value></data>
+  <data name="RefusedUnknownMode" xml:space="preserve"><value>відхилено: ця збірка агента не знає такого режиму інтернету</value></data>
+  <data name="InternetFirewallOff" xml:space="preserve"><value>Брандмауер Windows вимкнено для мережевого профілю, який використовує цей ПК, тому обмеження інтернету тут неможливо застосувати</value></data>
+  <data name="InternetReadBack" xml:space="preserve"><value>обмеження інтернету після зчитування не виглядає застосованим ({0})</value></data>
+  <data name="InternetStepFailed" xml:space="preserve"><value>не вдалося змінити брандмауер або DNS: {0}</value></data>
+  <data name="InternetResolverFailed" xml:space="preserve"><value>DNS-фільтр дозволених сайтів не зміг прослуховувати інтерфейс зворотної петлі ({0}); можливо, порт 53 використовує інша програма</value></data>
+  <data name="UpdateRefusedPolicy" xml:space="preserve"><value>відхилено: на цьому ПК діє обмеження інтернету; зніміть його, а потім надішліть оновлення</value></data>
+  <data name="RefusedNoExamSession" xml:space="preserve"><value>відхилено: на цьому ПК немає такого іспиту, щоб його завершити</value></data>
+  <data name="ExamClosedProgram" xml:space="preserve"><value>{0} закрито: іспит не дозволяє цю програму</value></data>
+  <data name="ExamTimeUp" xml:space="preserve"><value>Час іспиту вичерпано; екран заблоковано, доки викладач його не розблокує.</value></data>
+  <data name="ExamProgramWouldNotEnd" xml:space="preserve"><value>{0} не дозволено під час іспиту, але програма не завершилася ({1})</value></data>
+</root>

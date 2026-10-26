@@ -4898,3 +4898,46 @@ or 2; whether Linux and Windows PCs must coexist in one lab.
 | Avalonia.Headless, Avalonia.Skia | tests | the console's windows built and rendered off screen for the UI tests (D-27) |
 | NSubstitute | tests | *planned* — added when the first interface actually needs faking |
 | Markdig | tools/DocsBuild | Markdown → HTML mirror of the documentation (D-12) |
+
+## D-86 — The console's language: chosen once, applied at start, carried to the PCs (M7 portion 1)
+
+Context (2026-10-26): `D-67` fixed the three languages and the rule; M7 starts with them. The
+console's text is resolved when a window, a view model or a tile is built — `LocalizeExtension`
+returns a string, view models format labels once — so a live switch would leave half the
+screen in the old language unless every one of them were rebuilt.
+
+Decisions:
+
+1. **Applied at start, saved at once** (owner, 2026-10-26). `ConsoleLanguage.Apply` runs in
+   `Program.Main` before the first string is read and sets `Strings.Culture` and the process's
+   UI culture, so Shared resources (policy texts, `INSTALL.txt`) follow. Number and date
+   formats keep the OS region. Choosing in the selector writes `preferences.json` at once;
+   *Restart now* is an ordinary quit — the departure question, the lab released, the data
+   directory's lock let go — after which `Program` starts the same executable with the same
+   options and none of the documents (they were imported). *Stay* clears the restart.
+2. **`preferences.json` at the data root**, schema 1, `language` = `uk` | `en` | `ru` or absent.
+   It belongs to the person at this computer, so it is never in a backup or a lab file. A
+   torn, foreign or newer file means "no choice" for reading (the OS language decides and the
+   log says why); a newer one is not overwritten by a later choice.
+3. **One rule, in Shared** (`ProductLanguages.Resolve`): a supported stored code, else the OS
+   display language or one of its parents (`uk-UA` → `uk`), else English. Setup uses the same
+   rule from the Windows display language (portion 2).
+4. **The selector** shows each language under its own name (`D-67` item 3) in *Settings* and in
+   the lab chooser, so it can be reached before any lab exists.
+5. **The student's language is the console's** (owner, 2026-10-26): stock text drawn on a PC —
+   the lock screen, the exam strip, *Time is up* — is in the language of the console that set
+   it, not the PC's Windows language. Portion 2 carries the language over the link as an
+   additive field; an older agent shows English. Teacher-typed messages are data and are never
+   translated.
+6. **"Lab" is *лабораторія* / *лаборатория*** (owner, 2026-10-26); the remaining terminology
+   is a glossary the owner reviews in the resource files.
+7. **Tests pin English.** Both test assemblies set the UI culture to English in a module
+   initializer and `Strings.Culture` defaults to English until `Apply`, because the owner's Mac
+   reports `ru-UA` and the tests assert English text. The per-language renders run in their
+   own non-parallel collection because the language is process-wide.
+
+Rejected: switching live (every window and cached label rebuilt — more code for a choice made
+once); the language in `profiles.json` (a lab index, not a preference — and a schema bump for
+it); the PC's Windows language for student text (an English Windows would show English whatever
+the teacher chose).
+

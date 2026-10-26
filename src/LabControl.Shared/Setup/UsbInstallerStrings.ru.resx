@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Instructions" xml:space="preserve"><value>1. Держите консоль преподавателя открытой в этой локальной сети и разблокируйте ключ лаборатории перед установкой ПК.
+2. На каждом студенческом ПК запустите {0} от имени администратора.
+3. Выберите номер этого ПК. Создание учётной записи студента и автоматический вход включены по умолчанию. Снимите этот флажок, если хотите использовать существующие учётные записи ПК.
+4. Завершите установку и перезагрузите Windows, чтобы применить имя ПК и настройки питания.
+5. В консоли преподавателя убедитесь, что этот ПК отображается зелёным и подключённым.
+</value></data>
+</root>

@@ -466,6 +466,9 @@ profiles.json     ProfilesDocument: last_used_lab_id and one entry per saved lab
                   (administrator | teacher), authorization state, instance id/name,
                   pc_count, added/last-used times, source. Metadata only: no keys, no
                   certificates. The chooser reads nothing else.
+preferences.json  PreferencesDocument (M7, D-86): this computer's console preferences —
+                  today only `language` (uk | en | ru, absent = the OS language decides).
+                  Never in a backup or a lab file
 console-<date>.log  app-level Serilog log at the root (not per lab); a pre-M5 console's
                   copies under logs/ are moved here once by the migration
 console.lock      held open with FileShare.None for the process lifetime: one console

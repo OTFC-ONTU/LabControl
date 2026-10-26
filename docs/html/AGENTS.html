@@ -355,6 +355,15 @@ procedures in ROADMAP M6, <em>The portion-6 drills</em>. Tests: 1003 Shared + 30
 findings fixed and retested on <code>1.0.0+cc39651</code>; open check: teacher access in the lab (no second
 teacher device). Next by the roadmap: M7; its last item is a UI/UX redesign of every screen
 (owner decision 2026-10-26), which also carries the failed-action feedback.</li>
+<li><strong>M7 portion 1 is built (2026-10-26, <code>D-86</code>), on the Mac</strong>: the console in Ukrainian, English and
+Russian — <code>Shared/Localization/ProductLanguages</code> (stored choice, else a supported OS language,
+else English), <code>preferences.json</code> at the data root, <code>ConsoleLanguage</code> applied in <code>Program.Main</code>,
+the selector in <em>Settings</em> and the chooser with <em>Restart now</em> through the quit path, <code>*.uk.resx</code>
+and <code>*.ru.resx</code> beside every product <code>.resx</code>. A new key goes into all three files
+(<code>ResourceTranslationTests</code>); both test projects pin English (the owner's Mac reports <code>ru-UA</code>).
+Owner decisions: language applies on restart, the student sees the console's language
+(portion 2 carries it to the PC), &quot;lab&quot; = лабораторія / лаборатория. Seven portions in ROADMAP
+M7. Tests: 1032 Shared + 316 Console. Next: the owner reads the translations; portion 2.</li>
 <li><strong>M6 in the physical lab (2026-10-26, build <code>1.0.0+68d0ae5</code>)</strong> passed sections 0–6 of the checklist.
 Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (<code>D-75</code>
 item 12), ends asked while a PC was off are sent on its return with the same session (<code>D-79</code> item 8),
@@ -453,6 +462,8 @@ or the generated HTML stale is not finished.</p>
 <li>UI strings are resources, not hard-coded text. English is the neutral source and
 fallback locale. M7 must ship Ukrainian, English and Russian for every ordinary
 product-facing surface, with an explicit persistent console language choice (<code>D-67</code>).
+Every new or changed key goes into the neutral <code>.resx</code> and its <code>.uk.resx</code> / <code>.ru.resx</code>
+siblings in the same change; <code>ResourceTranslationTests</code> enforces it (<code>D-86</code>).
 Stable protocol identifiers, diagnostic codes and developer logs remain English.</li>
 <li>Prefer simple, well-supported libraries. Record every new NuGet dependency and
 its reason in <code>docs/DECISIONS.md</code>.</li>
@@ -518,7 +529,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-26 15:45 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 16:09 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

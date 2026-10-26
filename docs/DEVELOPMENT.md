@@ -307,7 +307,15 @@ then `netsh advfirewall firewall delete rule name="LabControl Internet (sites)"`
 `(loopback)`, `(local subnet)` and `(agent)` (`netsh` has no `group=` for deleting, the portion-7
 lesson); DNS then needs `netsh interface ip set dns "<adapter>" dhcp` per interface.
 
-**Languages.** The product UI is English today. M7 must ship the complete product-facing
-experience in **Ukrainian, English and Russian**, including the teacher console, Windows
-Setup/removal, stock student-facing text and generated USB instructions. The console will
-have a saved language selector; English remains the safe fallback (`D-67`).
+**Languages.** The console ships in **Ukrainian, English and Russian** (M7 portion 1, `D-86`):
+English is the neutral `*.resx`, Ukrainian and Russian are `*.uk.resx` / `*.ru.resx` beside it
+for every product resource set (console, Setup, overlay, policy texts, `INSTALL.txt`). A new
+key goes into all three files in the same change — `ResourceTranslationTests` fails otherwise,
+and `ConsoleLanguageTests` fails on a key the code names but the English file lacks. The
+language is chosen in *Settings* or the lab chooser, saved in `preferences.json` at the data
+root, and applied at the next start; with no choice the OS display language decides
+(`ru-UA` → Russian), anything unsupported is English. Both test projects pin English, so the
+tests are the same on any Mac. To look at the three languages, run the console tests with
+`LABCONTROL_UI_SHOTS=<dir>` and open the `lang-uk-*` / `lang-ru-*` PNGs. On the PC, stock
+student text and agent messages follow the console's language from portion 2 on; Setup
+follows the Windows display language.

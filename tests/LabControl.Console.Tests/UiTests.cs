@@ -32,7 +32,7 @@ public static class HeadlessApp
 /// </summary>
 public sealed class UiTests
 {
-    private static readonly HeadlessUnitTestSession Session = HeadlessUnitTestSession.StartNew(typeof(HeadlessApp));
+    internal static readonly HeadlessUnitTestSession Session = HeadlessUnitTestSession.StartNew(typeof(HeadlessApp));
 
     [Fact]
     public async Task The_first_run_wizard_creates_a_lab_and_insists_on_a_backup()
@@ -834,7 +834,7 @@ public sealed class UiTests
         Assert.True(done);
     }
 
-    private static async Task Render(Window window, string name)
+    internal static async Task Render(Window window, string name)
     {
         for (var i = 0; i < 3; i++)
         {

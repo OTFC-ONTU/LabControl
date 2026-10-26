@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Title" xml:space="preserve"><value>Установка LabControl</value></data>
+  <data name="Number" xml:space="preserve"><value>Номер ПК</value></data>
+  <data name="CreateStudent" xml:space="preserve"><value>Создать учётную запись студента и включить автоматический вход</value></data>
+  <data name="Changes" xml:space="preserve"><value>Установщик ставит агент класса, задаёт имя этого ПК, настраивает обнаружение в брандмауэре, питание и Wake-on-LAN и добавляет исключение Defender. При создании студента уведомления о конфиденциальности, первом запуске браузера и входе в OneDrive подавляются политикой компьютера, в том числе для других пользователей. Повышение прав администратора запрашивает имя пользователя и пароль, прежде чем плитка администратора будет скрыта; эта политика компьютера действует на всех пользователей. Локальная политика длины и сложности паролей может быть ослаблена, если это нужно для создания студента. Прежние настройки записываются для удаления. Личные учётные записи и файлы сохраняются.</value></data>
+  <data name="Install" xml:space="preserve"><value>Установить / восстановить</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Отмена</value></data>
+  <data name="Reboot" xml:space="preserve"><value>Установка завершена. Перезагрузить сейчас, чтобы применить имя компьютера и настройки питания?</value></data>
+  <data name="RebootCountdown" xml:space="preserve"><value>Установка завершена. Windows перезагрузится через {0} с, чтобы применить имя компьютера и настройки питания. Нажмите «Позже», чтобы продолжить работу и перезагрузить вручную.</value></data>
+  <data name="RebootNow" xml:space="preserve"><value>Перезагрузить</value></data>
+  <data name="RebootLater" xml:space="preserve"><value>Позже</value></data>
+  <data name="UsbNumberNotSaved" xml:space="preserve"><value>Установка завершена, но следующий номер ПК не удалось сохранить на USB-накопитель. На следующем ПК выберите номер вручную.</value></data>
+  <data name="Completed" xml:space="preserve"><value>Установка проверена. LabControl готов; перезагрузите Windows, чтобы применить отложенные настройки.</value></data>
+  <data name="Failed" xml:space="preserve"><value>Установка не завершена. Окно консоли и setup.log в папке данных LabControl указывают шаг с ошибкой. Записанные изменения сохранены, чтобы восстановление или удаление могли повторить попытку.</value></data>
+  <data name="RemoveStudent" xml:space="preserve"><value>Удалить учётную запись студента, созданную этой установкой, вместе со всем профилем? Файлы студента будут удалены безвозвратно.</value></data>
+  <data name="Uninstall" xml:space="preserve"><value>Удалить LabControl с этого компьютера? Личные учётные записи и файлы сохранятся. Записанные настройки будут восстановлены, если их не меняли позже.</value></data>
+  <data name="Unknown" xml:space="preserve"><value>неизвестно</value></data>
+  <data name="NicInventory" xml:space="preserve"><value>[Сеть] {0}; интерфейс {1}; оборудование {2}; MAC {3}; драйвер {4} {5}</value></data>
+  <data name="WakeInventoryUnavailable" xml:space="preserve"><value>[Предупреждение] Windows не удалось прочитать все возможности Ethernet-оборудования. Проверьте шаги «Network» в setup.log и настройки сетевого драйвера.</value></data>
+  <data name="WakeAdapter" xml:space="preserve"><value>[Wake-on-LAN] Физический Ethernet: {0}, MAC {1}. Консоль будет использовать этот адрес после перезапуска агента.</value></data>
+  <data name="WakeAdapterUnavailable" xml:space="preserve"><value>[Предупреждение] Для Wake-on-LAN нет однозначного физического Ethernet-адаптера ({0}). Проверьте Ethernet-подключение и отключите неиспользуемые адаптеры перед восстановлением.</value></data>
+  <data name="WakeNeedsAttention" xml:space="preserve"><value>[Предупреждение] Wake-on-LAN требует внимания: некоторые возможности оборудования настроить не удалось. Проверьте шаги «Network» выше и setup.log. Перезагрузите Windows, включите Wake-on-LAN в BIOS/UEFI, затем проверьте включение после выключения из консоли преподавателя в той же сети.</value></data>
+  <data name="WakeWindowsConfigured" xml:space="preserve"><value>[Wake-on-LAN] Поддерживаемые настройки Windows проверены. Перезагрузите Windows, включите Wake-on-LAN в BIOS/UEFI, затем проверьте включение после выключения из консоли преподавателя в той же сети. Установщик не проверял физическое включение.</value></data>
+  <data name="PushConfigured" xml:space="preserve"><value>[Обновления по сети] Служба агента, правила брандмауэра для обнаружения и восстановление службы настроены. Держите консоль преподавателя запущенной в этой сети; разблокируйте ключ лаборатории и отправьте обновление агента из консоли. Для принятия нужно десять минут непрерывного подключения; если новый агент сбоит, выполняется автоматическое восстановление.</value></data>
+  <data name="UninstallFailed" xml:space="preserve"><value>Удаление не завершено. Прочитайте сообщение в окне консоли и, устранив проблему, повторите из «Установленных приложений». История владения сохранена; ранее подтверждённое удаление студента возобновится при повторе.</value></data>
+  <data name="OperationFailed" xml:space="preserve"><value>Установщику не удалось выполнить эту операцию. Прочитайте сообщение в окне консоли перед повтором. Нерешённая история владения сохранена.</value></data>
+  <data name="StudentRemovalResuming" xml:space="preserve"><value>Возобновляется удаление студента, ранее подтверждённое для этой установки.</value></data>
+  <data name="SignInSidBaselineUnknown" xml:space="preserve"><value>[Предупреждение] Эта установка не записала исходный SID автоматического входа Windows. AutoLogonSID сохранён; его исходное значение нельзя восстановить автоматически. Для остальных записанных настроек входа сохраняется защищённая история восстановления.</value></data>
+  <data name="PendingHostnameChange" xml:space="preserve"><value>Windows ожидает завершения прежней смены имени ПК. Перезагрузите Windows, затем снова запустите установщик.</value></data>
+</root>

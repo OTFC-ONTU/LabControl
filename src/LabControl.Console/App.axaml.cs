@@ -140,6 +140,11 @@ public partial class App : Application
             .CreateLogger();
         _loggers = new SerilogLoggerFactory(Log.Logger);
         _log = _loggers.CreateLogger<App>();
+        _log.LogInformation("Interface language: {Language}", ConsoleLanguage.Running.Code);
+        if (Program.LanguageProblem is { } languageProblem)
+        {
+            _log.LogWarning("preferences.json could not be read; the OS language decides: {Problem}", languageProblem);
+        }
 
         // The lock is ours, so the endpoint is ours too (D-59 item 5): a second launch on this
         // directory forwards its documents here instead of showing the refusal above. A socket
@@ -261,7 +266,10 @@ public partial class App : Application
         }
 
         var chooser = new LabChooserWindow();
-        var viewModel = new LabChooserViewModel(_bootstrap, _controller, chooser, action => Dispatcher.UIThread.Post(action), _log);
+        var viewModel = new LabChooserViewModel(_bootstrap, _controller, chooser, action => Dispatcher.UIThread.Post(action), _log)
+        {
+            Language = NewLanguageChoice(),
+        };
         chooser.DataContext = viewModel;
         viewModel.QuitRequested += () => _desktop.Shutdown();
         viewModel.CreateRequested += () => CreateLabAsync(chooser, viewModel);
@@ -549,6 +557,7 @@ public partial class App : Application
 
         var main = new MainWindow();
         var viewModel = new MainViewModel(session, _bootstrap, main, action => Dispatcher.UIThread.Post(action)) { IsConnecting = connecting };
+        viewModel.Settings.Language = NewLanguageChoice();
         main.DataContext = viewModel;
         viewModel.DisconnectRequested += () => _ = DisconnectAsync(main, viewModel, session);
         viewModel.SwitchLabRequested += labId => _ = SwitchToMovedLabAsync(viewModel, labId);
@@ -659,6 +668,8 @@ public partial class App : Application
         {
             if (!await MayQuitAsync())
             {
+                // A restart for a new language is a quit; Stay keeps this console as it is.
+                Program.RestartAfterExit = false;
                 return;
             }
         }
@@ -668,6 +679,28 @@ public partial class App : Application
         }
 
         await StopAsync();
+    }
+
+    /// <summary>
+    /// The language selector for a window (M7, D-86). <i>Restart now</i> is a quit — the same
+    /// departure question, the lab released — after which <see cref="Program"/> starts the
+    /// console again in the chosen language.
+    /// </summary>
+    private LanguageChoiceViewModel NewLanguageChoice()
+    {
+        var choice = new LanguageChoiceViewModel(Program.Options.DataDirectory, ConsoleLanguage.Running);
+        choice.RestartRequested += () =>
+        {
+            if (_desktop is null || _stopping || _stopped)
+            {
+                return;
+            }
+
+            _log?.LogInformation("Restart requested to switch the interface language to {Language}", choice.Selected.Code);
+            Program.RestartAfterExit = true;
+            _desktop.Shutdown();
+        };
+        return choice;
     }
 
     /// <summary>The departure question for the quit path; <c>true</c> when the console may go.</summary>

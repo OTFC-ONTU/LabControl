@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using LabControl.Console.Services;
 
@@ -15,6 +16,16 @@ internal static class Program
     public static IReadOnlyList<string> Arguments { get; private set; } = [];
 
     private static ConsoleLock? _lock;
+
+    /// <summary>Why <c>preferences.json</c> could not be read, for <see cref="App"/> to log; <c>null</c> when it was fine or absent.</summary>
+    public static string? LanguageProblem { get; private set; }
+
+    /// <summary>
+    /// Set by <i>Restart now</i> in the language selector (M7, D-86) and cleared again when the
+    /// teacher stays at the departure question: once the console has quit — the lab released,
+    /// the data directory's lock let go — <see cref="Main"/> starts it once more.
+    /// </summary>
+    public static bool RestartAfterExit { get; set; }
 
     /// <summary>
     /// The data directory's lock, when <see cref="Main"/> took it before Avalonia started;
@@ -39,6 +50,11 @@ internal static class Program
         }
 
         Options = options;
+
+        // The interface language is fixed for the process (M7, D-86): chosen before the first
+        // string is read, including the refusal a second launch may show.
+        ConsoleLanguage.Apply(options.DataDirectory, out var languageProblem);
+        LanguageProblem = languageProblem;
         // The full command line, not `args`: under `dotnet`, the host strips the assembly path
         // that AppKit will nevertheless report back as an opened file.
         Arguments = Environment.GetCommandLineArgs();
@@ -81,7 +97,15 @@ internal static class Program
             // The lifetime's exit code, not a flat 0: a launch the data directory refuses
             // (App shows why and shuts down with 1) must not look to a script like a console
             // that ran and quit normally.
-            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            var exitCode = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            if (exitCode == 0 && RestartAfterExit)
+            {
+                _lock?.Dispose();
+                _lock = null;
+                Relaunch(args);
+            }
+
+            return exitCode;
         }
         catch (Exception ex)
         {
@@ -91,6 +115,52 @@ internal static class Program
         finally
         {
             _lock?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Starts this console again with the same options and none of the documents it was opened
+    /// with — they were imported already. Under <c>dotnet LabControl.Console.dll</c> the host is
+    /// the process, so the assembly goes first. A start that fails leaves the teacher to open
+    /// the console by hand, as after any quit.
+    /// </summary>
+    private static void Relaunch(string[] args)
+    {
+        try
+        {
+            var executable = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(executable))
+            {
+                return;
+            }
+
+            var start = new ProcessStartInfo(executable) { UseShellExecute = false };
+            if (string.Equals(Path.GetFileNameWithoutExtension(executable), "dotnet", StringComparison.OrdinalIgnoreCase))
+            {
+                start.ArgumentList.Add(typeof(Program).Assembly.Location);
+            }
+
+            // The options and their values only: a bare argument is a document (or macOS's
+            // -psn_ serial), and every "--name" but --import-only takes one value.
+            for (var i = 0; i < args.Length; i++)
+            {
+                if (!args[i].StartsWith("--", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                start.ArgumentList.Add(args[i]);
+                if (args[i] != "--import-only" && i + 1 < args.Length)
+                {
+                    start.ArgumentList.Add(args[++i]);
+                }
+            }
+
+            using var _ = Process.Start(start);
+        }
+        catch (Exception ex)
+        {
+            System.Console.Error.WriteLine("LabControl console could not start again: " + ex.Message);
         }
     }
 

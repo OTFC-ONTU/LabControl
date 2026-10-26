@@ -137,7 +137,9 @@ internal static class Program
             var start = new ProcessStartInfo(executable) { UseShellExecute = false };
             if (string.Equals(Path.GetFileNameWithoutExtension(executable), "dotnet", StringComparison.OrdinalIgnoreCase))
             {
-                start.ArgumentList.Add(typeof(Program).Assembly.Location);
+                // Assembly.Location is empty in a single-file publish (IL3000); under the dotnet
+                // host the assembly sits beside the app's base directory under its own name.
+                start.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, typeof(Program).Assembly.GetName().Name + ".dll"));
             }
 
             // The options and their values only: a bare argument is a document (or macOS's

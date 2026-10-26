@@ -73,6 +73,7 @@ internal static class TestLabHost
         var dataName = "console";
         var teacherLeaf = false;
         var broadcastSource = "synthetic";
+        var hardLimit = 0;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < args.Length; i++)
         {
@@ -89,13 +90,16 @@ internal static class TestLabHost
                 // agent's refusal can be observed. No production console is ever built this way.
                 case "--teacher-leaf": teacherLeaf = bool.Parse(args[i]); break;
                 case "--broadcast-source": broadcastSource = args[i] is "synthetic" or "screen" ? args[i] : throw new ArgumentException("Invalid option."); break;
+                // The fail-safe drill (D-79 item 5): every lock, internet policy and exam proposes this
+                // hard limit instead of the hours-long default; the PC still clamps it to its ceiling.
+                case "--hard-limit-seconds": hardLimit = int.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); break;
                 default: throw new ArgumentException("Unknown option.");
             }
         }
 
         if (!IsFixtureName(dataName)) throw new ArgumentException("An instance directory name is short and alphanumeric.");
         if (bind.AddressFamily != AddressFamily.InterNetwork || bind.Equals(IPAddress.Any) || bind.Equals(IPAddress.Broadcast)
-            || port is < 0 or > 65535 || port == Defaults.ConsolePort || duration is < 0 or > 86400)
+            || port is < 0 or > 65535 || port == Defaults.ConsolePort || duration is < 0 or > 86400 || hardLimit is < 0 or > 86400)
             throw new ArgumentException("Use an explicit IPv4 interface and a nonproduction port.");
 
         string root;
@@ -152,6 +156,10 @@ internal static class TestLabHost
             DataDirectory = data, BindAddress = bind, Port = port, BeaconPort = beaconPort,
         }, store, vault, instance, instance.Document, NullLoggerFactory.Instance);
         if (broadcastSource == "synthetic") session.BroadcastSource = () => new SyntheticBroadcastSource();
+        if (hardLimit > 0)
+        {
+            session.LockLimit = session.InternetLimit = session.ExamLimit = TimeSpan.FromSeconds(hardLimit);
+        }
         await session.StartAsync();
         if (session.Port == Defaults.ConsolePort) throw new IOException("An ephemeral port matched production.");
         var usb = Path.Combine(root, "usb");

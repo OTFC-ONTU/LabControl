@@ -417,6 +417,7 @@ public sealed class DepartureDialog : DialogWindow<DepartureChoice?>
             {
                 DepartureConsequence.Completes => "Departure.Jobs.Completes",
                 DepartureConsequence.CannotBeAborted => "Departure.Jobs.CannotAbort",
+                DepartureConsequence.NotCollected => "Departure.Jobs.NotCollected",
                 _ => "Departure.Jobs.ContinuesOnPc",
             };
             lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format(key, group.Count, kind)));
@@ -442,6 +443,19 @@ public sealed class DepartureDialog : DialogWindow<DepartureChoice?>
             lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format("Departure.Wakes", Names(report.PendingWakes))));
         }
 
+        if (report.BroadcastPcs.Count > 0)
+        {
+            lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format("Departure.Broadcast", Names(report.BroadcastPcs))));
+        }
+
+        AddPolicy(lines, report.Locks, "Departure.Locks");
+        AddPolicy(lines, report.Internet, "Departure.Internet");
+        AddPolicy(lines, report.Exams, "Departure.Exams");
+        if (report.UncollectedExamPcs.Count > 0)
+        {
+            lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format("Departure.ExamWork", Names(report.UncollectedExamPcs))));
+        }
+
         var stay = Secondary(Strings.Get("Departure.Stay"));
         stay.Click += (_, _) => Finish(DepartureChoice.Stay);
 
@@ -456,12 +470,49 @@ public sealed class DepartureDialog : DialogWindow<DepartureChoice?>
             buttons.Add(wait);
         }
 
+        if (report.CanEndPolicies)
+        {
+            var end = Primary(Strings.Get("Departure.EndPolicies"));
+            end.Click += (_, _) => Finish(DepartureChoice.EndPoliciesAndLeave);
+            buttons.Add(end);
+        }
+
         buttons.Add(leave);
         Body(Heading(Strings.Format("Departure.Title", labName)), Label(Strings.Format("Departure.Body", labName)), lines, Buttons(buttons.ToArray()));
     }
 
     private static string Names(IEnumerable<int> numbers) =>
         string.Join(", ", numbers.Select(n => string.Format(Strings.Culture, Defaults.MachineNameFormat, n)));
+
+    private static void AddPolicy(StackPanel lines, DeparturePolicy policy, string key)
+    {
+        if (policy.IsEmpty)
+        {
+            return;
+        }
+
+        var by = policy.EndsBy is { } at ? at.ToLocalTime().ToString("t", Strings.Culture) : string.Empty;
+        lines.Children.Add(Label(Strings.Get("Common.Bullet") + Strings.Format(key, Names(policy.Pcs), by)));
+    }
+}
+
+/// <summary>
+/// <i>Unlocking and opening the internet…</i>: runs <see cref="LabSession.EndLocksAndInternetAsync"/>
+/// as soon as it opens and closes itself when the PCs are clear or the bounded wait is over
+/// (D-79 item 1). It has no <i>Cancel</i>: the wait is at most <see cref="Defaults.DeparturePolicyEndBudget"/>.
+/// </summary>
+public sealed class EndPoliciesDialog : DialogWindow<bool?>
+{
+    public EndPoliciesDialog(LabSession session)
+    {
+        Title = Strings.Get("Departure.EndingTitle");
+        Body(Heading(Strings.Get("Departure.EndingTitle")), Label(Strings.Get("Departure.Ending")), new ProgressBar { IsIndeterminate = true });
+        Opened += async (_, _) =>
+        {
+            await session.EndLocksAndInternetAsync(Defaults.DeparturePolicyEndBudget);
+            Finish(true);
+        };
+    }
 }
 
 /// <summary>

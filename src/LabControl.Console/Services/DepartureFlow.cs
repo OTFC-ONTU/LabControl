@@ -6,6 +6,9 @@ public enum DepartureChoice
     Stay = 0,
     Leave = 1,
     Wait = 2,
+
+    /// <summary>Unlock the PCs, lift their standalone internet policies, then leave (D-79 item 1); an exam continues.</summary>
+    EndPoliciesAndLeave = 3,
 }
 
 /// <summary>
@@ -20,6 +23,9 @@ public interface IDeparturePrompt
 
     /// <summary>Waits until nothing is running any more; <c>false</c> when the teacher cancelled the wait.</summary>
     Task<bool> WaitForJobsAsync(LabSession session);
+
+    /// <summary>Unlocks and opens the internet with the teacher watching; the console uses <see cref="LabSession.EndLocksAndInternetAsync"/>.</summary>
+    Task EndPoliciesAsync(LabSession session);
 }
 
 /// <summary>
@@ -48,7 +54,8 @@ public sealed class DepartureFlow
     /// <summary>
     /// Whether the console may leave <paramref name="session"/> now. An empty report leaves at
     /// once and asks nothing; <i>Stay</i> answers <c>false</c> and the session stays live;
-    /// <i>Wait for N jobs</i> waits and then leaves, unless the wait itself was cancelled.
+    /// <i>Wait for N jobs</i> waits and then leaves, unless the wait itself was cancelled;
+    /// <i>Unlock, open the internet and leave</i> ends those first and leaves whatever the PCs say.
     /// A session that is not the active one any more (a switch overtook this question, or the
     /// controller has already released it) is never in the way.
     /// </summary>
@@ -70,8 +77,19 @@ public sealed class DepartureFlow
         {
             DepartureChoice.Stay => false,
             DepartureChoice.Wait => await _prompt.WaitForJobsAsync(session) && !session.IsDisposed,
+            DepartureChoice.EndPoliciesAndLeave => await EndPoliciesAsync(session),
             _ => true,
         };
+    }
+
+    private async Task<bool> EndPoliciesAsync(LabSession session)
+    {
+        if (!session.IsDisposed)
+        {
+            await _prompt.EndPoliciesAsync(session);
+        }
+
+        return true;
     }
 
     /// <summary>

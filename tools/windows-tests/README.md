@@ -129,6 +129,12 @@ shows — and `--broadcast-source screen` captures the Mac's real display instea
 sees; switch the PC to full mode with `full-screen` first. It cannot see Winlogon.
 The status file carries `broadcasting` and `broadcast_targets`.
 
+For the M6 fail-safe drill (`D-79` item 5), `--hard-limit-seconds N` (1…86400) at startup
+makes every lock, internet policy and exam the fixture sets propose a hard limit of `N`
+seconds instead of the hours-long defaults, so "the PC restores itself at the hard limit"
+can be watched in minutes. It can only shorten a limit: the PC clamps whatever it is sent to
+its own ceiling, which the Console tests prove separately (`FailSafeTests`).
+
 Copy only the reported `usb/LabControl` directory into the fixture media. Never copy its
 `console` directory. When using read-only ISO media, copy the USB payload to a writable
 fixture directory in the guest before running Setup: enrollment consumes a one-use code.

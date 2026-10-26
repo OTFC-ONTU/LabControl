@@ -339,6 +339,18 @@ iterative <code>ProfileWipe</code>; full = log off, <code>DeleteProfile</code> b
 the token and never follow links as SYSTEM. The VM drill fixed an offline <em>End exam</em> never reporting PCs
 missing and a light reset removing Windows' hidden system junctions. Tests: 1003 Shared + 301 Console.
 Next: portion 6.</li>
+<li><strong>M6 portion 6 is built (2026-10-26, <code>D-79</code>), on the Mac; its VM drills are next.</strong> The departure
+contract: <code>DepartureReport</code> names the broadcast that ends, the locks and standalone internet
+policies that stay, the exams that continue (each with its latest self-lift) and the exam work the
+session would have collected; <em>Unlock, open the internet and leave</em> (owner decision 2026-10-26)
+ends locks and standalone policies, waits up to <code>Defaults.DeparturePolicyEndBudget</code> for the PCs'
+word and never ends an exam; exam work is collected by hand on return, never remembered.
+<code>Defaults.ProtocolVersion</code> is 2 and <code>ClassroomControlProtocolVersion</code> 2: a lock, broadcast,
+internet policy or exam is <em>set</em> only on a version-2 agent, every <em>end</em> goes to any non-outdated
+one, <code>MinimumProtocolVersion</code> stays 1 — push the current build to the physical lab (it reports 1)
+before setting anything there. The <code>D-56</code> amendment (a teacher console may do all of M6). Drills
+use <code>LabSession.LockLimit</code>/<code>InternetLimit</code>/<code>ExamLimit</code> via <code>TestLabHost --hard-limit-seconds</code>;
+procedures in ROADMAP M6, <em>The portion-6 drills</em>. Tests: 1003 Shared + 308 Console.</li>
 <li>The Windows student agent must survive reboots and must not let a failed Win32
 operation escape the service loop.</li>
 <li>Physical lab status (2026-09-08 evening): five PCs installed and linked from the
@@ -494,7 +506,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-23 17:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 10:48 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

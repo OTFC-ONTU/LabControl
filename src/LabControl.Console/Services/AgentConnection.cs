@@ -317,6 +317,12 @@ public sealed class AgentConnection
     /// <summary>Newer than this console: usable, but the console should be updated too.</summary>
     public bool IsNewer => Hello.ProtocolVersion > Defaults.ProtocolVersion;
 
+    /// <summary>
+    /// The agent enforces classroom control (M6, D-79 item 4): a lock, a broadcast, an internet
+    /// policy or an exam is <i>set</i> only on such a PC. Ending one is sent to any PC.
+    /// </summary>
+    public bool SupportsClassroomControl => !IsOutdated && Hello.ProtocolVersion >= Defaults.ClassroomControlProtocolVersion;
+
     public ChannelReader<ConsoleMessage> Outgoing => _outgoing.Reader;
 
     public CancellationToken Closing => _closing.Token;

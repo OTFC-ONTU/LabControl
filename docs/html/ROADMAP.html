@@ -200,7 +200,7 @@ implement.</p>
 <tr>
 <td><strong>M6</strong></td>
 <td>Classroom control: broadcast, lock, exam mode</td>
-<td><strong>in progress — plan settled 2026-09-16 (<code>D-69</code>…<code>D-79</code>, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, <em>Lock screens</em> in the console, the simulator's lock; <strong>portion 1 verified in an isolated Windows 11 ARM64 VM on 2026-10-17</strong>, desktop-following defects fixed (<code>D-81</code>); physical Windows x64/fleet acceptance remains open. <strong>Portion 2 built on 2026-10-17</strong> (<code>D-71</code>, <code>D-72</code>): the teacher's screen captured by CoreGraphics on macOS or GDI on Windows, scaled to 1280 wide inside the source, encoded once and fanned out over a new server-streaming <code>PullBroadcast</code> with a latest-wins slot per PC; the helper shows it in the lock's window with input blocked, a lock on top; it ends with its stream and at 30 min on the PC's own clock; <em>Show my screen</em> / <em>Stop showing</em> in the console and a <em>WATCHING</em> tile badge. Review fixes and a partial ARM64 VM drill on 2026-10-17 (<code>D-71</code> items 9–11), a second review with three more fixes (items 12–14) and the drill continued the same day: keyboard refusal with a positive control, service restart, reboot and the Mac's real display passed; physical mouse refusal, the readability check and the physical lab remain. <strong>Portion 3 built on the Mac on 2026-10-17</strong> (<code>D-73</code>, <code>D-74</code>): internet control — every profile's default outbound block after the <code>agent.exe</code>, local-subnet and loopback rules, other programs' outbound allow rules switched off for the policy, the loopback whitelist resolver admitting allowed answers to one rule before they leave, DNS pointed at it in both families, exact restore, the watchdog task restoring a dead service's PC without re-applying; <em>Internet…</em> in the console with presets, the 8 h ceiling and the refused names with <em>Allow</em>; a tile badge. <strong>VM drill passed on 2026-10-20</strong> after two fixes (no loopback rule; the resolver state read after a change), and the 14-PC physical-lab drill the same day. <strong>Portion 4 built on the Mac on 2026-10-23</strong> (<code>D-75</code>, <code>D-76</code>): exam mode — the timer with a strip on the student's screen and a &quot;Time is up&quot; lock, the allowed-programs whitelist in the service (session and token before name, a polite opening sweep), the internet switch handing back to a standalone policy, presets, late PCs joining. <strong>VM drill passed on 2026-10-23</strong> after five fixes (protected processes never judged; the remaining time aged on a re-send and on <em>Extend</em>; the strip widened for the sweep's warning; a new exam forgetting the last one's closed programs; more quiet helpers, <code>D-75</code>). Next: the physical lab. <strong>Portion 5 built on the Mac on 2026-10-23</strong> (<code>D-77</code>, <code>D-78</code>): collect work — the additive <code>RequestUpload</code>, the folder packed under the student's token and unpacked into <code>&lt;name date&gt;/PC-07/</code> with a report, exams collecting at their end, <em>Collect files…</em>, PCs off reported missing — and profile reset, light and full, refused during an exam and on account-off; <strong>VM drill passed on 2026-10-23</strong> after two fixes (an exam ended with its PCs off now reports them missing; a light reset keeps Windows' hidden system junctions). Next: portion 6</strong></td>
+<td><strong>in progress — plan settled 2026-09-16 (<code>D-69</code>…<code>D-79</code>, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, <em>Lock screens</em> in the console, the simulator's lock; <strong>portion 1 verified in an isolated Windows 11 ARM64 VM on 2026-10-17</strong>, desktop-following defects fixed (<code>D-81</code>); physical Windows x64/fleet acceptance remains open. <strong>Portion 2 built on 2026-10-17</strong> (<code>D-71</code>, <code>D-72</code>): the teacher's screen captured by CoreGraphics on macOS or GDI on Windows, scaled to 1280 wide inside the source, encoded once and fanned out over a new server-streaming <code>PullBroadcast</code> with a latest-wins slot per PC; the helper shows it in the lock's window with input blocked, a lock on top; it ends with its stream and at 30 min on the PC's own clock; <em>Show my screen</em> / <em>Stop showing</em> in the console and a <em>WATCHING</em> tile badge. Review fixes and a partial ARM64 VM drill on 2026-10-17 (<code>D-71</code> items 9–11), a second review with three more fixes (items 12–14) and the drill continued the same day: keyboard refusal with a positive control, service restart, reboot and the Mac's real display passed; physical mouse refusal, the readability check and the physical lab remain. <strong>Portion 3 built on the Mac on 2026-10-17</strong> (<code>D-73</code>, <code>D-74</code>): internet control — every profile's default outbound block after the <code>agent.exe</code>, local-subnet and loopback rules, other programs' outbound allow rules switched off for the policy, the loopback whitelist resolver admitting allowed answers to one rule before they leave, DNS pointed at it in both families, exact restore, the watchdog task restoring a dead service's PC without re-applying; <em>Internet…</em> in the console with presets, the 8 h ceiling and the refused names with <em>Allow</em>; a tile badge. <strong>VM drill passed on 2026-10-20</strong> after two fixes (no loopback rule; the resolver state read after a change), and the 14-PC physical-lab drill the same day. <strong>Portion 4 built on the Mac on 2026-10-23</strong> (<code>D-75</code>, <code>D-76</code>): exam mode — the timer with a strip on the student's screen and a &quot;Time is up&quot; lock, the allowed-programs whitelist in the service (session and token before name, a polite opening sweep), the internet switch handing back to a standalone policy, presets, late PCs joining. <strong>VM drill passed on 2026-10-23</strong> after five fixes (protected processes never judged; the remaining time aged on a re-send and on <em>Extend</em>; the strip widened for the sweep's warning; a new exam forgetting the last one's closed programs; more quiet helpers, <code>D-75</code>). Next: the physical lab. <strong>Portion 5 built on the Mac on 2026-10-23</strong> (<code>D-77</code>, <code>D-78</code>): collect work — the additive <code>RequestUpload</code>, the folder packed under the student's token and unpacked into <code>&lt;name date&gt;/PC-07/</code> with a report, exams collecting at their end, <em>Collect files…</em>, PCs off reported missing — and profile reset, light and full, refused during an exam and on account-off; <strong>VM drill passed on 2026-10-23</strong> after two fixes (an exam ended with its PCs off now reports them missing; a light reset keeps Windows' hidden system junctions). <strong>Portion 6 built on the Mac on 2026-10-26</strong> (<code>D-79</code>): the departure contract for every policy with <em>Unlock, open the internet and leave</em> (the exam continues), protocol version 2 gating what is set, the <code>D-56</code> amendment, the fail-safe drills written down with a short hard limit for the fixture. Next: the portion-6 VM drills, then the physical lab</strong></td>
 <td>M5</td>
 </tr>
 <tr>
@@ -2269,7 +2269,7 @@ subsection wins, and ARCHITECTURE §6 was amended when portion 5 landed. Portion
 built and has passed ARM64 VM acceptance; portion 2 is built, review-fixed and has passed a partial VM drill;
 portion 3 is built and has passed its VM drill and the physical lab; portion 4 is built
 (2026-10-23) and has passed its VM drill the same day; portion 5 is built (2026-10-23) and passed
-its VM drill the same day; portion 6 remains to be implemented.</p>
+its VM drill the same day; portion 6 is built (2026-10-26) and waits for its VM drills.</p>
 <h4 id="owner-decisions-2026-09-09-binding">Owner decisions (2026-09-09, binding)</h4>
 <ol>
 <li><strong>Lock hard limit = 1 hour</strong> (<code>Defaults.LockHardLimit</code>). Rationale: a lock is &quot;look at
@@ -2477,7 +2477,47 @@ the rename hole (a renamed exe passes) stated in one sentence in the UI.</li>
 <li>Fail-safe drill needs an explicitly short hard limit plus a separate clamp test — the
 ROADMAP must say so. Drill 4 split into <code>sc stop</code> / kill / power-loss.</li>
 <li>New drill: corrupt/half-written <code>policy.json</code> → PC still restores.</li>
+<li>Owner decisions of 2026-10-26: the departure dialog offers <em>Unlock, open the internet and
+leave</em> — locks and standalone internet policies ended, <strong>the exam is not</strong>; exam work that
+the session would collect at the end is warned about and collected by hand on return, never
+remembered across sessions (<code>D-79</code> items 2–3).</li>
 </ul>
+<h4 id="the-portion-6-drills-on-the-vm-then-the-physical-lab-d-79-item-6">The portion-6 drills (on the VM, then the physical lab; <code>D-79</code> item 6)</h4>
+<p>Every drill runs against a built <code>win-x64</code> (lab) or <code>win-arm64</code> (VM) agent of the portion-6
+commit — a PC reporting protocol 1 is set nothing (<code>D-79</code> item 4), so push the build first.
+The fixture is <code>tools/windows-tests/TestLabHost</code> started with <strong><code>--hard-limit-seconds 300</code></strong>:
+the real limits are 1 h, 8 h and 4 h, and a drill that waits for them proves nothing a
+five-minute one does not. The ceiling itself is proven separately on the Mac
+(<code>FailSafeTests.A_far_hard_limit_is_clamped_to_the_pcs_own_ceiling</code>, the journal's clamp
+tests); do not try to prove it on a PC by waiting four hours.</p>
+<ol>
+<li><strong>Console gone.</strong> <code>exam-start</code> with <code>seconds</code> 3600, <code>internet</code> &quot;whitelist&quot; (<code>hosts</code>
+<code>docs.oracle.com</code>), <code>restrict</code> true; on a second PC <code>lock-screens</code> 0 and
+<code>internet-whitelist</code>. Close the Mac's lid (or <code>stop</code> the fixture) and leave it. Within
+five minutes plus a second of the start each PC is unlocked, out of the exam, its DNS and
+firewall back exactly as before (<code>Get-DnsClientServerAddress</code>, <code>Get-NetFirewallProfile</code>
+compared with the snapshot taken before the drill), and <code>policy.json</code> holds no session.</li>
+<li><strong>Service death, three ways</strong>, each under a whitelist exam started fresh:
+(a) <code>sc stop LabControl</code> — <code>OnStop</code> restores at once; the internet is back while the
+service is stopped; <code>sc start</code> re-applies the exam with its remaining time;
+(b) <code>taskkill /f</code> on <code>agent.exe</code> — no <code>OnStop</code>: the PC stays restricted until the service
+restarts (<code>sc failure</code> recovery), which restores first and re-applies second;
+(c) pull the power — after boot the internet is back before anything is re-applied (the
+service's start pass, and the watchdog task if the service is slow), then the exam returns
+with the correct remaining time.</li>
+<li><strong>Corrupt <code>policy.json</code>.</strong> Under a lock and a whitelist, stop the service, truncate
+<code>C:\ProgramData\LabControl\policy.json</code> to half its length (and in a second run, fill it
+with garbage), start the service: the PC is open and unlocked, links, and the console shows
+<code>policy.unreadable</code>; nothing is re-applied and nothing blocks the next policy.</li>
+<li><strong>Departure.</strong> With a lock, a standalone block, an exam collecting <code>Desktop\Exam</code> and a
+broadcast on four PCs, press <em>Disconnect</em>: the dialog names each with its latest end and
+warns about the exam's work. <em>Unlock, open the internet and leave</em>: the lock and the block
+end within seconds, the exam and its strip continue, the broadcast stops; back in the lab,
+<em>Collect files…</em> of <code>Desktop\Exam</code> after the exam ended brings the work.</li>
+<li><strong>Teacher access.</strong> From a console with teacher access (<code>--teacher-leaf true</code> presents
+the role; a real teacher device has no key), lock, block and run an exam on one PC; each
+applies, and <code>self_update</code> is still refused by role.</li>
+</ol>
 <h4 id="known-pre-existing-test-failure-not-m6s">Known pre-existing test failure (not M6's)</h4>
 <p><code>LabSwitchTests.Twenty_rounds_of_switching_leak_neither_sessions_nor_threads_nor_handles</code>
 fails on clean <code>main</code> (bdc5b6f) under load: <code>:333</code> fixed 15 s for 30 PCs to link, <code>:371</code>
@@ -2919,6 +2959,20 @@ installation had just been removed ended with a <em>Conflict</em> at <em>Adminis
 (the student was activated and signed in; M4 to look at). Tests: 1003 Shared + 301 Console. <strong>Not
 covered:</strong> <code>win-x64</code>, Word holding a document open, OneDrive moving a known folder, thirty PCs at
 once, the physical lab. <strong>Next:</strong> portion 6.</li>
+<li><em>Portion 6 built (2026-10-26), on the Mac</em> (<code>D-79</code>). The departure contract: <code>DepartureReport</code>
+names the broadcast that ends, the locks and standalone internet policies that stay, the exams
+that continue — each with the latest moment it lifts by itself — and the exam work this session
+would have collected; a running collection is <em>not collected</em>. <em>Unlock, open the internet and
+leave</em> (owner decision 2026-10-26) ends the locks and the standalone policies, waits up to 10 s
+for the PCs to confirm, names a PC that did not (<code>departure.policies_held</code>) and never ends an
+exam. <code>ProtocolVersion</code> 2 with <code>ClassroomControlProtocolVersion</code> 2: classroom control is set only
+on an agent of version 2 and ended on any (<code>link.no_classroom_control</code> once per link), the frozen
+subset and the minimum unchanged. The <code>D-56</code> amendment, tested over the real link from a
+teacher console. The drills' short limit: <code>LabSession.LockLimit</code>/<code>InternetLimit</code>/<code>ExamLimit</code>
+and the fixture's <code>--hard-limit-seconds</code>; the drills themselves are written down above
+(<em>The portion-6 drills</em>). Tests: <code>DepartureTests</code>, <code>FailSafeTests</code>, the teacher-access test, the
+departure dialog render — 1003 Shared + 308 Console. <strong>Not yet run on Windows.</strong> <strong>Next:</strong> the
+portion-6 drills on the VM, then every M6 drill in the physical lab after pushing this build.</li>
 </ul>
 <hr />
 <h2 id="m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish<a class="anchor" href="#m7-software-catalog-localization-polish" aria-label="Link to this section">#</a></h2>
@@ -3161,7 +3215,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-23 17:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 10:48 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish">M7 — Software catalog, localization, polish</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

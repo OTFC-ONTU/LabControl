@@ -2205,7 +2205,9 @@ Decisions:
    `job.refused_by_role` before pulling any manifest; `RenewalLoopAsync` is skipped on
    teacher links. Older agents treat a teacher leaf as a full console — a documented gap
    closed by the next agent push, not by a wire negotiation; `Welcome.console_access` is
-   informational only.
+   informational only. **Amended for M6** (owner decision 3, 2026-09-09; `D-79` item 5): a
+   teacher-access console may also lock, broadcast, run an exam, control the internet and reset
+   profiles — `self_update` and `rekey` stay the only role-gated jobs.
 6. **A device is revoked across renewal with a pseudo-serial.** *Settings → Teacher
    devices → Withdraw access…* (unlock required) issues two signed entries through
    `Registry.Revoke`: the current leaf serial and `instance:<instance_id>`, in the same
@@ -4338,6 +4340,93 @@ Rejected: `Win32_UserProfile.Delete` (WMI for one call Setup already makes nativ
 profile directory by path (`D-52`'s rule: never a path from an account name); a light reset that
 logs the student off first (the owner's light reset is between groups, with the student signed in);
 a reset during an exam.
+
+## D-79 — M6 in six portions; the departure contract for lock, broadcast, exam and internet; protocol version 2 (M6 portion 6)
+
+Context (2026-10-26): the six-portion plan of 2026-09-16 (ROADMAP M6, *Milestone shape*) left
+three things to its last portion. M5's departure report (`D-57` item 3) knew only jobs, uploads,
+probation and wakes, while portions 1–5 had each said "lab departure does not end it" and left the
+contract open (`D-70` item 3, `D-73` item 10); owner decision 3 of 2026-09-09 — a `teacher`-access
+console may do everything in M6 — was still to become a line in `D-56`; and every M6 message went
+to any agent that was not outdated, although an agent from before M6 ignores them, so a lock or an
+exam sent to one left the teacher waiting for a state that never came. Owner decisions of
+2026-10-26: the departure dialog offers to end the locks and the internet policies before leaving,
+**not** the exam; exam work that would be collected at the end is warned about and collected by
+hand later, never remembered across sessions.
+
+Decisions:
+
+1. **The departure report names classroom control by the PCs' own word** (`DepartureReport`): the
+   PCs shown this console's screen (the broadcast ends — it is the first release step, `D-71`); the
+   PCs holding a lock and those holding a **standalone** internet policy, which stay until a console
+   of the lab ends them or their limit passes; the PCs in an exam, which continues to its timer or
+   its limit. Each line gives the latest moment one of those PCs lifts it by itself, on this
+   console's clock: the lock's and the internet's `remaining_seconds` are as of their last send and
+   are not aged, so the moment is never earlier than the truth; the exam's are aged from arrival like
+   *Extend* (`D-75`). An exam's own internet switch (session id + `PolicyJournal.ExamInternetSuffix`)
+   is the exam's and is not listed as an internet policy. PCs that are not linked are not listed —
+   the console cannot know what they hold.
+2. **Work collection keeps its owner, and says so.** Exam collections live in the session's memory
+   (`D-77` item 5) and die with it: the report lists the PCs of a remembered exam whose work was not
+   asked for yet ("stays in the exam folder; collect it with *Collect files…* when you come back").
+   A running `collect_files` job is `DepartureConsequence.NotCollected` — its grant is the session's
+   and the agent's later `RequestUpload` is refused — no longer "continues on the PC".
+3. ***Unlock, open the internet and leave*** (`DepartureChoice.EndPoliciesAndLeave`), offered only
+   when a lock or a standalone internet policy is held: `LabSession.EndLocksAndInternetAsync`
+   unlocks every linked PC holding a lock and lifts every standalone policy, whoever set them (any
+   console of the lab may, owner decision 4), and never touches an exam or its internet switch. It
+   waits for the PCs' own word, at most `Defaults.DeparturePolicyEndBudget` (10 s), because the
+   departure closes every link and `AgentConnection.Close` drops what is still queued; a PC that has
+   not confirmed by then keeps it to its own limit and is named in `departure.policies_held`. The
+   console shows *Unlocking and opening the internet* meanwhile, without *Cancel* — the wait is
+   bounded.
+4. **Protocol version 2** (`Defaults.ProtocolVersion`), and `ClassroomControlProtocolVersion = 2`:
+   a lock, a broadcast, a standalone internet policy and an exam are **set** only on an agent that
+   reports at least 2 (`AgentConnection.SupportsClassroomControl`); every **end** — unlock, open,
+   end exam, stop showing, *Allow* on a held whitelist, *Extend* on a held exam — still goes to any
+   agent that is not outdated, because an M6 build from before the bump (the physical lab runs the
+   portion-3 build, which reports 1) may hold a policy, and an older one ignores the message. A
+   version-1 agent is **not outdated**: `MinimumProtocolVersion` stays 1, so scripts, files,
+   screens, updates and the move to a new key work as before, and the console says once per link
+   `link.no_classroom_control` — "push the current agent build". The frozen subset is untouched
+   (`D-19`). The physical lab therefore needs the current agent pushed before the console sets
+   anything there, which portions 4 and 5 need anyway.
+5. **The `D-56` amendment** (owner decision 3, 2026-09-09): a `teacher`-access console may lock,
+   broadcast, run an exam, control the internet and reset profiles; `self_update` and `rekey` stay
+   the only jobs refused by role. Nothing on the agent changes — its ownership gate judges the
+   console *instance*, never the role. `TeacherAccessTests` drives a lock, an internet policy and an
+   exam from a teacher console over the real link.
+6. **The fail-safe drills need an explicitly short hard limit**, because the real ones are hours:
+   `LabSession.LockLimit`, `InternetLimit` and `ExamLimit` (defaults `Defaults.LockHardLimit`,
+   `InternetPolicyHardLimit`, `ExamHardLimit`) are the *proposed* limits, which the PC clamps to its
+   own ceiling, so they can only shorten a policy's life; the drill fixture sets them with
+   `--hard-limit-seconds`. Because a short limit alone never shows that the ceiling holds, a
+   separate test proposes thirty days and sees each one clamped (`FailSafeTests`, besides the
+   journal's own clamp tests). The service-death drill is split into three — `sc stop` (graceful,
+   `OnStop` restores), killing the process (no `OnStop`; the service-start pass restores) and
+   pulling the power (the boot pass and the watchdog task) — and a corrupt or half-written
+   `policy.json` is its own drill: the PC restores, links and reports `policy.unreadable`.
+7. **The six portions**, for the record: (1) the policy journal and the lock (`D-69`, `D-70`);
+   (2) broadcast (`D-71`, `D-72`); (3) internet control (`D-73`, `D-74`); (4) exam mode (`D-75`,
+   `D-76`); (5) collect work and profile reset (`D-77`, `D-78`); (6) this entry. Each was committed
+   and then run on the Windows 11 ARM64 VM before the next; the physical lab follows.
+
+Rejected: ending the exam on departure (owner decision: it is the students' test, with its own
+timer); remembering an exam's collection across sessions (owner decision, as `D-77` rejected it
+across a restart); leaving without waiting after ending (the queued unlock dies with the link);
+raising `MinimumProtocolVersion` to 2 (every version-1 PC would become *outdated* and lose scripts,
+screens and the move to a new key until updated); gating the ends by version too (a portion-3 PC
+holding a whitelist could not be opened); a capability field in `Hello` (it is frozen, and the
+version says the same).
+
+Validation (2026-10-26, on the Mac): `DepartureTests` — the report over three simulated PCs names a
+lock and a block on one, an exam with its own block and work to collect on another, a broadcast on
+the third, with their latest ends; ending them leaves the exam and its block; a PC that never
+confirms is named and the wait stays bounded; a version-1 agent is set nothing yet is sent every
+end; `FailSafeTests` — with a four-second limit and the console gone, an exam with its block and
+whitelist, a lock and a whitelist all restore by themselves, and a thirty-day proposal is clamped
+to one, eight and four hours; `TeacherAccessTests` — the amendment; `UiTests` — the dialog with
+policies and its button. Tests: 1003 Shared + 308 Console. Not yet run on Windows.
 
 ## D-80 — Public repository: MIT, a README that is a project page, links that work in the mirror
 

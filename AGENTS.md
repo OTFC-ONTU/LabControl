@@ -199,6 +199,18 @@ the documents relevant to the task:
   the token and never follow links as SYSTEM. The VM drill fixed an offline *End exam* never reporting PCs
   missing and a light reset removing Windows' hidden system junctions. Tests: 1003 Shared + 301 Console.
   Next: portion 6.
+- **M6 portion 6 is built (2026-10-26, `D-79`), on the Mac; its VM drills are next.** The departure
+  contract: `DepartureReport` names the broadcast that ends, the locks and standalone internet
+  policies that stay, the exams that continue (each with its latest self-lift) and the exam work the
+  session would have collected; *Unlock, open the internet and leave* (owner decision 2026-10-26)
+  ends locks and standalone policies, waits up to `Defaults.DeparturePolicyEndBudget` for the PCs'
+  word and never ends an exam; exam work is collected by hand on return, never remembered.
+  `Defaults.ProtocolVersion` is 2 and `ClassroomControlProtocolVersion` 2: a lock, broadcast,
+  internet policy or exam is *set* only on a version-2 agent, every *end* goes to any non-outdated
+  one, `MinimumProtocolVersion` stays 1 — push the current build to the physical lab (it reports 1)
+  before setting anything there. The `D-56` amendment (a teacher console may do all of M6). Drills
+  use `LabSession.LockLimit`/`InternetLimit`/`ExamLimit` via `TestLabHost --hard-limit-seconds`;
+  procedures in ROADMAP M6, *The portion-6 drills*. Tests: 1003 Shared + 308 Console.
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the

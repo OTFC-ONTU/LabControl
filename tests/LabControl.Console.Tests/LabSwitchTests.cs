@@ -975,6 +975,8 @@ public sealed class LabSwitchTests
             Waited++;
             return OnWait is null ? Task.FromResult(true) : OnWait(session);
         }
+
+        public Task EndPoliciesAsync(LabSession session) => session.EndLocksAndInternetAsync(Defaults.DeparturePolicyEndBudget);
     }
 
     /// <summary>A full-mode keyframe, the cheapest picture a PC can push.</summary>

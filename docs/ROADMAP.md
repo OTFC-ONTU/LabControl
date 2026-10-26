@@ -20,7 +20,7 @@ implement.
 | **M3** | Screens: mosaic, full view, remote control | **all three portions built and verified on `PC-10` (2026-09-07): capture, control, text, Ctrl+Alt+Del, 14–18 fps scrolling with auto quality (`D-37`, build 0.1.4); the hour-long and 30-tile measurements remain for the close-out** | M2, `PC-00` |
 | **M4** | Deployment: USB installer, files, self-update | **in progress — `1.0.0` is the physical-lab release candidate (owner decision 2026-09-08); script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
 | **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the `app.manifest` double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the `group=` argument that made the printed `netsh` line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest `PC-27`) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three `--remove-data` answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`; on Linux, the `SO_PEERCRED` path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
-| **M6** | Classroom control: broadcast, lock, exam mode | **in progress — plan settled 2026-09-16 (`D-69`…`D-79`, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, *Lock screens* in the console, the simulator's lock; **portion 1 verified in an isolated Windows 11 ARM64 VM on 2026-10-17**, desktop-following defects fixed (`D-81`); physical Windows x64/fleet acceptance remains open. **Portion 2 built on 2026-10-17** (`D-71`, `D-72`): the teacher's screen captured by CoreGraphics on macOS or GDI on Windows, scaled to 1280 wide inside the source, encoded once and fanned out over a new server-streaming `PullBroadcast` with a latest-wins slot per PC; the helper shows it in the lock's window with input blocked, a lock on top; it ends with its stream and at 30 min on the PC's own clock; *Show my screen* / *Stop showing* in the console and a *WATCHING* tile badge. Review fixes and a partial ARM64 VM drill on 2026-10-17 (`D-71` items 9–11), a second review with three more fixes (items 12–14) and the drill continued the same day: keyboard refusal with a positive control, service restart, reboot and the Mac's real display passed; physical mouse refusal, the readability check and the physical lab remain. **Portion 3 built on the Mac on 2026-10-17** (`D-73`, `D-74`): internet control — every profile's default outbound block after the `agent.exe`, local-subnet and loopback rules, other programs' outbound allow rules switched off for the policy, the loopback whitelist resolver admitting allowed answers to one rule before they leave, DNS pointed at it in both families, exact restore, the watchdog task restoring a dead service's PC without re-applying; *Internet…* in the console with presets, the 8 h ceiling and the refused names with *Allow*; a tile badge. **VM drill passed on 2026-10-20** after two fixes (no loopback rule; the resolver state read after a change), and the 14-PC physical-lab drill the same day. **Portion 4 built on the Mac on 2026-10-23** (`D-75`, `D-76`): exam mode — the timer with a strip on the student's screen and a "Time is up" lock, the allowed-programs whitelist in the service (session and token before name, a polite opening sweep), the internet switch handing back to a standalone policy, presets, late PCs joining. **VM drill passed on 2026-10-23** after five fixes (protected processes never judged; the remaining time aged on a re-send and on *Extend*; the strip widened for the sweep's warning; a new exam forgetting the last one's closed programs; more quiet helpers, `D-75`). Next: the physical lab. **Portion 5 built on the Mac on 2026-10-23** (`D-77`, `D-78`): collect work — the additive `RequestUpload`, the folder packed under the student's token and unpacked into `<name date>/PC-07/` with a report, exams collecting at their end, *Collect files…*, PCs off reported missing — and profile reset, light and full, refused during an exam and on account-off; **VM drill passed on 2026-10-23** after two fixes (an exam ended with its PCs off now reports them missing; a light reset keeps Windows' hidden system junctions). Next: portion 6** | M5 |
+| **M6** | Classroom control: broadcast, lock, exam mode | **in progress — plan settled 2026-09-16 (`D-69`…`D-79`, six portions); portion 1 built on the Mac on 2026-09-16: the policy journal with restore-first/re-apply-second, the agent-clamped 1 h lock, the Win32 overlay and low-level hooks in the helper, *Lock screens* in the console, the simulator's lock; **portion 1 verified in an isolated Windows 11 ARM64 VM on 2026-10-17**, desktop-following defects fixed (`D-81`); physical Windows x64/fleet acceptance remains open. **Portion 2 built on 2026-10-17** (`D-71`, `D-72`): the teacher's screen captured by CoreGraphics on macOS or GDI on Windows, scaled to 1280 wide inside the source, encoded once and fanned out over a new server-streaming `PullBroadcast` with a latest-wins slot per PC; the helper shows it in the lock's window with input blocked, a lock on top; it ends with its stream and at 30 min on the PC's own clock; *Show my screen* / *Stop showing* in the console and a *WATCHING* tile badge. Review fixes and a partial ARM64 VM drill on 2026-10-17 (`D-71` items 9–11), a second review with three more fixes (items 12–14) and the drill continued the same day: keyboard refusal with a positive control, service restart, reboot and the Mac's real display passed; physical mouse refusal, the readability check and the physical lab remain. **Portion 3 built on the Mac on 2026-10-17** (`D-73`, `D-74`): internet control — every profile's default outbound block after the `agent.exe`, local-subnet and loopback rules, other programs' outbound allow rules switched off for the policy, the loopback whitelist resolver admitting allowed answers to one rule before they leave, DNS pointed at it in both families, exact restore, the watchdog task restoring a dead service's PC without re-applying; *Internet…* in the console with presets, the 8 h ceiling and the refused names with *Allow*; a tile badge. **VM drill passed on 2026-10-20** after two fixes (no loopback rule; the resolver state read after a change), and the 14-PC physical-lab drill the same day. **Portion 4 built on the Mac on 2026-10-23** (`D-75`, `D-76`): exam mode — the timer with a strip on the student's screen and a "Time is up" lock, the allowed-programs whitelist in the service (session and token before name, a polite opening sweep), the internet switch handing back to a standalone policy, presets, late PCs joining. **VM drill passed on 2026-10-23** after five fixes (protected processes never judged; the remaining time aged on a re-send and on *Extend*; the strip widened for the sweep's warning; a new exam forgetting the last one's closed programs; more quiet helpers, `D-75`). Next: the physical lab. **Portion 5 built on the Mac on 2026-10-23** (`D-77`, `D-78`): collect work — the additive `RequestUpload`, the folder packed under the student's token and unpacked into `<name date>/PC-07/` with a report, exams collecting at their end, *Collect files…*, PCs off reported missing — and profile reset, light and full, refused during an exam and on account-off; **VM drill passed on 2026-10-23** after two fixes (an exam ended with its PCs off now reports them missing; a light reset keeps Windows' hidden system junctions). **Portion 6 built on the Mac on 2026-10-26** (`D-79`): the departure contract for every policy with *Unlock, open the internet and leave* (the exam continues), protocol version 2 gating what is set, the `D-56` amendment, the fail-safe drills written down with a short hard limit for the fixture. Next: the portion-6 VM drills, then the physical lab** | M5 |
 | **M7** | Software catalog, localization, polish | not started | M6 |
 
 Update the **State** column (`not started` / `in progress` / `done <date>`) in the same
@@ -2079,7 +2079,7 @@ subsection wins, and ARCHITECTURE §6 was amended when portion 5 landed. Portion
 built and has passed ARM64 VM acceptance; portion 2 is built, review-fixed and has passed a partial VM drill;
 portion 3 is built and has passed its VM drill and the physical lab; portion 4 is built
 (2026-10-23) and has passed its VM drill the same day; portion 5 is built (2026-10-23) and passed
-its VM drill the same day; portion 6 remains to be implemented.
+its VM drill the same day; portion 6 is built (2026-10-26) and waits for its VM drills.
 
 #### Owner decisions (2026-09-09, binding)
 
@@ -2259,6 +2259,47 @@ lifted.
 - Fail-safe drill needs an explicitly short hard limit plus a separate clamp test — the
   ROADMAP must say so. Drill 4 split into `sc stop` / kill / power-loss.
 - New drill: corrupt/half-written `policy.json` → PC still restores.
+- Owner decisions of 2026-10-26: the departure dialog offers *Unlock, open the internet and
+  leave* — locks and standalone internet policies ended, **the exam is not**; exam work that
+  the session would collect at the end is warned about and collected by hand on return, never
+  remembered across sessions (`D-79` items 2–3).
+
+#### The portion-6 drills (on the VM, then the physical lab; `D-79` item 6)
+
+Every drill runs against a built `win-x64` (lab) or `win-arm64` (VM) agent of the portion-6
+commit — a PC reporting protocol 1 is set nothing (`D-79` item 4), so push the build first.
+The fixture is `tools/windows-tests/TestLabHost` started with **`--hard-limit-seconds 300`**:
+the real limits are 1 h, 8 h and 4 h, and a drill that waits for them proves nothing a
+five-minute one does not. The ceiling itself is proven separately on the Mac
+(`FailSafeTests.A_far_hard_limit_is_clamped_to_the_pcs_own_ceiling`, the journal's clamp
+tests); do not try to prove it on a PC by waiting four hours.
+
+1. **Console gone.** `exam-start` with `seconds` 3600, `internet` "whitelist" (`hosts`
+   `docs.oracle.com`), `restrict` true; on a second PC `lock-screens` 0 and
+   `internet-whitelist`. Close the Mac's lid (or `stop` the fixture) and leave it. Within
+   five minutes plus a second of the start each PC is unlocked, out of the exam, its DNS and
+   firewall back exactly as before (`Get-DnsClientServerAddress`, `Get-NetFirewallProfile`
+   compared with the snapshot taken before the drill), and `policy.json` holds no session.
+2. **Service death, three ways**, each under a whitelist exam started fresh:
+   (a) `sc stop LabControl` — `OnStop` restores at once; the internet is back while the
+   service is stopped; `sc start` re-applies the exam with its remaining time;
+   (b) `taskkill /f` on `agent.exe` — no `OnStop`: the PC stays restricted until the service
+   restarts (`sc failure` recovery), which restores first and re-applies second;
+   (c) pull the power — after boot the internet is back before anything is re-applied (the
+   service's start pass, and the watchdog task if the service is slow), then the exam returns
+   with the correct remaining time.
+3. **Corrupt `policy.json`.** Under a lock and a whitelist, stop the service, truncate
+   `C:\ProgramData\LabControl\policy.json` to half its length (and in a second run, fill it
+   with garbage), start the service: the PC is open and unlocked, links, and the console shows
+   `policy.unreadable`; nothing is re-applied and nothing blocks the next policy.
+4. **Departure.** With a lock, a standalone block, an exam collecting `Desktop\Exam` and a
+   broadcast on four PCs, press *Disconnect*: the dialog names each with its latest end and
+   warns about the exam's work. *Unlock, open the internet and leave*: the lock and the block
+   end within seconds, the exam and its strip continue, the broadcast stops; back in the lab,
+   *Collect files…* of `Desktop\Exam` after the exam ended brings the work.
+5. **Teacher access.** From a console with teacher access (`--teacher-leaf true` presents
+   the role; a real teacher device has no key), lock, block and run an exam on one PC; each
+   applies, and `self_update` is still refused by role.
 
 #### Known pre-existing test failure (not M6's)
 
@@ -2711,6 +2752,20 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   (the student was activated and signed in; M4 to look at). Tests: 1003 Shared + 301 Console. **Not
   covered:** `win-x64`, Word holding a document open, OneDrive moving a known folder, thirty PCs at
   once, the physical lab. **Next:** portion 6.
+- *Portion 6 built (2026-10-26), on the Mac* (`D-79`). The departure contract: `DepartureReport`
+  names the broadcast that ends, the locks and standalone internet policies that stay, the exams
+  that continue — each with the latest moment it lifts by itself — and the exam work this session
+  would have collected; a running collection is *not collected*. *Unlock, open the internet and
+  leave* (owner decision 2026-10-26) ends the locks and the standalone policies, waits up to 10 s
+  for the PCs to confirm, names a PC that did not (`departure.policies_held`) and never ends an
+  exam. `ProtocolVersion` 2 with `ClassroomControlProtocolVersion` 2: classroom control is set only
+  on an agent of version 2 and ended on any (`link.no_classroom_control` once per link), the frozen
+  subset and the minimum unchanged. The `D-56` amendment, tested over the real link from a
+  teacher console. The drills' short limit: `LabSession.LockLimit`/`InternetLimit`/`ExamLimit`
+  and the fixture's `--hard-limit-seconds`; the drills themselves are written down above
+  (*The portion-6 drills*). Tests: `DepartureTests`, `FailSafeTests`, the teacher-access test, the
+  departure dialog render — 1003 Shared + 308 Console. **Not yet run on Windows.** **Next:** the
+  portion-6 drills on the VM, then every M6 drill in the physical lab after pushing this build.
 ---
 
 ## M7 — Software catalog, localization, polish

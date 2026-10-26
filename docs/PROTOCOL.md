@@ -489,7 +489,8 @@ answers `self_update` with a refusal (`D-69` item 6): the `agent.exe` exemption 
 its version directory.
 
 **How it ends.** On the PC's own clock at `until_unix` or the clamped hard limit, on `OPEN`,
-and never on lab departure in this portion (portion 6 sets the departure contract). Persisted
+and never on lab departure by itself: the departure dialog lists a standalone policy and offers
+*Unlock, open the internet and leave*, which lifts it before the links close (`D-79`). Persisted
 in `policy.json`: after a restart the PC comes back **open** before anything is re-applied,
 then re-applies a policy still within its limits with the limit re-clamped. The watchdog task
 `LabControl Policy Restore` restores a PC whose service is not running and re-applies nothing
@@ -730,8 +731,9 @@ that took the PC over (owner decision 4); the console shows whose lock it is fro
 `self_update` and `rekey` are role-gated.
 
 **How it ends.** On the PC's own clock (`D-16`): at `until_unix`, at the clamped hard
-limit, or on `UNLOCK` — never on lab departure (a lock has its own limit and the teacher
-who set it may be back in a minute). The agent reports `overlay.expired` when it lifts a
+limit, or on `UNLOCK` — never on lab departure by itself (a lock has its own limit and the
+teacher who set it may be back in a minute); the departure dialog lists it and offers to
+unlock before the links close (`D-79`). The agent reports `overlay.expired` when it lifts a
 lock itself. The lock is persisted in `policy.json` (`D-69`): after a reboot the agent
 restores the machine first, then re-applies the lock only if it is still within its
 limits, re-clamping the stored hard limit against `LockHardLimit` again. Ctrl+Alt+Del
@@ -1157,6 +1159,16 @@ every agent whose certificate is valid, compares versions, and:
 | older, still supported | normal; tile shows an *update available* badge |
 | older than the console's minimum | connected, tile marked **outdated**, unsupported features greyed out with the reason, *Update* offered |
 | newer than the console | connected and usable; the console warns that it should be updated itself, and refuses only the features it does not know |
+
+**Version 2** (M6 portion 6, `D-79` item 4) is the agent that enforces classroom control.
+`Defaults.ProtocolVersion` is 2 and `Defaults.ClassroomControlProtocolVersion` is 2, while
+`MinimumProtocolVersion` stays 1. The console **sets** a lock, a broadcast, a standalone
+internet policy or an exam only on an agent that reports at least 2; it still sends every
+**end** — `Overlay{UNLOCK}`, `BROADCAST_STOP`, `InternetPolicy{OPEN}`, `ExamMode{active:
+false}`, an *Allow* or *Extend* on what the PC reported holding — to any agent that is not
+outdated, because an M6 build from before the bump may hold one and an older agent ignores
+the message. A version-1 agent is not outdated: everything else works, and the console
+records `link.no_classroom_control` once per link. No field changed.
 
 Proto files evolve additively (never renumber fields), and a message the receiver does not
 recognise is logged and ignored rather than closing the stream.

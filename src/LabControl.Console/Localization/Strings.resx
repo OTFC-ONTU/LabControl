@@ -416,6 +416,17 @@ exit 0
   <data name="Departure.Uploads" xml:space="preserve"><value>{0} upload(s) in progress will fail.</value></data>
   <data name="Departure.Probation" xml:space="preserve"><value>{0}: trying a new agent version; they report when you come back.</value></data>
   <data name="Departure.Wakes" xml:space="preserve"><value>{0}: Wake-on-LAN is no longer watched.</value></data>
+  <data name="Departure.Jobs.NotCollected" xml:space="preserve"><value>{0} × {1}: the work is not collected; collect it again with Collect files… when you come back.</value></data>
+  <data name="Departure.Broadcast" xml:space="preserve"><value>{0}: your screen stops showing there.</value></data>
+  <data name="Departure.Locks" xml:space="preserve"><value>{0}: the screen stays locked until a console of this lab unlocks it, at the latest {1}.</value></data>
+  <data name="Departure.Internet" xml:space="preserve"><value>{0}: the internet policy stays until a console of this lab lifts it, at the latest {1}.</value></data>
+  <data name="Departure.Exams" xml:space="preserve"><value>{0}: the exam continues and ends by itself, at the latest {1}.</value></data>
+  <data name="Departure.ExamWork" xml:space="preserve"><value>{0}: the exam's work is not collected when it ends; it stays in the exam folder on the PC. Collect it with Collect files… when you come back.</value></data>
+  <data name="Departure.EndPolicies" xml:space="preserve"><value>Unlock, open the internet and leave</value></data>
+  <data name="Departure.EndingTitle" xml:space="preserve"><value>Unlocking and opening the internet</value></data>
+  <data name="Departure.Ending" xml:space="preserve"><value>Waiting for the PCs to confirm… An exam is not ended.</value></data>
+  <data name="Event.DeparturePoliciesHeld" xml:space="preserve"><value>{0} did not confirm the unlock or the open internet before the console left; each keeps it to its own limit.</value></data>
+  <data name="Event.NoClassroomControl" xml:space="preserve"><value>{0} runs protocol version {1}: locks, broadcast, internet control and exams need version {2}. Push the current agent build to it.</value></data>
   <data name="Departure.Leave" xml:space="preserve"><value>Leave anyway</value></data>
   <data name="Departure.Stay" xml:space="preserve"><value>Stay</value></data>
   <data name="Departure.Wait" xml:space="preserve"><value>Wait for {0} job(s)</value></data>

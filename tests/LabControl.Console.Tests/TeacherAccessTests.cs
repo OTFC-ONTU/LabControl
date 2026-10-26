@@ -132,6 +132,58 @@ public sealed class TeacherAccessTests
         }
     }
 
+    /// <summary>
+    /// Owner decision 3 of 2026-09-09, the D-56 amendment (D-79 item 3): a teacher-access console
+    /// may do everything in M6 — lock, an internet policy, an exam — and the PCs obey it like an
+    /// administrator console; <c>self_update</c> and <c>rekey</c> stay the only role-gated jobs.
+    /// </summary>
+    [Fact]
+    public async Task A_teacher_console_locks_sets_the_internet_and_runs_an_exam_like_an_administrator()
+    {
+        await using var admin = await TestConsole.CreateLabAsync("Admin MacBook");
+        await using var teacher = await TestConsole.JoinAsTeacherAsync(admin, "Teacher laptop");
+        var lab = admin.Session.Vault!.Peek()!;
+
+        var config = new AgentConfigDocument
+        {
+            LabId = lab.LabId,
+            AgentId = Guid.NewGuid().ToString("d"),
+            Number = 6,
+            Hostname = string.Format(Defaults.MachineNameFormat, 6),
+            Mac = "02:00:5E:00:00:06",
+            ConsoleHost = IPAddress.Loopback.ToString(),
+            ConsolePort = teacher.Port,
+        };
+        using var authority = X509CertificateLoader.LoadCertificate(lab.Document.Authority);
+        var store = DirectoryAgentStore.Install(Path.Combine(TestConsole.TempDirectory(), "PC-06"), config, authority);
+        var csr = LabCertificates.CreateSigningRequest(store.Key, "test");
+        using (var certificate = LabCertificates.IssueAgentFromCsr(lab.Authority, lab.LabId, config.AgentId, 6, csr, DateTimeOffset.UtcNow))
+        {
+            store.InstallCertificate(store.Key, certificate);
+        }
+
+        await using var machine = new LabControl.FakeAgent.FakeMachine(store, null, TestLogging.Factory.CreateLogger("PC-06"));
+        machine.Start();
+        Assert.True(await Wait.UntilAsync(() => teacher.Session.IsLinked(machine.AgentId), TimeSpan.FromSeconds(20)));
+        var id = machine.AgentId;
+
+        Assert.Equal(1, teacher.Session.Lock([id], "Look here", TimeSpan.FromMinutes(5)));
+        Assert.Equal(1, teacher.Session.SetInternet([id], InternetPolicy.Types.Mode.Blocked, [], string.Empty, null));
+        Assert.True(await Wait.UntilAsync(() => teacher.Session.FindLinked(id) is { OverlayLocked: true, InternetMode: InternetPolicy.Types.Mode.Blocked }, TimeSpan.FromSeconds(15)));
+        var linked = teacher.Session.FindLinked(id)!;
+        Assert.Equal(teacher.Session.Instance.InstanceId, linked.OverlayState!.SetByInstance);
+        Assert.Equal(teacher.Session.Instance.InstanceId, linked.InternetState!.SetByInstance);
+
+        Assert.Equal(1, teacher.Session.Unlock([id]));
+        Assert.Equal(1, teacher.Session.LiftInternet([id]));
+        var (_, sent) = teacher.Session.StartExam([id], new ExamRequest("Test", TimeSpan.FromMinutes(20), false, [], InternetPolicy.Types.Mode.Open, [], string.Empty, string.Empty), wholeLab: false);
+        Assert.Equal(1, sent);
+        Assert.True(await Wait.UntilAsync(() => teacher.Session.FindLinked(id) is { InExam: true, OverlayLocked: false, InternetMode: InternetPolicy.Types.Mode.Open }, TimeSpan.FromSeconds(15)));
+        Assert.Equal(1, teacher.Session.EndExam([id]));
+        Assert.True(await Wait.UntilAsync(() => teacher.Session.FindLinked(id) is { InExam: false }, TimeSpan.FromSeconds(15)));
+        Assert.DoesNotContain(teacher.Session.Events.Recent, e => e.Code is "overlay.refused" or "internet.refused" or "exam.refused");
+    }
+
     [Fact]
     public async Task Withdrawing_a_device_revokes_it_by_instance_the_pending_list_shrinks_as_pcs_confirm_and_its_link_is_refused()
     {

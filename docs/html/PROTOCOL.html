@@ -692,7 +692,8 @@ set one. While a policy is applied — or its originals are not yet proven resto
 answers <code>self_update</code> with a refusal (<code>D-69</code> item 6): the <code>agent.exe</code> exemption is pinned to
 its version directory.</p>
 <p><strong>How it ends.</strong> On the PC's own clock at <code>until_unix</code> or the clamped hard limit, on <code>OPEN</code>,
-and never on lab departure in this portion (portion 6 sets the departure contract). Persisted
+and never on lab departure by itself: the departure dialog lists a standalone policy and offers
+<em>Unlock, open the internet and leave</em>, which lifts it before the links close (<code>D-79</code>). Persisted
 in <code>policy.json</code>: after a restart the PC comes back <strong>open</strong> before anything is re-applied,
 then re-applies a policy still within its limits with the limit re-clamped. The watchdog task
 <code>LabControl Policy Restore</code> restores a PC whose service is not running and re-applies nothing
@@ -943,8 +944,9 @@ that took the PC over (owner decision 4); the console shows whose lock it is fro
 <code>set_by_instance</code>. A <code>teacher</code>-access console (<code>D-56</code>) may lock and unlock: only
 <code>self_update</code> and <code>rekey</code> are role-gated.</p>
 <p><strong>How it ends.</strong> On the PC's own clock (<code>D-16</code>): at <code>until_unix</code>, at the clamped hard
-limit, or on <code>UNLOCK</code> — never on lab departure (a lock has its own limit and the teacher
-who set it may be back in a minute). The agent reports <code>overlay.expired</code> when it lifts a
+limit, or on <code>UNLOCK</code> — never on lab departure by itself (a lock has its own limit and the
+teacher who set it may be back in a minute); the departure dialog lists it and offers to
+unlock before the links close (<code>D-79</code>). The agent reports <code>overlay.expired</code> when it lifts a
 lock itself. The lock is persisted in <code>policy.json</code> (<code>D-69</code>): after a reboot the agent
 restores the machine first, then re-applies the lock only if it is still within its
 limits, re-clamping the stored hard limit against <code>LockHardLimit</code> again. Ctrl+Alt+Del
@@ -1377,6 +1379,14 @@ every agent whose certificate is valid, compares versions, and:</p>
 </tr>
 </tbody>
 </table></div>
+<p><strong>Version 2</strong> (M6 portion 6, <code>D-79</code> item 4) is the agent that enforces classroom control.
+<code>Defaults.ProtocolVersion</code> is 2 and <code>Defaults.ClassroomControlProtocolVersion</code> is 2, while
+<code>MinimumProtocolVersion</code> stays 1. The console <strong>sets</strong> a lock, a broadcast, a standalone
+internet policy or an exam only on an agent that reports at least 2; it still sends every
+<strong>end</strong> — <code>Overlay{UNLOCK}</code>, <code>BROADCAST_STOP</code>, <code>InternetPolicy{OPEN}</code>, <code>ExamMode{active: false}</code>, an <em>Allow</em> or <em>Extend</em> on what the PC reported holding — to any agent that is not
+outdated, because an M6 build from before the bump may hold one and an older agent ignores
+the message. A version-1 agent is not outdated: everything else works, and the console
+records <code>link.no_classroom_control</code> once per link. No field changed.</p>
 <p>Proto files evolve additively (never renumber fields), and a message the receiver does not
 recognise is logged and ignored rather than closing the stream.</p>
 <h3 id="self_update-pushing-a-new-agent"><code>self_update</code> — pushing a new agent<a class="anchor" href="#self_update-pushing-a-new-agent" aria-label="Link to this section">#</a></h3>
@@ -1479,7 +1489,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-23 17:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 10:48 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

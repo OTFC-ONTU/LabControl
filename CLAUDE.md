@@ -220,7 +220,7 @@ update first; (3) the VM drill on an owned-installation clone and the physical l
 network, kept its agent id and number and enrolled into the new lab on its own (ROADMAP *Lab key
 recovery*). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.
 
-**M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portions 4 and 5 VM-verified; portion 6 remains:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
+**M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portions 4 and 5 VM-verified; portion 6 built, its VM drills next:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, *Settled before implementation*; M6 reserves `D-69`…`D-79`.
@@ -434,7 +434,26 @@ running job of that PC delivered by this instance and unpacks with every name ch
 emptied under the token (`ProfileWipe`, iterative, links never entered); full = log off, `DeleteProfile`
 by the recorded SID, reboot. The VM drill fixed two defects: *End exam* with PCs off now reports them missing
 (ended by PC, not by their last report), and a light reset keeps Windows' hidden system entries (`My Music`…).
-Tests: 1003 Shared + 301 Console. Next: portion 6.
+Tests: 1003 Shared + 301 Console.
+
+**M6 portion 6 is built (2026-10-26, `D-79`), on the Mac; not yet run on Windows.** Owner decisions of
+2026-10-26: the departure dialog offers *Unlock, open the internet and leave* — locks and standalone
+internet policies ended, the exam **not** — and exam work the session would collect at the end is
+warned about and collected by hand on return, never remembered across sessions. `DepartureReport`
+names the broadcast (ends), locks and standalone policies (stay), exams (continue), each with its
+latest self-lift, and the uncollected exam PCs; a running `collect_files` is *not collected*.
+`LabSession.EndLocksAndInternetAsync` waits up to `Defaults.DeparturePolicyEndBudget` (10 s) for the
+PCs' word, because `AgentConnection.Close` drops queued messages (`departure.policies_held` names the
+rest). `Defaults.ProtocolVersion` = 2 and `ClassroomControlProtocolVersion` = 2: a lock, broadcast,
+internet policy or exam is *set* only on a version-2 agent (`AgentConnection.SupportsClassroomControl`),
+every *end* goes to any non-outdated one, `MinimumProtocolVersion` stays 1 (`link.no_classroom_control`
+once per link) — the physical lab's agents report 1 and need the current build pushed first. The
+`D-56` amendment (a teacher console may do all of M6; `self_update`/`rekey` the only role-gated jobs)
+is tested over the real link. Fail-safe drills use `LabSession.LockLimit`/`InternetLimit`/`ExamLimit`
+through `TestLabHost --hard-limit-seconds`, with the ceiling proven separately (`FailSafeTests`); the
+drills — console gone, `sc stop`/kill/power loss, corrupt `policy.json`, departure, teacher access —
+are written in ROADMAP M6, *The portion-6 drills*. Tests: 1003 Shared + 308 Console. Next: those
+drills on the VM, then the physical lab.
 
 **M0 is done (2026-09-04). M1 is done (2026-09-05)**: the trust model, beacon discovery,
 mutual TLS, enrolment, the `Link` stream with jobs and renewal, take-over between teacher

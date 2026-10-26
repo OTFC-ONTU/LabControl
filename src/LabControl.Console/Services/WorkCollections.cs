@@ -580,6 +580,21 @@ public sealed class WorkCollections
     }
 
     /// <summary>The session closes: every grant and staging file goes; a collection in progress is lost (D-77 item 1).</summary>
+    /// <summary>
+    /// The PCs of a remembered exam whose work has not been asked for yet: a departure forgets
+    /// the exam, so their work stays on the PC (owner decision 2026-10-26, D-79 item 2).
+    /// </summary>
+    public IReadOnlyList<string> AwaitingExamWork()
+    {
+        lock (_gate)
+        {
+            return _exams.Values
+                .SelectMany(e => e.AgentIds.Where(id => e.Collection is not { } c || !c.Pcs.TryGetValue(id, out var pc) || pc.State == CollectedState.Waiting))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+    }
+
     public void Close()
     {
         lock (_gate)

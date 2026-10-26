@@ -347,7 +347,7 @@ update first; (3) the VM drill on an owned-installation clone and the physical l
 2 are built (2026-10-20) and portion 2 passed its VM drill</strong> — an owned installation moved over the
 network, kept its agent id and number and enrolled into the new lab on its own (ROADMAP <em>Lab key
 recovery</em>). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.</p>
-<p><strong>M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portions 4 and 5 VM-verified; portion 6 remains:</strong> the owner decisions of 2026-09-09 (lock hard limit 1 h,
+<p><strong>M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portions 4 and 5 VM-verified; portion 6 built, its VM drills next:</strong> the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, <em>Settled before implementation</em>; M6 reserves <code>D-69</code>…<code>D-79</code>.</p>
@@ -554,7 +554,25 @@ running job of that PC delivered by this instance and unpacks with every name ch
 emptied under the token (<code>ProfileWipe</code>, iterative, links never entered); full = log off, <code>DeleteProfile</code>
 by the recorded SID, reboot. The VM drill fixed two defects: <em>End exam</em> with PCs off now reports them missing
 (ended by PC, not by their last report), and a light reset keeps Windows' hidden system entries (<code>My Music</code>…).
-Tests: 1003 Shared + 301 Console. Next: portion 6.</p>
+Tests: 1003 Shared + 301 Console.</p>
+<p><strong>M6 portion 6 is built (2026-10-26, <code>D-79</code>), on the Mac; not yet run on Windows.</strong> Owner decisions of
+2026-10-26: the departure dialog offers <em>Unlock, open the internet and leave</em> — locks and standalone
+internet policies ended, the exam <strong>not</strong> — and exam work the session would collect at the end is
+warned about and collected by hand on return, never remembered across sessions. <code>DepartureReport</code>
+names the broadcast (ends), locks and standalone policies (stay), exams (continue), each with its
+latest self-lift, and the uncollected exam PCs; a running <code>collect_files</code> is <em>not collected</em>.
+<code>LabSession.EndLocksAndInternetAsync</code> waits up to <code>Defaults.DeparturePolicyEndBudget</code> (10 s) for the
+PCs' word, because <code>AgentConnection.Close</code> drops queued messages (<code>departure.policies_held</code> names the
+rest). <code>Defaults.ProtocolVersion</code> = 2 and <code>ClassroomControlProtocolVersion</code> = 2: a lock, broadcast,
+internet policy or exam is <em>set</em> only on a version-2 agent (<code>AgentConnection.SupportsClassroomControl</code>),
+every <em>end</em> goes to any non-outdated one, <code>MinimumProtocolVersion</code> stays 1 (<code>link.no_classroom_control</code>
+once per link) — the physical lab's agents report 1 and need the current build pushed first. The
+<code>D-56</code> amendment (a teacher console may do all of M6; <code>self_update</code>/<code>rekey</code> the only role-gated jobs)
+is tested over the real link. Fail-safe drills use <code>LabSession.LockLimit</code>/<code>InternetLimit</code>/<code>ExamLimit</code>
+through <code>TestLabHost --hard-limit-seconds</code>, with the ceiling proven separately (<code>FailSafeTests</code>); the
+drills — console gone, <code>sc stop</code>/kill/power loss, corrupt <code>policy.json</code>, departure, teacher access —
+are written in ROADMAP M6, <em>The portion-6 drills</em>. Tests: 1003 Shared + 308 Console. Next: those
+drills on the VM, then the physical lab.</p>
 <p><strong>M0 is done (2026-09-04). M1 is done (2026-09-05)</strong>: the trust model, beacon discovery,
 mutual TLS, enrolment, the <code>Link</code> stream with jobs and renewal, take-over between teacher
 machines, the sealed backup, <code>FakeAgent</code> and the console UI — see the M1 <em>Progress</em> and
@@ -798,7 +816,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-23 17:55 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-26 10:48 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

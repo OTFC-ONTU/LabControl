@@ -551,6 +551,24 @@ public sealed class UiTests
             Assert.Contains(departure.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("PC-04, PC-09", StringComparison.Ordinal) == true);
             departure.Close();
 
+            // Classroom control (D-79): what stays, what ends, and the button that ends locks and the internet.
+            var at = new DateTimeOffset(2026, 10, 26, 11, 40, 0, TimeSpan.Zero);
+            var policies = new DepartureDialog("Room 214", DepartureReport.Empty with
+            {
+                BroadcastPcs = [1, 2],
+                Locks = new DeparturePolicy([3], at),
+                Internet = new DeparturePolicy([3, 4], at.AddHours(1)),
+                Exams = new DeparturePolicy([5, 6], at.AddMinutes(30)),
+                UncollectedExamPcs = [5, 6],
+            });
+            policies.Show();
+            await Render(policies, "departure-policies");
+            var policyButtons = policies.GetVisualDescendants().OfType<Button>().Select(b => b.Content?.ToString()).ToList();
+            Assert.Contains("Unlock, open the internet and leave", policyButtons);
+            Assert.DoesNotContain(policyButtons, b => b?.StartsWith("Wait", StringComparison.Ordinal) == true);
+            Assert.Contains(policies.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("PC-05, PC-06: the exam's work is not collected", StringComparison.Ordinal) == true);
+            policies.Close();
+
             var quiet = new DepartureDialog("Room 214", new DepartureReport([], 0, 1, [], []));
             quiet.Show();
             await Render(quiet, "departure-quiet");

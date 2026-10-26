@@ -717,6 +717,13 @@ public partial class App : Application
             return await waiting.Completion == true;
         }
 
+        public async Task EndPoliciesAsync(LabSession session)
+        {
+            var ending = new EndPoliciesDialog(session);
+            await ShowAsync(ending);
+            await ending.Completion;
+        }
+
         private async Task ShowAsync(Window dialog)
         {
             if (owner is { IsVisible: true } visible)

@@ -18,8 +18,18 @@ public static class Defaults
     /// <b>not</b> gate the connection: the console accepts an older agent, marks it outdated
     /// and offers an update, because <c>Hello</c>, <c>Heartbeat</c>, <c>Job{self_update}</c>
     /// and <c>JobResult</c> are frozen at version 1 forever (D-19, PROTOCOL "Versioning").
+    /// Version 2 (M6, D-79 item 4) is the agent that enforces classroom control.
     /// </summary>
-    public const int ProtocolVersion = 1;
+    public const int ProtocolVersion = 2;
+
+    /// <summary>
+    /// The first <c>protocol_version</c> whose agent enforces classroom control — <c>Overlay</c>
+    /// (lock, broadcast), <c>InternetPolicy</c> and <c>ExamMode</c> (M6, D-79 item 4). The console
+    /// <i>sets</i> none of them on an older agent, which would ignore the message and leave the
+    /// teacher waiting for a state that never comes; it still sends every <i>end</i>, which an
+    /// older agent ignores harmlessly and an M6 build from before the bump obeys.
+    /// </summary>
+    public const int ClassroomControlProtocolVersion = 2;
 
     /// <summary>
     /// The wire version of the frozen subset. This value may never change — an agent of any
@@ -933,6 +943,13 @@ public static class Defaults
     /// mid-lock leaves the PC usable again within the hour. The agent clamps every lock to it.
     /// </summary>
     public static readonly TimeSpan LockHardLimit = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How long <i>Unlock, open the internet and leave</i> waits for the PCs to say they are clear
+    /// before the departure closes their links (D-79 item 1). A PC still holding one then keeps it
+    /// to its own limit, and the console says which.
+    /// </summary>
+    public static readonly TimeSpan DeparturePolicyEndBudget = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// A broadcast may never outlive this either, and it dies with its stream (D-71, M6

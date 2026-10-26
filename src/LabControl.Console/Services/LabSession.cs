@@ -1007,6 +1007,12 @@ public sealed class LabSession : IAsyncDisposable
                 $"{who} runs protocol version {hello.ProtocolVersion}, newer than this console ({Defaults.ProtocolVersion}); update the console.",
                 hello.AgentId, hello.Number);
         }
+        else if (!connection.SupportsClassroomControl)
+        {
+            Events.Warning("link.no_classroom_control",
+                Localization.Strings.Format("Event.NoClassroomControl", who, hello.ProtocolVersion, Defaults.ClassroomControlProtocolVersion),
+                hello.AgentId, hello.Number);
+        }
 
         _log.LogInformation("{Pc} linked from {From} (agent {Agent}, serial {Serial})", who, from, hello.AgentVersion, serial);
 
@@ -1856,10 +1862,10 @@ public sealed class LabSession : IAsyncDisposable
             Message = message,
             SessionId = Guid.NewGuid().ToString("n"),
             UntilSeconds = duration is { } d && d > TimeSpan.Zero ? (long)Math.Ceiling(d.TotalSeconds) : 0,
-            HardLimitSeconds = (long)Defaults.LockHardLimit.TotalSeconds,
+            HardLimitSeconds = (long)Math.Ceiling(LockLimit.TotalSeconds),
         };
 
-        var (sent, skipped) = SendOverlay(agentIds, overlay);
+        var (sent, skipped) = SendOverlay(agentIds, overlay, setting: true);
         Events.Info("overlay.lock_sent", Localization.Strings.Format("Event.LockSent", sent, skipped, message));
         return sent;
     }
@@ -1868,19 +1874,23 @@ public sealed class LabSession : IAsyncDisposable
     public int Unlock(IEnumerable<string> agentIds)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
-        var (sent, skipped) = SendOverlay(agentIds, new Overlay { Kind = Overlay.Types.Kind.Unlock });
+        var (sent, skipped) = SendOverlay(agentIds, new Overlay { Kind = Overlay.Types.Kind.Unlock }, setting: false);
         Events.Info("overlay.unlock_sent", Localization.Strings.Format("Event.UnlockSent", sent, skipped));
         return sent;
     }
 
-    private (int Sent, int Skipped) SendOverlay(IEnumerable<string> agentIds, Overlay overlay)
+    /// <summary>
+    /// <paramref name="setting"/>: the message starts something, and goes only to a PC that
+    /// enforces classroom control; an end goes to any linked PC (D-79 item 4).
+    /// </summary>
+    private (int Sent, int Skipped) SendOverlay(IEnumerable<string> agentIds, Overlay overlay, bool setting)
     {
         var sent = 0;
         var skipped = 0;
         foreach (var agentId in agentIds.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var connection = FindLinked(agentId);
-            if (connection is null || connection.IsOutdated || !connection.TrySend(new ConsoleMessage { Overlay = overlay.Clone() }))
+            if (connection is null || !MaySend(connection, setting) || !connection.TrySend(new ConsoleMessage { Overlay = overlay.Clone() }))
             {
                 skipped++;
                 continue;
@@ -1891,6 +1901,15 @@ public sealed class LabSession : IAsyncDisposable
 
         return (sent, skipped);
     }
+
+    /// <summary>
+    /// Whether a classroom-control message may go to <paramref name="connection"/>: one that
+    /// <i>sets</i> something needs an agent that enforces it, one that ends something goes to any
+    /// PC that is not outdated — an M6 build from before <see cref="Defaults.ClassroomControlProtocolVersion"/>
+    /// may hold a policy, and an older agent ignores the message (D-79 item 4).
+    /// </summary>
+    private static bool MaySend(AgentConnection connection, bool setting) =>
+        setting ? connection.SupportsClassroomControl : !connection.IsOutdated;
 
     // ------------------------------------------------------------------ moving to a new key (D-82)
 
@@ -2011,14 +2030,14 @@ public sealed class LabSession : IAsyncDisposable
             SessionId = Guid.NewGuid().ToString("n"),
             PresetName = presetName ?? string.Empty,
             UntilSeconds = duration is { } d && d > TimeSpan.Zero ? (long)Math.Ceiling(d.TotalSeconds) : 0,
-            HardLimitSeconds = (long)Defaults.InternetPolicyHardLimit.TotalSeconds,
+            HardLimitSeconds = (long)Math.Ceiling(InternetLimit.TotalSeconds),
         };
         if (mode == InternetPolicy.Types.Mode.Whitelist)
         {
             policy.AllowedHosts.AddRange(hosts);
         }
 
-        var (sent, skipped) = SendInternet(agentIds, _ => policy.Clone());
+        var (sent, skipped) = SendInternet(agentIds, _ => policy.Clone(), setting: true);
         Events.Info("internet.set_sent", Localization.Strings.Format(
             mode == InternetPolicy.Types.Mode.Blocked ? "Event.InternetBlockSent" : "Event.InternetWhitelistSent", sent, skipped, policy.PresetName));
         return sent;
@@ -2028,7 +2047,7 @@ public sealed class LabSession : IAsyncDisposable
     public int LiftInternet(IEnumerable<string> agentIds)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
-        var (sent, skipped) = SendInternet(agentIds, _ => new InternetPolicy { Mode = InternetPolicy.Types.Mode.Open });
+        var (sent, skipped) = SendInternet(agentIds, _ => new InternetPolicy { Mode = InternetPolicy.Types.Mode.Open }, setting: false);
         Events.Info("internet.lift_sent", Localization.Strings.Format("Event.InternetLiftSent", sent, skipped));
         return sent;
     }
@@ -2059,7 +2078,7 @@ public sealed class LabSession : IAsyncDisposable
             amend.AllowedHosts.AddRange(state.AllowedHosts);
             amend.AllowedHosts.Add(pattern);
             return amend;
-        });
+        }, setting: false);
         Events.Info("internet.allow_sent", Localization.Strings.Format("Event.InternetAllowSent", pattern, sent, skipped));
         return sent;
     }
@@ -2105,14 +2124,14 @@ public sealed class LabSession : IAsyncDisposable
             .ToArray();
     }
 
-    private (int Sent, int Skipped) SendInternet(IEnumerable<string> agentIds, Func<string, InternetPolicy> policyFor)
+    private (int Sent, int Skipped) SendInternet(IEnumerable<string> agentIds, Func<string, InternetPolicy> policyFor, bool setting)
     {
         var sent = 0;
         var skipped = 0;
         foreach (var agentId in agentIds.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var connection = FindLinked(agentId);
-            if (connection is null || connection.IsOutdated || !connection.TrySend(new ConsoleMessage { InternetPolicy = policyFor(agentId) }))
+            if (connection is null || !MaySend(connection, setting) || !connection.TrySend(new ConsoleMessage { InternetPolicy = policyFor(agentId) }))
             {
                 skipped++;
                 continue;
@@ -2204,7 +2223,7 @@ public sealed class LabSession : IAsyncDisposable
             PresetName = request.PresetName ?? string.Empty,
             RestrictPrograms = request.RestrictPrograms,
             UntilSeconds = request.Timer is { } timer && timer > TimeSpan.Zero ? (long)Math.Ceiling(timer.TotalSeconds) : 0,
-            HardLimitSeconds = 0,
+            HardLimitSeconds = (long)Math.Ceiling(ExamLimit.TotalSeconds),
         };
         template.AllowedPrograms.AddRange(LabControl.Shared.Exam.ProgramNames.NormalizeAll(request.AllowedPrograms));
         string? collectFolder = null;
@@ -2232,7 +2251,7 @@ public sealed class LabSession : IAsyncDisposable
         lock (_examGate)
         {
             _labExam = wholeLab
-                ? new LabExam(template.Clone(), template.UntilSeconds > 0 ? now.AddSeconds(template.UntilSeconds) : null, now + Defaults.ExamHardLimit)
+                ? new LabExam(template.Clone(), template.UntilSeconds > 0 ? now.AddSeconds(template.UntilSeconds) : null, now + ExamLimit)
                 : _labExam;
         }
 
@@ -2249,7 +2268,7 @@ public sealed class LabSession : IAsyncDisposable
         {
             connection.ExamSessionsSeen.Add(template.SessionId);
             return template.Clone();
-        });
+        }, setting: true);
         Events.Info("exam.start_sent", Localization.Strings.Format("Event.ExamStartSent", sent, skipped, template.PresetName));
         return (template.SessionId, sent);
     }
@@ -2278,7 +2297,7 @@ public sealed class LabSession : IAsyncDisposable
             var aged = (long)Math.Floor((_clock() - connection.ExamStateAt).TotalSeconds);
             mode.UntilSeconds = Math.Max(1, state.RemainingSeconds - Math.Max(0, aged)) + extra;
             return mode;
-        });
+        }, setting: false);
 
         lock (_examGate)
         {
@@ -2312,7 +2331,7 @@ public sealed class LabSession : IAsyncDisposable
 
         Collections.ExamEndedByTeacher(ids);
         var (sent, skipped) = SendExam(ids, connection =>
-            connection.ExamState is { Active: true } state ? new ExamMode { Active = false, SessionId = state.SessionId } : null);
+            connection.ExamState is { Active: true } state ? new ExamMode { Active = false, SessionId = state.SessionId } : null, setting: false);
         Events.Info("exam.end_sent", Localization.Strings.Format("Event.ExamEndSent", sent, skipped));
         return sent;
     }
@@ -2335,14 +2354,14 @@ public sealed class LabSession : IAsyncDisposable
         return mode;
     }
 
-    private (int Sent, int Skipped) SendExam(IEnumerable<string> agentIds, Func<AgentConnection, ExamMode?> modeFor)
+    private (int Sent, int Skipped) SendExam(IEnumerable<string> agentIds, Func<AgentConnection, ExamMode?> modeFor, bool setting)
     {
         var sent = 0;
         var skipped = 0;
         foreach (var agentId in agentIds.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var connection = FindLinked(agentId);
-            if (connection is null || connection.IsOutdated || modeFor(connection) is not { } mode || !connection.TrySend(new ConsoleMessage { ExamMode = mode }))
+            if (connection is null || !MaySend(connection, setting) || modeFor(connection) is not { } mode || !connection.TrySend(new ConsoleMessage { ExamMode = mode }))
             {
                 skipped++;
                 continue;
@@ -2381,7 +2400,7 @@ public sealed class LabSession : IAsyncDisposable
             }
 
             var sessionId = exam.Template.SessionId;
-            if (connection.ExamSessionsSeen.Contains(sessionId) || connection.ExamState is { Active: true } || connection.IsOutdated)
+            if (connection.ExamSessionsSeen.Contains(sessionId) || connection.ExamState is { Active: true } || !connection.SupportsClassroomControl)
             {
                 // Already in it, or in another exam that is not this console's to replace.
                 connection.ExamSessionsSeen.Add(sessionId);
@@ -2449,6 +2468,19 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary><see cref="Defaults.BroadcastHardLimit"/> unless a test wants it sooner.</summary>
     public TimeSpan BroadcastLimit { get; set; } = Defaults.BroadcastHardLimit;
+
+    /// <summary>
+    /// The hard limit a lock proposes: <see cref="Defaults.LockHardLimit"/> unless a test or the
+    /// fail-safe drill wants it sooner (D-79 item 5). The PC clamps whatever it is sent to its
+    /// own ceiling, so this can only shorten a lock's life, never lengthen it.
+    /// </summary>
+    public TimeSpan LockLimit { get; set; } = Defaults.LockHardLimit;
+
+    /// <summary>The hard limit a standalone internet policy proposes: <see cref="Defaults.InternetPolicyHardLimit"/> unless the drill wants it sooner.</summary>
+    public TimeSpan InternetLimit { get; set; } = Defaults.InternetPolicyHardLimit;
+
+    /// <summary>The hard limit an exam proposes — its internet switch's too: <see cref="Defaults.ExamHardLimit"/> unless the drill wants it sooner.</summary>
+    public TimeSpan ExamLimit { get; set; } = Defaults.ExamHardLimit;
 
     /// <summary>The broadcast in progress, or <c>null</c>.</summary>
     public BroadcastHub? Broadcast
@@ -2522,7 +2554,7 @@ public sealed class LabSession : IAsyncDisposable
         foreach (var id in ids)
         {
             var connection = FindLinked(id);
-            if (connection is null || connection.IsOutdated || BroadcastStartFor(id) is not { } start
+            if (connection is null || !connection.SupportsClassroomControl || BroadcastStartFor(id) is not { } start
                 || !connection.TrySend(new ConsoleMessage { Overlay = start }))
             {
                 skipped++;
@@ -3122,7 +3154,93 @@ public sealed class LabSession : IAsyncDisposable
             wakes = _waking.Values.Select(w => w.Number).Order().ToArray();
         }
 
-        return new DepartureReport(running, queued, Uploads.InProgressCount, probation, wakes);
+        var now = _clock();
+        var linked = Linked;
+        var broadcast = BroadcastTargets.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var uncollected = Collections.AwaitingExamWork()
+            .Select(id => Registry.FindByAgentId(id)?.Number ?? 0).Where(n => n > 0).Distinct().Order().ToArray();
+        return new DepartureReport(running, queued, Uploads.InProgressCount, probation, wakes)
+        {
+            BroadcastPcs = Broadcast is null ? [] : linked.Where(c => broadcast.Contains(c.AgentId)).Select(c => c.Number).Order().ToArray(),
+            Locks = PolicyOf(linked.Where(c => c.OverlayLocked), c => now.AddSeconds(Math.Max(0, c.OverlayState!.RemainingSeconds))),
+            Internet = PolicyOf(linked.Where(HoldsStandaloneInternet), c => now.AddSeconds(Math.Max(0, c.InternetState!.RemainingSeconds))),
+            Exams = PolicyOf(linked.Where(c => c.InExam), c => c.ExamStateAt.AddSeconds(Math.Max(0, c.ExamState!.RemainingSeconds))),
+            UncollectedExamPcs = uncollected,
+        };
+    }
+
+    /// <summary>
+    /// The PCs holding one kind of policy and the latest moment one lifts it by itself. The lock's
+    /// and the internet's <c>remaining_seconds</c> are as of their last send and are not aged, so
+    /// the moment is never earlier than the truth; the exam's are aged from their arrival.
+    /// </summary>
+    private static DeparturePolicy PolicyOf(IEnumerable<AgentConnection> holding, Func<AgentConnection, DateTimeOffset> endsAt)
+    {
+        var pcs = holding.ToArray();
+        return pcs.Length == 0
+            ? DeparturePolicy.None
+            : new DeparturePolicy(pcs.Select(c => c.Number).Distinct().Order().ToArray(), pcs.Max(endsAt));
+    }
+
+    /// <summary>
+    /// The PC holds a standalone internet policy, not only an exam's internet switch — the exam's
+    /// lives and dies with the exam, and <i>Open</i> lifts the standalone one alone.
+    /// </summary>
+    private static bool HoldsStandaloneInternet(AgentConnection connection) =>
+        connection.InternetMode != InternetPolicy.Types.Mode.Open
+        && !connection.InternetState!.SessionId.EndsWith(LabControl.Shared.Policy.PolicyJournal.ExamInternetSuffix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// <i>Unlock, open the internet and leave</i> (owner decision 2026-10-26, D-79 item 1): every
+    /// linked PC holding a lock is unlocked and every one holding a standalone internet policy has
+    /// it lifted — whoever set them, as any console of the lab may (owner decision 4); an exam is
+    /// left to its timer, its internet switch with it. Waits, at most <paramref name="budget"/>,
+    /// for the PCs' own word that they are clear, because the departure closes every link and a
+    /// queued message would die with it. Returns the PC numbers still holding one when the wait
+    /// ended; they keep it to its own limit.
+    /// </summary>
+    public async Task<IReadOnlyList<int>> EndLocksAndInternetAsync(TimeSpan budget)
+    {
+        var locked = Linked.Where(c => c.OverlayLocked).Select(c => c.AgentId).ToArray();
+        var internet = Linked.Where(HoldsStandaloneInternet).Select(c => c.AgentId).ToArray();
+        if (locked.Length > 0)
+        {
+            Unlock(locked);
+        }
+
+        if (internet.Length > 0)
+        {
+            LiftInternet(internet);
+        }
+
+        int[] Holding() => Linked
+            .Where(c => locked.Contains(c.AgentId, StringComparer.OrdinalIgnoreCase) && c.OverlayLocked
+                || internet.Contains(c.AgentId, StringComparer.OrdinalIgnoreCase) && HoldsStandaloneInternet(c))
+            .Select(c => c.Number).Distinct().Order().ToArray();
+
+        var deadline = DateTimeOffset.UtcNow + budget;
+        var holding = Holding();
+        while (holding.Length > 0 && DateTimeOffset.UtcNow < deadline && !_stopping.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100), _stopping.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            holding = Holding();
+        }
+
+        if (holding.Length > 0)
+        {
+            Events.Warning("departure.policies_held", Localization.Strings.Format("Event.DeparturePoliciesHeld",
+                string.Join(", ", holding.Select(n => string.Format(System.Globalization.CultureInfo.InvariantCulture, Defaults.MachineNameFormat, n)))));
+        }
+
+        return holding;
     }
 
     // ------------------------------------------------------------------ persistence and housekeeping

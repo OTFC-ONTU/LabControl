@@ -220,7 +220,9 @@ update first; (3) the VM drill on an owned-installation clone and the physical l
 network, kept its agent id and number and enrolled into the new lab on its own (ROADMAP *Lab key
 recovery*). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.
 
-**M6 portion 1 verified, portion 2 built and partly VM-verified, portion 3 passed in the physical lab, portions 4 and 5 VM-verified; portion 6 built, its VM drills next:** the owner decisions of 2026-09-09 (lock hard limit 1 h,
+**M6 is done (owner decision 2026-10-26)**: all six portions built, accepted in the physical lab on all
+14 PCs (builds `1.0.0+68d0ae5` → `1.0.0+cc39651`), the lab's findings fixed and retested; open check:
+teacher access in the lab (no second teacher device). Next by the roadmap: M7. The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, *Settled before implementation*; M6 reserves `D-69`…`D-79`.

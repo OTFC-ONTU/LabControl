@@ -211,6 +211,9 @@ the documents relevant to the task:
   before setting anything there. The `D-56` amendment (a teacher console may do all of M6). Drills
   use `LabSession.LockLimit`/`InternetLimit`/`ExamLimit` via `TestLabHost --hard-limit-seconds`;
   procedures in ROADMAP M6, *The portion-6 drills*. Tests: 1003 Shared + 308 Console.
+- **M6 is done (owner decision 2026-10-26)**: accepted in the physical lab on all 14 PCs, the
+  findings fixed and retested on `1.0.0+cc39651`; open check: teacher access in the lab (no second
+  teacher device). Next by the roadmap: M7.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

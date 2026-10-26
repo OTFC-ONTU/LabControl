@@ -2791,6 +2791,15 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   by the next push (`D-83` addendum). The cause: the MacBook left Wi-Fi range for ten seconds,
   and the 12-minute deadline left no room to restart the ten linked minutes; the window is now 30
   minutes (`D-83` second addendum).
+  **Retest the same day on `1.0.0+c1c6e10`:** passed — the whitelist keeps what an allowed IDE
+  starts and still closes what the Start menu opens; *Unlock all* / *Open* asked while a PC was off
+  reached it when it came back, and a lock set afterwards was kept; the *Internet* dialog names the
+  PCs whose exam controls the internet; no Ctrl+Alt+Del line on the student's lock screen. Still
+  open: the same one PC accepts the mouse and the Win key under a broadcast (reproduced again);
+  teacher access not run — there is no second teacher device. The console's ad-hoc signature is a
+  new identity after every console build, so macOS *Screen Recording* must be reset by hand
+  (`tccutil reset ScreenCapture org.ontfk.labcontrol.console`) and granted again; a stable local
+  signing identity was offered and deferred by the owner.
 ---
 
 ## M7 — Software catalog, localization, polish

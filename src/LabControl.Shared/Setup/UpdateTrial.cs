@@ -104,7 +104,7 @@ public sealed class UpdateTrial(string directory)
         if (bootUnix - state.BootUnix <= Defaults.UpdateProbationBootTolerance.TotalSeconds
             || state.Extensions >= Defaults.UpdateProbationRebootExtensions)
             return null;
-        var extended = SchedulerDeadline(now + Defaults.UpdateProbation + Defaults.ServiceRestartWait * 2);
+        var extended = SchedulerDeadline(now + Defaults.UpdateProbationWindow);
         return extended > state.Deadline ? extended : null;
     });
 

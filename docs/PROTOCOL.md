@@ -1226,7 +1226,8 @@ version answers *Running `<version>` now* because the job's `version` is its own
 rule makes pushing a build that is already running a harmless success. While answering, the
 new version preserves trial directories until probation ends. `Hello.update_state` reports
 `ON_PROBATION` or `ROLLED_BACK`; the existing `Event` envelope carries `update.stable`
-when ten continuous linked minutes complete, refreshing the live tile. The monitor also
+when ten continuous linked minutes complete — inside a 30-minute window, so a dropped link
+only restarts them (`D-83` addendum) — refreshing the live tile. The monitor also
 retries terminal-state publication once per connection and durable job/state identity:
 `update.stable` refreshes an already-stable record, and Warning `update.rolled_back` carries
 only the validated failed version as its message. Consoles localize that version into a

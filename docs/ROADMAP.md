@@ -2788,7 +2788,9 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   surface only in *Jobs*; a visible answer to the teacher's action is recorded for M7 below.
   The push of `1.0.0+109a040` rolled back on the PCs, and pushing it again was refused (*That
   version directory already exists*); a leftover directory of a rolled-back version is now replaced
-  by the next push (`D-83` addendum). Why the probation failed is not yet known.
+  by the next push (`D-83` addendum). The cause: the MacBook left Wi-Fi range for ten seconds,
+  and the 12-minute deadline left no room to restart the ten linked minutes; the window is now 30
+  minutes (`D-83` second addendum).
 ---
 
 ## M7 — Software catalog, localization, polish

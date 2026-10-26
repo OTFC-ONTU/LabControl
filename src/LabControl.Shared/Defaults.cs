@@ -613,6 +613,16 @@ public static class Defaults
     public static readonly TimeSpan UpdateProbation = TimeSpan.FromMinutes(10);
 
     /// <summary>
+    /// How long a freshly installed version has to complete <see cref="UpdateProbation"/> — ten
+    /// continuous linked minutes — before the previous version's deadline task rolls it back, from
+    /// the install or from a reboot that restarts the probation (D-83). Was ten minutes plus two
+    /// service restarts (12 min), which left no room for a dropped link: the teacher's MacBook out
+    /// of Wi-Fi range for ten seconds rolled the whole lab back (2026-10-26). Now a drop only
+    /// restarts the ten minutes; a build that cannot hold a link is still rolled back, later.
+    /// </summary>
+    public static readonly TimeSpan UpdateProbationWindow = TimeSpan.FromMinutes(30);
+
+    /// <summary>
     /// How many reboots inside one probation may each restart it (D-83): a teacher's reboot is not
     /// a failed release, a release that keeps rebooting the PC is.
     /// </summary>

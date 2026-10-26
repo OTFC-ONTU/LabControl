@@ -187,7 +187,7 @@ get `win-x64`. `tools/publish-all.sh` produces both.
    Setup does not migrate the unowned development installation described above. Unlock
    the console's lab key, select the PC, choose *Push agent build…*, select the published
    Windows agent/session pair and press *Push*. The console signs the bundle and displays
-   per-PC update state. Acceptance requires ten continuous minutes connected on the new
+   per-PC update state. Acceptance requires ten continuous minutes connected, within 30 minutes of the push, on the new
    build. An actual crashing or unlinked release has been verified to recover automatically
    to the previous version on the isolated VM; see the roadmap for fleet acceptance.
 

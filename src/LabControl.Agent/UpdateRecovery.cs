@@ -14,8 +14,8 @@ internal static class UpdateRecovery
     public static void Arm(string jobId, string version, string previous, string executable, Action<string>? log = null)
     {
         if (Trial.Read() is { } preceding) FinalizeTerminal(preceding);
-        // Startup has a bounded allowance in addition to ten continuous linked minutes.
-        var calculated = DateTimeOffset.UtcNow + Defaults.UpdateProbation + Defaults.ServiceRestartWait * 2;
+        // Ten continuous linked minutes somewhere inside the window: a dropped link restarts them (D-83 addendum).
+        var calculated = DateTimeOffset.UtcNow + Defaults.UpdateProbationWindow;
         // Scheduler triggers have whole-second precision. Round the persisted deadline
         // up too; formatting alone could otherwise fire before the durable deadline.
         var deadline = UpdateTrial.SchedulerDeadline(calculated);

@@ -23,6 +23,16 @@ public sealed class UpdateTrialTests : IDisposable
         Assert.Equal(UpdateTrialPhase.Stable, Trial.Read()!.Phase);
     }
 
+    [Fact]
+    public void The_window_leaves_room_for_ten_continuous_minutes_after_a_dropped_link()
+    {
+        // The lab, 2026-10-26: the link dropped for ten seconds at minute three; the ten minutes start again.
+        Assert.True(Defaults.UpdateProbationWindow >= Defaults.UpdateProbation * 2);
+        Trial.Begin("job", "0.2.0", "0.1.0", _now + Defaults.UpdateProbationWindow);
+        Assert.False(Trial.Accept("0.2.0", _now.AddMinutes(12), TimeSpan.FromMinutes(9)));
+        Assert.True(Trial.Accept("0.2.0", _now.AddMinutes(13), TimeSpan.FromMinutes(10)));
+    }
+
     // ------------------------------------------------------------------ D-83: a reboot restarts the probation
 
     [Fact]

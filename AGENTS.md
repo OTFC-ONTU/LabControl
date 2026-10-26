@@ -216,7 +216,8 @@ the documents relevant to the task:
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),
   the *Internet* dialog names PCs whose exam controls the internet (item 9), no Ctrl+Alt+Del line on
   the student's lock screen. Open: mouse/Win under a broadcast on one PC; teacher access not run;
-  failed-action feedback is M7. Tests: 1006 Shared + 309 Console.
+  failed-action feedback is M7. Tests: 1006 Shared + 309 Console. Then: a re-push replaces a
+  rolled-back version's leftover directory; the probation window is 30 minutes (`D-83` addenda).
 - The Windows student agent must survive reboots and must not let a failed Win32
   operation escape the service loop.
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the

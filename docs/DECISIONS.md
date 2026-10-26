@@ -4765,6 +4765,15 @@ recovery files; any other directory of the pushed version is a leftover and is n
 files are placed (`InstallLayout.HoldsRecovery`). The rule lives in the agent, so a PC still running a
 build from before it needs a new version name for its next push (`1.0.0+<hash>.2`).
 
+Second addendum, the same day — **why** they rolled back: the teacher carried the MacBook into
+another room and the link dropped for about ten seconds. The deadline was the probation plus two
+service restarts, 12 minutes, so a drop after minute two left no room for ten continuous linked
+minutes. The deadline (at install and after a reboot) is now `Defaults.UpdateProbationWindow`, 30
+minutes, and the ten minutes must still be continuous: a drop restarts them, a build that crashes is
+still rolled back by the service-restart threshold at once, and one that cannot hold a link is
+rolled back at the window's end instead of minute twelve. The deadline is written when the new build
+is installed, so this takes effect from the push **after** the PCs run this build.
+
 ## D-84 — A lock or a broadcast keeps the student's monitor on
 
 Context (2026-10-20, physical lab): during a broadcast, a lock and other long overlays the

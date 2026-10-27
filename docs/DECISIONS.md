@@ -5006,4 +5006,5 @@ value is the PC's reality, and the argument would reach code that has no link to
 own Windows language for anything (`D-86`); a `--language` switch for Setup (the owner's rule is
 the Windows display language, and a switch is one more thing to get wrong on fourteen PCs).
 
-Status: built 2026-10-26 on the Mac; the VM run in all three languages is pending.
+Status: built 2026-10-26; accepted by the owner on 2026-10-27 after the physical lab (build
+`1.0.0+c8e3c9b`: exam, lock, language switch). Setup and removal in the three languages were not run.

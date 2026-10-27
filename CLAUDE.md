@@ -236,7 +236,8 @@ overlay, policy texts, `INSTALL.txt`). Every new key goes into all three files i
 `ru-UA`. Owner decisions: the language applies on restart, the student sees the console's language
 (portion 2 carries it to the PC), "lab" = лабораторія / лаборатория. ROADMAP M7 holds the seven
 portions. Tests: 1032 Shared + 316 Console. Next: the owner reads both translations; portion 2.
-**M7 portion 2 is built (2026-10-26, `D-87`), on the Mac; not yet run on Windows:** the console's
+**M7 portion 2 is done (built 2026-10-26, `D-87`; accepted by the owner 2026-10-27 after the lab on
+`1.0.0+c8e3c9b` — exam, lock, language switch; Setup's languages not run):** the console's
 language reaches the PC. `Welcome.language` sets `Shared/Localization/PcLanguage` (kept in
 `agent.json` as `console_language`), in which the PC writes its events, job results and refusals
 (`PolicyStrings` and the new `PcStrings` via `PcText.Get`; the helper learns it from
@@ -246,7 +247,7 @@ the student's words are in the **setting** console's language, and `OverlayText`
 explicitly, never the process culture. Setup and removal resolve the Windows display language
 before the first string; the step trace shared with `setup.log` stays English. `PcLanguage` is
 process-wide, so a test that changes it runs in the language collection and restores English.
-Tests: 1050 Shared + 317 Console. Next: the VM run in all three languages; portion 3.
+Tests: 1050 Shared + 317 Console. Built-in scripts' output stays English (data). Next: portion 3.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

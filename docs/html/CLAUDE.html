@@ -363,7 +363,8 @@ overlay, policy texts, <code>INSTALL.txt</code>). Every new key goes into all th
 <code>ru-UA</code>. Owner decisions: the language applies on restart, the student sees the console's language
 (portion 2 carries it to the PC), &quot;lab&quot; = лабораторія / лаборатория. ROADMAP M7 holds the seven
 portions. Tests: 1032 Shared + 316 Console. Next: the owner reads both translations; portion 2.
-<strong>M7 portion 2 is built (2026-10-26, <code>D-87</code>), on the Mac; not yet run on Windows:</strong> the console's
+<strong>M7 portion 2 is done (built 2026-10-26, <code>D-87</code>; accepted by the owner 2026-10-27 after the lab on
+<code>1.0.0+c8e3c9b</code> — exam, lock, language switch; Setup's languages not run):</strong> the console's
 language reaches the PC. <code>Welcome.language</code> sets <code>Shared/Localization/PcLanguage</code> (kept in
 <code>agent.json</code> as <code>console_language</code>), in which the PC writes its events, job results and refusals
 (<code>PolicyStrings</code> and the new <code>PcStrings</code> via <code>PcText.Get</code>; the helper learns it from
@@ -373,7 +374,7 @@ the student's words are in the <strong>setting</strong> console's language, and 
 explicitly, never the process culture. Setup and removal resolve the Windows display language
 before the first string; the step trace shared with <code>setup.log</code> stays English. <code>PcLanguage</code> is
 process-wide, so a test that changes it runs in the language collection and restores English.
-Tests: 1050 Shared + 317 Console. Next: the VM run in all three languages; portion 3.
+Tests: 1050 Shared + 317 Console. Built-in scripts' output stays English (data). Next: portion 3.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
@@ -856,7 +857,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-26 16:38 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 09:59 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

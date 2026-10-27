@@ -2909,10 +2909,11 @@ the three languages checked again. H.264 only if M3's measurements demand it.
   resolve the Windows display language before the first string; their dialogs, plan, warnings,
   refusals and closing lines are resources (35 new `SetupStrings` keys), the step trace shared
   with `setup.log` stays English. An older console or agent costs English, nothing else.
-  Tests: `StudentTextLanguageTests`, `PcLanguageTests` (Shared and Console). **Open:** the VM
-  run in all three languages — a lock, an exam with a closed program and *Time is up*, a refused
-  job, Setup and removal under each Windows display language — and the owner's read-through of
-  the new texts.
+  Tests: `StudentTextLanguageTests`, `PcLanguageTests` (Shared and Console). **Accepted by the
+  owner (2026-10-27)** after the physical lab on build `1.0.0+c8e3c9b`: exam, lock and the
+  language switch in the console's language. Script output (*PC-INFO* prints English labels)
+  is the script's own text — data, not translated (`D-67` item 2). Not run: Setup and removal
+  under each Windows display language.
 
 **Acceptance criteria**
 

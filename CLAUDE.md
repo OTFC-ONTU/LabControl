@@ -267,7 +267,9 @@ silent arguments, detect rule, limit and a mode (`install` / `missing` / `check`
 the limit, staging emptied at start) and `FakePackageHost` (`/fail`, `/reboot`, `/hang`, `/nodetect`).
 The console's `PackageStatusBook` (`package-status.json`) keeps each PC's answer; the *Packages* tab
 lists every PC and has *Install on N selected PCs*, *Install on all missing* (asks before an untried
-package) and *Check PCs*. A package may also be a `.zip` (`D-89` addendum): the wizard lists the
+package) and *Check PCs*. **Working in the lab (owner, 2026-10-27)**: the Wake-on-LAN driver was
+installed on the room with it; open: the broken-package drill and the measured 14-PC IDE install.
+A package may also be a `.zip` (`D-89` addendum): the wizard lists the
 installers inside, the PC unpacks it under checked names and limits (`PackageArchive`) and runs the
 chosen one (`run`) from its folder — first for the Realtek RTL8168 driver Wake-on-LAN needs.
 Tests: 1102 Shared + 335 Console. Next: the VM run, then the broken-package drill and the 14-PC measurement in the lab.
@@ -763,9 +765,9 @@ Setup, enrolled in lab `444-2`, linked to the MacBook console over Wi-Fi with au
 `student` sign-in and live screens. The owner considers the physical baseline established
 and development moves on (M5 portion 2 onwards); the remaining nine PCs, the vendor NIC
 driver, the wake test and the other M4 physical checks continue alongside, tracked in
-ROADMAP's *Physical lab* row and the on-site checklist. **Wake-on-LAN first worked on 2026-10-27 on one PC**
-(the Realtek driver `.zip` installed through the catalog, ErP off and *Power On By PCI-E* on in the BIOS;
-PC-02 woke without the USB repair, so the driver's defaults suffice for wake from shutdown); do not describe it as working for the room until all fourteen wake.
+ROADMAP's *Physical lab* row and the on-site checklist. **Wake-on-LAN works in the lab (owner, 2026-10-27)**: Realtek's
+vendor driver `.zip` installed on all fourteen through the package catalog, ErP off and *Power On By
+PCI-E* on in each BIOS; no USB repair is needed for wake from shutdown (PC-02 proved it).
 
 **Physical lab, 2026-10-20:** all fourteen PCs (PC-01…PC-14) are installed and linked. The owner had
 forgotten the lab key's passphrase; the lab was moved to a new key with *Move this lab to a new key*

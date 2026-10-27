@@ -388,7 +388,8 @@ package) and <code>FakePackageHost</code> (<code>/fail</code>, <code>/reboot</co
 <code>PackageStatusBook</code> (<code>package-status.json</code>) and the <em>Packages</em> tab's <em>Install on N selected PCs</em>,
 <em>Install on all missing</em> (queued for PCs that are off; asks before an untried package) and <em>Check
 PCs</em>. A restart is only reported; an exam refuses. A package may be a <code>.zip</code> with its installer
-and files (<code>run</code>, <code>PackageArchive</code>, <code>D-89</code> addendum). Tests: 1102 Shared + 335 Console. Next: the VM run, the lab drills.</li>
+and files (<code>run</code>, <code>PackageArchive</code>, <code>D-89</code> addendum). Working in the lab (owner, 2026-10-27); open: the
+broken-package drill and the measured 14-PC IDE install. Tests: 1102 Shared + 335 Console. Next: the VM run, the lab drills.</li>
 <li><strong>M6 in the physical lab (2026-10-26, build <code>1.0.0+68d0ae5</code>)</strong> passed sections 0–6 of the checklist.
 Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (<code>D-75</code>
 item 12), ends asked while a PC was off are sent on its return with the same session (<code>D-79</code> item 8),
@@ -402,9 +403,8 @@ operation escape the service loop.</li>
 <li>Physical lab status (2026-09-08 evening): five PCs installed and linked from the
 <code>1.0.0</code> media; the owner declared the baseline established and moved development on
 to M5. Remaining PCs, the vendor Realtek driver and the wake test continue alongside
-(ROADMAP <em>Physical lab</em> row and on-site checklist). Wake-on-LAN first worked on one PC on 2026-10-27
-(Realtek driver via the catalog, BIOS ErP off / Power On By PCI-E on; no USB repair needed on PC-02); never claim it for
-the room until all fourteen wake.</li>
+(ROADMAP <em>Physical lab</em> row and on-site checklist). Wake-on-LAN works in the lab (owner, 2026-10-27): the Realtek driver
+installed on all 14 through the package catalog, BIOS ErP off / Power On By PCI-E on, no USB repair needed.</li>
 <li><code>1.0.0</code> is the current physical-lab release candidate (owner decision 2026-09-08).
 Do not call it released until the remaining M4 physical acceptance checks pass; the
 later additive M5 portion-5 <code>Welcome.console_access</code> field preserves the frozen
@@ -556,7 +556,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-27 13:44 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 13:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

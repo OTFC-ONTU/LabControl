@@ -206,7 +206,7 @@ implement.</p>
 <tr>
 <td><strong>M7</strong></td>
 <td>Software catalog, localization, polish, UI/UX redesign</td>
-<td><strong>in progress — portion 1 (the console's languages, <code>D-86</code>) built 2026-10-26 on the Mac; Ukrainian and Russian awaiting the owner's read-through</strong></td>
+<td><strong>in progress — portions 1–2 (languages, <code>D-86</code>, <code>D-87</code>) done; portions 3–4 (catalog, wizard, <code>install_package</code>, <code>.zip</code> packages, <code>D-88</code>, <code>D-89</code>) working in the lab 2026-10-27 — Wake-on-LAN's driver installed on the room through it; next: portion 5</strong></td>
 <td>M6</td>
 </tr>
 </tbody>
@@ -3166,8 +3166,12 @@ other 13 through <em>Install on all missing</em>. <strong>PC-02 woke with the dr
 the USB repair</strong>: the vendor driver's defaults already enable wake on a magic packet from shutdown,
 so the repair is not needed for wake from S5 (it still sets <em>only magic packet</em>, Energy-Efficient
 Ethernet off and <em>allow this device to wake the computer</em>, and refreshes the tile's NIC advisory,
-which otherwise stays as an informational tooltip, <code>D-66</code>). Next: the BIOS on the rest and the
-room-wide wake.</li>
+which otherwise stays as an informational tooltip, <code>D-66</code>). <strong>Owner's confirmation (2026-10-27):
+Wake-on-LAN works in the lab and the mass install through the catalog works</strong> — the driver
+installed on the room with <em>Install on all missing</em>, the BIOS set on every PC, the room woke from
+the console. Still open for portion 4's acceptance: the deliberately broken package on all 14 and
+the measured install of a real program (an IDE) on 14 PCs without internet, written here next to
+the manual afternoon.</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -3255,12 +3259,15 @@ PCs <code>192.168.0.x</code> on the wire, one broadcast domain (2026-09-08).</li
 is found by every installed PC and they enrol and link within seconds (2026-09-08).</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> Is it a switch or a real hub? Bandwidth headroom for 14 (later 30) video streams.</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> DHCP lease behaviour; do PCs keep their IPs?</li>
-<li class="task-list-item"><input disabled="disabled" type="checkbox" /> Per PC: BIOS/UEFI &quot;Wake on LAN&quot; / &quot;Power on by PCI-E&quot; enabled. — Not yet checked;
-pointless until the NIC driver below is replaced.</li>
+<li class="task-list-item"><input disabled="disabled" type="checkbox" checked="checked" /> Per PC: BIOS/UEFI &quot;Wake on LAN&quot; / &quot;Power on by PCI-E&quot; enabled. — Done on every PC on
+2026-10-27 (ASUS: Advanced → APM Configuration: ErP Ready <em>Disabled</em>, Power On By PCI-E
+<em>Enabled</em>); with the vendor driver the whole room wakes from the console.</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" checked="checked" /> NIC models across the PCs (Realtek/Intel differences change the WoL settings). —
 All seen so far: Realtek PCIe GbE (RTL8168) on ASUS boards with the Microsoft
 in-box driver 9.1.410.2015, which exposes no Wake-on-LAN settings at all (<code>D-66</code>).
-The vendor driver is required before any wake test.</li>
+The vendor driver is required before any wake test — Realtek's <em>Win10/Win11 Auto
+Installation Program (NDIS)</em> 10.80.50, installed on all 14 through the package catalog
+on 2026-10-27 (<code>D-89</code> addendum); its defaults wake from shutdown without a USB repair.</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> Windows edition and build (Home vs Pro changes some policy options).</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" /> Local administrator account name and password, per PC or common.</li>
 <li class="task-list-item"><input disabled="disabled" type="checkbox" checked="checked" /> Antivirus in use — Defender only, or a third-party product that Setup cannot
@@ -3385,7 +3392,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-27 13:44 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 13:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish-uiux-redesign">M7 — Software catalog, localization, polish, UI/UX redesign</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

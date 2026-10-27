@@ -48,7 +48,7 @@ machines on and off, and watch what students are doing.
 - **Scripts and files on all PCs in parallel** — a PowerShell / cmd script library and
   file handouts over the LAN, with a separate result and log for every PC; a package
   catalog filled by an *Add package* wizard installs programs silently on one PC or on all
-  that lack them, with no internet on the PCs (M7, not yet run on a real PC).
+  that lack them, with no internet on the PCs (M7; in use in the lab since 2026-10-27).
 - **Broadcast, lock and exam mode** — show the teacher's screen on every
   PC, lock screens with a message, and an exam mode built from four independent switches
   (timer, allowed programs, internet block, collect work) that always restores the PC by

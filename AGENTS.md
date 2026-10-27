@@ -248,7 +248,8 @@ the documents relevant to the task:
   `PackageStatusBook` (`package-status.json`) and the *Packages* tab's *Install on N selected PCs*,
   *Install on all missing* (queued for PCs that are off; asks before an untried package) and *Check
   PCs*. A restart is only reported; an exam refuses. A package may be a `.zip` with its installer
-  and files (`run`, `PackageArchive`, `D-89` addendum). Tests: 1102 Shared + 335 Console. Next: the VM run, the lab drills.
+  and files (`run`, `PackageArchive`, `D-89` addendum). Working in the lab (owner, 2026-10-27); open: the
+  broken-package drill and the measured 14-PC IDE install. Tests: 1102 Shared + 335 Console. Next: the VM run, the lab drills.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),
@@ -262,9 +263,8 @@ the documents relevant to the task:
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the
   `1.0.0` media; the owner declared the baseline established and moved development on
   to M5. Remaining PCs, the vendor Realtek driver and the wake test continue alongside
-  (ROADMAP *Physical lab* row and on-site checklist). Wake-on-LAN first worked on one PC on 2026-10-27
-  (Realtek driver via the catalog, BIOS ErP off / Power On By PCI-E on; no USB repair needed on PC-02); never claim it for
-  the room until all fourteen wake.
+  (ROADMAP *Physical lab* row and on-site checklist). Wake-on-LAN works in the lab (owner, 2026-10-27): the Realtek driver
+  installed on all 14 through the package catalog, BIOS ErP off / Power On By PCI-E on, no USB repair needed.
 - `1.0.0` is the current physical-lab release candidate (owner decision 2026-09-08).
   Do not call it released until the remaining M4 physical acceptance checks pass; the
   later additive M5 portion-5 `Welcome.console_access` field preserves the frozen

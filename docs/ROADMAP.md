@@ -21,7 +21,7 @@ implement.
 | **M4** | Deployment: USB installer, files, self-update | **in progress — `1.0.0` is the physical-lab release candidate (owner decision 2026-09-08); script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
 | **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the `app.manifest` double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the `group=` argument that made the printed `netsh` line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest `PC-27`) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three `--remove-data` answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`; on Linux, the `SO_PEERCRED` path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | **done 2026-10-26 (owner decision)** — all six portions built (`D-69`…`D-79`), portions 1–5 VM-drilled, and the whole milestone accepted in the physical lab on all 14 PCs (2026-10-26, builds `1.0.0+68d0ae5` → `1.0.0+cc39651`): lock, broadcast, internet control, exam mode, collect work, profile reset, the fail-safe checks and the departure dialog; the lab's findings fixed and retested the same day (`D-75` item 12, `D-79` items 8–9, `D-81` and `D-83` addenda). **Open check:** teacher access in the lab — there is no second teacher device yet (proven over the real link on the Mac, `TeacherAccessTests`). The portion-6 VM drills were not run separately; the lab covered them | M5 |
-| **M7** | Software catalog, localization, polish, UI/UX redesign | **in progress — portion 1 (the console's languages, `D-86`) built 2026-10-26 on the Mac; Ukrainian and Russian awaiting the owner's read-through** | M6 |
+| **M7** | Software catalog, localization, polish, UI/UX redesign | **in progress — portions 1–2 (languages, `D-86`, `D-87`) done; portions 3–4 (catalog, wizard, `install_package`, `.zip` packages, `D-88`, `D-89`) working in the lab 2026-10-27 — Wake-on-LAN's driver installed on the room through it; next: portion 5** | M6 |
 
 Update the **State** column (`not started` / `in progress` / `done <date>`) in the same
 change that finishes the work, and regenerate the HTML mirror (see
@@ -2960,8 +2960,12 @@ the three languages checked again. H.264 only if M3's measurements demand it.
   the USB repair**: the vendor driver's defaults already enable wake on a magic packet from shutdown,
   so the repair is not needed for wake from S5 (it still sets *only magic packet*, Energy-Efficient
   Ethernet off and *allow this device to wake the computer*, and refreshes the tile's NIC advisory,
-  which otherwise stays as an informational tooltip, `D-66`). Next: the BIOS on the rest and the
-  room-wide wake.
+  which otherwise stays as an informational tooltip, `D-66`). **Owner's confirmation (2026-10-27):
+  Wake-on-LAN works in the lab and the mass install through the catalog works** — the driver
+  installed on the room with *Install on all missing*, the BIOS set on every PC, the room woke from
+  the console. Still open for portion 4's acceptance: the deliberately broken package on all 14 and
+  the measured install of a real program (an IDE) on 14 PCs without internet, written here next to
+  the manual afternoon.
 
 **Acceptance criteria**
 
@@ -3064,12 +3068,15 @@ Do this on the first visit to the lab; several milestones depend on the answers.
       is found by every installed PC and they enrol and link within seconds (2026-09-08).
 - [ ] Is it a switch or a real hub? Bandwidth headroom for 14 (later 30) video streams.
 - [ ] DHCP lease behaviour; do PCs keep their IPs?
-- [ ] Per PC: BIOS/UEFI "Wake on LAN" / "Power on by PCI-E" enabled. — Not yet checked;
-      pointless until the NIC driver below is replaced.
+- [x] Per PC: BIOS/UEFI "Wake on LAN" / "Power on by PCI-E" enabled. — Done on every PC on
+      2026-10-27 (ASUS: Advanced → APM Configuration: ErP Ready *Disabled*, Power On By PCI-E
+      *Enabled*); with the vendor driver the whole room wakes from the console.
 - [x] NIC models across the PCs (Realtek/Intel differences change the WoL settings). —
       All seen so far: Realtek PCIe GbE (RTL8168) on ASUS boards with the Microsoft
       in-box driver 9.1.410.2015, which exposes no Wake-on-LAN settings at all (`D-66`).
-      The vendor driver is required before any wake test.
+      The vendor driver is required before any wake test — Realtek's *Win10/Win11 Auto
+      Installation Program (NDIS)* 10.80.50, installed on all 14 through the package catalog
+      on 2026-10-27 (`D-89` addendum); its defaults wake from shutdown without a USB repair.
 - [ ] Windows edition and build (Home vs Pro changes some policy options).
 - [ ] Local administrator account name and password, per PC or common.
 - [x] Antivirus in use — Defender only, or a third-party product that Setup cannot

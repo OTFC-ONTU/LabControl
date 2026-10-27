@@ -394,7 +394,9 @@ silent arguments, detect rule, limit and a mode (<code>install</code> / <code>mi
 the limit, staging emptied at start) and <code>FakePackageHost</code> (<code>/fail</code>, <code>/reboot</code>, <code>/hang</code>, <code>/nodetect</code>).
 The console's <code>PackageStatusBook</code> (<code>package-status.json</code>) keeps each PC's answer; the <em>Packages</em> tab
 lists every PC and has <em>Install on N selected PCs</em>, <em>Install on all missing</em> (asks before an untried
-package) and <em>Check PCs</em>. A package may also be a <code>.zip</code> (<code>D-89</code> addendum): the wizard lists the
+package) and <em>Check PCs</em>. <strong>Working in the lab (owner, 2026-10-27)</strong>: the Wake-on-LAN driver was
+installed on the room with it; open: the broken-package drill and the measured 14-PC IDE install.
+A package may also be a <code>.zip</code> (<code>D-89</code> addendum): the wizard lists the
 installers inside, the PC unpacks it under checked names and limits (<code>PackageArchive</code>) and runs the
 chosen one (<code>run</code>) from its folder — first for the Realtek RTL8168 driver Wake-on-LAN needs.
 Tests: 1102 Shared + 335 Console. Next: the VM run, then the broken-package drill and the 14-PC measurement in the lab.
@@ -868,9 +870,9 @@ Setup, enrolled in lab <code>444-2</code>, linked to the MacBook console over Wi
 <code>student</code> sign-in and live screens. The owner considers the physical baseline established
 and development moves on (M5 portion 2 onwards); the remaining nine PCs, the vendor NIC
 driver, the wake test and the other M4 physical checks continue alongside, tracked in
-ROADMAP's <em>Physical lab</em> row and the on-site checklist. <strong>Wake-on-LAN first worked on 2026-10-27 on one PC</strong>
-(the Realtek driver <code>.zip</code> installed through the catalog, ErP off and <em>Power On By PCI-E</em> on in the BIOS;
-PC-02 woke without the USB repair, so the driver's defaults suffice for wake from shutdown); do not describe it as working for the room until all fourteen wake.</p>
+ROADMAP's <em>Physical lab</em> row and the on-site checklist. <strong>Wake-on-LAN works in the lab (owner, 2026-10-27)</strong>: Realtek's
+vendor driver <code>.zip</code> installed on all fourteen through the package catalog, ErP off and <em>Power On By
+PCI-E</em> on in each BIOS; no USB repair is needed for wake from shutdown (PC-02 proved it).</p>
 <p><strong>Physical lab, 2026-10-20:</strong> all fourteen PCs (PC-01…PC-14) are installed and linked. The owner had
 forgotten the lab key's passphrase; the lab was moved to a new key with <em>Move this lab to a new key</em>
 (<code>D-82</code>) — all fourteen moved over the network in half a minute — and the new key is remembered on the
@@ -881,7 +883,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-27 13:44 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 13:47 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

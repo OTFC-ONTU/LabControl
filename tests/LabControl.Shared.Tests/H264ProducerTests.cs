@@ -213,6 +213,68 @@ public sealed class H264ProducerTests
     }
 
     [Fact]
+    public void Three_failures_in_a_row_give_h264_up_once_and_jpeg_still_works()
+    {
+        using var image = new ScreenImage();
+        var created = 0;
+        using var decoder = new FrameDecoder(() =>
+        {
+            created++;
+            throw new H264Exception("broken codec");
+        });
+        var reasons = new List<string>();
+        decoder.BrokeDown += reasons.Add;
+        var now = DateTimeOffset.UtcNow;
+
+        Assert.Equal(FrameOutcome.Undecodable, decoder.Apply(image, H264Frame(idr: true), now));
+        Assert.Equal(FrameOutcome.Undecodable, decoder.Apply(image, H264Frame(idr: true), now));
+        Assert.False(decoder.Broken);
+        Assert.Equal(FrameOutcome.Undecodable, decoder.Apply(image, H264Frame(idr: true), now));
+        Assert.True(decoder.Broken);
+        Assert.Equal(["broken codec"], reasons);
+
+        // Given up: no more attempts, and JPEG goes on.
+        Assert.Equal(FrameOutcome.Undecodable, decoder.Apply(image, H264Frame(idr: true), now));
+        Assert.Equal(3, created);
+        using var bitmap = new SKBitmap(new SKImageInfo(64, 48, JpegCodec.PixelFormat, SKAlphaType.Premul));
+        var jpeg = new VideoFrame
+        {
+            Width = 64, Height = 48, Mode = VideoMode.Full, Keyframe = true, Codec = Defaults.VideoCodecJpeg,
+            Jpeg = Google.Protobuf.ByteString.CopyFrom(JpegCodec.Encode(bitmap, 80)),
+        };
+        jpeg.Dirty.Add(VideoGeometry.Whole(64, 48));
+        Assert.Equal(FrameOutcome.Applied, decoder.Apply(image, jpeg, now));
+        Assert.Single(reasons);
+    }
+
+    [Fact]
+    public void A_success_between_failures_starts_the_count_again()
+    {
+        using var image = new ScreenImage();
+        var calls = 0;
+        using var decoder = new FrameDecoder(() => new ScriptedDecoder(() => ++calls % 3 == 0));
+        var now = DateTimeOffset.UtcNow;
+        for (var i = 0; i < 12; i++)
+        {
+            decoder.Apply(image, H264Frame(idr: true), now);
+        }
+
+        Assert.False(decoder.Broken);
+    }
+
+    /// <summary>Decodes when <c>succeed</c> says so, throws otherwise.</summary>
+    private sealed class ScriptedDecoder(Func<bool> succeed) : IH264Decoder
+    {
+        private readonly SKBitmap _picture = new(new SKImageInfo(64, 48, JpegCodec.PixelFormat, SKAlphaType.Premul));
+
+        public string Kind => "scripted";
+
+        public SKBitmap? Decode(ReadOnlySpan<byte> accessUnit) => succeed() ? _picture : throw new H264Exception("scripted failure");
+
+        public void Dispose() => _picture.Dispose();
+    }
+
+    [Fact]
     public void A_broadcast_picture_decodes_h264_on_its_own_thread()
     {
         using var picture = new BroadcastPicture(NullLogger.Instance, () => new FakeH264Decoder(128, 72));

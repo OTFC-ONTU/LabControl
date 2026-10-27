@@ -138,6 +138,49 @@ public sealed class H264BroadcastTests
     }
 
     [Fact]
+    public async Task A_pc_whose_decoder_breaks_mid_broadcast_carries_on_as_text()
+    {
+        SkipWithoutH264();
+        await using var console = await TestConsole.CreateLabAsync();
+        console.Session.BroadcastSource = TeacherScreen;
+        var payload = SetupPayload.Open(console.Session.WritePayload(TestConsole.TempDirectory(), pcCount: 1));
+        var store = FakeMachine.Install(Path.Combine(TestConsole.TempDirectory(), "PC-01"), 1, payload, System.Net.IPAddress.Loopback.ToString(), console.Port, burnedCode: false);
+
+        // The real decoder for ten pictures, then nothing but failures — what LABCONTROL_H264_DECODE_FAIL_AFTER does on a PC.
+        var decoded = 0;
+        await using var machine = new FakeMachine(store, null, TestLogging.Factory.CreateLogger("PC-01"),
+            broadcastDecoder: () => new BreakingDecoder(H264Codecs.CreateDecoder(), () => Interlocked.Increment(ref decoded) > 10));
+        machine.Start();
+        Assert.True(await Wait.UntilAsync(() => console.Session.IsLinked(machine.AgentId), TimeSpan.FromSeconds(30)));
+
+        console.Session.StartBroadcast([machine.AgentId], video: true);
+        var hub = console.Session.Broadcast!;
+        Assert.True(await Wait.UntilAsync(() => hub.StreamOf(machine.AgentId) == Defaults.VideoCodecH264, TimeSpan.FromSeconds(20)));
+
+        // The decoder breaks, the PC dials again without H.264 and keeps the screen.
+        Assert.True(await Wait.UntilAsync(() => hub.StreamOf(machine.AgentId) == Defaults.VideoCodecJpeg, TimeSpan.FromSeconds(30)),
+            $"stream {hub.StreamOf(machine.AgentId)}");
+        Assert.True(await Wait.UntilAsync(() => console.Session.Events.Recent.Any(e => e.Code == "broadcast.text_fallback" && e.AgentId == machine.AgentId), TimeSpan.FromSeconds(10)));
+        Assert.Equal(1, hub.WatchingAsText);
+        var applied = machine.BroadcastPicture.Applied;
+        Assert.True(await Wait.UntilAsync(() => machine.BroadcastPicture.Applied > applied + 5, TimeSpan.FromSeconds(20)));
+        Assert.NotNull(machine.Broadcast);
+        Assert.DoesNotContain(console.Session.Events.Recent, e => e.Code is "broadcast.failed" or "broadcast.stalled");
+
+        await console.Session.StopBroadcastAsync();
+    }
+
+    /// <summary>A real decoder until <c>broken</c> says otherwise.</summary>
+    private sealed class BreakingDecoder(IH264Decoder inner, Func<bool> broken) : IH264Decoder
+    {
+        public string Kind => "breaking";
+
+        public SkiaSharp.SKBitmap? Decode(ReadOnlySpan<byte> accessUnit) => broken() ? throw new H264Exception("the test broke the decoder") : inner.Decode(accessUnit);
+
+        public void Dispose() => inner.Dispose();
+    }
+
+    [Fact]
     public async Task The_real_codec_carries_a_full_view_in_video_and_back_to_text()
     {
         SkipWithoutH264();

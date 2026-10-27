@@ -35,6 +35,7 @@
   <data name="BroadcastExpired" xml:space="preserve"><value>Трансляція екрана на цьому ПК завершилася після досягнення ліміту.</value></data>
   <data name="BroadcastFailed" xml:space="preserve"><value>Не вдалося показати трансляцію екрана: {0}.</value></data>
   <data name="BroadcastStalled" xml:space="preserve"><value>Трансляція екрана не передавала зображення {0} с; цей ПК повернув собі екран.</value></data>
+  <data name="BroadcastTextFallback" xml:space="preserve"><value>Цей ПК не зміг показати трансляцію як Відео (H.264); вона триває як Текст.</value></data>
   <data name="RefusedNoSession" xml:space="preserve"><value>відхилено: у трансляції не вказано сеанс</value></data>
   <data name="StampNever" xml:space="preserve"><value>ніколи</value></data>
   <data name="RefusedNoInternetSession" xml:space="preserve"><value>відхилено: на цьому ПК немає такого обмеження інтернету, щоб його змінити</value></data>

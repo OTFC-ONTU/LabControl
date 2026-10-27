@@ -186,24 +186,50 @@ public sealed class BroadcastReceiver : IAsyncDisposable
 
             // Pushed back by every frame; a stream that brings none for this long is over.
             using var stall = new CancellationTokenSource(_stallTimeout);
-            using var both = CancellationTokenSource.CreateLinkedTokenSource(running.Token, limit.Token, stall.Token);
             var first = true;
-            outcome = await _link.PullBroadcastAsync(session.SessionId, SafeCodecs(), async (frame, token) =>
+            var codecs = SafeCodecs();
+            while (true)
             {
-                stall.CancelAfter(_stallTimeout);
-                if (first)
+                // Dialled again, with the screen kept, when the machine stops decoding a codec it
+                // asked for (D-91 item 11): its H.264 decoder broke, the console sends JPEG instead.
+                using var redial = new CancellationTokenSource();
+                using var both = CancellationTokenSource.CreateLinkedTokenSource(running.Token, limit.Token, stall.Token, redial.Token);
+                var asked = codecs;
+                outcome = await _link.PullBroadcastAsync(session.SessionId, asked, async (frame, token) =>
                 {
-                    first = false;
-                    taken = TakeScreen(session, generation);
-                    if (!taken)
+                    stall.CancelAfter(_stallTimeout);
+                    if (first)
                     {
-                        running.Cancel();
+                        first = false;
+                        taken = TakeScreen(session, generation);
+                        if (!taken)
+                        {
+                            running.Cancel();
+                            return;
+                        }
+                    }
+
+                    if (asked.Count > 0 && LostCodec(asked))
+                    {
+                        redial.Cancel();
                         return;
                     }
+
+                    await _machine.BroadcastFrameAsync(frame, token);
+                }, both.Token);
+
+                if (redial.IsCancellationRequested && !running.IsCancellationRequested && !limit.IsCancellationRequested && !stall.IsCancellationRequested)
+                {
+                    codecs = SafeCodecs();
+                    _log.LogWarning("broadcast {Session}: this PC no longer decodes {Lost}; dialling again for {Codecs}", session.SessionId,
+                        string.Join(",", asked.Except(codecs)), codecs.Count > 0 ? string.Join(",", codecs) : "jpeg");
+                    Report(Event.Types.Severity.Warning, PolicyEvents.BroadcastTextFallback, PolicyEvents.Text("BroadcastTextFallback"));
+                    continue;
                 }
 
-                await _machine.BroadcastFrameAsync(frame, token);
-            }, both.Token);
+                break;
+            }
+
             limitReached = limit.IsCancellationRequested && !running.IsCancellationRequested;
             stalled = stall.IsCancellationRequested && !limitReached && !running.IsCancellationRequested;
         }
@@ -236,6 +262,13 @@ public sealed class BroadcastReceiver : IAsyncDisposable
     }
 
     /// <summary>On the first frame: the screen is the broadcast's from now on. False when the machine cannot show it.</summary>
+    /// <summary>A codec this stream was asked with is no longer one the machine decodes.</summary>
+    private bool LostCodec(IReadOnlyCollection<string> asked)
+    {
+        var now = SafeCodecs();
+        return asked.Any(codec => !now.Contains(codec, StringComparer.OrdinalIgnoreCase));
+    }
+
     /// <summary>What the machine says it decodes; a machine that fails to say is JPEG only.</summary>
     private IReadOnlyCollection<string> SafeCodecs()
     {

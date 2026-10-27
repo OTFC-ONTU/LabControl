@@ -35,6 +35,7 @@
   <data name="BroadcastExpired" xml:space="preserve"><value>The screen broadcast ended on this PC at its limit.</value></data>
   <data name="BroadcastFailed" xml:space="preserve"><value>The screen broadcast could not be shown: {0}.</value></data>
   <data name="BroadcastStalled" xml:space="preserve"><value>The screen broadcast brought no picture for {0} seconds; this PC gave its screen back.</value></data>
+  <data name="BroadcastTextFallback" xml:space="preserve"><value>This PC could not show the broadcast as Video (H.264); it carries on as Text.</value></data>
   <data name="RefusedNoSession" xml:space="preserve"><value>refused: the broadcast names no session</value></data>
   <data name="StampNever" xml:space="preserve"><value>never</value></data>
   <data name="RefusedNoInternetSession" xml:space="preserve"><value>refused: this PC holds no such internet policy to change</value></data>

@@ -60,7 +60,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     /// <param name="broadcastCeiling">This PC's own broadcast limit; <see cref="Defaults.BroadcastHardLimit"/> when <c>null</c> — a test that wants to see it end passes a short one.</param>
     /// <param name="broadcastStallTimeout">How long this PC waits for a broadcast frame; <see cref="Defaults.BroadcastStallTimeout"/> when <c>null</c>.</param>
     public FakeMachine(DirectoryAgentStore store, FailureSpec? failure, ILogger log, TimeSpan? policyMutexWait = null, TimeSpan? broadcastCeiling = null,
-        TimeSpan? broadcastStallTimeout = null)
+        TimeSpan? broadcastStallTimeout = null, Func<LabControl.Shared.Video.H264.IH264Decoder>? broadcastDecoder = null)
     {
         _store = store;
         _failure = failure;
@@ -90,7 +90,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         // The policy journal (M6, D-69) is the real one over policy.json in this PC's own
         // directory; only what the machine does with a lock is simulated. The mutex name is
         // per PC so thirty of them in one process never queue behind one another.
-        _machineState = new FakeMachineState(() => _desktop, log)
+        _machineState = new FakeMachineState(() => _desktop, log, broadcastDecoder)
         {
             PrepareCollectFolder = folder =>
             {

@@ -40,6 +40,13 @@ public sealed class BroadcastPicture : IDisposable
         _thread.Start();
     }
 
+    /// <summary>The H.264 decoder was given up (D-91 item 11); the owner says so and asks for JPEG. On the decode thread.</summary>
+    public event Action<string>? H264Failed
+    {
+        add => _decoder.BrokeDown += value;
+        remove => _decoder.BrokeDown -= value;
+    }
+
     /// <summary>The picture; empty until the first keyframe.</summary>
     public ScreenImage Image { get; } = new();
 

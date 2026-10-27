@@ -622,4 +622,8 @@ message HelperStatus {
   int32  screen_width   = 2;  // the primary display, in pixels
   int32  screen_height  = 3;
   int64  uptime_ms      = 4;  // how long this helper instance has been running
+  // M7 portion 6 (D-91 item 11): what the helper decodes besides "jpeg" right now. "h264" goes
+  // away when its decoder broke during a broadcast; the service then dials the broadcast again
+  // without it. Helper and service are always one build, so the service takes it as it comes.
+  repeated string video_decoders = 5;
 }

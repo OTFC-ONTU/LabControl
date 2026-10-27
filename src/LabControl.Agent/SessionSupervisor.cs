@@ -709,6 +709,14 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                         var status = message.Status;
                         var changedDesktop = helper.Status?.InputDesktop != status.InputDesktop;
                         helper.Status = status;
+
+                        // The helper's word on what it decodes now: "h264" goes when its decoder broke
+                        // during a broadcast, and the broadcast receiver dials again for JPEG (D-91 item 11).
+                        if (!status.VideoDecoders.SequenceEqual(helper.VideoDecoders))
+                        {
+                            _log.LogWarning("session.exe now decodes {Decoders}", status.VideoDecoders.Count > 0 ? string.Join(",", status.VideoDecoders) : "jpeg only");
+                            helper.VideoDecoders = status.VideoDecoders.ToArray();
+                        }
                         if (!announced)
                         {
                             announced = true;

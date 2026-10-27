@@ -48,6 +48,9 @@ public static class PolicyEvents
     /// <summary>A broadcast's stream brought no frame for <see cref="Defaults.BroadcastStallTimeout"/>, and the PC gave its screen back (D-71 item 10).</summary>
     public const string BroadcastStalled = "broadcast.stalled";
 
+    /// <summary>The PC's H.264 decoder broke during a broadcast; it dialled again for JPEG (D-91 item 11).</summary>
+    public const string BroadcastTextFallback = "broadcast.text_fallback";
+
     private static readonly ResourceManager Resources = new("LabControl.Shared.Policy.PolicyStrings", typeof(PolicyEvents).Assembly);
 
     /// <summary>

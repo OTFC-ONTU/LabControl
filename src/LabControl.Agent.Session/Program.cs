@@ -187,6 +187,15 @@ internal static class Program
         // every status and on every change, so the service always knows what is shown.
         using var overlay = new OverlayController(loggers.CreateLogger("overlay"), state => Send(new HelperMessage { OverlayState = state }), Environment.MachineName);
 
+        // A broadcast decoder that broke (D-91 item 11): this process decodes JPEG only from now
+        // on, and the service hears it at once so it dials the broadcast again without H.264.
+        overlay.H264Failed += why =>
+        {
+            log.LogWarning("the H.264 decoder broke, asking for JPEG: {Why}", why);
+            H264Codecs.MarkDecoderBroken(why);
+            Send(new HelperMessage { Status = StatusNow() });
+        };
+
         // The exam strip and the opening sweep's close request (D-75); a lock or a broadcast covers the strip.
         using var exam = new ExamStripController(loggers.CreateLogger("exam"), () => overlay.CoversScreen);
 
@@ -195,7 +204,7 @@ internal static class Program
             var lastDesktop = string.Empty;
             while (!token.IsCancellationRequested)
             {
-                var status = DesktopProbe.Status();
+                var status = StatusNow();
                 if (status.InputDesktop != lastDesktop)
                 {
                     log.LogInformation("input desktop: {Desktop} ({Width}x{Height})", status.InputDesktop, status.ScreenWidth, status.ScreenHeight);
@@ -208,6 +217,14 @@ internal static class Program
             }
         }, token);
 
+        // What only this session sees, and what it decodes besides JPEG right now (D-91 item 11).
+        static HelperStatus StatusNow()
+        {
+            var status = DesktopProbe.Status();
+            status.VideoDecoders.AddRange(H264Codecs.Decoders);
+            return status;
+        }
+
         var exit = ExitPipeClosed;
         try
         {
@@ -218,7 +235,7 @@ internal static class Program
                     case ServiceMessage.PayloadOneofCase.Ping:
                         // Never await a write from the read loop (D-35 item 8): the service may be
                         // waiting for us to read its next message before it reads ours.
-                        Send(new HelperMessage { Status = DesktopProbe.Status() });
+                        Send(new HelperMessage { Status = StatusNow() });
                         overlay.Report();
                         break;
 

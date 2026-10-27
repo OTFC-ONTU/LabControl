@@ -64,6 +64,13 @@ internal sealed class OverlayController : IDisposable
     // The broadcast the picture belongs to; touched only by the pipe's read loop (Offer).
     private string? _pictureSession;
 
+    /// <summary>The broadcast's H.264 decoder was given up (D-91 item 11). On the decode thread.</summary>
+    public event Action<string>? H264Failed
+    {
+        add => _picture.H264Failed += value;
+        remove => _picture.H264Failed -= value;
+    }
+
     /// <param name="report">Sends an <c>overlay_state</c> up the pipe, fire-and-forget.</param>
     /// <param name="pcName">The PC's own name for the picture (<c>PC-07</c>).</param>
     public OverlayController(ILogger log, Action<OverlayState> report, string pcName)

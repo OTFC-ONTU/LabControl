@@ -28,11 +28,19 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
     private readonly RefusedNames _refused = new();
 
     /// <param name="desktop">The desktop being drawn right now, or <c>null</c> while nobody watches; a desktop created later is told by <see cref="Overlay"/>.</param>
-    public FakeMachineState(Func<FakeScreen?> desktop, ILogger log)
+    /// <param name="h264">The broadcast's H.264 decoder (a test's stand-in); the platform's when <c>null</c>.</param>
+    public FakeMachineState(Func<FakeScreen?> desktop, ILogger log, Func<LabControl.Shared.Video.H264.IH264Decoder>? h264 = null)
     {
         _desktop = desktop;
         _log = log;
-        Picture = new BroadcastPicture(log);
+        Picture = new BroadcastPicture(log, h264);
+
+        // Like the helper (D-91 item 11): a decoder given up means JPEG only from now on.
+        Picture.H264Failed += why =>
+        {
+            _log.LogWarning("the H.264 decoder broke, asking for JPEG: {Why}", why);
+            BroadcastCodecs = [];
+        };
     }
 
     private readonly ILogger _log;
@@ -64,7 +72,9 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
     }
 
     /// <summary>What this simulated PC decodes besides JPEG: the Mac's own H.264 (D-91), nothing on Linux.</summary>
-    public IReadOnlyList<string> BroadcastCodecs { get; init; } = LabControl.Shared.Video.H264.H264Codecs.Decoders;
+    public IReadOnlyList<string> BroadcastCodecs { get => _codecs; set => _codecs = value; }
+
+    private volatile IReadOnlyList<string> _codecs = LabControl.Shared.Video.H264.H264Codecs.Decoders;
 
     public ValueTask BroadcastFrameAsync(VideoFrame frame, CancellationToken token)
     {

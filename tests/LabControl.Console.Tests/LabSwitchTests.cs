@@ -1022,8 +1022,8 @@ public sealed class LabSwitchTests
         idle.Behaviour.OnJob = _ => new TaskCompletionSource<JobResult>().Task;
         console.Session.CreateJobs([idle.AgentId], Job.Types.Kind.Reboot);
         Assert.True(await Wait.UntilAsync(() => idle.Behaviour.JobsRun.Count == 1));
-        // A reboot is queued for an offline PC (a shutdown would be closed on the spot, D-25).
-        console.Session.CreateJobs(["offline-pc"], Job.Types.Kind.Reboot);
+        // A script is queued for an offline PC (a power action would be closed on the spot, D-25).
+        console.Session.CreateJobs(["offline-pc"], Job.Types.Kind.RunScript);
 
         // An upload granted and not yet complete.
         await using var destination = new MemoryStream();

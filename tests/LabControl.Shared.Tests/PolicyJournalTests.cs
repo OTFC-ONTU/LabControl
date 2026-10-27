@@ -716,6 +716,48 @@ public sealed class PolicyJournalTests
         Assert.Null(after.ExamInternet);
         Assert.Equal("e" + PolicyJournal.TimeUpSuffix, after.Overlay!.SessionId);
     }
+
+    [Fact]
+    public void A_pc_switched_off_for_a_week_under_a_lock_an_exam_and_an_internet_policy_comes_back_open()
+    {
+        // Switched off mid-lesson: a lock with no end, an exam with its timer and internet
+        // switch, and a standalone whitelist — every one well inside its limits when written,
+        // and the firewall's originals in the displaced block (M7 portion 5, scenario 1).
+        var policy = new ClassroomPolicy
+        {
+            Overlay = new OverlaySession { SessionId = "lock-1", SetByInstance = Instance, SinceUnix = Now - 60, UntilUnix = 0, HardLimitUnix = Now + Hour, Message = "Look here" },
+            Exam = new ExamSession { SessionId = "e", SetByInstance = Instance, SinceUnix = Now - 60, UntilUnix = Now + 1800, HardLimitUnix = Now + 3 * Hour },
+            ExamInternet = new InternetSession { SessionId = "ei", Mode = InternetPolicy.Types.Mode.Blocked, HardLimitUnix = Now + 3 * Hour },
+            Internet = new InternetSession { SessionId = "i", Mode = InternetPolicy.Types.Mode.Whitelist, AllowedHosts = { "docs.oracle.com" }, HardLimitUnix = Now + 8 * Hour },
+            Displaced = new DisplacedSettings { ProfileDefaultOutbound = { ["private"] = "allow" } },
+        };
+        var rig = new Rig(Document(policy));
+        var aWeekLater = Now + 7 * 24 * 3600;
+
+        var outcome = rig.Journal.Start(aWeekLater);
+
+        // Nothing comes back, not even the exam's "time is up" lock; the machine is restored
+        // from the originals and proven open; the document no longer holds any session.
+        Assert.True(outcome.MachineOpen);
+        Assert.Empty(outcome.Reapplied);
+        Assert.Equal(4, outcome.Dropped.Count);
+        Assert.Null(rig.Machine.Shown);
+        Assert.Null(rig.Machine.EnforcedInternet);
+        Assert.Contains(nameof(IMachineState.RefineRestore), rig.Machine.Calls);
+        Assert.DoesNotContain(nameof(IMachineState.ApplyOverlay), rig.Machine.Calls);
+        Assert.DoesNotContain(nameof(IMachineState.ApplyExam), rig.Machine.Calls);
+        Assert.DoesNotContain(nameof(IMachineState.ApplyInternet), rig.Machine.Calls);
+        var saved = rig.Saved!.Policy!;
+        Assert.Null(saved.Overlay);
+        Assert.Null(saved.Exam);
+        Assert.Null(saved.ExamInternet);
+        Assert.Null(saved.Internet);
+        Assert.Null(rig.Journal.NextDeadline);
+
+        // And the clock that sees the week go by afterwards changes nothing.
+        Assert.Empty(rig.Journal.Tick(aWeekLater + Hour));
+        Assert.Null(rig.Machine.Shown);
+    }
 }
 
 /// <summary>The ownership gate (D-69): who may set or lift a policy on this PC.</summary>

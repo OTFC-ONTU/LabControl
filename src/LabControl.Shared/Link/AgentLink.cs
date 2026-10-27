@@ -1136,6 +1136,7 @@ public sealed partial class AgentLink : IAsyncDisposable
     {
         var now = _options.Clock();
         ClockSkew = DateTimeOffset.FromUnixTimeSeconds(welcome.ServerTimeUnix) - now;
+        var skewReported = ClockSkew.Duration() > Defaults.BeaconMaxSkew;
 
         LinkedInstanceId = instanceId;
         LinkedInstanceName = welcome.InstanceName;
@@ -1170,6 +1171,16 @@ public sealed partial class AgentLink : IAsyncDisposable
 
         _log.LogInformation("{Pc}: linked to {Console} ({Instance}) at {Endpoint}", Name, welcome.InstanceName, instanceId, endpoint);
         Linked?.Invoke(instanceId, welcome.InstanceName);
+
+        // A clock past the beacon window is told to the teacher (M7 portion 5): this PC found the
+        // console only because an unlinked PC dials a beacon whose sole fault is its time, and a
+        // take-over by another teacher machine cannot move it until the clocks agree again.
+        if (skewReported)
+        {
+            var minutes = Math.Max(1, (int)Math.Round(ClockSkew.Duration().TotalMinutes));
+            Report(Event.Types.Severity.Warning, "clock.skew",
+                PcText.Get(ClockSkew > TimeSpan.Zero ? "ClockBehindConsole" : "ClockAheadOfConsole", minutes));
+        }
     }
 
     /// <summary>The informational <c>Welcome</c> field in this build's terms; anything unknown stays unknown.</summary>

@@ -162,4 +162,6 @@
   <data name="PackageInstalled" xml:space="preserve"><value>{0} is installed (version {1}).</value></data>
   <data name="PackageUnpackFailed" xml:space="preserve"><value>The archive {0} could not be unpacked: {1}</value></data>
   <data name="RenewalNotSaved" xml:space="preserve"><value>The console renewed this PC's certificate, but it could not be saved here: {0} The current certificate keeps working; the PC asks again later.</value></data>
+  <data name="ClockBehindConsole" xml:space="preserve"><value>This PC's clock is {0} min behind the console's. It still links, but another teacher machine cannot take it over until the time is corrected (Windows: Settings → Time → Sync now).</value></data>
+  <data name="ClockAheadOfConsole" xml:space="preserve"><value>This PC's clock is {0} min ahead of the console's. It still links, but another teacher machine cannot take it over until the time is corrected (Windows: Settings → Time → Sync now).</value></data>
 </root>

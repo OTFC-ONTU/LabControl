@@ -162,4 +162,6 @@
   <data name="PackageInstalled" xml:space="preserve"><value>{0} встановлено (версія {1}).</value></data>
   <data name="PackageUnpackFailed" xml:space="preserve"><value>Архів {0} не вдалося розпакувати: {1}</value></data>
   <data name="RenewalNotSaved" xml:space="preserve"><value>Консоль оновила сертифікат цього ПК, але його не вдалося тут зберегти: {0} Поточний сертифікат працює далі; ПК попросить ще раз пізніше.</value></data>
+  <data name="ClockBehindConsole" xml:space="preserve"><value>Годинник цього ПК відстає від консолі на {0} хв. Він підключається, але інша консоль учителя не зможе перехопити його, доки час не виправлено (Windows: Параметри → Час → Синхронізувати).</value></data>
+  <data name="ClockAheadOfConsole" xml:space="preserve"><value>Годинник цього ПК поспішає відносно консолі на {0} хв. Він підключається, але інша консоль учителя не зможе перехопити його, доки час не виправлено (Windows: Параметри → Час → Синхронізувати).</value></data>
 </root>

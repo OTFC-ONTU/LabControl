@@ -98,9 +98,21 @@ public sealed class BeaconGate
 
     public BeaconVerdict Consider(Beacon beacon, DateTimeOffset now)
     {
+        // A beacon whose only fault is its timestamp is still this lab's console: the timestamp
+        // is checked last, after the CA endorsement and the instance signature (M7 portion 5).
+        // A PC whose clock drifted past ±BeaconMaxSkew — the lab has no time source — would
+        // otherwise never link again, silently. Such a beacon may only make an unlinked PC dial;
+        // the TLS handshake authenticates whoever answers, and a take-over still needs clocks
+        // within the window, because a replayed press must never move a linked room.
+        var skewed = false;
         if (!beacon.TryVerify(_authority, _labId, now, out var failure))
         {
-            return new BeaconVerdict(BeaconAction.Ignore, Describe(failure));
+            if (failure != BeaconFailure.StaleTimestamp)
+            {
+                return new BeaconVerdict(BeaconAction.Ignore, Describe(failure));
+            }
+
+            skewed = true;
         }
 
         // Before anything else a beacon could make this PC do (D-56 item 6). The CA
@@ -129,6 +141,11 @@ public sealed class BeaconGate
 
             if (_linkedInstanceId is not null)
             {
+                if (skewed)
+                {
+                    return new BeaconVerdict(BeaconAction.Ignore, Describe(failure), beacon);
+                }
+
                 if (string.Equals(_linkedInstanceId, beacon.InstanceId, StringComparison.OrdinalIgnoreCase))
                 {
                     return new BeaconVerdict(BeaconAction.Ignore, "already linked to this console", beacon);

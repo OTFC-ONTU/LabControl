@@ -221,7 +221,11 @@ without any other exchange.</p>
 <p>The beacon is verifiable <strong>offline, with no shared secret</strong>. An agent accepts it only if
 <code>lab</code> matches its own, <code>end</code> verifies against the <strong>pinned CA public key</strong>, <code>sig</code>
 verifies against <code>pub</code>, and <code>ts</code> is within ±60 s. Then it dials <code>host:port</code> and completes
-mutual TLS, which is the real gate — the beacon only says <em>where</em> to look.</p>
+mutual TLS, which is the real gate — the beacon only says <em>where</em> to look. <strong>A PC that is not
+linked</strong> also dials a beacon whose only fault is <code>ts</code> (M7 portion 5, <code>D-90</code>): the lab has no
+time source, and a PC whose clock drifted would otherwise never link again; once linked it
+reports <code>clock.skew</code> with the minutes. A linked PC never acts on such a beacon — a take-over
+needs the clocks within the window.</p>
 <p><strong>What exactly is signed</strong> (<code>D-24</code>). Both signatures are ECDSA P-256 over SHA-256, in the
 IEEE P1363 fixed-width form, so each is exactly 64 bytes. The signed bytes are UTF-8 of a
 pipe-joined string with a fixed field order — never re-serialized JSON, whose key order is a
@@ -448,7 +452,8 @@ kinds: shutdown | reboot | logoff | run_script | install_package | reset_profile
 portion 4 — see <em>Files</em>). Jobs are idempotent by <code>id</code>; a
 re-sent job with a known <code>id</code> returns the cached result. Jobs for offline agents are
 queued in the console (<code>pending</code>) and delivered on the next <code>Link</code>, unless
-<code>deliver: online_only</code> (default for <code>shutdown</code>), which is <strong>never</strong> queued: created for a
+<code>deliver: online_only</code> (default for <code>shutdown</code>, <code>reboot</code> and <code>logoff</code> — since M7 portion 5,
+owner decision 2026-10-27, <code>D-90</code>), which is <strong>never</strong> queued: created for a
 PC that is not linked it is <code>not_delivered</code> on the spot, and one the PC had not collected
 when its link dropped is closed the same way rather than kept for its return (<code>D-25</code>).</p>
 <p><code>timeout_s</code> is a timeout of <em>inactivity</em>, measured from delivery or the latest
@@ -1639,7 +1644,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-27 14:28 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 17:16 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#m7-additions-portion-2-d-87">M7 additions (portion 2, D-87)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

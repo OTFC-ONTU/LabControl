@@ -46,7 +46,11 @@ without any other exchange.
 The beacon is verifiable **offline, with no shared secret**. An agent accepts it only if
 `lab` matches its own, `end` verifies against the **pinned CA public key**, `sig`
 verifies against `pub`, and `ts` is within ±60 s. Then it dials `host:port` and completes
-mutual TLS, which is the real gate — the beacon only says *where* to look.
+mutual TLS, which is the real gate — the beacon only says *where* to look. **A PC that is not
+linked** also dials a beacon whose only fault is `ts` (M7 portion 5, `D-90`): the lab has no
+time source, and a PC whose clock drifted would otherwise never link again; once linked it
+reports `clock.skew` with the minutes. A linked PC never acts on such a beacon — a take-over
+needs the clocks within the window.
 
 **What exactly is signed** (`D-24`). Both signatures are ECDSA P-256 over SHA-256, in the
 IEEE P1363 fixed-width form, so each is exactly 64 bytes. The signed bytes are UTF-8 of a
@@ -267,7 +271,8 @@ Agent replies with `JobProgress` (0–100 + line of output) and finally `JobResu
 portion 4 — see *Files*). Jobs are idempotent by `id`; a
 re-sent job with a known `id` returns the cached result. Jobs for offline agents are
 queued in the console (`pending`) and delivered on the next `Link`, unless
-`deliver: online_only` (default for `shutdown`), which is **never** queued: created for a
+`deliver: online_only` (default for `shutdown`, `reboot` and `logoff` — since M7 portion 5,
+owner decision 2026-10-27, `D-90`), which is **never** queued: created for a
 PC that is not linked it is `not_delivered` on the spot, and one the PC had not collected
 when its link dropped is closed the same way rather than kept for its return (`D-25`).
 

@@ -3103,7 +3103,7 @@ the UI/UX redesign with the visible answer to failed actions, and the three lang
 again; <strong>(8)</strong> the README as a teacher's manual, written for the redesigned screens (owner
 decision 2026-10-27: the manual after the redesign, so it is not rewritten).</p>
 <ul>
-<li><em>Portion 1 built (2026-10-26), on the Mac.</em> <code>Shared/Localization/ProductLanguages</code> (the
+<li><p><em>Portion 1 built (2026-10-26), on the Mac.</em> <code>Shared/Localization/ProductLanguages</code> (the
 three languages under their own names and the rule: a stored choice, else a supported OS
 display language, else English), <code>Persistence/PreferencesDocument</code> (<code>preferences.json</code> at
 the data root, never in a backup or lab file), <code>Console/Services/ConsoleLanguage</code> (applied
@@ -3119,8 +3119,9 @@ dialogs in each language; with <code>LABCONTROL_UI_SHOTS</code> the <code>lang-u
 the clipping check); both test projects pin English, since the owner's Mac reports <code>ru-UA</code>.
 <strong>Open:</strong> the owner's read-through of both translations; clipping fixes wait for the
 redesign (portion 7) unless a screen is unusable; agent-originated text (events from a PC,
-job output) is still English until portion 2.</li>
-<li><em>Portion 2 built (2026-10-26), on the Mac; not yet run on Windows</em> (<code>D-87</code>). The console's
+job output) is still English until portion 2.</p>
+</li>
+<li><p><em>Portion 2 built (2026-10-26), on the Mac; not yet run on Windows</em> (<code>D-87</code>). The console's
 language travels in <code>Welcome.language</code>, and each lock and exam carries its own
 (<code>Overlay.language</code>, <code>ExamMode.language</code>): the student's lock screen, exam strip, notices and
 <em>Time is up</em> are in the language of the console that <strong>set</strong> them, kept with the session in
@@ -3137,8 +3138,9 @@ Tests: <code>StudentTextLanguageTests</code>, <code>PcLanguageTests</code> (Shar
 owner (2026-10-27)</strong> after the physical lab on build <code>1.0.0+c8e3c9b</code>: exam, lock and the
 language switch in the console's language. Script output (<em>PC-INFO</em> prints English labels)
 is the script's own text — data, not translated (<code>D-67</code> item 2). Not run: Setup and removal
-under each Windows display language.</li>
-<li><em>Portion 3 built (2026-10-27), on the Mac</em> (<code>D-88</code>). Owner decisions of 2026-10-27: the
+under each Windows display language.</p>
+</li>
+<li><p><em>Portion 3 built (2026-10-27), on the Mac</em> (<code>D-88</code>). Owner decisions of 2026-10-27: the
 wizard copies the installer into the lab's catalog; the proposed rule is the program's name in
 Windows' list of installed programs (a file path the alternative); a new version replaces the
 entry of the same program; the install buttons come with portion 4. <code>Shared/Packages</code> reads an
@@ -3153,8 +3155,9 @@ carries only the YAML, so another computer shows the entry as <em>installer not 
 computer</em>. Tests: <code>PackageInspectionTests</code> (an MSI written byte by byte, a real PE, every
 family's marker, damaged files), <code>PackageCatalogTests</code>, the wizard in the per-language renders.
 <strong>Open:</strong> the owner adds a real package through the wizard (acceptance, with portion 4); real
-installers of each family have not been inspected yet — only synthetic ones and a real PE.</li>
-<li><em>Portion 4 built (2026-10-27), on the Mac; not yet run on Windows</em> (<code>D-89</code>). Owner decisions
+installers of each family have not been inspected yet — only synthetic ones and a real PE.</p>
+</li>
+<li><p><em>Portion 4 built (2026-10-27), on the Mac; not yet run on Windows</em> (<code>D-89</code>). Owner decisions
 of 2026-10-27: an installer may run 15 minutes by default, changeable per package; <em>Install on
 all missing</em> queues for PCs that are off; a restart the installer asks for is only reported;
 a PC in an exam refuses. <code>install_package</code> carries the file, family, silent arguments, detect
@@ -3189,7 +3192,22 @@ Wake-on-LAN works in the lab and the mass install through the catalog works</str
 installed on the room with <em>Install on all missing</em>, the BIOS set on every PC, the room woke from
 the console. Still open for portion 4's acceptance: the deliberately broken package on all 14 and
 the measured install of a real program (an IDE) on 14 PCs without internet, written here next to
-the manual afternoon.</li>
+the manual afternoon.</p>
+</li>
+<li><p><em>Portion 5 — robustness pass built (2026-10-27), on the Mac</em> (<code>D-90</code>). The six scenarios were
+reproduced in tests — a reconnect storm of 30 PCs, half the room in full view, a PC off for a week,
+a console restored from an older backup, a full disk (a real RAM-disk volume), clocks ±3 h — by three
+parallel worktrees, and sixteen defects fixed: power actions online-only (owner decision), stale
+queued installs and superseded queued updates dropped, a revocation learned from a PC cutting the
+revoked PC, torn temporaries removed, teacher saves on a full disk answered instead of crashing the
+console, no orphan installer, atomic certificate renewal and its failure reported, certificates
+backdated a day, an unlinked PC dialling a beacon whose only fault is its time (with <code>clock.skew</code>
+told to the teacher), faster reconnects, late full frames ignored. Owner decision: the missing
+summaries after a restore or a move go into the redesign (portion 7). The 90-minute lesson passed
+(owner). The rehearsed recovery is half done — the <code>win-x64</code> console installed on a Windows
+computer and the backup imported with the passphrase; driving the lab from it remains. Open for
+Windows: the items listed in <code>D-90</code>'s status.</p>
+</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -3417,7 +3435,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-27 14:28 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 17:16 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish-uiux-redesign">M7 — Software catalog, localization, polish, UI/UX redesign</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

@@ -342,3 +342,10 @@ unrecognised installer) waits out the package's time limit, `/nodetect` succeeds
 installing; anything else installs. What a simulated PC has is `installed-packages.json` in its
 directory. To try the broken-package drill on the Mac, edit an entry's arguments to `/S /fail`
 and press *Install on all missing*.
+
+**Robustness tests** (M7 portion 5, `D-90`). `ReconnectStormTests` and `FullViewStormTests` run in
+their own non-parallel collection (thirty TLS links in one process). The full-disk tests use a real
+full volume: on macOS `FullVolume` makes a 4–8 MB RAM disk with `hdiutil`, fills it and detaches it
+afterwards (a stray `LCFULL…` volume in Finder is one of them still mounted); elsewhere they skip
+unless `LABCONTROL_FULL_DISK_VOLUME` names a dedicated volume of at most 64 MB — on Windows, a small
+VHD.

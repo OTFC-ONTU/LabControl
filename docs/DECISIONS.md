@@ -5202,3 +5202,119 @@ jobs that must land together); unpacking on the console and pushing a folder (th
 moves one hash-verified file, `D-23`); self-extracting archives made by the console (a program the
 console would have to build for Windows); downloading the driver for the owner (Realtek's page asks
 for acceptance of its terms and a CAPTCHA, which the owner does himself).
+
+## D-90 — The robustness pass: what a reconnect storm, many full views, a week off, an old backup, a full disk and a drifting clock broke (M7 portion 5)
+
+Context (2026-10-27): M7 asks for a robustness pass — reconnect storms, many full views, a full
+disk, clock skew, a PC off for a week, a backup older than the machine list. Each scenario was
+reproduced in tests on the Mac (real TLS links, the simulator, a real full RAM-disk volume via
+`hdiutil` in `FullVolume`, controllable clocks); what held is pinned by those tests, what broke is
+below. Owner decisions of 2026-10-27: reboot and log off become online-only like shutdown; the
+missing summaries after a restore or a move go into the redesign (portion 7).
+
+**A PC off for a week** (`WeekOffTests`, `PolicyJournalTests`):
+
+1. **Power actions are online-only** — `JobQueue.DefaultDeliveryFor` now returns `OnlineOnly` for
+   `reboot` and `logoff` as for `shutdown`: a *Reboot all* clicked while one PC was off restarted
+   it whenever it was next switched on, a week later mid-lesson (PROTOCOL `Job`; amends `D-25`
+   item 4).
+2. **A queued install whose installer is gone is dropped** — a pending `install_package` names its
+   installer by hash; when the entry is replaced or deleted (`PackageCatalog.Changed`), the job is
+   closed as not delivered with *the installer was replaced* (`JobQueue.DropPending`), so the PC is
+   again one *Install on all missing* reaches (`D-89`).
+3. **The latest push wins** — `PushAgentBuild` closes a still-pending `self_update` for the same PCs
+   before queuing the new one; two queued builds would both be delivered and the second refused
+   while the first is on probation (`D-83`), leaving the PC on the older build.
+
+Held: a certificate that entered its renewal window while the PC was off is renewed on the first
+link; an expired one is refused with `link.refused` (only a USB rekey brings it back — open, low
+risk with a five-year lifetime); a protocol-1 agent gets its queued update and never a lock; a
+revocation made meanwhile reaches it on its first link; a lock, exam or policy it held is not
+re-applied after a week. Open: a PC that was off during a `D-82` move is moved only while the old
+lab is active, and the new lab does not say so (redesign).
+
+**A console restored from an old backup** (`OldBackupTests`):
+
+4. **A revocation learned from a PC cuts the revoked PC** — `HandleIncoming` now pushes newly
+   learned revocation entries to every linked PC and closes a link whose certificate they revoke
+   (`link.revoked`); serials are compared normalised. Before, a restored console that never had the
+   revocation kept a removed, revoked PC linked even after an honest PC brought the entry. Inherent
+   limit: the revoked PC is accepted until the first PC carrying the revocation links.
+
+Held: PCs added after the backup heal into the list (`link.new_machine`); scripts, presets and
+catalog entries load (installers do not travel, as designed); codes burned after the backup are
+dormant (`D-60`; activating them reopens that risk, as accepted there).
+
+**A full disk** (`DiskFullTests` in both projects):
+
+5. **`JsonStore.Save` removes the temporary it tore** — a write that failed mid-way left a partial
+   `<doc>.tmp` holding the last free space and pushing every later save onto a GUID name.
+6. **Teacher saves no longer crash the console** — script, internet-preset, exam-preset and package
+   saves caught nothing, and the console has no global handler; the libraries roll memory back to
+   disk and the views say *Not saved — this computer could not write the file* (`Store.SaveFailed`).
+7. **No orphan installer** — `PackageCatalog.AddAsync` removes the copied installer when its YAML
+   cannot be written, unless the existing entry names that very file.
+8. **Renewal writes key and certificate atomically** — `DirectoryAgentStore.InstallCertificate`
+   writes both beside their places before either replaces anything; a torn in-place write could
+   leave a truncated `agent.key` or a new key beside the old certificate — a USB visit. A small
+   window remains between the two renames.
+9. **Renewal reports a write failure and retries** — `AgentLink`'s renewal loop caught only
+   `RpcException`; an `IOException` now raises `renew.not_saved` and retries on the backoff.
+
+Open: an enrolment while `enrollment.json` cannot be saved burns the code in memory only (a restart
+before the next successful save would accept it again); a full console disk produces one
+`jobs.log_failed` warning per job update; a brand-new lab cannot be created on a full disk.
+
+**Clock skew** (`ClockSkewTests`, `BeaconGateTests`):
+
+10. **Certificates are backdated a day** (`Defaults.CertificateBackdate`, was five minutes): a console
+    more than five minutes ahead issued a certificate the PC called "not yet valid" after the
+    single-use code was spent — the PC was refused as "code already used" for ever. A leaf still
+    never starts before its CA.
+11. **An unlinked PC dials a beacon whose only fault is its time** (`BeaconGate`, PROTOCOL
+    *Discovery beacon*): the timestamp is checked last, after the CA endorsement and the instance
+    signature, so such a beacon is this lab's; TLS authenticates whoever answers. A PC more than
+    ±`BeaconMaxSkew` off the teacher's machine — the lab has no time source — silently never linked
+    again. A linked PC never acts on it, so a replayed press cannot move a room. After `Welcome` the
+    PC reports `clock.skew` (*This PC's clock is N min behind/ahead…*) in the console's language.
+
+Held: lock, internet and exam limits are durations on the PC's clock (±3 h tested end to end);
+install jobs, package status and renewal at ±3 h. Open: `InFlightJobPolicy` compares the console's
+delivery time with the PC's boot time, so a PC behind may have a restored `run_script` run twice
+(`D-57` accepts a second run); a PC years off (dead CMOS battery) still fails TLS.
+
+**A reconnect storm** (`ReconnectStormTests`, thirty PCs dropped at once by the console or on the PCs):
+
+12. **A PC notices a console-side close at once** — `AgentLink`'s heartbeat and renewal loops now end
+    with the link's stream (a per-link token), not only with the session: a console that closed the
+    link ended the stream gracefully and the teardown waited for the next heartbeat tick, so the
+    slowest of thirty PCs started dialling back 4.9 s late.
+13. **A link lost right after it came up is redialled within a second** — the pinned-host retry waits
+    out a long backoff step in 250 ms slices and abandons it once a `Welcome` arrived during it.
+14. **The key-bearing certificate copy made for each dial is disposed** at once, not left to the
+    finalizer — one native key handle per dial, many dials per lesson.
+
+Held: jobs running or queued at the drop are neither lost nor run twice (the agent's ledger,
+`D-32` item 7); the console's linked set, tiles and job rows end consistent; threads and
+connections do not grow from storm to storm.
+
+**Many full views at once** (`FullViewStormTests`, half the room opened and closed repeatedly):
+
+15. **A full frame after its window closed is counted, not applied** (`ScreenStore`), so a late frame
+    cannot rebuild the released full picture and keep its memory.
+16. **`ScreenImage.HasFrame` follows the bitmap**, not the version: after `Clear` a reopened window
+    shows the thumbnail until its keyframe instead of nothing.
+
+Held: every stream stays within its cap, the mosaic keeps updating, a closed window returns its PC
+to thumbnails with nothing left streaming. The drills run alone (`RobustnessCollection`), like the
+lab-switch drills.
+
+Rejected: a time server on the console (one more service on a teacher's laptop, and a PC need not
+trust a console's time to find it); persisting the `Welcome` offset to correct the beacon check (it
+cannot help a PC that never linked); queuing power actions with an expiry (a click the teacher
+cannot see the consequence of, a week later, is the problem itself).
+
+Status: built 2026-10-27 on the Mac, merged from three parallel worktrees. Not run on Windows: the delete of a
+torn temporary after a failed flush on NTFS, `DirectoryAgentStore` under DPAPI and the ProgramData
+ACLs, a real `ERROR_DISK_FULL` in staging (set `LABCONTROL_FULL_DISK_VOLUME` to a small VHD), Schannel
+with a client certificate whose start is in the PC's future, and clock drift in the physical lab.

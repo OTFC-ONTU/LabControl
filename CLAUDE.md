@@ -277,7 +277,10 @@ chosen one (`run`) from its folder — first for the Realtek RTL8168 driver Wake
 Tests: 1102 Shared + 335 Console. Next: the broken-package drill and the 14-PC measurement in the lab.
 **M7 portion 5 has started (2026-10-27):** the 90-minute lesson criterion passed (owner, several lessons);
 the `win-x64` console installer ran on a real Windows computer and the lab backup imported there with the
-passphrase (half of the rehearsed recovery; driving the lab from it remains); the robustness pass is running.
+passphrase (half of the rehearsed recovery; driving the lab from it remains); the robustness pass is built
+(`D-90`: reconnect storm, full views, a week off, an old backup, a full disk, clock skew — sixteen fixes,
+among them online-only reboot/log off and an unlinked PC dialling a beacon whose only fault is its time).
+Tests: 1116 Shared + 370 Console (LabSwitchTests.Twenty_rounds fails on this Mac on clean HEAD too).
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

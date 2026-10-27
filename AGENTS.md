@@ -254,7 +254,8 @@ the documents relevant to the task:
   broken-package drill and the measured 14-PC IDE install. Tests: 1102 Shared + 335 Console. Next: the lab drills.
 - **M7 portion 5 has started (2026-10-27)**: the 90-minute lesson passed (owner); the `win-x64` console
   installer ran on a real Windows PC and the backup imported there with the passphrase (driving the lab
-  from it remains); the robustness pass is running.
+  from it remains); the robustness pass is built (`D-90`, sixteen fixes; online-only reboot/log off, a
+  drifted PC still dials its console). Tests: 1116 Shared + 370 Console.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

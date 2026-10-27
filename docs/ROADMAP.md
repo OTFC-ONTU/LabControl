@@ -2985,6 +2985,20 @@ decision 2026-10-27: the manual after the redesign, so it is not rewritten).
   the measured install of a real program (an IDE) on 14 PCs without internet, written here next to
   the manual afternoon.
 
+- *Portion 5 — robustness pass built (2026-10-27), on the Mac* (`D-90`). The six scenarios were
+  reproduced in tests — a reconnect storm of 30 PCs, half the room in full view, a PC off for a week,
+  a console restored from an older backup, a full disk (a real RAM-disk volume), clocks ±3 h — by three
+  parallel worktrees, and sixteen defects fixed: power actions online-only (owner decision), stale
+  queued installs and superseded queued updates dropped, a revocation learned from a PC cutting the
+  revoked PC, torn temporaries removed, teacher saves on a full disk answered instead of crashing the
+  console, no orphan installer, atomic certificate renewal and its failure reported, certificates
+  backdated a day, an unlinked PC dialling a beacon whose only fault is its time (with `clock.skew`
+  told to the teacher), faster reconnects, late full frames ignored. Owner decision: the missing
+  summaries after a restore or a move go into the redesign (portion 7). The 90-minute lesson passed
+  (owner). The rehearsed recovery is half done — the `win-x64` console installed on a Windows
+  computer and the backup imported with the passphrase; driving the lab from it remains. Open for
+  Windows: the items listed in `D-90`'s status.
+
 **Acceptance criteria**
 
 - The owner adds a package of his own choosing **without reading the source code**, using

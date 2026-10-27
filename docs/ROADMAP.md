@@ -2843,16 +2843,19 @@ department. The catalog ships **empty** — the deliverable is the ease of filli
   tomorrow" performed end to end from the backup.
 - `README.md` rewritten as a teacher-facing operating manual: what to click before a
   lesson, what to do when a PC does not appear, how to move the console to a new
-  computer.
+  computer. Written **after** the redesign (owner decision 2026-10-27), so it describes the
+  screens as they will stay.
 - Optional, and only if M3's measurements demand it: H.264 via Media Foundation behind
   the existing `VideoFrame` envelope. Decide with numbers, not taste.
-- **UI/UX redesign — the last M7 item** (owner decision 2026-10-26): a complete review of
+- **UI/UX redesign — the last M7 item before the manual** (owner decisions 2026-10-26 and
+  2026-10-27): a complete review of
   every console screen, dialog and window — the mosaic and its tiles, full view, *My labs*,
   *Scripts*, *Jobs*, the lock / broadcast / internet / exam / collect dialogs, the departure
   dialog, *Teacher devices*, the package wizard — plus the student-facing lock screen and exam
   strip, judged for what a teacher does before, during and after a lesson rather than one
-  screen at a time. It comes last so the screens M7 adds are reviewed with the rest, and it
-  absorbs:
+  screen at a time. It comes after the catalog and the robustness pass so the screens M7 adds
+  are reviewed with the rest, and before the README manual, which then describes the redesigned
+  screens. It absorbs:
   - **A visible answer to every teacher action that fails** (owner, physical lab 2026-10-26): a
     refused or failed action — a profile reset during an exam, a lock refused by a PC, a job
     that failed on some PCs — today shows only as a row in *Jobs* or a line in the events, so
@@ -2875,9 +2878,11 @@ messages in that language, Setup and removal following the Windows display langu
 their remaining literals moved to resources, a VM run in all three; **(3)** the package
 catalog and the *Add package* wizard on the console; **(4)** `install_package` on the agent,
 *Install on all missing*, the broken-package drill and the 14-PC measurement; **(5)** the
-robustness pass, the 90-minute lesson and the rehearsed recovery; **(6)** the README as a
-teacher's manual; **(7)** the UI/UX redesign with the visible answer to failed actions, and
-the three languages checked again. H.264 only if M3's measurements demand it.
+robustness pass, the 90-minute lesson and the rehearsed recovery; **(6)** the UI/UX redesign
+with the visible answer to failed actions, and the three languages checked again; **(7)** the
+README as a teacher's manual, written for the redesigned screens (owner decision 2026-10-27:
+portions 6 and 7 swapped, so the manual is not rewritten after the redesign). H.264 only if M3's
+measurements demand it.
 
 - *Portion 1 built (2026-10-26), on the Mac.* `Shared/Localization/ProductLanguages` (the
   three languages under their own names and the rule: a stored choice, else a supported OS
@@ -2894,7 +2899,7 @@ the three languages checked again. H.264 only if M3's measurements demand it.
   dialogs in each language; with `LABCONTROL_UI_SHOTS` the `lang-uk-…`/`lang-ru-…` PNGs are
   the clipping check); both test projects pin English, since the owner's Mac reports `ru-UA`.
   **Open:** the owner's read-through of both translations; clipping fixes wait for the
-  redesign (portion 7) unless a screen is unusable; agent-originated text (events from a PC,
+  redesign (portion 6) unless a screen is unusable; agent-originated text (events from a PC,
   job output) is still English until portion 2.
 - *Portion 2 built (2026-10-26), on the Mac; not yet run on Windows* (`D-87`). The console's
   language travels in `Welcome.language`, and each lock and exam carries its own

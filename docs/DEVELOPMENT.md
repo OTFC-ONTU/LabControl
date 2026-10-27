@@ -334,3 +334,11 @@ Mac: any `.exe` or `.msi` can be chosen, it is read (never run) and copied into
 console and open the `.yaml`. The tests build their MSI byte by byte (`MsiBuilder` in
 `PackageInspectionTests`) and use a real managed DLL as the PE; real installers of each family
 are worth inspecting by hand before the owner's acceptance run.
+
+Installing (M7 portion 4, `D-89`) works against `FakeAgent`: the simulated PC really pulls the
+installer and checks its hash, then pretends to run it, steered by the package's silent
+arguments — `/fail` ends with 1603, `/reboot` with 3010, `/hang` (or no arguments on an
+unrecognised installer) waits out the package's time limit, `/nodetect` succeeds without
+installing; anything else installs. What a simulated PC has is `installed-packages.json` in its
+directory. To try the broken-package drill on the Mac, edit an entry's arguments to `/S /fail`
+and press *Install on all missing*.

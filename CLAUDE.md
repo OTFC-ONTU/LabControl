@@ -258,6 +258,17 @@ InstallShield — and its silent arguments; `PackageEntry`/`DetectRule`). `Conso
 writes `packages/<id>.yaml` (YamlDotNet) and copies the installer, hash-checked, into
 `packages/<id>/<hash prefix>/`; the *Packages* tab edits and deletes entries. A backup carries only
 the YAML. Tests: 1073 Shared + 327 Console. Next: portion 4 (`install_package` on the agent).
+**M7 portion 4 is built (2026-10-27, `D-89`), on the Mac; not yet run on Windows:** `install_package`.
+Owner decisions: 15 minutes per installer by default (per package), *Install on all missing* queues for
+PCs that are off, a restart is only reported, a PC in an exam refuses. The job carries file, family,
+silent arguments, detect rule, limit and a mode (`install` / `missing` / `check`) and answers with
+`JobResult.outcome` (additive, `PackageOutcomes`). `Shared/Packages/PackageInstallRunner` over
+`IPackageHost`: `WindowsPackageHost` (SYSTEM, session 0, no redirected streams, process tree ended at
+the limit, staging emptied at start) and `FakePackageHost` (`/fail`, `/reboot`, `/hang`, `/nodetect`).
+The console's `PackageStatusBook` (`package-status.json`) keeps each PC's answer; the *Packages* tab
+lists every PC and has *Install on N selected PCs*, *Install on all missing* (asks before an untried
+package) and *Check PCs*. Tests: 1085 Shared + 334 Console. Next: the VM run, then the broken-package drill and the
+14-PC measurement in the lab.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

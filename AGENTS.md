@@ -241,6 +241,13 @@ the documents relevant to the task:
   `packages/<id>/<hash prefix>/` beside `packages/<id>.yaml` (YamlDotNet, `Console/Services/PackageCatalog`);
   a new version replaces the entry of the same program; the *Packages* tab edits and deletes. Only
   the YAML is in a backup. Tests: 1073 Shared + 327 Console. Next: portion 4 (`install_package`).
+- **M7 portion 4 is built (2026-10-27, `D-89`), on the Mac; not yet run on Windows**: `install_package`
+  with modes `install` / `missing` / `check` and a stable `JobResult.outcome`; the shared
+  `PackageInstallRunner` over `WindowsPackageHost` (SYSTEM, no window, limit 15 min by default per
+  package) and `FakePackageHost` (`/fail`, `/reboot`, `/hang`, `/nodetect`); the console's
+  `PackageStatusBook` (`package-status.json`) and the *Packages* tab's *Install on N selected PCs*,
+  *Install on all missing* (queued for PCs that are off; asks before an untried package) and *Check
+  PCs*. A restart is only reported; an exam refuses. Tests: 1085 Shared + 334 Console. Next: the VM run, the lab drills.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

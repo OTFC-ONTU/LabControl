@@ -46,7 +46,7 @@
       <StackPanel Margin="12,8,12,8" Spacing="8">
         <TextBlock Text="{Binding StateLine}" TextWrapping="Wrap" FontWeight="SemiBold" />
         <StackPanel Spacing="8" IsEnabled="{Binding HasEntry}">
-          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
             <TextBlock Grid.Row="0" Classes="k" Text="{loc:Localize Packages.Name}" />
             <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name}" MaxLength="80" />
             <TextBlock Grid.Row="1" Classes="k" Text="{loc:Localize Packages.Version}" />
@@ -59,14 +59,40 @@
               <ComboBoxItem Content="{loc:Localize Packages.DetectByPath}" />
             </ComboBox>
             <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding DetectValue}" MaxLength="260" />
+            <TextBlock Grid.Row="5" Classes="k" Text="{loc:Localize Packages.Timeout}" />
+            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding TimeoutText}" MaxLength="3" Width="80" HorizontalAlignment="Left" />
           </Grid>
-          <TextBlock Text="{Binding Facts}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
-          <TextBlock Text="{loc:Localize Packages.SystemNote}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
           <WrapPanel ItemSpacing="8" LineSpacing="8">
             <Button Content="{loc:Localize Packages.Save}" Command="{Binding SaveCommand}" />
             <Button Content="{loc:Localize Packages.Revert}" Command="{Binding RevertCommand}" />
             <Button Content="{loc:Localize Packages.Delete}" Command="{Binding DeleteCommand}" />
           </WrapPanel>
+
+          <!-- On the PCs (M7 portion 4, D-89): the test install on the selection, then the rest. -->
+          <Rectangle Height="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" Margin="0,4" />
+          <TextBlock Text="{loc:Localize Packages.OnThePcs}" FontWeight="SemiBold" />
+          <TextBlock Text="{loc:Localize Packages.TestHint}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+          <WrapPanel ItemSpacing="8" LineSpacing="8">
+            <Button Classes="accent" Content="{Binding InstallSelectedLabel}" Command="{Binding InstallSelectedCommand}" />
+            <Button Content="{loc:Localize Packages.InstallAllMissing}" Command="{Binding InstallAllMissingCommand}" />
+            <Button Content="{loc:Localize Packages.Check}" Command="{Binding CheckPcsCommand}" />
+          </WrapPanel>
+          <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
+          <ItemsControl ItemsSource="{Binding Pcs}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:PackagePcRow">
+                <Grid ColumnDefinitions="64,170,*" Margin="0,1">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                  <TextBlock Grid.Column="1" Text="{Binding StateText}" Foreground="DarkOrange" IsVisible="{Binding IsProblem}" TextWrapping="Wrap" />
+                  <TextBlock Grid.Column="1" Text="{Binding StateText}" IsVisible="{Binding !IsProblem}" TextWrapping="Wrap" />
+                  <TextBlock Grid.Column="2" Text="{Binding Detail}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Text="{Binding Facts}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" Margin="0,8,0,0" />
+          <TextBlock Text="{loc:Localize Packages.SystemNote}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
         </StackPanel>
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.7" />
         <TextBlock Text="{Binding Error}" Foreground="IndianRed" TextWrapping="Wrap" />

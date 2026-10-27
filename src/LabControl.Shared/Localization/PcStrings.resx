@@ -144,4 +144,20 @@
   <data name="InputRecovered" xml:space="preserve"><value>Input from the console reaches the desktop again.</value></data>
   <data name="CaptureFallback" xml:space="preserve"><value>Desktop duplication is not available on this PC ({0}); the screen is captured with GDI, which costs more CPU.</value></data>
   <data name="HelperNotInThisBuild" xml:space="preserve"><value>The session helper {0} does not handle {1} yet.</value></data>
+  <data name="PackageExamHeld" xml:space="preserve"><value>An exam is in progress on this PC; {0} was not installed. Install it after the exam.</value></data>
+  <data name="PackagePresent" xml:space="preserve"><value>{0} is installed (version {1}).</value></data>
+  <data name="PackageAbsent" xml:space="preserve"><value>{0} is not installed.</value></data>
+  <data name="PackageAlreadyInstalled" xml:space="preserve"><value>{0} is already installed (version {1}); the installer was not run.</value></data>
+  <data name="PackageWaiting" xml:space="preserve"><value>Waiting for this PC's previous installation to finish.</value></data>
+  <data name="PackageReceiving" xml:space="preserve"><value>Receiving {0}: {1} bytes.</value></data>
+  <data name="PackagePullFailed" xml:space="preserve"><value>The installer {0} was not received: {1}</value></data>
+  <data name="PackageStarting" xml:space="preserve"><value>Starting {0} {1}</value></data>
+  <data name="PackageInstalling" xml:space="preserve"><value>Still installing: {0} min of at most {1}.</value></data>
+  <data name="PackageStartFailed" xml:space="preserve"><value>The installer {0} could not be started: {1}</value></data>
+  <data name="PackageTimedOut" xml:space="preserve"><value>{0} was still running after {1} min and was ended. It is probably waiting for an answer on a screen nobody sees: check the silent arguments.</value></data>
+  <data name="PackageAnotherInstall" xml:space="preserve"><value>{0} could not run: another installation is in progress on this PC (code {1}). Try again later.</value></data>
+  <data name="PackageFailedCode" xml:space="preserve"><value>{0} failed with code {1}. Check the silent arguments, or run the installer by hand on this PC to see its message.</value></data>
+  <data name="PackageNotDetected" xml:space="preserve"><value>{0} finished (code {1}), but the program is not found by the package's rule. Check the rule, or whether the installer really installed for all users.</value></data>
+  <data name="PackageInstalledReboot" xml:space="preserve"><value>{0} is installed (version {1}); Windows needs a restart to finish. The PC does not restart by itself.</value></data>
+  <data name="PackageInstalled" xml:space="preserve"><value>{0} is installed (version {1}).</value></data>
 </root>

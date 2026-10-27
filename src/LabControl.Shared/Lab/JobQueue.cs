@@ -85,6 +85,9 @@ public sealed class JobRecord
 
     public string ArtifactRef { get; set; } = string.Empty;
 
+    /// <summary>The PC's stable outcome code (<c>JobResult.outcome</c>, D-89); empty for kinds that send none.</summary>
+    public string Outcome { get; set; } = string.Empty;
+
     /// <summary>Captured output lines, as they arrive on <c>JobProgress</c>.</summary>
     public List<string> Output { get; } = [];
 
@@ -320,6 +323,7 @@ public sealed class JobQueue
             job.ExitCode = result.ExitCode;
             job.Message = result.Message;
             job.ArtifactRef = result.ArtifactRef;
+            job.Outcome = result.Outcome;
             job.Percent = result.Ok ? 100 : job.Percent;
             job.CompletedAtUnix = now.ToUnixTimeSeconds();
         }

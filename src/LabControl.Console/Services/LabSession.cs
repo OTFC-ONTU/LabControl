@@ -13,6 +13,7 @@ using LabControl.Shared.Setup;
 using LabControl.Shared.Lab;
 using LabControl.Shared.Localization;
 using LabControl.Shared.Link;
+using LabControl.Shared.Packages;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protection;
 using LabControl.Shared.Power;
@@ -197,6 +198,7 @@ public sealed class LabSession : IAsyncDisposable
         InternetPresets = new InternetPresetLibrary(store, identity.LabId, _clock, loggers.CreateLogger<InternetPresetLibrary>());
         ExamPresets = new ExamPresetLibrary(store, identity.LabId, _clock, InternetPresets, loggers.CreateLogger<ExamPresetLibrary>());
         Packages = new PackageCatalog(store, instance.InstanceName, _clock, loggers.CreateLogger<PackageCatalog>());
+        PackageStatus = new PackageStatusBook(store, identity.LabId, Jobs, loggers.CreateLogger<PackageStatusBook>());
 
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
@@ -268,6 +270,9 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>The package catalog (M7 portion 3, D-88): <c>packages/</c> beside <c>lab.json</c>, its YAML in the backup, its installers on this computer only.</summary>
     public PackageCatalog Packages { get; }
+
+    /// <summary>What each PC last said about each package (M7 portion 4, D-89), in <c>package-status.json</c>.</summary>
+    public PackageStatusBook PackageStatus { get; }
 
     public EventLog Events { get; }
 
@@ -911,6 +916,15 @@ public sealed class LabSession : IAsyncDisposable
         return response;
     }
 
+    /// <summary>Every PC of the lab, by number — a copy of the list, safe to read on any thread.</summary>
+    public IReadOnlyList<MachineRecord> Machines()
+    {
+        lock (_gate)
+        {
+            return Registry.Document.Machines.OrderBy(m => m.Number).ToArray();
+        }
+    }
+
     /// <summary>The PCs whose certificates are inside the renewal lead time (D-25), for the banner.</summary>
     public IReadOnlyList<MachineRecord> MachinesNeedingRenewal()
     {
@@ -1450,6 +1464,74 @@ public sealed class LabSession : IAsyncDisposable
             if (FindLinked(target) is { } connection) DeliverJobs(connection, resendInFlight: false);
         return created;
     }
+
+    /// <summary>
+    /// The console's inactivity budget for an <c>install_package</c> job: the PC reports while it
+    /// waits for another install, while it receives and every <see cref="Defaults.PackageInstallHeartbeat"/>
+    /// while the installer runs, and ends a stuck installer itself (D-89).
+    /// </summary>
+    public static TimeSpan PackageJobTimeout =>
+        (Defaults.FileChunkTimeout > Defaults.PackageInstallHeartbeat * 2 ? Defaults.FileChunkTimeout : Defaults.PackageInstallHeartbeat * 2) + Defaults.JobTimeoutGrace;
+
+    /// <summary>
+    /// <c>install_package</c> for <paramref name="entry"/> on <paramref name="agentIds"/> (D-89): the
+    /// installer is offered from the catalog under the hash it was added with, one job per PC in one
+    /// batch, queued for a PC that is off (owner decision 2026-10-27). <see cref="InstallMode.Check"/>
+    /// is for PCs online now only — a check is about the present.
+    /// </summary>
+    public IReadOnlyList<JobRecord> InstallPackage(IEnumerable<string> agentIds, PackageEntry entry, InstallMode mode)
+    {
+        var targets = agentIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (targets.Length == 0) return [];
+        if (mode != InstallMode.Check)
+        {
+            if (Packages.StateOf(entry) != InstallerState.Present)
+            {
+                throw new InvalidOperationException(Localization.Strings.Get("Packages.State." + Packages.StateOf(entry)));
+            }
+
+            Files.OfferKnownFile(Packages.InstallerPath(entry), entry.Sha256);
+        }
+
+        var now = _clock();
+        var batch = Guid.NewGuid().ToString("d");
+        var args = InstallPackageRequest.For(entry, mode).ToArgs();
+        var delivery = mode == InstallMode.Check ? JobDelivery.OnlineOnly : JobDelivery.Queued;
+        var created = targets.Select(target => Jobs.Create(target, Job.Types.Kind.InstallPackage, now, FindLinked(target) is not null,
+            new Dictionary<string, string>(args), PackageJobTimeout, delivery, batch)).ToList();
+        TryWriteBatchLogs(batch, register: true);
+        foreach (var target in targets)
+            if (FindLinked(target) is { } connection) DeliverJobs(connection, resendInFlight: false);
+        return created;
+    }
+
+    /// <summary>
+    /// <i>Install on all missing</i> (D-89): every PC of the lab except those known to hold this
+    /// installer and those already busy with it. A PC known to hold an older version gets a plain
+    /// install (its rule would find the old program and skip); every other PC an install that the
+    /// PC itself skips when its rule finds the program.
+    /// </summary>
+    public IReadOnlyList<JobRecord> InstallPackageOnAllMissing(PackageEntry entry)
+    {
+        var machines = Machines();
+        var upgrade = new List<string>();
+        var missing = new List<string>();
+        foreach (var machine in machines)
+        {
+            var state = PackageStatus.StateOf(entry, machine.AgentId);
+            if (state is PcPackageState.Installed or PcPackageState.RebootRequired or PcPackageState.Busy) continue;
+            var last = PackageStatus.Last(entry.Id, machine.AgentId);
+            var olderVersion = last is not null && PackageOutcomes.MeansInstalled(last.Outcome) && last.Outcome != PackageOutcomes.Present
+                && !string.Equals(last.Sha256, entry.Sha256, StringComparison.OrdinalIgnoreCase);
+            (olderVersion ? upgrade : missing).Add(machine.AgentId);
+        }
+
+        return [.. InstallPackage(upgrade, entry, InstallMode.Install), .. InstallPackage(missing, entry, InstallMode.Missing)];
+    }
+
+    /// <summary><i>Check PCs</i>: every linked PC evaluates the entry's rule and says whether the program is there.</summary>
+    public IReadOnlyList<JobRecord> CheckPackage(PackageEntry entry) =>
+        InstallPackage(Linked.Select(c => c.AgentId), entry, InstallMode.Check);
 
     /// <summary>
     /// <i>Collect files…</i> outside an exam (owner decision 2026-10-23): <paramref name="folder"/>

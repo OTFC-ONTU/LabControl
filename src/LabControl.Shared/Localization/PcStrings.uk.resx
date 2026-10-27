@@ -144,4 +144,20 @@
   <data name="InputRecovered" xml:space="preserve"><value>Керування з консолі знову доходить до робочого столу.</value></data>
   <data name="CaptureFallback" xml:space="preserve"><value>Дублювання робочого столу на цьому ПК недоступне ({0}); екран знімається через GDI, а це більше навантажує процесор.</value></data>
   <data name="HelperNotInThisBuild" xml:space="preserve"><value>Помічник сеансу {0} ще не обробляє {1}.</value></data>
+  <data name="PackageExamHeld" xml:space="preserve"><value>На цьому ПК триває екзамен; {0} не встановлено. Встановіть після екзамену.</value></data>
+  <data name="PackagePresent" xml:space="preserve"><value>{0} встановлено (версія {1}).</value></data>
+  <data name="PackageAbsent" xml:space="preserve"><value>{0} не встановлено.</value></data>
+  <data name="PackageAlreadyInstalled" xml:space="preserve"><value>{0} вже встановлено (версія {1}); інсталятор не запускався.</value></data>
+  <data name="PackageWaiting" xml:space="preserve"><value>Чекаю, доки завершиться попереднє встановлення на цьому ПК.</value></data>
+  <data name="PackageReceiving" xml:space="preserve"><value>Отримую {0}: {1} байт.</value></data>
+  <data name="PackagePullFailed" xml:space="preserve"><value>Інсталятор {0} не отримано: {1}</value></data>
+  <data name="PackageStarting" xml:space="preserve"><value>Запускаю {0} {1}</value></data>
+  <data name="PackageInstalling" xml:space="preserve"><value>Ще встановлюється: {0} хв із щонайбільше {1}.</value></data>
+  <data name="PackageStartFailed" xml:space="preserve"><value>Не вдалося запустити інсталятор {0}: {1}</value></data>
+  <data name="PackageTimedOut" xml:space="preserve"><value>{0} працював понад {1} хв і його завершено. Імовірно, він чекає на відповідь на екрані, якого ніхто не бачить: перевірте аргументи тихого встановлення.</value></data>
+  <data name="PackageAnotherInstall" xml:space="preserve"><value>{0} не запустився: на цьому ПК триває інше встановлення (код {1}). Спробуйте пізніше.</value></data>
+  <data name="PackageFailedCode" xml:space="preserve"><value>{0} завершився з кодом {1}. Перевірте аргументи тихого встановлення або запустіть інсталятор вручну на цьому ПК, щоб побачити його повідомлення.</value></data>
+  <data name="PackageNotDetected" xml:space="preserve"><value>{0} завершився (код {1}), але правило пакета не знаходить програму. Перевірте правило або чи справді інсталятор встановив програму для всіх користувачів.</value></data>
+  <data name="PackageInstalledReboot" xml:space="preserve"><value>{0} встановлено (версія {1}); Windows потребує перезавантаження, щоб завершити. ПК не перезавантажується сам.</value></data>
+  <data name="PackageInstalled" xml:space="preserve"><value>{0} встановлено (версія {1}).</value></data>
 </root>

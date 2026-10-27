@@ -263,7 +263,8 @@ kinds: shutdown | reboot | logoff | run_script | install_package | reset_profile
        send_file | collect_files | set_config | self_update | rekey
 ```
 Agent replies with `JobProgress` (0–100 + line of output) and finally `JobResult`
-`{id, ok, exit_code, message, artifact_ref?}`. Jobs are idempotent by `id`; a
+`{id, ok, exit_code, message, artifact_ref?, outcome?}` (`outcome`, a stable code, since M7
+portion 4 — see *Files*). Jobs are idempotent by `id`; a
 re-sent job with a known `id` returns the cached result. Jobs for offline agents are
 queued in the console (`pending`) and delivered on the next `Link`, unless
 `deliver: online_only` (default for `shutdown`), which is **never** queued: created for a
@@ -423,13 +424,49 @@ where it lands and what happens next (`D-23`):
 
 | | `install_package` | `send_file` |
 |---|---|---|
-| args | `package`, `version`, `ref`, `sha256` | `ref`, `sha256`, `name`, `open` (`true`/`false`, default `false`) |
+| args | `package`, `version`, `ref`, `sha256`, `file`, `family`, `silent`, `detect_kind`, `detect`, `timeout_seconds`, `mode` (M7 portion 4, `D-89`) | `ref`, `sha256`, `name`, `open` (`true`/`false`, default `false`) |
 | lands in | agent staging directory under `ProgramData`, deleted afterwards | `Materials` on the `student` desktop, overwriting a same-named file |
 | then | run silently as SYSTEM with the catalog's arguments, verify `detect` | if `open`, the helper opens it in the student session with the default application |
 | ever executed | yes — that is the job | never, whatever the extension |
 
 `install_package` is the older and more important of the two and its behaviour is fixed;
 `send_file` is one job per file so that a batch reports per file, per PC.
+
+**`install_package` in detail** (M7 portion 4, `D-89`). Everything the PC needs travels in the
+job — the agent never reads the catalog:
+
+| arg | meaning |
+|---|---|
+| `package` | the catalog id (`[a-z0-9-]`, ≤ 48) — the console keys its per-PC status on it |
+| `version` | the catalog's version, informational |
+| `ref`, `sha256` | the installer by reference and hash (equal, `D-31`); pulled with `PullFile`, verified |
+| `file` | the installer's Windows leaf name; staged as `%ProgramData%\LabControl\packages\<guid>\<file>` |
+| `family` | `msi` \| `burn` \| `nsis` \| `inno` \| `installshield` \| `exe` — an `msi` runs as `msiexec.exe /i "<file>" <silent>`, anything else as itself with `<silent>` |
+| `silent` | the arguments, passed verbatim |
+| `detect_kind`, `detect` | `uninstall_name` (a `DisplayName` in the 64- or 32-bit *Uninstall* keys of HKLM starting with the value, ignoring case) or `path` (a file or folder at that path, environment variables expanded) |
+| `timeout_seconds` | 60 … 10 800: the installer and everything it started are ended after this |
+| `mode` | `install` (run whatever the rule finds), `missing` (skip when the rule finds the program), `check` (evaluate the rule only; nothing is pulled) |
+
+The PC refuses during an exam, runs one installer at a time (others wait, reporting every 10 s),
+sends a progress line every `Defaults.PackageInstallHeartbeat` (20 s) while the installer runs —
+the console's inactivity budget is therefore short (`FileChunkTimeout` + grace) — and evaluates
+the rule again afterwards. Exit codes 0, 3010 and 1641 are success (the latter two: restart
+needed; the PC does not restart). The answer carries **`JobResult.outcome = 6`**, additive and
+outside the frozen subset (an older agent answers "not in this build" without it):
+
+| outcome | `ok` | when |
+|---|---|---|
+| `package.installed` | true | the installer succeeded and the rule finds the program |
+| `package.reboot_required` | true | the same, with 3010 / 1641 |
+| `package.present` | true | `missing` or `check`: the rule already finds it; nothing ran |
+| `package.absent` | true | `check`: the rule finds nothing |
+| `package.failed` | false | another exit code (`exit_code` carries it; 1618 is named as another install running) |
+| `package.not_detected` | false | success code, but the rule still finds nothing |
+| `package.timed_out` | false | ended after `timeout_seconds` — usually a question nobody can see |
+| `package.not_run` | false | the job's arguments, the pull, the staging or the start failed |
+| `package.exam` | false | an exam is held on this PC |
+
+The staging directory is removed after every install and emptied when the service starts.
 
 The console dispatch and FakeAgent implementation are built (D-44); Windows delivery is
 pending managed-account ownership (D-40). `SendFileRequest` validates Windows leaf names

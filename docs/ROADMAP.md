@@ -2930,6 +2930,24 @@ the three languages checked again. H.264 only if M3's measurements demand it.
   family's marker, damaged files), `PackageCatalogTests`, the wizard in the per-language renders.
   **Open:** the owner adds a real package through the wizard (acceptance, with portion 4); real
   installers of each family have not been inspected yet — only synthetic ones and a real PE.
+- *Portion 4 built (2026-10-27), on the Mac; not yet run on Windows* (`D-89`). Owner decisions
+  of 2026-10-27: an installer may run 15 minutes by default, changeable per package; *Install on
+  all missing* queues for PCs that are off; a restart the installer asks for is only reported;
+  a PC in an exam refuses. `install_package` carries the file, family, silent arguments, detect
+  rule, limit and a mode — `install`, `missing`, `check` — and answers with a stable
+  `JobResult.outcome` (`package.installed`, `.reboot_required`, `.present`, `.absent`, `.failed`,
+  `.not_detected`, `.timed_out`, `.not_run`, `.exam`). `Shared/Packages/PackageInstallRunner`
+  holds the rules for both hosts: `WindowsPackageHost` (SYSTEM, session 0, no window, the
+  *Uninstall* keys or a file, the process tree ended at the limit) and the simulator's
+  `FakePackageHost` (`/fail`, `/reboot`, `/hang`, `/nodetect`). The console's
+  `PackageStatusBook` (`package-status.json`) remembers each PC's answer; the *Packages* tab
+  lists every PC's state and has *Install on N selected PCs* (the test install), *Install on all
+  missing* (asks before an untried package goes to the lab; an older version gets a plain
+  install) and *Check PCs*; the per-package time limit is in the tab and the wizard. Tests:
+  `PackageInstallRunnerTests`, `PackageInstallTests` (simulated PCs over the real link).
+  **Open:** the VM run (a real MSI, an NSIS and an Inno installer as SYSTEM; a wrong argument
+  ending at its limit; 3010), then the physical lab — the broken-package drill on all 14 and
+  the measured 14-PC install without internet, written below next to the manual afternoon.
 
 **Acceptance criteria**
 

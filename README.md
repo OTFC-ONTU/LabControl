@@ -47,8 +47,8 @@ machines on and off, and watch what students are doing.
 - **Power for one PC or the whole room** — Wake-on-LAN, shutdown, reboot and log off.
 - **Scripts and files on all PCs in parallel** — a PowerShell / cmd script library and
   file handouts over the LAN, with a separate result and log for every PC; a package
-  catalog filled by an *Add package* wizard is built, and installing from it on the PCs is
-  the next M7 step.
+  catalog filled by an *Add package* wizard installs programs silently on one PC or on all
+  that lack them, with no internet on the PCs (M7, not yet run on a real PC).
 - **Broadcast, lock and exam mode** — show the teacher's screen on every
   PC, lock screens with a message, and an exam mode built from four independent switches
   (timer, allowed programs, internet block, collect work) that always restores the PC by
@@ -140,7 +140,7 @@ more are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 | **M4** | Deployment: USB installer, files, self-update | 🔨 in progress — `1.0.0` release candidate in the first lab |
 | **M5** | Lab files, teacher access, fast switching between rooms | 🔨 in progress — all portions built, field acceptance remains |
 | **M6** | Classroom control: broadcast, lock, exam mode | ✅ done (2026-10-26) — accepted in the lab on all 14 PCs; teacher access not yet checked there |
-| **M7** | Software catalog, localization (uk / en / ru), polish, UI/UX redesign | 🔨 in progress — the console, its student screens and Setup speak Ukrainian, English and Russian; the package catalog and its *Add package* wizard are built |
+| **M7** | Software catalog, localization (uk / en / ru), polish, UI/UX redesign | 🔨 in progress — the console, its student screens and Setup speak Ukrainian, English and Russian; the package catalog, its *Add package* wizard and silent installs on the PCs are built |
 
 The detailed acceptance criteria and verification ledger are in the
 [roadmap](docs/ROADMAP.md).

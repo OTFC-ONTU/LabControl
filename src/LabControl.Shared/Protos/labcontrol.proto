@@ -254,6 +254,7 @@ message JobResult {
   int32  exit_code    = 3;
   string message      = 4;
   string artifact_ref = 5;  // set when the job produced an upload
+  string outcome      = 6;  // M7 portion 4 (D-89): a stable code for install_package, e.g. "package.installed"
 }
 
 // ---------------------------------------------------------------------------

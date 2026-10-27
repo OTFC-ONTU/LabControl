@@ -385,6 +385,17 @@ InstallShield — and its silent arguments; <code>PackageEntry</code>/<code>Dete
 writes <code>packages/&lt;id&gt;.yaml</code> (YamlDotNet) and copies the installer, hash-checked, into
 <code>packages/&lt;id&gt;/&lt;hash prefix&gt;/</code>; the <em>Packages</em> tab edits and deletes entries. A backup carries only
 the YAML. Tests: 1073 Shared + 327 Console. Next: portion 4 (<code>install_package</code> on the agent).
+<strong>M7 portion 4 is built (2026-10-27, <code>D-89</code>), on the Mac; not yet run on Windows:</strong> <code>install_package</code>.
+Owner decisions: 15 minutes per installer by default (per package), <em>Install on all missing</em> queues for
+PCs that are off, a restart is only reported, a PC in an exam refuses. The job carries file, family,
+silent arguments, detect rule, limit and a mode (<code>install</code> / <code>missing</code> / <code>check</code>) and answers with
+<code>JobResult.outcome</code> (additive, <code>PackageOutcomes</code>). <code>Shared/Packages/PackageInstallRunner</code> over
+<code>IPackageHost</code>: <code>WindowsPackageHost</code> (SYSTEM, session 0, no redirected streams, process tree ended at
+the limit, staging emptied at start) and <code>FakePackageHost</code> (<code>/fail</code>, <code>/reboot</code>, <code>/hang</code>, <code>/nodetect</code>).
+The console's <code>PackageStatusBook</code> (<code>package-status.json</code>) keeps each PC's answer; the <em>Packages</em> tab
+lists every PC and has <em>Install on N selected PCs</em>, <em>Install on all missing</em> (asks before an untried
+package) and <em>Check PCs</em>. Tests: 1085 Shared + 334 Console. Next: the VM run, then the broken-package drill and the
+14-PC measurement in the lab.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
@@ -867,7 +878,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-27 10:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 11:03 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

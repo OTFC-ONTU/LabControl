@@ -6,6 +6,7 @@ using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
 using LabControl.Shared.Localization;
 using LabControl.Shared.Persistence;
+using LabControl.Shared.Packages;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Setup;
@@ -31,6 +32,7 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
     private readonly ScreenProducer _screen;
     private readonly FakeMachineState _machineState;
     private readonly PolicyEnforcer _policy;
+    private readonly PackageInstallRunner _installs;
     private FakeScreen? _desktop;
     private int _sasCount;
     private readonly Timer _browsing;
@@ -101,6 +103,8 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
         _policy = new PolicyEnforcer(Link, _machineState, store.Directory, store.Config.LabId, log,
             mutexName: PolicyMutexName(store.Config.AgentId), mutexWait: policyMutexWait, broadcastCeiling: broadcastCeiling,
             broadcastStallTimeout: broadcastStallTimeout);
+
+        _installs = new PackageInstallRunner(new FakePackageHost(store.Directory, () => _policy.HoldsExam), Link.PullFileAsync);
 
         // A whitelist on a simulated PC refuses what a real student's browser would ask for.
         var browseEvery = TimeSpan.FromSeconds(15 + _random.Next(15));
@@ -347,6 +351,9 @@ public sealed class FakeMachine : IAgentBehaviour, IAsyncDisposable
 
             case Job.Types.Kind.ResetProfile:
                 return ResetProfile(job);
+
+            case Job.Types.Kind.InstallPackage:
+                return await _installs.RunAsync(job, report, token);
 
             default:
                 await Task.Delay(TimeSpan.FromMilliseconds(300), token);

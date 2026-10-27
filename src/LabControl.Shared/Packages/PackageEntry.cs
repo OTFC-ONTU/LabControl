@@ -29,6 +29,7 @@ public enum PackageProblem
     DetectMissing,
     DetectPathInvalid,
     MsiFileExpected,
+    TimeoutInvalid,
 }
 
 /// <summary>
@@ -50,6 +51,9 @@ public sealed record PackageEntry
     public required string Sha256 { get; init; }
     public string Silent { get; init; } = string.Empty;
     public required DetectRule Detect { get; init; }
+
+    /// <summary>How long the installer may run on a PC before it is ended as stuck (D-89).</summary>
+    public int TimeoutMinutes { get; init; } = (int)Defaults.PackageInstallTimeout.TotalMinutes;
     public string ChangedBy { get; init; } = string.Empty;
     public long ChangedAtUnix { get; init; }
 
@@ -64,6 +68,7 @@ public sealed record PackageEntry
         if (Silent.Length > 1024 || Silent.Any(char.IsControl)) return PackageProblem.SilentInvalid;
         if (string.IsNullOrWhiteSpace(Detect.Value) || Detect.Value.Length > 260 || Detect.Value.Any(char.IsControl)) return PackageProblem.DetectMissing;
         if (Detect.Kind == DetectKind.Path && !IsWindowsPath(Detect.Value.Trim())) return PackageProblem.DetectPathInvalid;
+        if (TimeoutMinutes < 1 || TimeoutMinutes > Defaults.PackageInstallTimeoutMax.TotalMinutes) return PackageProblem.TimeoutInvalid;
         return PackageProblem.None;
     }
 

@@ -211,6 +211,8 @@ public static class Defaults
     public const int EnrollmentSchemaVersion = 2;
     public const int AgentConfigSchemaVersion = 1;
     public const int PackageCatalogSchemaVersion = 1;
+    /// <summary><c>package-status.json</c> (M7 portion 4, D-89).</summary>
+    public const int PackageStatusSchemaVersion = 1;
     public const int BackupSchemaVersion = 1;
     public const int ScriptsSchemaVersion = 1;
     /// <summary><c>internet-presets.json</c>, the teacher's named whitelist presets (M6, D-73).</summary>
@@ -251,6 +253,9 @@ public static class Defaults
     public const string InternetPresetsFileName = "internet-presets.json";
     /// <summary>The named exam presets (M6 portion 4, D-76): beside <c>lab.json</c>, inside the backup, never in the lab file.</summary>
     public const string ExamPresetsFileName = "exam-presets.json";
+
+    /// <summary><c>package-status.json</c>: what each PC last said about each catalog package (M7 portion 4, D-89); this console only, never in a backup.</summary>
+    public const string PackageStatusFileName = "package-status.json";
     /// <summary>
     /// This computer's way into the lab key when it is remembered here (D-82): the reference to
     /// a random secret in the OS store. Per computer — never in a backup or a lab file.
@@ -1260,6 +1265,18 @@ public static class Defaults
     public static readonly Guid StudentDesktopKnownFolderId = new("B4BFCC3A-DB2C-424C-B029-7FE99A87C641");
     public const string WindowsExplorerExecutableName = "explorer.exe";
     public const string HandoutStagingDirectoryName = "handouts";
+
+    /// <summary>Where <c>install_package</c> stages an installer, under the agent's private data directory (M7 portion 4, D-89).</summary>
+    public const string PackageStagingDirectoryName = "packages";
+
+    /// <summary>How long an installer may run before the PC ends it as stuck — usually one waiting for a click nobody can see (owner decision 2026-10-27, D-89); each catalog entry may set its own.</summary>
+    public static readonly TimeSpan PackageInstallTimeout = TimeSpan.FromMinutes(15);
+
+    /// <summary>The longest an entry may ask for: three hours covers the largest IDE.</summary>
+    public static readonly TimeSpan PackageInstallTimeoutMax = TimeSpan.FromHours(3);
+
+    /// <summary>How often a PC says "still installing" while an installer runs, so the console's inactivity timeout never fires on a long install (D-89).</summary>
+    public static readonly TimeSpan PackageInstallHeartbeat = TimeSpan.FromSeconds(20);
     public const string ProfileTemplateArchiveFileName = "profile-template.zip";
     public const string ProfileTemplatePlanFileName = "profile-template.json";
     public const string ProfileTemplateStagingDirectoryName = "profile-template-staging";

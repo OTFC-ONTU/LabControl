@@ -2,6 +2,7 @@ using System.Globalization;
 using LabControl.Shared;
 using LabControl.Shared.Link;
 using LabControl.Shared.Localization;
+using LabControl.Shared.Packages;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
     private readonly AgentUpdater _updater;
     private readonly UpdateTrialMonitor _trialMonitor;
     private readonly SetupReadinessMonitor _readinessMonitor;
+    private readonly WindowsPackageHost _packages;
+    private readonly PackageInstallRunner _installs;
 
     public WindowsAgentBehaviour(DirectoryAgentStore store, ILogger log)
     {
@@ -33,6 +36,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         _updater = new AgentUpdater(Link, log, store.Authority);
         _trialMonitor = new UpdateTrialMonitor(Link, log);
         _readinessMonitor = new SetupReadinessMonitor(Link);
+        _packages = new WindowsPackageHost(() => ExamHeld?.Invoke() == true);
+        _installs = new PackageInstallRunner(_packages, Link.PullFileAsync);
 
         Link.Linked += (_, name) => _log.LogInformation("{Pc}: linked to {Console}", Link.Name, name);
         Link.Unlinked += reason => _log.LogInformation("{Pc}: unlinked — {Reason}", Link.Name, reason);
@@ -50,6 +55,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             Link.Report(Event.Types.Severity.Warning, "agent.data_acl", problem);
         }
 
+        // An install the service was stopped in the middle of leaves its staged installer (D-89).
+        _packages.ClearStaging();
         Link.Start();
     }
 
@@ -113,6 +120,9 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             case Job.Types.Kind.CollectFiles:
                 return await new CollectRunner(Link).RunAsync(job, report, token);
 
+            case Job.Types.Kind.InstallPackage:
+                return await _installs.RunAsync(job, report, token);
+
             case Job.Types.Kind.ResetProfile:
                 return await new ProfileResetRunner(Link, _log) { ExamHeld = ExamHeld }.RunAsync(job, report, token);
 
@@ -131,7 +141,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
                 return await _updater.RunAsync(job, report, token);
 
             default:
-                // Packages land in M7 (ROADMAP). Until then the console hears "not in this build".
+                // A kind this build does not run (set_config, rekey outside Setup): the console hears "not in this build".
                 return new JobResult
                 {
                     JobId = job.Id,

@@ -34,6 +34,9 @@ public sealed class AddPackageModel
 
     public string DetectPath { get; set; } = string.Empty;
 
+    /// <summary>How long the installer may run on a PC (D-89); the replaced entry's own limit is kept.</summary>
+    public int TimeoutMinutes { get; set; } = (int)LabControl.Shared.Defaults.PackageInstallTimeout.TotalMinutes;
+
     /// <summary>Reads the installer and fills every proposal; the reason when the file cannot be read, else <c>null</c>.</summary>
     public async Task<string?> InspectAsync(string path, IProgress<double>? progress, CancellationToken cancellationToken)
     {
@@ -61,6 +64,7 @@ public sealed class AddPackageModel
         if (Replaces() is { } existing && existing.Family == info.Family)
         {
             Silent = existing.Silent;
+            TimeoutMinutes = existing.TimeoutMinutes;
             DetectKind = existing.Detect.Kind;
             if (existing.Detect.Kind == DetectKind.Path) DetectPath = existing.Detect.Value;
             else DetectName = existing.Detect.Value;
@@ -101,6 +105,7 @@ public sealed class AddPackageModel
             Sha256 = Info.Sha256,
             Silent = Silent.Trim(),
             Detect = new DetectRule(DetectKind, (DetectKind == DetectKind.Path ? DetectPath : DetectName).Trim()),
+            TimeoutMinutes = TimeoutMinutes,
         };
         var problem = entry.Validate();
         if (problem == PackageProblem.None && Info.Family == InstallerFamily.Unknown && entry.Silent.Length == 0)

@@ -444,7 +444,8 @@ kinds: shutdown | reboot | logoff | run_script | install_package | reset_profile
        send_file | collect_files | set_config | self_update | rekey
 </code></pre>
 <p>Agent replies with <code>JobProgress</code> (0–100 + line of output) and finally <code>JobResult</code>
-<code>{id, ok, exit_code, message, artifact_ref?}</code>. Jobs are idempotent by <code>id</code>; a
+<code>{id, ok, exit_code, message, artifact_ref?, outcome?}</code> (<code>outcome</code>, a stable code, since M7
+portion 4 — see <em>Files</em>). Jobs are idempotent by <code>id</code>; a
 re-sent job with a known <code>id</code> returns the cached result. Jobs for offline agents are
 queued in the console (<code>pending</code>) and delivered on the next <code>Link</code>, unless
 <code>deliver: online_only</code> (default for <code>shutdown</code>), which is <strong>never</strong> queued: created for a
@@ -620,7 +621,7 @@ where it lands and what happens next (<code>D-23</code>):</p>
 <tbody>
 <tr>
 <td>args</td>
-<td><code>package</code>, <code>version</code>, <code>ref</code>, <code>sha256</code></td>
+<td><code>package</code>, <code>version</code>, <code>ref</code>, <code>sha256</code>, <code>file</code>, <code>family</code>, <code>silent</code>, <code>detect_kind</code>, <code>detect</code>, <code>timeout_seconds</code>, <code>mode</code> (M7 portion 4, <code>D-89</code>)</td>
 <td><code>ref</code>, <code>sha256</code>, <code>name</code>, <code>open</code> (<code>true</code>/<code>false</code>, default <code>false</code>)</td>
 </tr>
 <tr>
@@ -642,6 +643,117 @@ where it lands and what happens next (<code>D-23</code>):</p>
 </table></div>
 <p><code>install_package</code> is the older and more important of the two and its behaviour is fixed;
 <code>send_file</code> is one job per file so that a batch reports per file, per PC.</p>
+<p><strong><code>install_package</code> in detail</strong> (M7 portion 4, <code>D-89</code>). Everything the PC needs travels in the
+job — the agent never reads the catalog:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>arg</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>package</code></td>
+<td>the catalog id (<code>[a-z0-9-]</code>, ≤ 48) — the console keys its per-PC status on it</td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td>the catalog's version, informational</td>
+</tr>
+<tr>
+<td><code>ref</code>, <code>sha256</code></td>
+<td>the installer by reference and hash (equal, <code>D-31</code>); pulled with <code>PullFile</code>, verified</td>
+</tr>
+<tr>
+<td><code>file</code></td>
+<td>the installer's Windows leaf name; staged as <code>%ProgramData%\LabControl\packages\&lt;guid&gt;\&lt;file&gt;</code></td>
+</tr>
+<tr>
+<td><code>family</code></td>
+<td><code>msi</code> | <code>burn</code> | <code>nsis</code> | <code>inno</code> | <code>installshield</code> | <code>exe</code> — an <code>msi</code> runs as <code>msiexec.exe /i &quot;&lt;file&gt;&quot; &lt;silent&gt;</code>, anything else as itself with <code>&lt;silent&gt;</code></td>
+</tr>
+<tr>
+<td><code>silent</code></td>
+<td>the arguments, passed verbatim</td>
+</tr>
+<tr>
+<td><code>detect_kind</code>, <code>detect</code></td>
+<td><code>uninstall_name</code> (a <code>DisplayName</code> in the 64- or 32-bit <em>Uninstall</em> keys of HKLM starting with the value, ignoring case) or <code>path</code> (a file or folder at that path, environment variables expanded)</td>
+</tr>
+<tr>
+<td><code>timeout_seconds</code></td>
+<td>60 … 10 800: the installer and everything it started are ended after this</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>install</code> (run whatever the rule finds), <code>missing</code> (skip when the rule finds the program), <code>check</code> (evaluate the rule only; nothing is pulled)</td>
+</tr>
+</tbody>
+</table></div>
+<p>The PC refuses during an exam, runs one installer at a time (others wait, reporting every 10 s),
+sends a progress line every <code>Defaults.PackageInstallHeartbeat</code> (20 s) while the installer runs —
+the console's inactivity budget is therefore short (<code>FileChunkTimeout</code> + grace) — and evaluates
+the rule again afterwards. Exit codes 0, 3010 and 1641 are success (the latter two: restart
+needed; the PC does not restart). The answer carries <strong><code>JobResult.outcome = 6</code></strong>, additive and
+outside the frozen subset (an older agent answers &quot;not in this build&quot; without it):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>outcome</th>
+<th><code>ok</code></th>
+<th>when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>package.installed</code></td>
+<td>true</td>
+<td>the installer succeeded and the rule finds the program</td>
+</tr>
+<tr>
+<td><code>package.reboot_required</code></td>
+<td>true</td>
+<td>the same, with 3010 / 1641</td>
+</tr>
+<tr>
+<td><code>package.present</code></td>
+<td>true</td>
+<td><code>missing</code> or <code>check</code>: the rule already finds it; nothing ran</td>
+</tr>
+<tr>
+<td><code>package.absent</code></td>
+<td>true</td>
+<td><code>check</code>: the rule finds nothing</td>
+</tr>
+<tr>
+<td><code>package.failed</code></td>
+<td>false</td>
+<td>another exit code (<code>exit_code</code> carries it; 1618 is named as another install running)</td>
+</tr>
+<tr>
+<td><code>package.not_detected</code></td>
+<td>false</td>
+<td>success code, but the rule still finds nothing</td>
+</tr>
+<tr>
+<td><code>package.timed_out</code></td>
+<td>false</td>
+<td>ended after <code>timeout_seconds</code> — usually a question nobody can see</td>
+</tr>
+<tr>
+<td><code>package.not_run</code></td>
+<td>false</td>
+<td>the job's arguments, the pull, the staging or the start failed</td>
+</tr>
+<tr>
+<td><code>package.exam</code></td>
+<td>false</td>
+<td>an exam is held on this PC</td>
+</tr>
+</tbody>
+</table></div>
+<p>The staging directory is removed after every install and emptied when the service starts.</p>
 <p>The console dispatch and FakeAgent implementation are built (D-44); Windows delivery is
 pending managed-account ownership (D-40). <code>SendFileRequest</code> validates Windows leaf names
 on every OS, refusing paths, alternate streams, device names and trailing spaces/dots;
@@ -1523,7 +1635,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-27 10:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 11:03 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#m7-additions-portion-2-d-87">M7 additions (portion 2, D-87)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

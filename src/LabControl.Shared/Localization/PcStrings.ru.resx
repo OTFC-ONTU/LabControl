@@ -144,4 +144,20 @@
   <data name="InputRecovered" xml:space="preserve"><value>Управление с консоли снова доходит до рабочего стола.</value></data>
   <data name="CaptureFallback" xml:space="preserve"><value>Дублирование рабочего стола на этом ПК недоступно ({0}); экран снимается через GDI, а это сильнее нагружает процессор.</value></data>
   <data name="HelperNotInThisBuild" xml:space="preserve"><value>Помощник сеанса {0} ещё не обрабатывает {1}.</value></data>
+  <data name="PackageExamHeld" xml:space="preserve"><value>На этом ПК идёт экзамен; {0} не установлен. Установите после экзамена.</value></data>
+  <data name="PackagePresent" xml:space="preserve"><value>{0} установлен (версия {1}).</value></data>
+  <data name="PackageAbsent" xml:space="preserve"><value>{0} не установлен.</value></data>
+  <data name="PackageAlreadyInstalled" xml:space="preserve"><value>{0} уже установлен (версия {1}); установщик не запускался.</value></data>
+  <data name="PackageWaiting" xml:space="preserve"><value>Жду, пока завершится предыдущая установка на этом ПК.</value></data>
+  <data name="PackageReceiving" xml:space="preserve"><value>Получаю {0}: {1} байт.</value></data>
+  <data name="PackagePullFailed" xml:space="preserve"><value>Установщик {0} не получен: {1}</value></data>
+  <data name="PackageStarting" xml:space="preserve"><value>Запускаю {0} {1}</value></data>
+  <data name="PackageInstalling" xml:space="preserve"><value>Ещё устанавливается: {0} мин из не более чем {1}.</value></data>
+  <data name="PackageStartFailed" xml:space="preserve"><value>Не удалось запустить установщик {0}: {1}</value></data>
+  <data name="PackageTimedOut" xml:space="preserve"><value>{0} работал дольше {1} мин и был завершён. Вероятно, он ждёт ответа на экране, который никто не видит: проверьте аргументы тихой установки.</value></data>
+  <data name="PackageAnotherInstall" xml:space="preserve"><value>{0} не запустился: на этом ПК идёт другая установка (код {1}). Попробуйте позже.</value></data>
+  <data name="PackageFailedCode" xml:space="preserve"><value>{0} завершился с кодом {1}. Проверьте аргументы тихой установки или запустите установщик вручную на этом ПК, чтобы увидеть его сообщение.</value></data>
+  <data name="PackageNotDetected" xml:space="preserve"><value>{0} завершился (код {1}), но правило пакета не находит программу. Проверьте правило или действительно ли установщик поставил программу для всех пользователей.</value></data>
+  <data name="PackageInstalledReboot" xml:space="preserve"><value>{0} установлен (версия {1}); Windows нужна перезагрузка, чтобы завершить. ПК не перезагружается сам.</value></data>
+  <data name="PackageInstalled" xml:space="preserve"><value>{0} установлен (версия {1}).</value></data>
 </root>

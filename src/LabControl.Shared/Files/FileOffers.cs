@@ -73,6 +73,18 @@ public sealed class FileOffers
         return Add(offer);
     }
 
+    /// <summary>
+    /// Offers a file whose hash the caller already knows — a catalog installer, hashed when it was
+    /// added (D-89) — without reading a gigabyte again on every click. A file changed since is
+    /// refused by the PC's own hash check, so the trust is only about speed.
+    /// </summary>
+    public FileOffer OfferKnownFile(string path, string sha256)
+    {
+        var hash = sha256.ToLowerInvariant();
+        var offer = new FileOffer(hash, hash, new FileInfo(path).Length, Path.GetFileName(path), () => File.OpenRead(path));
+        return Add(offer);
+    }
+
     public FileOffer? Find(string reference)
     {
         lock (_gate)

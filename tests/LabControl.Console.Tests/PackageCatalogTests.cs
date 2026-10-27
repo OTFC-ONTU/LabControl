@@ -28,7 +28,7 @@ public sealed class PackageCatalogTests
     }
 
     /// <summary>An installer the inspector knows as NSIS: a PE stub with NSIS's first-header marker after it.</summary>
-    private static string NsisInstaller(string name, string tail = "")
+    internal static string NsisInstaller(string name, string tail = "")
     {
         var directory = TestConsole.TempDirectory();
         Directory.CreateDirectory(directory);
@@ -38,7 +38,7 @@ public sealed class PackageCatalogTests
         return path;
     }
 
-    private static async Task<PackageEntry> AddAsync(PackageCatalog catalog, string path, string name, Action<AddPackageModel>? edit = null)
+    internal static async Task<PackageEntry> AddAsync(PackageCatalog catalog, string path, string name, Action<AddPackageModel>? edit = null)
     {
         var model = new AddPackageModel(catalog);
         Assert.Null(await model.InspectAsync(path, null, TestContext.Current.CancellationToken));
@@ -265,10 +265,10 @@ public sealed class PackageCatalogTests
     [Fact]
     public async Task The_packages_tab_adds_through_the_wizard_edits_in_place_and_deletes_after_asking()
     {
-        var store = NewStore();
-        var catalog = Open(store);
+        await using var console = await TestConsole.CreateLabAsync("MacBook");
+        var catalog = console.Session.Packages;
         var dialogs = new WizardDialogs(NsisInstaller("tool.exe"), "Tool");
-        var tab = new PackagesViewModel(catalog, dialogs, action => action());
+        var tab = new PackagesViewModel(console.Session, dialogs, action => action(), () => []);
         Assert.True(tab.IsEmpty);
         Assert.False(tab.HasEntry);
 
@@ -304,7 +304,7 @@ public sealed class PackageCatalogTests
     }
 
     /// <summary>The wizard answered by the model itself with one installer and a name; every other dialog cancelled.</summary>
-    private sealed class WizardDialogs(string installer, string name) : IDialogs
+    internal sealed class WizardDialogs(string installer, string name) : IDialogs
     {
         public bool Confirm { get; set; }
 

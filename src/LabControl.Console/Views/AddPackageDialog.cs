@@ -24,6 +24,7 @@ public sealed class AddPackageDialog : DialogWindow<PackageEntry>
     private readonly TextBox _name = new() { MinWidth = 320, MaxLength = PackageEntry.MaxNameLength };
     private readonly TextBox _version = new() { MinWidth = 160, MaxLength = 64 };
     private readonly TextBox _silent = new() { MinWidth = 320, MaxLength = 1024, FontFamily = new FontFamily("Menlo, Consolas, monospace") };
+    private readonly TextBox _timeout = new() { Width = 80, MaxLength = 3, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly RadioButton _byName = new() { GroupName = "detect", IsChecked = true };
     private readonly RadioButton _byPath = new() { GroupName = "detect" };
     private readonly TextBox _detectName = new() { MinWidth = 320, MaxLength = 260 };
@@ -73,6 +74,7 @@ public sealed class AddPackageDialog : DialogWindow<PackageEntry>
         _fields.Children.Add(Pair(Strings.Get("Packages.Name"), _name));
         _fields.Children.Add(Pair(Strings.Get("Packages.Version"), _version));
         _fields.Children.Add(Pair(Strings.Get("Packages.Silent"), _silent));
+        _fields.Children.Add(Pair(Strings.Get("Packages.Timeout"), _timeout));
         _fields.Children.Add(new TextBlock { Text = Strings.Get("Packages.DetectHeading"), TextWrapping = TextWrapping.Wrap, MaxWidth = 460, HorizontalAlignment = HorizontalAlignment.Left });
         _fields.Children.Add(Indented(_byName, _detectName));
         _fields.Children.Add(Indented(_byPath, _detectPath));
@@ -116,6 +118,7 @@ public sealed class AddPackageDialog : DialogWindow<PackageEntry>
             _name.Text = _model.Name;
             _version.Text = _model.Version;
             _silent.Text = _model.Silent;
+            _timeout.Text = _model.TimeoutMinutes.ToString(System.Globalization.CultureInfo.CurrentCulture);
             _detectName.Text = _model.DetectName;
             _detectPath.Text = _model.DetectPath;
             _byName.IsChecked = _model.DetectKind == DetectKind.UninstallName;
@@ -131,6 +134,7 @@ public sealed class AddPackageDialog : DialogWindow<PackageEntry>
         _model.Name = _name.Text ?? string.Empty;
         _model.Version = _version.Text ?? string.Empty;
         _model.Silent = _silent.Text ?? string.Empty;
+        _model.TimeoutMinutes = int.TryParse(_timeout.Text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.CurrentCulture, out var minutes) ? minutes : 0;
         _model.DetectKind = _byPath.IsChecked == true ? DetectKind.Path : DetectKind.UninstallName;
         _model.DetectName = _detectName.Text ?? string.Empty;
         _model.DetectPath = _detectPath.Text ?? string.Empty;

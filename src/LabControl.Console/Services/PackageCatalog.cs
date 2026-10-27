@@ -208,6 +208,7 @@ public sealed class PackageCatalog
                 Version = edited.Version.Trim(),
                 Silent = edited.Silent.Trim(),
                 Detect = edited.Detect with { Value = edited.Detect.Value.Trim() },
+                TimeoutMinutes = edited.TimeoutMinutes,
                 ChangedBy = _instanceName,
                 ChangedAtUnix = _clock().ToUnixTimeSeconds(),
             };
@@ -259,6 +260,7 @@ public sealed class PackageCatalog
         public string? Sha256 { get; set; }
         public string? Silent { get; set; }
         public DetectYaml? Detect { get; set; }
+        public int? TimeoutMinutes { get; set; }
         public string? ChangedBy { get; set; }
         public string? ChangedAt { get; set; }
     }
@@ -274,12 +276,13 @@ public sealed class PackageCatalog
         SchemaVersion = Defaults.PackageCatalogSchemaVersion,
         Name = entry.Name,
         Version = entry.Version,
-        Family = FamilyName(entry.Family),
+        Family = InstallPackageRequest.FamilyCode(entry.Family),
         File = entry.File,
         Size = entry.Size,
         Sha256 = entry.Sha256,
         Silent = entry.Silent,
         Detect = entry.Detect.Kind == DetectKind.Path ? new DetectYaml { Path = entry.Detect.Value } : new DetectYaml { UninstallName = entry.Detect.Value },
+        TimeoutMinutes = entry.TimeoutMinutes,
         ChangedBy = entry.ChangedBy,
         ChangedAt = DateTimeOffset.FromUnixTimeSeconds(entry.ChangedAtUnix).ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
     });
@@ -320,32 +323,17 @@ public sealed class PackageCatalog
             Sha256 = raw.Sha256?.Trim().ToLowerInvariant() ?? string.Empty,
             Silent = raw.Silent?.Trim() ?? string.Empty,
             Detect = detect ?? new DetectRule(DetectKind.UninstallName, string.Empty),
+            TimeoutMinutes = raw.TimeoutMinutes ?? (int)Defaults.PackageInstallTimeout.TotalMinutes,
             ChangedBy = raw.ChangedBy ?? string.Empty,
             ChangedAtUnix = DateTimeOffset.TryParse(raw.ChangedAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at) ? at.ToUnixTimeSeconds() : 0,
         };
         return entry.Validate() is PackageProblem.None ? entry : throw new InvalidDataException(entry.Validate().ToString());
     }
 
-    private static string FamilyName(InstallerFamily family) => family switch
-    {
-        InstallerFamily.Msi => "msi",
-        InstallerFamily.Nsis => "nsis",
-        InstallerFamily.Inno => "inno",
-        InstallerFamily.InstallShield => "installshield",
-        InstallerFamily.WixBurn => "burn",
-        _ => "exe",
-    };
-
-    private static InstallerFamily ParseFamily(string? value, string file) => value?.Trim().ToLowerInvariant() switch
-    {
-        "msi" => InstallerFamily.Msi,
-        "nsis" => InstallerFamily.Nsis,
-        "inno" => InstallerFamily.Inno,
-        "installshield" => InstallerFamily.InstallShield,
-        "burn" => InstallerFamily.WixBurn,
-        null or "" when file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase) => InstallerFamily.Msi,
-        _ => InstallerFamily.Unknown,
-    };
+    private static InstallerFamily ParseFamily(string? value, string file) =>
+        string.IsNullOrWhiteSpace(value) && file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase)
+            ? InstallerFamily.Msi
+            : InstallPackageRequest.ParseFamily(value);
 
     private void WriteYaml(PackageEntry entry)
     {

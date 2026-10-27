@@ -381,6 +381,13 @@ wizard. The installer is read, never run (<code>Shared/Packages</code>: <code>Co
 <code>packages/&lt;id&gt;/&lt;hash prefix&gt;/</code> beside <code>packages/&lt;id&gt;.yaml</code> (YamlDotNet, <code>Console/Services/PackageCatalog</code>);
 a new version replaces the entry of the same program; the <em>Packages</em> tab edits and deletes. Only
 the YAML is in a backup. Tests: 1073 Shared + 327 Console. Next: portion 4 (<code>install_package</code>).</li>
+<li><strong>M7 portion 4 is built (2026-10-27, <code>D-89</code>), on the Mac; not yet run on Windows</strong>: <code>install_package</code>
+with modes <code>install</code> / <code>missing</code> / <code>check</code> and a stable <code>JobResult.outcome</code>; the shared
+<code>PackageInstallRunner</code> over <code>WindowsPackageHost</code> (SYSTEM, no window, limit 15 min by default per
+package) and <code>FakePackageHost</code> (<code>/fail</code>, <code>/reboot</code>, <code>/hang</code>, <code>/nodetect</code>); the console's
+<code>PackageStatusBook</code> (<code>package-status.json</code>) and the <em>Packages</em> tab's <em>Install on N selected PCs</em>,
+<em>Install on all missing</em> (queued for PCs that are off; asks before an untried package) and <em>Check
+PCs</em>. A restart is only reported; an exam refuses. Tests: 1085 Shared + 334 Console. Next: the VM run, the lab drills.</li>
 <li><strong>M6 in the physical lab (2026-10-26, build <code>1.0.0+68d0ae5</code>)</strong> passed sections 0–6 of the checklist.
 Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (<code>D-75</code>
 item 12), ends asked while a PC was off are sent on its return with the same session (<code>D-79</code> item 8),
@@ -546,7 +553,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-27 10:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 11:03 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

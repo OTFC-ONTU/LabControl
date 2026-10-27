@@ -835,4 +835,25 @@ java.exe</value></data>
   <data name="Packages.SizeKb" xml:space="preserve"><value>{0} КБ</value></data>
   <data name="Packages.SizeMb" xml:space="preserve"><value>{0} МБ</value></data>
   <data name="Packages.SizeGb" xml:space="preserve"><value>{0} ГБ</value></data>
+  <data name="Packages.Timeout" xml:space="preserve"><value>Ліміт часу, хв</value></data>
+  <data name="Packages.Problem.TimeoutInvalid" xml:space="preserve"><value>Ліміт часу має бути цілим числом хвилин від 1 до 180.</value></data>
+  <data name="Packages.OnThePcs" xml:space="preserve"><value>На ПК</value></data>
+  <data name="Packages.TestHint" xml:space="preserve"><value>Спершу спробуйте новий пакет на одному ПК: виберіть його на вкладці «Лабораторія» і натисніть «Встановити на вибраних ПК». Ця ж кнопка встановлює нову версію поверх старої.</value></data>
+  <data name="Packages.InstallSelected" xml:space="preserve"><value>Встановити на вибраних ПК ({0})</value></data>
+  <data name="Packages.InstallSelectedNone" xml:space="preserve"><value>Встановити — спершу виберіть ПК на вкладці «Лабораторія»</value></data>
+  <data name="Packages.InstallAllMissing" xml:space="preserve"><value>Встановити на всі, де немає</value></data>
+  <data name="Packages.Check" xml:space="preserve"><value>Перевірити ПК</value></data>
+  <data name="Packages.PcState.Unknown" xml:space="preserve"><value>невідомо</value></data>
+  <data name="Packages.PcState.Installed" xml:space="preserve"><value>встановлено</value></data>
+  <data name="Packages.PcState.RebootRequired" xml:space="preserve"><value>встановлено, потрібне перезавантаження</value></data>
+  <data name="Packages.PcState.Missing" xml:space="preserve"><value>не встановлено</value></data>
+  <data name="Packages.PcState.Failed" xml:space="preserve"><value>помилка</value></data>
+  <data name="Packages.PcState.Busy" xml:space="preserve"><value>триває…</value></data>
+  <data name="Packages.Summary" xml:space="preserve"><value>Встановлено: {0} · не встановлено: {1} · помилки: {2} · невідомо: {3}</value></data>
+  <data name="Packages.Sent" xml:space="preserve"><value>«{0}» надіслано на {1} ПК — хід виконання на вкладці «Завдання». Вимкнений ПК отримає його, коли під'єднається.</value></data>
+  <data name="Packages.NothingMissing" xml:space="preserve"><value>На всіх ПК лабораторії «{0}» уже є.</value></data>
+  <data name="Packages.UntestedTitle" xml:space="preserve"><value>Ще не перевірено на ПК</value></data>
+  <data name="Packages.UntestedConfirm" xml:space="preserve"><value>«{0}» ще не встановлювали на жоден ПК. Спершу спробуйте на одному: виберіть його на вкладці «Лабораторія» і натисніть «Встановити на вибраних ПК». Все одно встановити на {1} ПК?</value></data>
+  <data name="Packages.InstallAnyway" xml:space="preserve"><value>Все одно встановити</value></data>
+  <data name="Packages.InstallFailed" xml:space="preserve"><value>Не надіслано: {0}</value></data>
 </root>

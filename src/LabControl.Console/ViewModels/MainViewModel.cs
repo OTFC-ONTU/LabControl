@@ -56,7 +56,7 @@ public sealed partial class MainViewModel : ObservableObject
         Settings.BackupChanged += RefreshBanners;
         Settings.SwitchLabRequested += labId => SwitchLabRequested?.Invoke(labId);
         Scripts = new ScriptsViewModel(session, dialogs, () => Selected.Select(t => t.AgentId).ToArray());
-        Packages = new PackagesViewModel(session.Packages, dialogs, post);
+        Packages = new PackagesViewModel(session, dialogs, post, () => Selected.Select(t => t.AgentId).ToArray());
 
         Title = Strings.Format("Main.Title", session.LabName, session.Instance.InstanceName);
         Generation = session.Generation;
@@ -564,7 +564,11 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool HasSelection => SelectedCount > 0;
 
-    partial void OnSelectedCountChanged(int value) => Scripts.SetSelectedPcCount(value);
+    partial void OnSelectedCountChanged(int value)
+    {
+        Scripts.SetSelectedPcCount(value);
+        Packages.SetSelectedPcCount(value);
+    }
 
     /// <summary>Wake-on-LAN for the selected PCs that are off; the outcome arrives as events and on the tile (ARCHITECTURE §6).</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]

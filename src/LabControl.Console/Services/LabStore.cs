@@ -32,6 +32,8 @@ public sealed class LabStore
     public string InternetPresetsPath => Path.Combine(Directory, Defaults.InternetPresetsFileName);
     public string ExamPresetsPath => Path.Combine(Directory, Defaults.ExamPresetsFileName);
 
+    public string PackageStatusPath => Path.Combine(Directory, Defaults.PackageStatusFileName);
+
     public string LogsDirectory => Path.Combine(Directory, Defaults.LogsDirectoryName);
 
     /// <summary>How this computer opens the lab key without a passphrase, when it is remembered here (D-82).</summary>
@@ -116,6 +118,10 @@ public sealed class LabStore
     public ExamPresetsDocument? LoadExamPresets() => JsonStore.LoadIfExists<ExamPresetsDocument>(ExamPresetsPath, ExamPresetsDocument.Migrations);
 
     public void SaveExamPresets(ExamPresetsDocument document) => JsonStore.Save(ExamPresetsPath, document, ExamPresetsDocument.Migrations);
+
+    public PackageStatusDocument? LoadPackageStatus() => JsonStore.LoadIfExists<PackageStatusDocument>(PackageStatusPath, PackageStatusDocument.Migrations);
+
+    public void SavePackageStatus(PackageStatusDocument document) => JsonStore.Save(PackageStatusPath, document, PackageStatusDocument.Migrations);
 
     // ------------------------------------------------------------------ catalog
 

@@ -5091,3 +5091,74 @@ exact match (display names change with every version); the installer referenced 
 a JSON catalog (the format has been YAML since `D-07` and backups already carry `*.yaml`).
 
 Status: built 2026-10-27 on the Mac. No PC is involved until portion 4.
+
+## D-89 — `install_package` on the PC: the rule decides, the outcome is a code, the console remembers each PC's answer (M7 portion 4)
+
+Context (2026-10-27): portion 3 (`D-88`) filled the catalog; the agent answered `install_package`
+with "not in this build". `D-23` fixed the landing (private staging, silent, SYSTEM, `detect`
+verified, file deleted). Left open: how a stuck installer ends, how the console knows which PCs
+lack a program, what *Install on all missing* sends to a PC with an older version, and how a test
+install on one PC fits in.
+
+Owner decisions (2026-10-27): an installer may run **15 minutes** by default, changeable per
+package; *Install on all missing* **queues** for PCs that are off, like *Send files*; a restart
+the installer asks for is **only reported** — the PC never restarts by itself; a PC holding an
+**exam refuses** the install.
+
+Decisions:
+
+1. **The job carries everything** (PROTOCOL, *`install_package` in detail*): the catalog's file
+   name, family, silent arguments, detect rule and time limit travel as job arguments, validated
+   with the catalog entry's own rules on the PC (`InstallPackageRequest`). The agent never reads
+   the catalog, so a teacher console with a different catalog copy cannot confuse a PC, and the
+   YAML stays the console's private format.
+2. **Three modes.** `install` runs the installer whatever the rule finds — the test install on the
+   selected PCs and a new version over an old one; `missing` skips when the rule already finds the
+   program — *Install on all missing*; `check` only evaluates the rule, pulls nothing and is sent
+   to linked PCs only (a check is about now). A rule finds a program by name, not version, so
+   `missing` alone could never upgrade: the console sends `install` to a PC whose last answer was a
+   successful install of **another** installer of the same entry, and `missing` to the rest.
+3. **One shared runner, two hosts** (`Shared/Packages/PackageInstallRunner` over `IPackageHost`):
+   exam refusal, the modes, the pull into a fresh directory under the private staging root, one
+   install at a time per PC (Windows Installer refuses a second with 1618 anyway), a progress line
+   every `Defaults.PackageInstallHeartbeat` (20 s), the exit code, the rule evaluated again, the
+   directory removed. `WindowsPackageHost` runs the installer as SYSTEM in session 0 with no window
+   and **no redirected streams** — a child that inherits a pipe would keep it open past the
+   installer's exit, which is why `ProcessRunner` is not used — and ends it with its whole process
+   tree after the limit (wall clock, not inactivity: an installer prints nothing). The staging root
+   is emptied when the service starts. `FakePackageHost` really pulls and verifies, and pretends to
+   run: `/fail` → 1603, `/reboot` → 3010, `/hang` (or no arguments for an unrecognised installer)
+   → waits out the limit, `/nodetect` → success without the program.
+4. **Exit codes**: 0 is success; 3010 and 1641 are success with a restart needed
+   (`package.reboot_required`, `ok`); anything else is `package.failed` with the code, 1618 named as
+   another installation running. Success while the rule still finds nothing is
+   `package.not_detected` and **not** success — the usual sign of a per-user installer that went
+   into SYSTEM's profile, or of a wrong rule.
+5. **`JobResult.outcome = 6`**, a stable code (`PackageOutcomes`), additive, outside the frozen
+   subset (`D-19`): the message is in the console's language (`D-87`), so the console must never
+   parse it. `JobRecord.Outcome` keeps it.
+6. **The console remembers each PC's answer** (`PackageStatusBook`, `package-status.json` beside
+   `lab.json`, never in a backup — a cache rebuilt by *Check PCs*): package → PC → outcome, the
+   installer's hash, the message, the time. A PC's state for an entry — installed, restart needed,
+   not installed, failed, in progress, not known — counts only answers about the entry's current
+   installer, except `present`/`absent`, which come from the rule and hold for any version. A job
+   the console gave up on is recorded as `console.timed_out` (failed).
+7. **The test install is the selection.** The *Packages* tab's *Install on N selected PCs* uses the
+   lab view's selection, like the *Scripts* tab; the hint under it says to try one PC first. *Install
+   on all missing* asks before it sends an installer no PC has installed yet (*Not tried on a PC
+   yet … Install anyway?*). The tab lists every PC of the lab with its state and the PC's own words.
+8. **Budgets.** The console's inactivity timeout for the job is `FileChunkTimeout` (30 s) or two
+   heartbeats, whichever is longer, plus `JobTimeoutGrace`: the PC reports while waiting for the
+   previous install, while receiving and while running, and ends a stuck installer itself, so the
+   console never needs the package's own limit. Queued jobs live in the console's memory only:
+   `install_package` is not re-sent by a returning session (`InFlightJobPolicy`, `D-57` item 4).
+
+Rejected: a version-aware rule (`DisplayVersion` formats differ from the installer's own version
+strings — IntelliJ lists `262.4852.47` for *2026.2* — so a comparison would mislead more than help);
+reporting installed catalog packages in `Inventory.packages` (the PC does not know the catalog, and
+a check job answers the same question when asked); restarting the PC automatically (owner);
+installing during an exam (owner); one PC at a time across the lab (fourteen pulls in parallel are
+what the file channel is for; the MacBook's Wi-Fi is the measured limit, ROADMAP M7).
+
+Status: built 2026-10-27 on the Mac; the Windows host is compiled, not yet run on a PC. The broken
+package drill and the 14-PC measurement are the physical-lab steps of portion 4.

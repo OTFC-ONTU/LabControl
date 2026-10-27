@@ -2987,6 +2987,8 @@ measurements demand it.
 - Setup/removal is exercised in all three languages, and the USB builder emits each of the
   three instruction variants with English fallback for any unsupported culture.
 - The console runs a full 90-minute lesson without a restart, a leak, or a stuck job.
+  **Passed** (owner, 2026-10-27): several full 90-minute lessons in the physical lab without a
+  console restart during M6 and M7.
 - The recovery procedure is executed once for real, from the backup, and it works.
 - Every screen listed in the redesign item has been reviewed and the changes are in; every
   teacher action that is refused or fails on some PCs shows its reason and those PCs where

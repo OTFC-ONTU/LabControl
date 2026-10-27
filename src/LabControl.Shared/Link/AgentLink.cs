@@ -90,6 +90,10 @@ public sealed partial class AgentLink : IAsyncDisposable
     private Task? _loop;
     private CancellationTokenSource? _session;
     private long _linkEpoch;
+
+    // Counts Welcomes: the pinned-host retry loop abandons a backoff step once a link came up
+    // during it, however briefly that link lasted (M7 reconnect storm).
+    private long _welcomes;
     private string? _pendingEndpoint;
     private string? _pendingReason;
     private string? _previousInstanceId;
@@ -727,6 +731,8 @@ public sealed partial class AgentLink : IAsyncDisposable
         return await _dials.Reader.ReadAsync(stopping);
     }
 
+    private static readonly TimeSpan PinnedRetrySlice = TimeSpan.FromMilliseconds(250);
+
     private async Task RetryPinnedHostAsync(CancellationToken stopping)
     {
         var endpoint = $"{_store.Config.ConsoleHost}:{_store.Config.ConsolePort.ToString(CultureInfo.InvariantCulture)}";
@@ -742,8 +748,21 @@ public sealed partial class AgentLink : IAsyncDisposable
             try
             {
                 // While linked or dialling, look again every second so a dropped link is
-                // followed by a dial without waiting out a whole backoff step.
-                await Task.Delay(searching ? _pinnedBackoff.Next() : TimeSpan.FromSeconds(1), stopping);
+                // followed by a dial without waiting out a whole backoff step. A long step
+                // taken while searching is waited out in short slices and abandoned as soon
+                // as a Welcome arrived during it: the backoff was reset by that Welcome, and a
+                // link lost soon after must not wait for the rest of a step from before it
+                // (M7 reconnect storm: a PC whose link dropped right after it came back
+                // redialled only when its 4 s step ran out).
+                var delay = searching ? _pinnedBackoff.Next() : TimeSpan.FromSeconds(1);
+                var until = DateTimeOffset.UtcNow + delay;
+                var welcomes = Interlocked.Read(ref _welcomes);
+                do
+                {
+                    var left = until - DateTimeOffset.UtcNow;
+                    await Task.Delay(left < PinnedRetrySlice ? (left > TimeSpan.Zero ? left : TimeSpan.Zero) : PinnedRetrySlice, stopping);
+                }
+                while (DateTimeOffset.UtcNow < until && Interlocked.Read(ref _welcomes) == welcomes);
             }
             catch (OperationCanceledException)
             {
@@ -859,7 +878,24 @@ public sealed partial class AgentLink : IAsyncDisposable
         var config = _store.Config;
         var certificate = _store.Certificate!;
 
-        using var channel = ConsoleChannel.Open(host, port, _store.Authority, config.LabId, CertificateWithKey(certificate), _revocations);
+        // The channel takes its own TLS copy of the identity; the key-bearing copy made here
+        // only for that is released at once instead of leaving one native key handle per
+        // dial to the finalizer (M7 reconnect storm: a PC may dial many times in a lesson).
+        ConsoleChannel channelOpened;
+        var withKey = CertificateWithKey(certificate);
+        try
+        {
+            channelOpened = ConsoleChannel.Open(host, port, _store.Authority, config.LabId, withKey, _revocations);
+        }
+        finally
+        {
+            if (!ReferenceEquals(withKey, certificate))
+            {
+                withKey.Dispose();
+            }
+        }
+
+        using var channel = channelOpened;
         var client = new AgentService.AgentServiceClient(channel.Channel);
         var linked = false;
         var endedBy = "the console closed the link";
@@ -917,12 +953,20 @@ public sealed partial class AgentLink : IAsyncDisposable
 
             var outgoing = Channel.CreateUnbounded<AgentMessage>(new UnboundedChannelOptions { SingleReader = true });
             var writer = WriteLoopAsync(call.RequestStream, outgoing.Reader, token);
-            var heartbeats = HeartbeatLoopAsync(outgoing.Writer, token);
+
+            // The heartbeat and renewal loops end with the stream, not only with the session
+            // token: a console that closes the link ends the response stream gracefully, and
+            // the session token is then never cancelled, so the teardown below would wait for
+            // the heartbeat's next tick — up to HeartbeatInterval (5 s) before this PC even
+            // starts to dial back. Measured in the M7 reconnect storm: of thirty PCs closed by
+            // the console at once, the slowest noticed 4.9 s late; now all notice at once.
+            using var perLink = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var heartbeats = HeartbeatLoopAsync(outgoing.Writer, perLink.Token);
 
             // Only an administrator console can sign a renewal (D-56 item 5): asking a teacher
             // console would only fill its event log with refusals, and a leaf whose OU this build
             // does not know has no authority at all. The PC asks the next administrator instead.
-            var renewal = LinkedConsoleAccess != ConsoleAccess.Administrator ? Task.CompletedTask : RenewalLoopAsync(client, certificate, token);
+            var renewal = LinkedConsoleAccess != ConsoleAccess.Administrator ? Task.CompletedTask : RenewalLoopAsync(client, certificate, perLink.Token);
 
             var video = new VideoUplink(client, config.AgentId, _log, token,
                 (code, message) => Report(Event.Types.Severity.Warning, code, message));
@@ -1025,6 +1069,7 @@ public sealed partial class AgentLink : IAsyncDisposable
                 }
 
                 outgoing.Writer.TryComplete();
+                perLink.Cancel();
                 await Task.WhenAll(SwallowAsync(writer), SwallowAsync(heartbeats), SwallowAsync(renewal), SwallowAsync(video.DisposeAsync().AsTask()));
 
                 // The producer must not keep capturing for a console that is gone.
@@ -1148,6 +1193,7 @@ public sealed partial class AgentLink : IAsyncDisposable
         }
         _lastRefusal = string.Empty;
         _pinnedBackoff.Reset();
+        Interlocked.Increment(ref _welcomes);
         _gate.Linked(instanceId, endpoint, now);
 
         if (!string.Equals(_store.Config.LastInstanceId, instanceId, StringComparison.OrdinalIgnoreCase))

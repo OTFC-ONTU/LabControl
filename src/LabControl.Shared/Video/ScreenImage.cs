@@ -43,10 +43,25 @@ public sealed class ScreenImage : IDisposable
 
     public int ScreenHeight { get; private set; }
 
-    /// <summary>Grows by one per applied frame; 0 means no frame yet.</summary>
+    /// <summary>Grows by one per applied frame and never goes back, so a view's copy cache stays valid across <see cref="Clear"/>.</summary>
     public long Version { get; private set; }
 
-    public bool HasFrame => Version > 0;
+    /// <summary>
+    /// There is a picture to draw now. Not <c>Version &gt; 0</c>: after <see cref="Clear"/> —
+    /// the single-PC window closed — the version stays but the picture is gone, and a window
+    /// opened again must fall back to the thumbnail until its first keyframe instead of
+    /// drawing an empty image (M7 robustness pass).
+    /// </summary>
+    public bool HasFrame
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _bitmap is not null;
+            }
+        }
+    }
 
     /// <summary>When the last frame was applied, by the console's clock.</summary>
     public DateTimeOffset LastFrameAt { get; private set; }

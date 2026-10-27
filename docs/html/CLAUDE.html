@@ -375,6 +375,16 @@ explicitly, never the process culture. Setup and removal resolve the Windows dis
 before the first string; the step trace shared with <code>setup.log</code> stays English. <code>PcLanguage</code> is
 process-wide, so a test that changes it runs in the language collection and restores English.
 Tests: 1050 Shared + 317 Console. Built-in scripts' output stays English (data). Next: portion 3.
+<strong>M7 portion 3 is built (2026-10-27, <code>D-88</code>), on the Mac:</strong> the package catalog and the <em>Add package</em>
+wizard. Owner decisions: the installer is copied into the lab's catalog, the proposed detect rule is
+the program's name in Windows' installed programs (a file path the alternative), a new version
+replaces the entry of the same program, the install buttons come with portion 4. <code>Shared/Packages</code>
+reads an installer without running it (<code>CompoundFile</code> + <code>MsiProperties</code> for an MSI's <code>Property</code>
+table, <code>PeVersionInfo</code>, <code>InstallerInspector</code>: SHA-256, family — MSI, WiX bundle, NSIS, Inno,
+InstallShield — and its silent arguments; <code>PackageEntry</code>/<code>DetectRule</code>). <code>Console/Services/PackageCatalog</code>
+writes <code>packages/&lt;id&gt;.yaml</code> (YamlDotNet) and copies the installer, hash-checked, into
+<code>packages/&lt;id&gt;/&lt;hash prefix&gt;/</code>; the <em>Packages</em> tab edits and deletes entries. A backup carries only
+the YAML. Tests: 1073 Shared + 327 Console. Next: portion 4 (<code>install_package</code> on the agent).
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
@@ -857,7 +867,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-27 09:59 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 10:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

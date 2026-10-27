@@ -196,6 +196,7 @@ public sealed class LabSession : IAsyncDisposable
         Scripts = new ScriptLibrary(store, identity.LabId, seedScripts ?? [], _clock, loggers.CreateLogger<ScriptLibrary>());
         InternetPresets = new InternetPresetLibrary(store, identity.LabId, _clock, loggers.CreateLogger<InternetPresetLibrary>());
         ExamPresets = new ExamPresetLibrary(store, identity.LabId, _clock, InternetPresets, loggers.CreateLogger<ExamPresetLibrary>());
+        Packages = new PackageCatalog(store, instance.InstanceName, _clock, loggers.CreateLogger<PackageCatalog>());
 
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
@@ -264,6 +265,9 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>The teacher's named exam presets (M6 portion 4, D-76), beside <c>lab.json</c> and in the backup — never in a lab file.</summary>
     public ExamPresetLibrary ExamPresets { get; }
+
+    /// <summary>The package catalog (M7 portion 3, D-88): <c>packages/</c> beside <c>lab.json</c>, its YAML in the backup, its installers on this computer only.</summary>
+    public PackageCatalog Packages { get; }
 
     public EventLog Events { get; }
 

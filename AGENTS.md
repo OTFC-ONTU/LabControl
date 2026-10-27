@@ -234,6 +234,13 @@ the documents relevant to the task:
   culture. Setup/removal follow the Windows display language; the step trace stays English.
   A test that changes `PcLanguage` runs in the language collection and restores English.
   Tests: 1050 Shared + 317 Console. Built-in scripts' output stays English (data). Next: portion 3.
+- **M7 portion 3 is built (2026-10-27, `D-88`), on the Mac**: the package catalog and the *Add package*
+  wizard. The installer is read, never run (`Shared/Packages`: `CompoundFile` + `MsiProperties`,
+  `PeVersionInfo`, `InstallerInspector` with the family and its silent arguments; `PackageEntry`,
+  `DetectRule` — `uninstall_name` prefix or `path`), copied hash-checked into
+  `packages/<id>/<hash prefix>/` beside `packages/<id>.yaml` (YamlDotNet, `Console/Services/PackageCatalog`);
+  a new version replaces the entry of the same program; the *Packages* tab edits and deletes. Only
+  the YAML is in a backup. Tests: 1073 Shared + 327 Console. Next: portion 4 (`install_package`).
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

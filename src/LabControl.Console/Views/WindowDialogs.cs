@@ -54,6 +54,9 @@ public sealed class WindowDialogs : IDialogs
     public async Task<TimeSpan?> ExtendExamAsync(int pcCount) =>
         await Show(new ExtendExamDialog(pcCount));
 
+    public async Task<LabControl.Shared.Packages.PackageEntry?> AddPackageAsync(AddPackageModel model) =>
+        await Show(new AddPackageDialog(model));
+
     public async Task<CollectFilesAnswer?> CollectFilesAsync(int pcCount) =>
         await Show(new CollectFilesDialog(pcCount));
 

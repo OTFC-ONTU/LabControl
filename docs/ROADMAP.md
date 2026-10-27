@@ -2914,6 +2914,22 @@ the three languages checked again. H.264 only if M3's measurements demand it.
   language switch in the console's language. Script output (*PC-INFO* prints English labels)
   is the script's own text — data, not translated (`D-67` item 2). Not run: Setup and removal
   under each Windows display language.
+- *Portion 3 built (2026-10-27), on the Mac* (`D-88`). Owner decisions of 2026-10-27: the
+  wizard copies the installer into the lab's catalog; the proposed rule is the program's name in
+  Windows' list of installed programs (a file path the alternative); a new version replaces the
+  entry of the same program; the install buttons come with portion 4. `Shared/Packages` reads an
+  installer without running it — `CompoundFile` + `MsiProperties` (an MSI's `Property` table),
+  `PeVersionInfo` (an executable's version resource), `InstallerInspector` (SHA-256, the family
+  — MSI, WiX bundle, NSIS, Inno Setup, InstallShield — and its silent arguments) — and
+  `PackageEntry` / `DetectRule` hold the rules. `Console/Services/PackageCatalog` writes
+  `packages/<id>.yaml` (YamlDotNet) and copies the installer, hash-checked, into
+  `packages/<id>/<hash prefix>/`; the *Packages* tab lists the catalog with *catalog last
+  changed on …*, edits and deletes an entry, and *Add package…* is the wizard. A backup still
+  carries only the YAML, so another computer shows the entry as *installer not on this
+  computer*. Tests: `PackageInspectionTests` (an MSI written byte by byte, a real PE, every
+  family's marker, damaged files), `PackageCatalogTests`, the wizard in the per-language renders.
+  **Open:** the owner adds a real package through the wizard (acceptance, with portion 4); real
+  installers of each family have not been inspected yet — only synthetic ones and a real PE.
 
 **Acceptance criteria**
 

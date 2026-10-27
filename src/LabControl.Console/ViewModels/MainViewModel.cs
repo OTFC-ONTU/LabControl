@@ -56,6 +56,7 @@ public sealed partial class MainViewModel : ObservableObject
         Settings.BackupChanged += RefreshBanners;
         Settings.SwitchLabRequested += labId => SwitchLabRequested?.Invoke(labId);
         Scripts = new ScriptsViewModel(session, dialogs, () => Selected.Select(t => t.AgentId).ToArray());
+        Packages = new PackagesViewModel(session.Packages, dialogs, post);
 
         Title = Strings.Format("Main.Title", session.LabName, session.Instance.InstanceName);
         Generation = session.Generation;
@@ -112,6 +113,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The <i>Scripts</i> tab (D-31 item 4); runs on the lab view's selection.</summary>
     public ScriptsViewModel Scripts { get; }
+
+    /// <summary>The <i>Packages</i> tab (M7 portion 3, D-88): the catalog and the <i>Add package</i> wizard.</summary>
+    public PackagesViewModel Packages { get; }
 
     public string Title { get; }
 
@@ -269,6 +273,7 @@ public sealed partial class MainViewModel : ObservableObject
         _network.Changed -= _onNetworkChanged;
         _session.BroadcastChanged -= _onBroadcastChanged;
         Scripts.Detach();
+        Packages.Detach();
 
         foreach (var screen in _openScreens.Values.ToArray())
         {

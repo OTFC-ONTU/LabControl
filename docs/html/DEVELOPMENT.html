@@ -471,9 +471,16 @@ and each lock and exam carries its own <code>language</code> for the stock words
 simulator follows the same rule, so <code>FakeAgent</code> against a Ukrainian console draws a Ukrainian
 lock. <code>PcLanguage</code> is process-wide: a test that sets it runs in the language collection and
 puts English back. Setup follows the Windows display language (INSTALLER, <em>What Setup.exe does</em>).</p>
+<p><strong>Packages</strong> (M7 portion 3, <code>D-88</code>). The <em>Packages</em> tab and its <em>Add package…</em> wizard work on the
+Mac: any <code>.exe</code> or <code>.msi</code> can be chosen, it is read (never run) and copied into
+<code>labs/&lt;lab_id&gt;/packages/&lt;id&gt;/&lt;hash prefix&gt;/</code> beside <code>&lt;id&gt;.yaml</code>. The wizard's guesses come from
+<code>Shared/Packages/InstallerInspector</code>; to see what it makes of a real installer, add it in the
+console and open the <code>.yaml</code>. The tests build their MSI byte by byte (<code>MsiBuilder</code> in
+<code>PackageInspectionTests</code>) and use a real managed DLL as the PE; real installers of each family
+are worth inspecting by hand before the owner's acceptance run.</p>
 
 </article>
-<footer>Generated 2026-10-27 09:59 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 10:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#requirements">Requirements</a></li><li class="lvl2"><a href="#teacher-console-packages">Teacher-console packages</a></li><li class="lvl2"><a href="#console-command-line">Console command line</a></li><li class="lvl2"><a href="#the-simulator-fakeagent">The simulator: FakeAgent</a></li><li class="lvl2"><a href="#ui-screenshots-from-the-headless-tests">UI screenshots from the headless tests</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li><li class="lvl2"><a href="#downgrading-to-a-pre-m5-build">Downgrading to a pre-M5 build</a></li><li class="lvl2"><a href="#status-notes-by-milestone">Status notes by milestone</a></li></ul></nav>
 </div>

@@ -144,6 +144,9 @@
       <TabItem Header="{loc:Localize Tab.Scripts}">
         <views:ScriptsView DataContext="{Binding Scripts}" />
       </TabItem>
+      <TabItem Header="{loc:Localize Tab.Packages}">
+        <views:PackagesView DataContext="{Binding Packages}" />
+      </TabItem>
       <TabItem Header="{loc:Localize Tab.Jobs}">
         <views:JobsView />
       </TabItem>

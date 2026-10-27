@@ -4892,7 +4892,7 @@ or 2; whether Linux and Windows PCs must coexist in one lab.
 | Vortice.Direct3D11, Vortice.DXGI | Agent.Session | DXGI Desktop Duplication and the D3D11 staging texture it is read through (M3, D-35); the maintained successor of SharpDX |
 | Microsoft.Extensions.Hosting.WindowsServices | Agent | Windows service hosting (M2) |
 | System.Management | Setup | WMI (profiles, NIC properties) |
-| YamlDotNet | Console | package catalog |
+| YamlDotNet | Console | package catalog `<id>.yaml`, read and written by the *Add package* wizard (D-07, D-88) |
 | Serilog.Extensions.Logging, Serilog.Sinks.Console, Serilog.Sinks.File | all | logging |
 | xunit.v3 | tests | testing; it hosts its own Microsoft.Testing.Platform runner, so no VSTest packages are needed (D-18) |
 | Avalonia.Headless, Avalonia.Skia | tests | the console's windows built and rendered off screen for the UI tests (D-27) |
@@ -5008,3 +5008,86 @@ the Windows display language, and a switch is one more thing to get wrong on fou
 
 Status: built 2026-10-26; accepted by the owner on 2026-10-27 after the physical lab (build
 `1.0.0+c8e3c9b`: exam, lock, language switch). Setup and removal in the three languages were not run.
+
+## D-88 — The package catalog and the *Add package* wizard: read the installer on the console, copy it in, one entry per program (M7 portion 3)
+
+Context (2026-10-27): M7's first acceptance criterion is that the owner adds a package of his
+choosing without reading the source. `D-07` fixed the shape (`packages/<name>.yaml`, the installer
+cached on the console, pushed over the LAN) and `D-23` fixed what `install_package` does on the PC;
+nothing filled the catalog yet. The console may run on a Mac, so the wizard cannot start the
+installer, call `msiexec` or ask Windows anything about it. Portion 3 is the console's half; the
+agent's `install_package`, *Install on all missing* and the test install on one PC are portion 4.
+
+Owner decisions (2026-10-27): the wizard **copies** the installer into the lab's catalog, so the
+original may be deleted; the proposed detect rule is the program's **name in Windows' list of
+installed programs**, with a file path as the alternative; a new version **replaces** the entry
+of the same program (one entry per program); the install buttons come with portion 4, not as
+disabled placeholders now.
+
+Decisions:
+
+1. **The installer is read, never run** (`Shared/Packages`). One pass computes the SHA-256 and keeps
+   the first `InstallerInspector.MarkerWindow` (32 MiB) for the family markers. An `.msi` is an OLE
+   compound file: `CompoundFile` reads the root storage's streams (FAT, DIFAT, mini stream; every
+   chain bounded by the file's sector count, so a damaged file is `InvalidDataException`, never a
+   loop) and `MsiProperties` decodes the string pool and the `Property` table — 2- or 3-byte string
+   references, strings of 64 KiB and more, the database codepage — for `ProductName`,
+   `ProductVersion`, `Manufacturer`, `ProductCode`. An `.exe`'s version resource is read through
+   `System.Reflection.PortableExecutable` (`PeVersionInfo`). A file that is neither is still a
+   package: it has a hash, the teacher supplies the rest.
+2. **Five families and their silent arguments**, recognised in this order: `msi` (the compound-file
+   signature; run as `msiexec /i <file>` followed by `/qn /norestart`), WiX `burn` (a `.wixburn` PE
+   section; `/quiet /norestart`), `nsis` (`0xDEADBEEF` + `NullsoftInst`; `/S`), `inno`
+   (`Inno Setup Setup Data`, the loader's `rDlPtS02`, or *Inno Setup* in the version resource;
+   `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-`), `installshield` (the name in the stub or its
+   version resource; `/s /v"/qn /norestart"`). Anything else is *unrecognised*, its arguments empty,
+   and the wizard refuses to add it until the teacher types some — an installer without them would
+   wait for a click on every PC. Each family carries one sentence of advice in the wizard (NSIS's
+   case-sensitive `/S`, Inno's per-user installers landing in SYSTEM's profile, InstallScript's
+   answer file).
+3. **The detect rule** (`DetectRule`): `uninstall_name` — an entry of the 64- and 32-bit
+   *Uninstall* keys whose `DisplayName` **starts with** the value, ignoring case, because display
+   names carry versions (`IntelliJ IDEA Community Edition 2026.2`); proposed from the product name.
+   Or `path` — a file at an absolute Windows path, `C:\…` or `%Variable%\…`, no `..`, no `/`.
+   `command` (named in ARCHITECTURE since M0) is left out: nothing needs it, and it would be one
+   more thing to run as SYSTEM. The PC evaluates the rule in portion 4.
+4. **One entry per program, its id fixed at creation.** The id (`IdFor`: lower-case ASCII words
+   joined by hyphens, at most 48 characters, `package` for a name with none) names
+   `packages/<id>.yaml`. A new installer whose name matches an entry's name (ignoring case) or id
+   is a new version of it: the wizard says so (*This replaces …*), proposes the old entry's own
+   silent arguments and detect rule when the family is the same — the teacher may have corrected
+   them — and the add replaces the entry. Several versions side by side were rejected by the owner.
+5. **Installers live in `packages/<id>/<first 12 hex of SHA-256>/<file>`** — not beside the YAML
+   as the M0 README sketched — so two packages may both be called `setup.exe`, and a new version is
+   copied in full beside the old one before the YAML points at it; only then is the old directory
+   removed. The copy is hashed as it is written into `<file>.partial` and refused when the hash or
+   size is no longer what was inspected (the file changed in between), leaving nothing behind.
+   Copying, not referencing, is the owner's choice: a stick or a downloads folder may be gone by the
+   next lesson.
+6. **The YAML** (`PackageCatalog`, YamlDotNet): `schema_version`, `name`, `version`, `family`,
+   `file`, `size`, `sha256`, `silent`, `detect: {uninstall_name | path}`, `changed_by` (the console
+   instance), `changed_at`. Unknown keys are ignored (the old README's `run_as` and `reboot`: the
+   installer always runs as SYSTEM, `D-23`, and restarts are portion 4's), a missing `family` is
+   taken from the extension, a missing `size` is not checked; a newer schema or an entry that does
+   not validate is listed as unreadable with its reason rather than hidden. The backup keeps
+   carrying the YAML only (`BackupPayload.Catalog`); a console that imported one shows each entry
+   as *installer not on this computer — add the same installer again*, and re-adding it restores the
+   entry. The newest `changed_by`/`changed_at` is the *catalog last changed on …* line ARCHITECTURE
+   §3.6 promised, so a stale copy on another teacher machine is visible.
+7. **The *Packages* tab**: the catalog on the left (name, version, kind, size; an entry whose
+   installer is missing or changed says so), the selected entry on the right with the fields the
+   teacher may correct — name, version, silent arguments, the rule — *Save*, *Revert*, *Delete*
+   (the entry and its installer; programs already installed on PCs stay), and *Add package…*, the
+   wizard as one dialog: choose, read what was found, correct, *Add to catalog* with a progress bar
+   and *Cancel*. Every word is in the three languages; family, hint, state and problem words are
+   keyed by enum names, checked by a test.
+8. **Dependency.** YamlDotNet 16.3.0 enters the console, as the ledger has listed since M0; no other
+   project parses the catalog — the agent receives a job's arguments, not YAML.
+
+Rejected: running or unpacking the installer on the console (impossible on a Mac, unsafe anywhere);
+proposing the MSI `ProductCode` as the rule (exact, but a new version has a new code, so the rule
+of an entry replaced by its next version would always say *missing*); the name proposed as an
+exact match (display names change with every version); the installer referenced in place (owner);
+a JSON catalog (the format has been YAML since `D-07` and backups already carry `*.yaml`).
+
+Status: built 2026-10-27 on the Mac. No PC is involved until portion 4.

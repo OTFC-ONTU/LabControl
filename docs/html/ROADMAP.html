@@ -3120,6 +3120,22 @@ owner (2026-10-27)</strong> after the physical lab on build <code>1.0.0+c8e3c9b<
 language switch in the console's language. Script output (<em>PC-INFO</em> prints English labels)
 is the script's own text — data, not translated (<code>D-67</code> item 2). Not run: Setup and removal
 under each Windows display language.</li>
+<li><em>Portion 3 built (2026-10-27), on the Mac</em> (<code>D-88</code>). Owner decisions of 2026-10-27: the
+wizard copies the installer into the lab's catalog; the proposed rule is the program's name in
+Windows' list of installed programs (a file path the alternative); a new version replaces the
+entry of the same program; the install buttons come with portion 4. <code>Shared/Packages</code> reads an
+installer without running it — <code>CompoundFile</code> + <code>MsiProperties</code> (an MSI's <code>Property</code> table),
+<code>PeVersionInfo</code> (an executable's version resource), <code>InstallerInspector</code> (SHA-256, the family
+— MSI, WiX bundle, NSIS, Inno Setup, InstallShield — and its silent arguments) — and
+<code>PackageEntry</code> / <code>DetectRule</code> hold the rules. <code>Console/Services/PackageCatalog</code> writes
+<code>packages/&lt;id&gt;.yaml</code> (YamlDotNet) and copies the installer, hash-checked, into
+<code>packages/&lt;id&gt;/&lt;hash prefix&gt;/</code>; the <em>Packages</em> tab lists the catalog with <em>catalog last
+changed on …</em>, edits and deletes an entry, and <em>Add package…</em> is the wizard. A backup still
+carries only the YAML, so another computer shows the entry as <em>installer not on this
+computer</em>. Tests: <code>PackageInspectionTests</code> (an MSI written byte by byte, a real PE, every
+family's marker, damaged files), <code>PackageCatalogTests</code>, the wizard in the per-language renders.
+<strong>Open:</strong> the owner adds a real package through the wizard (acceptance, with portion 4); real
+installers of each family have not been inspected yet — only synthetic ones and a real PE.</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -3337,7 +3353,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-27 09:59 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 10:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish-uiux-redesign">M7 — Software catalog, localization, polish, UI/UX redesign</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

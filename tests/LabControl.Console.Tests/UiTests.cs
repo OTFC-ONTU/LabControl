@@ -390,16 +390,16 @@ public sealed class UiTests
 
                 Assert.True(await Wait.UntilAsync(() => vm.Jobs.Count == 2 && vm.Jobs.All(j => j.IsFinished)));
                 var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
-                tabs.SelectedIndex = 2;
+                tabs.SelectedIndex = 3;
                 Assert.False(vm.ExportBatchLogsCommand.CanExecute(null));
                 vm.SelectedJob = vm.Jobs[0];
                 Assert.True(vm.ExportBatchLogsCommand.CanExecute(null));
                 await Render(window, "main-3-jobs");
                 Assert.Contains(window.GetVisualDescendants().OfType<Button>(),
                     button => Equals(button.Content, "Export batch logs…") && button.IsEnabled);
-                tabs.SelectedIndex = 3;
-                await Render(window, "main-4-events");
                 tabs.SelectedIndex = 4;
+                await Render(window, "main-4-events");
+                tabs.SelectedIndex = 5;
                 await Render(window, "main-5-settings");
                 Assert.All(vm.Jobs, j => Assert.Equal("Reboot", j.Kind));
 
@@ -728,7 +728,7 @@ public sealed class UiTests
             window.DataContext = vm;
             window.Show();
             var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
-            tabs.SelectedIndex = 4;
+            tabs.SelectedIndex = 5;
             await Render(window, "settings-teacher-devices");
 
             Assert.True(vm.Settings.IsAdministrator);
@@ -785,7 +785,7 @@ public sealed class UiTests
             window.DataContext = vm;
             window.Show();
             var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
-            tabs.SelectedIndex = 2;
+            tabs.SelectedIndex = 3;
             await Render(window, "main-9-restored-jobs");
 
             Assert.Equal(2, vm.Jobs.Count);

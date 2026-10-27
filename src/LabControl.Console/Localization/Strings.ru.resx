@@ -766,4 +766,73 @@ java.exe</value></data>
   <data name="Language.RestartHint" xml:space="preserve"><value>Консоль переключится на язык «{0}» при следующем запуске.</value></data>
   <data name="Language.RestartNow" xml:space="preserve"><value>Перезапустить сейчас</value></data>
   <data name="Language.SaveFailed" xml:space="preserve"><value>Не удалось сохранить язык: {0}</value></data>
+  <data name="Tab.Packages" xml:space="preserve"><value>Пакеты</value></data>
+  <data name="Packages.Add" xml:space="preserve"><value>Добавить пакет…</value></data>
+  <data name="Packages.AddTitle" xml:space="preserve"><value>Добавить пакет</value></data>
+  <data name="Packages.AddDescription" xml:space="preserve"><value>Выберите установщик программы (.exe или .msi) на этом компьютере. LabControl прочитает его, предложит, как устанавливать без вопросов, и сохранит копию в каталоге этой лаборатории, так что оригинал потом можно удалить. Интернет на ПК не нужен.</value></data>
+  <data name="Packages.Choose" xml:space="preserve"><value>Выбрать установщик…</value></data>
+  <data name="Packages.InstallerFiles" xml:space="preserve"><value>Установщики</value></data>
+  <data name="Packages.Reading" xml:space="preserve"><value>Читаю установщик…</value></data>
+  <data name="Packages.Copying" xml:space="preserve"><value>Копирую установщик в каталог…</value></data>
+  <data name="Packages.NoInstaller" xml:space="preserve"><value>Установщик не выбран.</value></data>
+  <data name="Packages.FileFormat" xml:space="preserve"><value>{0} ({1})</value></data>
+  <data name="Packages.DetectedFormat" xml:space="preserve"><value>Распознано: {0}</value></data>
+  <data name="Packages.Family.Unknown" xml:space="preserve"><value>нераспознанный установщик</value></data>
+  <data name="Packages.Family.Msi" xml:space="preserve"><value>Windows Installer (MSI)</value></data>
+  <data name="Packages.Family.Nsis" xml:space="preserve"><value>NSIS</value></data>
+  <data name="Packages.Family.Inno" xml:space="preserve"><value>Inno Setup</value></data>
+  <data name="Packages.Family.InstallShield" xml:space="preserve"><value>InstallShield</value></data>
+  <data name="Packages.Family.WixBurn" xml:space="preserve"><value>пакет WiX (bundle)</value></data>
+  <data name="Packages.Hint.Unknown" xml:space="preserve"><value>LabControl не распознаёт этот установщик. Введите аргументы тихой установки из документации программы (часто /S, /silent или /quiet) и сначала проверьте их на одном ПК.</value></data>
+  <data name="Packages.Hint.Msi" xml:space="preserve"><value>Пакет Windows Installer: его запускает msiexec, а аргументы ниже добавляются после него.</value></data>
+  <data name="Packages.Hint.Nsis" xml:space="preserve"><value>Установщик NSIS: /S чувствителен к регистру. Другую папку указывают последней, как /D=C:\путь без кавычек.</value></data>
+  <data name="Packages.Hint.Inno" xml:space="preserve"><value>Установщик Inno Setup. Программа, которая ставится только для текущего пользователя, установится для системной учётной записи — проверьте на одном ПК.</value></data>
+  <data name="Packages.Hint.InstallShield" xml:space="preserve"><value>Установщик InstallShield: эти аргументы подходят для распространённого типа на основе MSI; для InstallScript нужен записанный файл ответов.</value></data>
+  <data name="Packages.Hint.WixBurn" xml:space="preserve"><value>Пакет WiX — установщик нескольких пакетов: /quiet устанавливает их все без вопросов.</value></data>
+  <data name="Packages.ReplacesFormat" xml:space="preserve"><value>Это заменит {0} {1} в каталоге: одна запись на программу, старый установщик будет удалён с этого компьютера.</value></data>
+  <data name="Packages.Problem.NameMissing" xml:space="preserve"><value>Дайте пакету название.</value></data>
+  <data name="Packages.Problem.NameTooLong" xml:space="preserve"><value>Название слишком длинное или содержит управляющие символы.</value></data>
+  <data name="Packages.Problem.VersionInvalid" xml:space="preserve"><value>Версия слишком длинная или содержит управляющие символы.</value></data>
+  <data name="Packages.Problem.FileNameInvalid" xml:space="preserve"><value>Имя файла установщика не подходит для Windows — переименуйте файл и выберите его снова.</value></data>
+  <data name="Packages.Problem.HashInvalid" xml:space="preserve"><value>Контрольная сумма установщика отсутствует или повреждена.</value></data>
+  <data name="Packages.Problem.SilentInvalid" xml:space="preserve"><value>Аргументы тихой установки слишком длинные или занимают несколько строк.</value></data>
+  <data name="Packages.Problem.DetectMissing" xml:space="preserve"><value>Укажите, как ПК узнает, что программа установлена.</value></data>
+  <data name="Packages.Problem.DetectPathInvalid" xml:space="preserve"><value>Файл должен быть полным путём Windows, например C:\Program Files\App\app.exe или %ProgramFiles%\App\app.exe.</value></data>
+  <data name="Packages.Problem.MsiFileExpected" xml:space="preserve"><value>Пакет Windows Installer должен сохранить расширение .msi.</value></data>
+  <data name="Packages.Problem.SilentNeeded" xml:space="preserve"><value>Этот установщик не распознан: введите аргументы тихой установки, иначе он будет ждать нажатия на каждом ПК.</value></data>
+  <data name="Packages.ReadFailed" xml:space="preserve"><value>Не удалось прочитать установщик: {0}</value></data>
+  <data name="Packages.AddFailed" xml:space="preserve"><value>Пакет не добавлен: {0}</value></data>
+  <data name="Packages.SourceChanged" xml:space="preserve"><value>Установщик изменился после чтения — выберите его снова.</value></data>
+  <data name="Packages.Name" xml:space="preserve"><value>Название</value></data>
+  <data name="Packages.Version" xml:space="preserve"><value>Версия</value></data>
+  <data name="Packages.Silent" xml:space="preserve"><value>Аргументы тихой установки</value></data>
+  <data name="Packages.SilentPlaceholder" xml:space="preserve"><value>например /S</value></data>
+  <data name="Packages.DetectHeading" xml:space="preserve"><value>ПК считает программу установленной, когда:</value></data>
+  <data name="Packages.DetectShort" xml:space="preserve"><value>Установлено, когда</value></data>
+  <data name="Packages.DetectByName" xml:space="preserve"><value>название в установленных программах Windows начинается с</value></data>
+  <data name="Packages.DetectByPath" xml:space="preserve"><value>существует этот файл</value></data>
+  <data name="Packages.DetectPathPlaceholder" xml:space="preserve"><value>C:\Program Files\…\program.exe</value></data>
+  <data name="Packages.SystemNote" xml:space="preserve"><value>На каждом ПК установщик запускается без вопросов от имени системы (SYSTEM).</value></data>
+  <data name="Packages.AddToCatalog" xml:space="preserve"><value>Добавить в каталог</value></data>
+  <data name="Packages.Unreadable" xml:space="preserve"><value>не читается</value></data>
+  <data name="Packages.UnreadableFormat" xml:space="preserve"><value>Этот файл каталога не читается: {0}</value></data>
+  <data name="Packages.State.Present" xml:space="preserve"><value>Установщик есть на этом компьютере.</value></data>
+  <data name="Packages.State.Missing" xml:space="preserve"><value>Установщика нет на этом компьютере (запись пришла из резервной копии): добавьте тот же установщик ещё раз.</value></data>
+  <data name="Packages.State.Changed" xml:space="preserve"><value>Файл установщика на этом компьютере изменился: добавьте установщик ещё раз.</value></data>
+  <data name="Packages.Empty" xml:space="preserve"><value>Каталог пуст. Добавьте установщик программы кнопкой «Добавить пакет…»; LabControl хранит копию на этом компьютере, чтобы устанавливать на ПК через сеть лаборатории.</value></data>
+  <data name="Packages.LastChanged" xml:space="preserve"><value>Каталог последний раз изменён на {0}, {1}.</value></data>
+  <data name="Packages.FactKind" xml:space="preserve"><value>Тип установщика: {0}</value></data>
+  <data name="Packages.FactHash" xml:space="preserve"><value>SHA-256: {0}</value></data>
+  <data name="Packages.FactChanged" xml:space="preserve"><value>Изменено на {0}, {1}</value></data>
+  <data name="Packages.Added" xml:space="preserve"><value>«{0}» добавлен в каталог.</value></data>
+  <data name="Packages.Saved" xml:space="preserve"><value>«{0}» сохранён.</value></data>
+  <data name="Packages.Delete" xml:space="preserve"><value>Удалить пакет</value></data>
+  <data name="Packages.DeleteConfirm" xml:space="preserve"><value>Удалить «{0}» из каталога, а его установщик — с этого компьютера? Программы, уже установленные на ПК, останутся.</value></data>
+  <data name="Packages.Deleted" xml:space="preserve"><value>«{0}» удалён.</value></data>
+  <data name="Packages.DeleteFailed" xml:space="preserve"><value>Не удалено: {0}</value></data>
+  <data name="Packages.Save" xml:space="preserve"><value>Сохранить</value></data>
+  <data name="Packages.Revert" xml:space="preserve"><value>Отменить изменения</value></data>
+  <data name="Packages.SizeKb" xml:space="preserve"><value>{0} КБ</value></data>
+  <data name="Packages.SizeMb" xml:space="preserve"><value>{0} МБ</value></data>
+  <data name="Packages.SizeGb" xml:space="preserve"><value>{0} ГБ</value></data>
 </root>

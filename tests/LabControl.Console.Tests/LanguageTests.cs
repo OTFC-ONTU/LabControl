@@ -200,6 +200,7 @@ public sealed class LanguageRenderTests
                         new InternetDialog(new InternetDialogModel(console.Session, 3)),
                         new ExamDialog(new ExamDialogModel(console.Session, 3, wholeLab: true)),
                         new CollectFilesDialog(3),
+                        new AddPackageDialog(new AddPackageModel(console.Session.Packages)),
                         new DepartureDialog("Room 214", new DepartureReport([], QueuedJobs: 2, UploadsInProgress: 0, ProbationPcs: [2], PendingWakes: [])),
                     ];
                     foreach (var dialog in dialogs)

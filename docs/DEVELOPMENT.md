@@ -326,3 +326,11 @@ and each lock and exam carries its own `language` for the stock words on the stu
 simulator follows the same rule, so `FakeAgent` against a Ukrainian console draws a Ukrainian
 lock. `PcLanguage` is process-wide: a test that sets it runs in the language collection and
 puts English back. Setup follows the Windows display language (INSTALLER, *What Setup.exe does*).
+
+**Packages** (M7 portion 3, `D-88`). The *Packages* tab and its *Add package…* wizard work on the
+Mac: any `.exe` or `.msi` can be chosen, it is read (never run) and copied into
+`labs/<lab_id>/packages/<id>/<hash prefix>/` beside `<id>.yaml`. The wizard's guesses come from
+`Shared/Packages/InstallerInspector`; to see what it makes of a real installer, add it in the
+console and open the `.yaml`. The tests build their MSI byte by byte (`MsiBuilder` in
+`PackageInspectionTests`) and use a real managed DLL as the PE; real installers of each family
+are worth inspecting by hand before the owner's acceptance run.

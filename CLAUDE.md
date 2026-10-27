@@ -248,6 +248,16 @@ explicitly, never the process culture. Setup and removal resolve the Windows dis
 before the first string; the step trace shared with `setup.log` stays English. `PcLanguage` is
 process-wide, so a test that changes it runs in the language collection and restores English.
 Tests: 1050 Shared + 317 Console. Built-in scripts' output stays English (data). Next: portion 3.
+**M7 portion 3 is built (2026-10-27, `D-88`), on the Mac:** the package catalog and the *Add package*
+wizard. Owner decisions: the installer is copied into the lab's catalog, the proposed detect rule is
+the program's name in Windows' installed programs (a file path the alternative), a new version
+replaces the entry of the same program, the install buttons come with portion 4. `Shared/Packages`
+reads an installer without running it (`CompoundFile` + `MsiProperties` for an MSI's `Property`
+table, `PeVersionInfo`, `InstallerInspector`: SHA-256, family — MSI, WiX bundle, NSIS, Inno,
+InstallShield — and its silent arguments; `PackageEntry`/`DetectRule`). `Console/Services/PackageCatalog`
+writes `packages/<id>.yaml` (YamlDotNet) and copies the installer, hash-checked, into
+`packages/<id>/<hash prefix>/`; the *Packages* tab edits and deletes entries. A backup carries only
+the YAML. Tests: 1073 Shared + 327 Console. Next: portion 4 (`install_package` on the agent).
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

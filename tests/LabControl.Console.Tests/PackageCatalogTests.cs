@@ -262,6 +262,21 @@ public sealed class PackageCatalogTests
         Assert.Empty(keys.Except(defined));
     }
 
+    /// <summary>
+    /// A dialog with a default body in <see cref="IDialogs"/> (it answers "cancelled") must still be
+    /// forwarded by the real windows: the main window forgot <i>Add package</i> once, and the button
+    /// did nothing (2026-10-27).
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(LabControl.Console.Views.MainWindow))]
+    [InlineData(typeof(LabControl.Console.Views.WindowDialogs))]
+    public void The_real_windows_implement_every_dialog_themselves(Type window)
+    {
+        var map = window.GetInterfaceMap(typeof(IDialogs));
+        var missing = map.TargetMethods.Where(m => m.DeclaringType == typeof(IDialogs)).Select(m => m.Name).ToArray();
+        Assert.Empty(missing);
+    }
+
     [Fact]
     public async Task The_packages_tab_adds_through_the_wizard_edits_in_place_and_deletes_after_asking()
     {

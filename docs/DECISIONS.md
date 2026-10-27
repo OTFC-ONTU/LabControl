@@ -3807,6 +3807,16 @@ does); a NuGet screen-capture package (`D-03`'s "no second product", and every d
 needs its line here); scaling in the producer (would change the code every PC runs for a
 console-only need); encoding per PC (thirty encodes on a laptop).
 
+**Addendum (2026-10-27): no `CAPTUREBLT`.** On a Windows console the teacher's own cursor
+flickered during a broadcast while the students saw a steady one. `StretchBlt`/`BitBlt` with
+`CAPTUREBLT` makes Windows hide the cursor for the copy so it can include layered windows — once
+per frame, hence the flicker. Since Windows 8 the desktop is always composed by DWM and a plain
+`SRCCOPY` from the screen DC already includes layered windows, so the flag is dropped in
+`GdiDisplayScreenSource` (the console's broadcast capture) and in the helper's `GdiScreenSource`
+(the PCs' GDI fallback, which would flicker the student's cursor the same way; DXGI, the usual
+path, never had it). The pointer the students see is still drawn into the picture by
+`ScaledScreenSource`. Not yet run on Windows after the change.
+
 ## D-73 — Internet control is the profiles' default outbound action plus an owned rule group; other programs' outbound allow rules are switched off for the policy; the watchdog task restores and re-applies nothing (M6 portion 3)
 
 Context (2026-10-17): `D-22` chose Windows Firewall for every internet mode and `D-69` built

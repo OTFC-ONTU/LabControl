@@ -68,7 +68,9 @@ internal sealed class GdiScreenSource : IScreenSource
                 var previous = PInvoke.SelectObject(memory, dib.Bitmap);
                 try
                 {
-                    if (!PInvoke.BitBlt(memory, 0, 0, _width, _height, screen, 0, 0, ROP_CODE.SRCCOPY | ROP_CODE.CAPTUREBLT))
+                    // No CAPTUREBLT (D-72 addendum): it hides the student's cursor for every frame, so the
+                    // cursor flickers; the DWM-composed desktop already includes layered windows.
+                    if (!PInvoke.BitBlt(memory, 0, 0, _width, _height, screen, 0, 0, ROP_CODE.SRCCOPY))
                     {
                         throw new ScreenCaptureException("gdi_failed", $"BitBlt failed: {new Win32Exception(Marshal.GetLastWin32Error()).Message}");
                     }

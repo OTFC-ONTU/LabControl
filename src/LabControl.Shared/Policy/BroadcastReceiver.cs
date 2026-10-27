@@ -188,7 +188,7 @@ public sealed class BroadcastReceiver : IAsyncDisposable
             using var stall = new CancellationTokenSource(_stallTimeout);
             using var both = CancellationTokenSource.CreateLinkedTokenSource(running.Token, limit.Token, stall.Token);
             var first = true;
-            outcome = await _link.PullBroadcastAsync(session.SessionId, async (frame, token) =>
+            outcome = await _link.PullBroadcastAsync(session.SessionId, SafeCodecs(), async (frame, token) =>
             {
                 stall.CancelAfter(_stallTimeout);
                 if (first)
@@ -236,6 +236,20 @@ public sealed class BroadcastReceiver : IAsyncDisposable
     }
 
     /// <summary>On the first frame: the screen is the broadcast's from now on. False when the machine cannot show it.</summary>
+    /// <summary>What the machine says it decodes; a machine that fails to say is JPEG only.</summary>
+    private IReadOnlyCollection<string> SafeCodecs()
+    {
+        try
+        {
+            return _machine.BroadcastCodecs.ToArray();
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "reading the broadcast codecs failed: {Message}", ex.Message);
+            return [];
+        }
+    }
+
     private bool TakeScreen(BroadcastSession session, int generation)
     {
         MachineResult result;

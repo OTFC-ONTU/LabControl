@@ -122,6 +122,7 @@
   <data name="CaptureFailed" xml:space="preserve"><value>Screen capture stopped: {0}</value></data>
   <data name="CaptureRecovered" xml:space="preserve"><value>Screen capture is back ({0}).</value></data>
   <data name="CaptureProblem" xml:space="preserve"><value>Cannot capture the screen: {0}</value></data>
+  <data name="H264Unavailable" xml:space="preserve"><value>Video (H.264) is not available here, the picture is sent as Text: {0}</value></data>
   <data name="SimSas" xml:space="preserve"><value>Ctrl+Alt+Del sent to the interactive session (simulated).</value></data>
   <data name="SimRefuseAll" xml:space="preserve"><value>Simulated failure: this PC refuses every job.</value></data>
   <data name="SimShutdown" xml:space="preserve"><value>Shutting down (simulated; back in 30 s as if someone pressed the button).</value></data>

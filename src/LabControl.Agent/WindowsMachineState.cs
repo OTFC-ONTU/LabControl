@@ -27,16 +27,20 @@ internal sealed class WindowsMachineState : IMachineState
 {
     private readonly Func<ServiceMessage, bool> _sendToHelper;
     private readonly Func<ServiceMessage, ValueTask<bool>> _sendToHelperAsync;
+    private readonly Func<IReadOnlyList<string>> _helperDecoders;
     private readonly ILogger _log;
     private readonly WindowsInternetControl _internet;
     private readonly WindowsExamControl _exam;
 
     /// <param name="sendToHelper">Writes a message down the helper pipe, fire-and-forget; <c>false</c> when no helper is connected.</param>
     /// <param name="sendToHelperAsync">The same, waiting until it is written — for broadcast frames, so a slow helper holds the stream back.</param>
-    public WindowsMachineState(Func<ServiceMessage, bool> sendToHelper, Func<ServiceMessage, ValueTask<bool>> sendToHelperAsync, ILogger log)
+    /// <param name="helperDecoders">What the connected helper decodes besides JPEG (D-91); empty when none is connected.</param>
+    public WindowsMachineState(Func<ServiceMessage, bool> sendToHelper, Func<ServiceMessage, ValueTask<bool>> sendToHelperAsync, ILogger log,
+        Func<IReadOnlyList<string>>? helperDecoders = null)
     {
         _sendToHelper = sendToHelper;
         _sendToHelperAsync = sendToHelperAsync;
+        _helperDecoders = helperDecoders ?? (() => []);
         _log = log;
         _internet = new WindowsInternetControl(log, Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "agent.exe"));
 
@@ -114,6 +118,9 @@ internal sealed class WindowsMachineState : IMachineState
 
         return MachineResult.Done;
     }
+
+    /// <summary>The helper shows the broadcast, so what it decodes is what this PC asks for (D-91 item 3).</summary>
+    public IReadOnlyList<string> BroadcastCodecs => _helperDecoders();
 
     public async ValueTask BroadcastFrameAsync(VideoFrame frame, CancellationToken token)
     {

@@ -63,6 +63,9 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
         return MachineResult.Done;
     }
 
+    /// <summary>What this simulated PC decodes besides JPEG: the Mac's own H.264 (D-91), nothing on Linux.</summary>
+    public IReadOnlyList<string> BroadcastCodecs { get; init; } = LabControl.Shared.Video.H264.H264Codecs.Decoders;
+
     public ValueTask BroadcastFrameAsync(VideoFrame frame, CancellationToken token)
     {
         Picture.Offer(frame);

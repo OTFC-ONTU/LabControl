@@ -83,6 +83,12 @@ internal sealed class SessionSupervisor : IAsyncDisposable
     /// <c>false</c> when no helper is connected, and the caller knows the message is not
     /// queued — the helper is told the current state when it connects.
     /// </summary>
+    /// <summary>
+    /// The codecs besides JPEG the connected helper decodes — <c>BroadcastRequest.codecs</c>
+    /// (D-91 item 3). Empty while no helper is connected: a broadcast dialled then is JPEG.
+    /// </summary>
+    public IReadOnlyList<string> HelperVideoDecoders => _helper is { Connected: true } helper ? helper.VideoDecoders : [];
+
     public bool SendToHelper(ServiceMessage message)
     {
         var helper = _helper;
@@ -668,7 +674,11 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             helper.Connected = true;
             helper.LastHeard = DateTimeOffset.UtcNow;
             helper.Version = hello.Hello.Version;
-            _log.LogInformation("session.exe {Version} (pid {Pid}) connected from session {Session}", hello.Hello.Version, hello.Hello.ProcessId, hello.Hello.SessionId);
+            helper.VideoDecoders = hello.Hello.VideoDecoders.ToArray();
+            _log.LogInformation("session.exe {Version} (pid {Pid}) connected from session {Session}; decodes {Decoders}, encodes {Encoders}",
+                hello.Hello.Version, hello.Hello.ProcessId, hello.Hello.SessionId,
+                hello.Hello.VideoDecoders.Count > 0 ? string.Join(",", hello.Hello.VideoDecoders) : "jpeg only",
+                hello.Hello.VideoEncoders.Count > 0 ? string.Join(",", hello.Hello.VideoEncoders) : "jpeg only");
 
             // Writes are never awaited from the read loop (D-35 item 8): a write that had to
             // wait for the helper to read, while the helper waits for us to read, is a deadlock.
@@ -963,6 +973,9 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         public DateTimeOffset LastHeard { get; set; }
 
         public string Version { get; set; } = string.Empty;
+
+        /// <summary>What the helper said it decodes besides JPEG (M7 portion 6, D-91): <c>"h264"</c>, or nothing from an older helper.</summary>
+        public IReadOnlyList<string> VideoDecoders { get; set; } = [];
 
         public HelperStatus? Status { get; set; }
 

@@ -152,6 +152,7 @@ public sealed partial class ScreenViewModel : ObservableObject
         _session.Screens.Updated -= OnUpdated;
         _session.SetScreenMode(AgentId, VideoMode.Thumbnail);
         Screen.Full.Clear();
+        Screen.FullDecoder.Reset();
         Closed?.Invoke();
     }
 

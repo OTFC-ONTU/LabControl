@@ -2,6 +2,7 @@ using Grpc.Core;
 using LabControl.Shared;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
+using LabControl.Shared.Video.H264;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.Console.Services;
@@ -20,28 +21,38 @@ namespace LabControl.Console.Services;
 /// retuned whenever a PC joins or leaves, and D-37's auto quality follows its waits. The
 /// hub ends at <see cref="Deadline"/> by itself (<see cref="Expired"/>), and every stream
 /// ends with it.
+/// <para>
+/// In *Video* (D-91 item 6) a second producer encodes H.264 at
+/// <see cref="Defaults.BroadcastVideoFramesPerSecond"/> for every PC that listed
+/// <c>"h264"</c> in its <c>BroadcastRequest</c>; the JPEG producer runs only while a watching
+/// PC did not (or in *Text*), so each PC receives exactly one stream and both count against
+/// the same total cap. Switching moves every PC to the other stream at its next keyframe.
+/// </para>
 /// </summary>
 public sealed class BroadcastHub : IAsyncDisposable
 {
     private readonly ILogger _log;
     private readonly Func<DateTimeOffset> _clock;
     private readonly Action<Event.Types.Severity, string, string> _report;
-    private readonly ScreenProducer _producer;
+    private readonly Stream _jpeg;
+    private readonly Stream _h264;
+    private readonly bool _canEncode;
     private readonly Dictionary<string, Subscriber> _subscribers = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Queue<(DateTimeOffset At, int Bytes)> _recent = new();
     private readonly Lock _lock = new();
     private readonly Timer _limit;
-    private DateTimeOffset _lastKeyframeRequest = DateTimeOffset.MinValue;
-    private long _recentBytes;
     private ulong _seq;
+    private bool _video;
+    private bool _started;
     private bool _disposed;
 
     /// <param name="sessionId">The <c>Overlay.session_id</c> every PC was told; a <c>PullBroadcast</c> for another one is not this broadcast.</param>
     /// <param name="open">The console's screen (<see cref="ConsoleScreen.Open"/>, a drawn one in the tests).</param>
     /// <param name="report">An event for the teacher: a capture that fails, and recovers.</param>
     /// <param name="limit"><see cref="Defaults.BroadcastHardLimit"/> unless a test wants it sooner.</param>
+    /// <param name="video">Start in *Video* (D-91); ignored where this console has no H.264 encoder.</param>
+    /// <param name="h264">The H.264 encoder (a test's stand-in); the platform's when <c>null</c>.</param>
     public BroadcastHub(string sessionId, Func<IScreenSource> open, ILogger log, Func<DateTimeOffset> clock,
-        Action<Event.Types.Severity, string, string> report, TimeSpan? limit = null)
+        Action<Event.Types.Severity, string, string> report, TimeSpan? limit = null, bool video = false, ScreenProducer.H264Factory? h264 = null)
     {
         SessionId = sessionId;
         _log = log;
@@ -50,7 +61,12 @@ public sealed class BroadcastHub : IAsyncDisposable
         StartedAt = clock();
         Limit = limit ?? Defaults.BroadcastHardLimit;
         Deadline = StartedAt + Limit;
-        _producer = new ScreenProducer("broadcast", open, SinkAsync, Report, log);
+        _canEncode = h264 is not null || H264Codecs.CanEncode;
+        _video = video && _canEncode;
+        _jpeg = new Stream(h264: false);
+        _h264 = new Stream(h264: true);
+        _jpeg.Producer = new ScreenProducer("broadcast", open, (frame, token) => SinkAsync(_jpeg, frame), Report, log);
+        _h264.Producer = new ScreenProducer("broadcast-video", open, (frame, token) => SinkAsync(_h264, frame), Report, log, h264: h264);
         _limit = new Timer(_ => OnLimit(), null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -68,6 +84,21 @@ public sealed class BroadcastHub : IAsyncDisposable
 
     /// <summary>Something changed that a status line shows: a PC joined or left, the capture failed or recovered.</summary>
     public event Action? Changed;
+
+    /// <summary>The teacher's *Video* is on (D-91); <c>false</c> in *Text* and where there is no encoder.</summary>
+    public bool Video
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _video;
+            }
+        }
+    }
+
+    /// <summary>Whether *Video* can be chosen on this console at all.</summary>
+    public bool CanVideo => _canEncode;
 
     /// <summary>PCs receiving the picture right now.</summary>
     public int Watching
@@ -93,14 +124,29 @@ public sealed class BroadcastHub : IAsyncDisposable
         }
     }
 
-    /// <summary>Frames encoded so far.</summary>
+    /// <summary>Watching PCs that get JPEG while *Video* is on: they cannot decode H.264 (D-91 item 6).</summary>
+    public int WatchingAsText
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _video ? _subscribers.Values.Count(s => !s.CanH264) : 0;
+            }
+        }
+    }
+
+    /// <summary>Frames encoded so far, both streams.</summary>
     public long FramesEncoded { get; private set; }
 
-    /// <summary>The JPEG quality of the last frame (D-37 auto quality moves it).</summary>
+    /// <summary>The JPEG quality of the last JPEG frame (D-37 auto quality moves it).</summary>
     public int LastQuality { get; private set; }
 
+    /// <summary>The codec of the last frame of the stream the teacher chose: <c>"h264"</c> when *Video* really runs as H.264.</summary>
+    public string? StreamCodec => Primary.Producer.LastCodec;
+
     /// <summary>"coregraphics", "gdi", "simulated"; <c>null</c> while no capture is open.</summary>
-    public string? SourceKind => _producer.SourceKind;
+    public string? SourceKind => Primary.Producer.SourceKind ?? _jpeg.Producer.SourceKind;
 
     /// <summary>Why the screen cannot be captured right now, as the producer said it; <c>null</c> when it can.</summary>
     public string? CaptureProblem { get; private set; }
@@ -111,31 +157,36 @@ public sealed class BroadcastHub : IAsyncDisposable
     /// <summary>The bandwidth cap of the one encoded stream right now.</summary>
     public int StreamBitsPerSecond => StreamCap(Watching);
 
-    /// <summary>JPEG bytes encoded in the last second — what one PC receives; the network carries it once per PC.</summary>
+    /// <summary>Bytes the teacher's chosen stream encoded in the last second — what one PC receives; the network carries it once per PC.</summary>
     public long BytesPerSecond
     {
         get
         {
             lock (_lock)
             {
-                Trim(_clock());
-                return _recentBytes;
+                var primary = Primary;
+                primary.Trim(_clock());
+                return primary.RecentBytes;
             }
         }
     }
 
-    /// <summary>Frames encoded in the last second.</summary>
+    /// <summary>Frames the teacher's chosen stream encoded in the last second.</summary>
     public int FramesPerSecond
     {
         get
         {
             lock (_lock)
             {
-                Trim(_clock());
-                return _recent.Count;
+                var primary = Primary;
+                primary.Trim(_clock());
+                return primary.Recent.Count;
             }
         }
     }
+
+    /// <summary>The stream *Text* or *Video* names. Under <see cref="_lock"/> or for a moment's read.</summary>
+    private Stream Primary => _video ? _h264 : _jpeg;
 
     /// <summary>The cap for one stream that <paramref name="watching"/> PCs each receive (D-72).</summary>
     public static int StreamCap(int watching) =>
@@ -144,22 +195,59 @@ public sealed class BroadcastHub : IAsyncDisposable
     /// <summary>Starts capturing; frames are encoded whether or not a PC has dialled yet, so the first one gets a picture at once.</summary>
     public void Start()
     {
-        _producer.Apply(Control(StreamCap(0), keyframe: true));
+        lock (_lock)
+        {
+            _started = true;
+        }
+
+        Reconcile(keyframe: true);
         var due = Deadline - _clock();
         _limit.Change(due > TimeSpan.Zero ? due : TimeSpan.Zero, Timeout.InfiniteTimeSpan);
-        _log.LogInformation("broadcast {Session} started; ends by itself at {Deadline:HH:mm:ss}", SessionId, Deadline.ToLocalTime());
+        _log.LogInformation("broadcast {Session} started in {Mode}; ends by itself at {Deadline:HH:mm:ss}", SessionId, Video ? "video" : "text", Deadline.ToLocalTime());
+    }
+
+    /// <summary>
+    /// The teacher switched between *Text* and *Video* (D-91 item 7): every PC moves to the
+    /// other stream at its next keyframe. <c>false</c> when *Video* is asked for and this
+    /// console has no H.264 encoder.
+    /// </summary>
+    public bool SetVideo(bool video)
+    {
+        if (video && !_canEncode)
+        {
+            return false;
+        }
+
+        lock (_lock)
+        {
+            if (_disposed || _video == video)
+            {
+                return true;
+            }
+
+            _video = video;
+            foreach (var subscriber in _subscribers.Values)
+            {
+                subscriber.Restart();
+            }
+        }
+
+        _log.LogInformation("broadcast {Session} now in {Mode}", SessionId, video ? "video" : "text");
+        Reconcile(keyframe: true);
+        RaiseChanged();
+        return true;
     }
 
     /// <summary>
     /// Serves one PC's <c>PullBroadcast</c> until the broadcast ends, the PC hangs up or the
     /// link drops. A PC that dials again replaces its own earlier stream. Ends normally (the
-    /// PC reads the end of the stream) when the hub is disposed.
+    /// PC reads the end of the stream) when the hub is disposed. <paramref name="codecs"/> is
+    /// <c>BroadcastRequest.codecs</c>: what the PC can decode besides JPEG.
     /// </summary>
-    public async Task ServeAsync(string agentId, IServerStreamWriter<VideoFrame> writer, CancellationToken token)
+    public async Task ServeAsync(string agentId, IReadOnlyCollection<string> codecs, IServerStreamWriter<VideoFrame> writer, CancellationToken token)
     {
         Subscriber subscriber;
         Subscriber? replaced;
-        int watching;
         lock (_lock)
         {
             if (_disposed)
@@ -168,13 +256,12 @@ public sealed class BroadcastHub : IAsyncDisposable
             }
 
             _subscribers.TryGetValue(agentId, out replaced);
-            subscriber = new Subscriber(agentId);
+            subscriber = new Subscriber(agentId, codecs.Contains(Defaults.VideoCodecH264, StringComparer.OrdinalIgnoreCase));
             _subscribers[agentId] = subscriber;
-            watching = _subscribers.Count;
         }
 
         replaced?.Complete();
-        Retune(watching);
+        Reconcile(keyframe: true);
         RaiseChanged();
 
         try
@@ -197,19 +284,21 @@ public sealed class BroadcastHub : IAsyncDisposable
                 {
                     _subscribers.Remove(agentId);
                 }
-
-                watching = _subscribers.Count;
             }
 
             subscriber.Complete();
             if (!_disposed)
             {
-                Retune(watching);
+                Reconcile(keyframe: true);
             }
 
             RaiseChanged();
         }
     }
+
+    /// <summary>A PC that names no codecs: JPEG only, as every agent before M7 portion 6.</summary>
+    public Task ServeAsync(string agentId, IServerStreamWriter<VideoFrame> writer, CancellationToken token) =>
+        ServeAsync(agentId, [], writer, token);
 
     /// <summary>Frames a PC skipped since it last caught up — for the tests.</summary>
     public (long Sent, long Skipped)? Statistics(string agentId)
@@ -220,9 +309,21 @@ public sealed class BroadcastHub : IAsyncDisposable
         }
     }
 
+    /// <summary>Which stream the PC is on right now: <c>"h264"</c> or <c>"jpeg"</c>; <c>null</c> when it is not watching. For the tests.</summary>
+    public string? StreamOf(string agentId)
+    {
+        lock (_lock)
+        {
+            return _subscribers.TryGetValue(agentId, out var s) ? (InVideo(s) ? Defaults.VideoCodecH264 : Defaults.VideoCodecJpeg) : null;
+        }
+    }
+
     // ------------------------------------------------------------------ the encoder side
 
-    private ValueTask<bool> SinkAsync(VideoFrame frame, CancellationToken token)
+    /// <summary>Under <see cref="_lock"/>: the PC is on the H.264 stream.</summary>
+    private bool InVideo(Subscriber subscriber) => _video && subscriber.CanH264;
+
+    private ValueTask<bool> SinkAsync(Stream stream, VideoFrame frame)
     {
         Subscriber[] subscribers;
         var now = _clock();
@@ -236,11 +337,15 @@ public sealed class BroadcastHub : IAsyncDisposable
             frame.Seq = ++_seq;
             frame.AtUnixMs = now.ToUnixTimeMilliseconds();
             FramesEncoded++;
-            LastQuality = frame.Quality;
-            Trim(now);
-            _recent.Enqueue((now, frame.Jpeg.Length));
-            _recentBytes += frame.Jpeg.Length;
-            subscribers = _subscribers.Values.ToArray();
+            if (FrameDecoder.CodecOf(frame) == Defaults.VideoCodecJpeg)
+            {
+                LastQuality = frame.Quality;
+            }
+
+            stream.Trim(now);
+            stream.Recent.Enqueue((now, frame.Jpeg.Length));
+            stream.RecentBytes += frame.Jpeg.Length;
+            subscribers = _subscribers.Values.Where(s => InVideo(s) == stream.H264).ToArray();
         }
 
         var keyframeWanted = false;
@@ -251,49 +356,69 @@ public sealed class BroadcastHub : IAsyncDisposable
 
         if (keyframeWanted)
         {
-            RequestKeyframe(force: false);
+            RequestKeyframe(stream);
         }
 
-        // Taken whatever the PCs did with it: the encoder's dirty state is spent, and a PC that
+        // Taken whatever the PCs did with it: the encoder's state is spent, and a PC that
         // missed it waits for a keyframe instead of holding everyone else back.
         return ValueTask.FromResult(true);
     }
 
-    private void Retune(int watching)
+    /// <summary>
+    /// Runs the streams the PCs need and stops the others: H.264 in *Video*, JPEG in *Text* or
+    /// while a watching PC cannot decode H.264. Every running stream gets the cap for the PCs
+    /// watching now; a new cap restarts its budget and sends a keyframe, which a joining PC
+    /// needs anyway.
+    /// </summary>
+    private void Reconcile(bool keyframe)
     {
+        bool runJpeg;
+        bool runH264;
+        int watching;
         lock (_lock)
         {
-            if (_disposed)
+            if (_disposed || !_started)
             {
                 return;
             }
 
-            _lastKeyframeRequest = _clock();
+            watching = _subscribers.Count;
+            runH264 = _video;
+            runJpeg = !_video || _subscribers.Values.Any(s => !s.CanH264);
+            var now = _clock();
+            _jpeg.LastKeyframeRequest = now;
+            _h264.LastKeyframeRequest = now;
         }
 
-        // A new cap restarts the budget and sends a keyframe, which a joining PC needs anyway.
-        _producer.Apply(Control(StreamCap(watching), keyframe: true));
+        var cap = StreamCap(watching);
+        _jpeg.Producer.Apply(runJpeg ? JpegControl(cap, keyframe) : null);
+        _h264.Producer.Apply(runH264 ? VideoControl(cap, keyframe) : null);
     }
 
-    private void RequestKeyframe(bool force)
+    private void RequestKeyframe(Stream stream)
     {
         var now = _clock();
         int watching;
         lock (_lock)
         {
-            if (_disposed || (!force && now - _lastKeyframeRequest < Defaults.BroadcastKeyframeRequestInterval))
+            if (_disposed || now - stream.LastKeyframeRequest < Defaults.BroadcastKeyframeRequestInterval)
             {
                 return;
             }
 
-            _lastKeyframeRequest = now;
+            stream.LastKeyframeRequest = now;
             watching = _subscribers.Count;
+            if (stream.H264 ? !_video : _video && _subscribers.Values.All(s => s.CanH264))
+            {
+                return; // not running
+            }
         }
 
-        _producer.Apply(Control(StreamCap(watching), keyframe: true));
+        var cap = StreamCap(watching);
+        stream.Producer.Apply(stream.H264 ? VideoControl(cap, keyframe: true) : JpegControl(cap, keyframe: true));
     }
 
-    private static VideoControl Control(int bitsPerSecond, bool keyframe) => new()
+    private static VideoControl JpegControl(int bitsPerSecond, bool keyframe) => new()
     {
         Active = true,
         Mode = VideoMode.Full,
@@ -301,6 +426,17 @@ public sealed class BroadcastHub : IAsyncDisposable
         Quality = Defaults.VideoQualityAuto,
         MaxBitsPerSecond = bitsPerSecond,
         RequestKeyframe = keyframe,
+    };
+
+    private static VideoControl VideoControl(int bitsPerSecond, bool keyframe) => new()
+    {
+        Active = true,
+        Mode = VideoMode.Full,
+        FramesPerSecond = Defaults.BroadcastVideoFramesPerSecond,
+        Quality = Defaults.VideoQualityAuto,
+        MaxBitsPerSecond = bitsPerSecond,
+        RequestKeyframe = keyframe,
+        Codec = Defaults.VideoCodecH264,
     };
 
     private void Report(Event.Types.Severity severity, string code, string message)
@@ -326,14 +462,6 @@ public sealed class BroadcastHub : IAsyncDisposable
         }
 
         RaiseChanged();
-    }
-
-    private void Trim(DateTimeOffset now)
-    {
-        while (_recent.Count > 0 && now - _recent.Peek().At > TimeSpan.FromSeconds(1))
-        {
-            _recentBytes -= _recent.Dequeue().Bytes;
-        }
     }
 
     private void OnLimit()
@@ -381,8 +509,31 @@ public sealed class BroadcastHub : IAsyncDisposable
             subscriber.Complete();
         }
 
-        await _producer.DisposeAsync();
+        await _jpeg.Producer.DisposeAsync();
+        await _h264.Producer.DisposeAsync();
         _log.LogInformation("broadcast {Session} ended after {Minutes:0.#} min, {Frames} frames", SessionId, (_clock() - StartedAt).TotalMinutes, FramesEncoded);
+    }
+
+    /// <summary>One encoded stream: its producer, what it sent in the last second, when it was last asked for a keyframe.</summary>
+    private sealed class Stream(bool h264)
+    {
+        public bool H264 { get; } = h264;
+
+        public ScreenProducer Producer { get; set; } = null!;
+
+        public Queue<(DateTimeOffset At, int Bytes)> Recent { get; } = new();
+
+        public long RecentBytes { get; set; }
+
+        public DateTimeOffset LastKeyframeRequest { get; set; } = DateTimeOffset.MinValue;
+
+        public void Trim(DateTimeOffset now)
+        {
+            while (Recent.Count > 0 && now - Recent.Peek().At > TimeSpan.FromSeconds(1))
+            {
+                RecentBytes -= Recent.Dequeue().Bytes;
+            }
+        }
     }
 
     /// <summary>One PC's slot: at most one frame waiting for its stream, latest-wins without ever breaking the picture.</summary>
@@ -394,9 +545,16 @@ public sealed class BroadcastHub : IAsyncDisposable
         private bool _awaitingKeyframe = true;
         private bool _completed;
 
-        public Subscriber(string agentId) => AgentId = agentId;
+        public Subscriber(string agentId, bool canH264)
+        {
+            AgentId = agentId;
+            CanH264 = canH264;
+        }
 
         public string AgentId { get; }
+
+        /// <summary>The PC listed <c>"h264"</c> in its <c>BroadcastRequest</c>.</summary>
+        public bool CanH264 { get; }
 
         public long Sent { get; set; }
 
@@ -467,6 +625,16 @@ public sealed class BroadcastHub : IAsyncDisposable
                 }
 
                 await _signal.WaitAsync(token);
+            }
+        }
+
+        /// <summary>The PC moves to the other stream: nothing it holds belongs to it, it waits for that stream's keyframe.</summary>
+        public void Restart()
+        {
+            lock (_lock)
+            {
+                _slot = null;
+                _awaitingKeyframe = true;
             }
         }
 

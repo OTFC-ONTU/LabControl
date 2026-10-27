@@ -1,6 +1,7 @@
 using Google.Protobuf;
 using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
+using LabControl.Shared.Video.H264;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.Shared.Video;
@@ -16,6 +17,13 @@ namespace LabControl.Shared.Video;
 /// re-encodes the current picture with the union (latest wins). A source that fails is
 /// reported and reopened every <see cref="Defaults.CaptureRetryInterval"/> while video is
 /// wanted; nothing here may throw out of the loop.
+/// <para>
+/// When the console asks for H.264 (the teacher's *Video*, D-91) full mode encodes every
+/// picture whole through an <see cref="IH264Encoder"/> instead — an IDR where a JPEG keyframe
+/// would be — and a frame the sink refuses is <b>held</b> and offered again, never re-encoded,
+/// because the encoder has already moved past it. An encoder that cannot be made or fails
+/// turns the stream back to JPEG until the next control, with one <c>video.h264_unavailable</c>.
+/// </para>
 /// </summary>
 public sealed class ScreenProducer : IAsyncDisposable
 {
@@ -25,12 +33,19 @@ public sealed class ScreenProducer : IAsyncDisposable
     /// <summary>An event for the console (relayed as-is by whoever hosts the producer).</summary>
     public delegate void Reporter(Event.Types.Severity severity, string code, string message);
 
+    /// <summary>Makes an H.264 encoder for a picture size under the settings; throws <see cref="H264Exception"/> when there is none.</summary>
+    public delegate IH264Encoder H264Factory(int width, int height, VideoSettings settings);
+
+    /// <summary>A held H.264 frame older than this is dropped for a fresh IDR: the picture is stale and whoever refused it is far behind.</summary>
+    private static readonly TimeSpan HeldFrameLimit = TimeSpan.FromSeconds(2);
+
     private readonly string _name;
     private readonly Func<IScreenSource> _open;
     private readonly FrameSink _sink;
     private readonly Reporter _report;
     private readonly ILogger _log;
     private readonly TimeProvider _time;
+    private readonly H264Factory _h264;
     private readonly Lock _lock = new();
 
     private CancellationTokenSource? _running;
@@ -42,7 +57,7 @@ public sealed class ScreenProducer : IAsyncDisposable
     private string? _sourceKind;
     private bool _disposed;
 
-    public ScreenProducer(string name, Func<IScreenSource> open, FrameSink sink, Reporter report, ILogger log, TimeProvider? time = null)
+    public ScreenProducer(string name, Func<IScreenSource> open, FrameSink sink, Reporter report, ILogger log, TimeProvider? time = null, H264Factory? h264 = null)
     {
         _name = name;
         _open = open;
@@ -50,7 +65,15 @@ public sealed class ScreenProducer : IAsyncDisposable
         _report = report;
         _log = log;
         _time = time ?? TimeProvider.System;
+        _h264 = h264 ?? PlatformEncoder;
     }
+
+    /// <summary>The platform's encoder (<see cref="H264Codecs"/>), aiming under the pacer's cap.</summary>
+    public static IH264Encoder PlatformEncoder(int width, int height, VideoSettings settings) =>
+        H264Codecs.CreateEncoder(width, height, settings.FramesPerSecond, (int)(settings.MaxBitsPerSecond * Defaults.H264TargetShareOfCap));
+
+    /// <summary>The codec of the last frame the sink took (<c>"jpeg"</c> or <c>"h264"</c>); <c>null</c> before the first.</summary>
+    public string? LastCodec { get; private set; }
 
     /// <summary>The mode being streamed, for a status line; <c>null</c> when off.</summary>
     public VideoMode? Streaming
@@ -186,6 +209,33 @@ public sealed class ScreenProducer : IAsyncDisposable
                     state.Pacer = new VideoPacer(settings.MaxBitsPerSecond, _time.GetUtcNow());
                     state.Quality = Defaults.FullJpegQuality;
                     state.FreeFrames = 0;
+                    state.DropEncoder();
+                    state.H264Failed = false;
+                    state.Held = null;
+                }
+
+                if (state.Held is { } held)
+                {
+                    // An H.264 frame the sink refused: nothing new is encoded until it is taken.
+                    if (_time.GetUtcNow() - state.HeldSince > HeldFrameLimit)
+                    {
+                        state.Held = null;
+                        state.DropEncoder();
+                        lock (_lock)
+                        {
+                            _keyframeWanted = true;
+                        }
+                    }
+                    else
+                    {
+                        if (await OfferAsync(held, settings, keyframeWanted, keyframeRequests, held.Keyframe, state, token))
+                        {
+                            state.Held = null;
+                        }
+
+                        await WaitRestOfTickAsync(settings, tickStarted, token);
+                        continue;
+                    }
                 }
 
                 if (source is null)
@@ -231,59 +281,11 @@ public sealed class ScreenProducer : IAsyncDisposable
                     video = Produce(frame, settings, keyframeWanted, state, out isKeyframe);
                 }
 
-                if (video is not null)
+                if (video is not null && !await OfferAsync(video, settings, keyframeWanted, keyframeRequests, isKeyframe, state, token)
+                    && video.Codec == Defaults.VideoCodecH264)
                 {
-                    var now = _time.GetUtcNow();
-                    bool taken;
-                    try
-                    {
-                        taken = await _sink(video, token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception ex)
-                    {
-                        // The wire is the host's problem; keep what is owed and try again later.
-                        _log.LogDebug("{Pc}: the frame sink failed: {Message}", _name, ex.Message);
-                        taken = false;
-                    }
-
-                    if (taken)
-                    {
-                        FramesSent++;
-                        state.Pending.Clear();
-                        if (isKeyframe)
-                        {
-                            state.LastKeyframe = now;
-                        }
-
-                        lock (_lock)
-                        {
-                            // Consumed — unless a newer request arrived while this one was on its way,
-                            // even one that changed no setting (a PC joining a broadcast, D-71 item 13).
-                            if (keyframeWanted && _keyframeRequests == keyframeRequests)
-                            {
-                                _keyframeWanted = false;
-                            }
-                        }
-
-                        var wait = state.Pacer!.Account(video.Jpeg.Length, now);
-                        if (settings.IsAdaptive && !isKeyframe && !state.AfterKeyframe)
-                        {
-                            // The delta right behind a keyframe waits for the keyframe's bytes,
-                            // not its own: it does not vote either.
-                            Adapt(state, wait > TimeSpan.Zero);
-                        }
-
-                        state.AfterKeyframe = isKeyframe;
-
-                        if (wait > TimeSpan.Zero)
-                        {
-                            await Task.Delay(wait, _time, token);
-                        }
-                    }
+                    state.Held = video;
+                    state.HeldSince = _time.GetUtcNow();
                 }
 
                 await WaitRestOfTickAsync(settings, tickStarted, token);
@@ -300,7 +302,69 @@ public sealed class ScreenProducer : IAsyncDisposable
         finally
         {
             CloseSource(ref source);
+            state.DropEncoder();
         }
+    }
+
+    /// <summary>Offers one frame to the sink and, when it is taken, does the bookkeeping: what is owed, the keyframe, the pacer, auto quality.</summary>
+    private async Task<bool> OfferAsync(VideoFrame video, VideoSettings settings, bool keyframeWanted, long keyframeRequests, bool isKeyframe, LoopState state, CancellationToken token)
+    {
+        var now = _time.GetUtcNow();
+        bool taken;
+        try
+        {
+            taken = await _sink(video, token);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // The wire is the host's problem; keep what is owed and try again later.
+            _log.LogDebug("{Pc}: the frame sink failed: {Message}", _name, ex.Message);
+            taken = false;
+        }
+
+        if (!taken)
+        {
+            return false;
+        }
+
+        FramesSent++;
+        LastCodec = video.Codec;
+        state.Pending.Clear();
+        if (isKeyframe)
+        {
+            state.LastKeyframe = now;
+        }
+
+        lock (_lock)
+        {
+            // Consumed — unless a newer request arrived while this one was on its way,
+            // even one that changed no setting (a PC joining a broadcast, D-71 item 13).
+            if (keyframeWanted && isKeyframe && _keyframeRequests == keyframeRequests)
+            {
+                _keyframeWanted = false;
+            }
+        }
+
+        var wait = state.Pacer!.Account(video.Jpeg.Length, now);
+        if (settings.IsAdaptive && video.Codec != Defaults.VideoCodecH264 && !isKeyframe && !state.AfterKeyframe)
+        {
+            // The delta right behind a keyframe waits for the keyframe's bytes,
+            // not its own: it does not vote either.
+            Adapt(state, wait > TimeSpan.Zero);
+        }
+
+        state.AfterKeyframe = isKeyframe;
+
+        if (wait > TimeSpan.Zero)
+        {
+            await Task.Delay(wait, _time, token);
+        }
+
+        return true;
     }
 
     private IScreenSource? TryOpen(ref string? lastFailure, LoopState state)
@@ -455,6 +519,18 @@ public sealed class ScreenProducer : IAsyncDisposable
         }
 
         var keyframe = keyframeWanted || _time.GetUtcNow() - state.LastKeyframe >= Defaults.KeyframeInterval;
+        if (settings.WantsH264 && !state.H264Failed)
+        {
+            var h264 = ProduceH264(frame, settings, keyframe, state, out isKeyframe);
+            if (h264 is not null || !state.H264Failed)
+            {
+                return h264;
+            }
+
+            // The encoder just failed: this picture goes out as a JPEG keyframe.
+            keyframe = true;
+        }
+
         var quality = state.QualityFor(settings);
         if (keyframe)
         {
@@ -492,6 +568,85 @@ public sealed class ScreenProducer : IAsyncDisposable
         };
         delta.Dirty.AddRange(state.Pending);
         return delta;
+    }
+
+    /// <summary>
+    /// The picture as one H.264 access unit (D-91): the whole screen, rounded down to an even
+    /// size, an IDR when a keyframe is due. Nothing new and no keyframe due is no frame, as
+    /// for JPEG. A failure marks the stream JPEG-only until the next control.
+    /// </summary>
+    private VideoFrame? ProduceH264(IScreenFrame frame, VideoSettings settings, bool keyframe, LoopState state, out bool isKeyframe)
+    {
+        isKeyframe = false;
+        var width = frame.Width & ~1;
+        var height = frame.Height & ~1;
+        if (width < 16 || height < 16)
+        {
+            FailH264(state, $"the screen is too small ({frame.Width}×{frame.Height})");
+            return null;
+        }
+
+        if (!keyframe && state.Pending.Count == 0 && state.Encoder is not null)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (state.Encoder is null || state.Encoder.Width != width || state.Encoder.Height != height)
+            {
+                state.DropEncoder();
+                state.Encoder = _h264(width, height, settings);
+                keyframe = true;
+                _log.LogInformation("{Pc}: encoding H.264 {Width}×{Height} with {Kind}", _name, width, height, state.Encoder.Kind);
+            }
+
+            var unit = state.Encoder.Encode(frame.Pixels, frame.RowBytes, keyframe, out isKeyframe);
+            if (keyframe && unit is not null && !isKeyframe)
+            {
+                // The encoder ignored the request (no ICodecAPI): a fresh one starts with an IDR.
+                state.DropEncoder();
+                state.Encoder = _h264(width, height, settings);
+                unit = state.Encoder.Encode(frame.Pixels, frame.RowBytes, true, out isKeyframe);
+            }
+
+            if (unit is null || unit.Length == 0)
+            {
+                return null;
+            }
+
+            if (unit.Length > Defaults.VideoFrameMaxBytes)
+            {
+                // Never sent; the next picture starts again from an IDR.
+                state.DropEncoder();
+                isKeyframe = false;
+                return null;
+            }
+
+            return new VideoFrame
+            {
+                Width = width,
+                Height = height,
+                Mode = VideoMode.Full,
+                Keyframe = isKeyframe,
+                Codec = Defaults.VideoCodecH264,
+                Jpeg = ByteString.CopyFrom(unit),
+            };
+        }
+        catch (Exception ex) when (ex is H264Exception or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException or DllNotFoundException or EntryPointNotFoundException)
+        {
+            isKeyframe = false;
+            FailH264(state, ex.Message);
+            return null;
+        }
+    }
+
+    private void FailH264(LoopState state, string why)
+    {
+        state.DropEncoder();
+        state.H264Failed = true;
+        _log.LogWarning("{Pc}: no H.264, sending JPEG: {Why}", _name, why);
+        Report(Event.Types.Severity.Info, "video.h264_unavailable", PcText.Get("H264Unavailable", why));
     }
 
     /// <summary>
@@ -560,6 +715,30 @@ public sealed class ScreenProducer : IAsyncDisposable
 
         public bool FirstFrameWarned { get; set; }
 
+        /// <summary>The H.264 encoder for the current size, while the console asks for H.264.</summary>
+        public IH264Encoder? Encoder { get; set; }
+
+        /// <summary>H.264 failed under the current control: JPEG until the next one.</summary>
+        public bool H264Failed { get; set; }
+
+        /// <summary>An H.264 frame the sink refused, offered again before anything new.</summary>
+        public VideoFrame? Held { get; set; }
+
+        public DateTimeOffset HeldSince { get; set; }
+
+        public void DropEncoder()
+        {
+            try
+            {
+                Encoder?.Dispose();
+            }
+            catch (Exception)
+            {
+            }
+
+            Encoder = null;
+        }
+
         /// <summary>A fresh source: nothing is owed, nothing is known about the screen.</summary>
         public void Reset()
         {
@@ -568,6 +747,7 @@ public sealed class ScreenProducer : IAsyncDisposable
             Height = 0;
             LastKeyframe = DateTimeOffset.MinValue;
             FirstFrameWarned = false;
+            Held = null;
         }
     }
 

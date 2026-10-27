@@ -61,8 +61,17 @@ public sealed partial class AgentLink
     /// except for <paramref name="token"/>'s own cancellation, which is reported as
     /// <see cref="BroadcastPullEnd.Cancelled"/>.
     /// </summary>
-    public async Task<(BroadcastPullEnd End, string Detail)> PullBroadcastAsync(string sessionId, Func<VideoFrame, CancellationToken, ValueTask> onFrame, CancellationToken token)
+    public Task<(BroadcastPullEnd End, string Detail)> PullBroadcastAsync(string sessionId, Func<VideoFrame, CancellationToken, ValueTask> onFrame, CancellationToken token) =>
+        PullBroadcastAsync(sessionId, [], onFrame, token);
+
+    /// <summary>
+    /// The same, naming the codecs besides JPEG this PC can show (<c>BroadcastRequest.codecs</c>,
+    /// D-91 item 3): the console sends H.264 only to a PC that listed it.
+    /// </summary>
+    public async Task<(BroadcastPullEnd End, string Detail)> PullBroadcastAsync(string sessionId, IReadOnlyCollection<string> codecs,
+        Func<VideoFrame, CancellationToken, ValueTask> onFrame, CancellationToken token)
     {
+        ArgumentNullException.ThrowIfNull(codecs);
         ArgumentNullException.ThrowIfNull(sessionId);
         ArgumentNullException.ThrowIfNull(onFrame);
 
@@ -83,7 +92,9 @@ public sealed partial class AgentLink
         long frames = 0;
         try
         {
-            using var stream = client.PullBroadcast(new BroadcastRequest { SessionId = sessionId }, cancellationToken: call.Token);
+            var request = new BroadcastRequest { SessionId = sessionId };
+            request.Codecs.AddRange(codecs);
+            using var stream = client.PullBroadcast(request, cancellationToken: call.Token);
             while (await stream.ResponseStream.MoveNext(call.Token))
             {
                 var frame = stream.ResponseStream.Current;

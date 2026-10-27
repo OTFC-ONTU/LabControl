@@ -19,6 +19,7 @@ using LabControl.Shared.Protection;
 using LabControl.Shared.Power;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
+using LabControl.Shared.Video.H264;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.Console.Services;
@@ -1068,7 +1069,7 @@ public sealed class LabSession : IAsyncDisposable
         if (!connection.IsOutdated)
         {
             var screen = Screens.Get(hello.AgentId);
-            var wanted = screen.RequestedMode == VideoMode.Full ? VideoSettings.FullControl(quality: screen.RequestedQuality) : VideoSettings.ThumbnailControl();
+            var wanted = screen.RequestedMode == VideoMode.Full ? FullControlFor(screen) : VideoSettings.ThumbnailControl();
             screen.RequestedMode = wanted.Mode;
             connection.RequestedVideo = wanted.Mode;
             connection.TrySend(new ConsoleMessage { VideoControl = wanted });
@@ -1944,13 +1945,18 @@ public sealed class LabSession : IAsyncDisposable
     /// for the single-PC view (ARCHITECTURE §8). Remembered per PC, so a PC that relinks
     /// while its full view is open comes back in full.
     /// </summary>
-    public void SetScreenMode(string agentId, VideoMode mode, int? quality = null)
+    public void SetScreenMode(string agentId, VideoMode mode, int? quality = null, bool? video = null)
     {
         var screen = Screens.Get(agentId);
         screen.RequestedMode = mode == VideoMode.Full ? VideoMode.Full : VideoMode.Thumbnail;
         if (quality is { } chosen)
         {
             screen.RequestedQuality = Math.Clamp(chosen, Defaults.VideoQualityAuto, 100);
+        }
+
+        if (video is { } wanted)
+        {
+            screen.RequestedVideo = wanted;
         }
 
         var connection = FindLinked(agentId);
@@ -1963,10 +1969,17 @@ public sealed class LabSession : IAsyncDisposable
         connection.TrySend(new ConsoleMessage
         {
             VideoControl = screen.RequestedMode == VideoMode.Full
-                ? VideoSettings.FullControl(quality: screen.RequestedQuality)
+                ? FullControlFor(screen)
                 : VideoSettings.ThumbnailControl(),
         });
     }
+
+    /// <summary>
+    /// The full-view control for this PC: *Text* is JPEG at the chosen quality, *Video* asks for
+    /// H.264 (D-91) — only when this console can decode it, so a Linux console never asks.
+    /// </summary>
+    private static VideoControl FullControlFor(AgentScreen screen, bool requestKeyframe = true) =>
+        VideoSettings.FullControl(requestKeyframe, screen.RequestedQuality, video: screen.RequestedVideo && H264Codecs.CanDecode);
 
     /// <summary>
     /// The teacher's mouse and keyboard for the PC in the single-PC window (PROTOCOL
@@ -2922,7 +2935,7 @@ public sealed class LabSession : IAsyncDisposable
             throw new RpcException(new Status(StatusCode.PermissionDenied, "this PC is not one the broadcast is shown to"));
         }
 
-        await hub.ServeAsync(name.Id, outgoing, token).ConfigureAwait(false);
+        await hub.ServeAsync(name.Id, request.Codecs, outgoing, token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -2970,7 +2983,7 @@ public sealed class LabSession : IAsyncDisposable
         }
 
         // The same quality as the standing control, or the PC would see a new control and restart its budget.
-        connection.TrySend(new ConsoleMessage { VideoControl = VideoSettings.FullControl(requestKeyframe: true, Screens.Get(agentId).RequestedQuality) });
+        connection.TrySend(new ConsoleMessage { VideoControl = FullControlFor(Screens.Get(agentId)) });
     }
 
     public Task<FileAck> ReceiveFileAsync(X509Certificate2? peer, IAsyncStreamReader<FileChunk> incoming, CancellationToken token) =>

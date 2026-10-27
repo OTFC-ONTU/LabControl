@@ -122,6 +122,7 @@
   <data name="CaptureFailed" xml:space="preserve"><value>Захват экрана остановился: {0}</value></data>
   <data name="CaptureRecovered" xml:space="preserve"><value>Захват экрана восстановлен ({0}).</value></data>
   <data name="CaptureProblem" xml:space="preserve"><value>Невозможно захватить экран: {0}</value></data>
+  <data name="H264Unavailable" xml:space="preserve"><value>Видео (H.264) здесь недоступно, изображение передаётся как Текст: {0}</value></data>
   <data name="SimSas" xml:space="preserve"><value>Ctrl+Alt+Del отправлено в интерактивный сеанс (симуляция).</value></data>
   <data name="SimRefuseAll" xml:space="preserve"><value>Симулированная ошибка: этот ПК отклоняет все задания.</value></data>
   <data name="SimShutdown" xml:space="preserve"><value>Выключение (симуляция; вернётся через 30 с, как будто кто-то нажал кнопку).</value></data>

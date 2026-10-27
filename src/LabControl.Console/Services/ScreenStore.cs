@@ -26,6 +26,12 @@ public sealed class AgentScreen : IDisposable
     /// <summary>The native-resolution picture; empty until the full view has been opened.</summary>
     public ScreenImage Full { get; } = new();
 
+    /// <summary>The full view's decoder: JPEG, or H.264 when the teacher chose *Video* and the PC can (D-91).</summary>
+    public FrameDecoder FullDecoder { get; } = new();
+
+    /// <summary>Whether the teacher chose *Video* for this PC's full view (D-91); the PC may still answer in JPEG.</summary>
+    public bool RequestedVideo { get; internal set; }
+
     /// <summary>What the console last asked this PC for; <see cref="VideoMode.Unspecified"/> when nothing.</summary>
     public VideoMode RequestedMode { get; internal set; }
 
@@ -114,6 +120,7 @@ public sealed class AgentScreen : IDisposable
 
     public void Dispose()
     {
+        FullDecoder.Dispose();
         Thumbnail.Dispose();
         Full.Dispose();
     }
@@ -204,14 +211,16 @@ public sealed class ScreenStore : IDisposable
 
     private static FrameOutcome ApplyFull(AgentScreen screen, VideoFrame frame, DateTimeOffset now)
     {
-        var outcome = screen.Full.Apply(frame, now);
-        if (outcome != FrameOutcome.Applied || !(frame.Keyframe || frame.Dirty.Count == 0))
+        var outcome = screen.FullDecoder.Apply(screen.Full, frame, now);
+        var whole = FrameDecoder.CodecOf(frame) == Defaults.VideoCodecH264 ? frame.Keyframe : frame.Keyframe || frame.Dirty.Count == 0;
+        if (outcome != FrameOutcome.Applied || !whole || !screen.Full.HasFrame)
         {
             return outcome;
         }
 
         // The mosaic keeps moving while the full view is open: every keyframe (one per
-        // KeyframeInterval) is scaled into the thumbnail, which the PC stopped sending.
+        // KeyframeInterval) is scaled into the thumbnail, which the PC stopped sending. Every
+        // H.264 picture is whole, but only its IDRs are — the thumbnail would cost a scale per frame.
         using var picture = screen.Full.Snapshot();
         if (picture is null)
         {

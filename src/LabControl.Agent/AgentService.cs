@@ -123,7 +123,7 @@ internal sealed class AgentService : BackgroundService
     {
         try
         {
-            var machine = new WindowsMachineState(supervisor.SendToHelper, supervisor.SendToHelperAsync, _loggers.CreateLogger("policy"));
+            var machine = new WindowsMachineState(supervisor.SendToHelper, supervisor.SendToHelperAsync, _loggers.CreateLogger("policy"), () => supervisor.HelperVideoDecoders);
             var policy = new PolicyEnforcer(link, machine, Defaults.AgentDataDirectory, labId, _loggers.CreateLogger("policy"));
             supervisor.Policy = policy;
             policy.Start();

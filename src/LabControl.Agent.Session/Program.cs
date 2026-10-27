@@ -5,6 +5,7 @@ using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Session;
 using LabControl.Shared.Video;
+using LabControl.Shared.Video.H264;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
@@ -132,7 +133,22 @@ internal static class Program
             }
         }
 
-        await SendAsync(new HelperMessage { Hello = new HelperHello { SessionId = session ?? 0, ProcessId = (uint)pid, Version = Version } });
+        // What this session can encode and decode besides JPEG (D-91): found once by making a small
+        // Media Foundation encoder and decoder, so a PC without the codecs is told apart at once.
+        var hello = new HelperHello { SessionId = session ?? 0, ProcessId = (uint)pid, Version = Version };
+        hello.VideoDecoders.AddRange(H264Codecs.Decoders);
+        hello.VideoEncoders.AddRange(H264Codecs.Encoders);
+        if (H264Codecs.WhyNoDecoder is { } noDecoder)
+        {
+            log.LogInformation("no H.264 decoder, the broadcast comes as JPEG: {Why}", noDecoder);
+        }
+
+        if (H264Codecs.WhyNoEncoder is { } noEncoder)
+        {
+            log.LogInformation("no H.264 encoder, the full view goes as JPEG: {Why}", noEncoder);
+        }
+
+        await SendAsync(new HelperMessage { Hello = hello });
         log.LogInformation("connected to the service");
 
         // Fire-and-forget for writes that must not hold up a read loop; a failure is logged,

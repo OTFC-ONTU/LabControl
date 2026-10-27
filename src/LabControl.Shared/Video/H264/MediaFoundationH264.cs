@@ -107,6 +107,25 @@ internal static unsafe class MediaFoundation
         }
     }
 
+    /// <summary>
+    /// Low latency on the transform's attributes (<c>MF_LOW_LATENCY</c>) and through <c>ICodecAPI</c>;
+    /// an MFT without either is still used — it may only hold a frame longer.
+    /// </summary>
+    public static void LowLatencyOn(IMFTransform transform)
+    {
+        try
+        {
+            using var attributes = transform.Attributes;
+            attributes?.Set(LowLatency, 1u);
+        }
+        catch (Exception)
+        {
+            // E_NOTIMPL: this MFT has no attribute store.
+        }
+
+        SetCodecValue(transform, LowLatency, 1);
+    }
+
     public static IMFSample Sample(int capacity, out IMFMediaBuffer buffer)
     {
         var sample = MediaFactory.MFCreateSample();
@@ -175,8 +194,7 @@ public sealed unsafe class MediaFoundationH264Encoder : IH264Encoder
         _transform = MediaFoundation.Find(TransformCategoryGuids.VideoEncoder, VideoFormatGuids.NV12, VideoFormatGuids.H264);
         try
         {
-            _transform.Attributes?.Set(MediaFoundation.LowLatency, 1u);
-            MediaFoundation.SetCodecValue(_transform, MediaFoundation.LowLatency, 1);
+            MediaFoundation.LowLatencyOn(_transform);
 
             // The encoder wants its output type before its input type.
             using (var output = MediaFactory.MFCreateMediaType())
@@ -406,8 +424,7 @@ public sealed unsafe class MediaFoundationH264Decoder : IH264Decoder
         _transform = MediaFoundation.Find(TransformCategoryGuids.VideoDecoder, VideoFormatGuids.H264, null);
         try
         {
-            _transform.Attributes?.Set(MediaFoundation.LowLatency, 1u);
-            MediaFoundation.SetCodecValue(_transform, MediaFoundation.LowLatency, 1);
+            MediaFoundation.LowLatencyOn(_transform);
             using (var input = MediaFactory.MFCreateMediaType())
             {
                 input.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Video);

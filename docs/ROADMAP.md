@@ -2998,6 +2998,27 @@ decision 2026-10-27: the manual after the redesign, so it is not rewritten).
   (owner). The rehearsed recovery is half done — the `win-x64` console installed on a Windows
   computer and the backup imported with the passphrase; driving the lab from it remains. Open for
   Windows: the items listed in `D-90`'s status.
+- *Portion 6 — H.264 built (2026-10-27), on the Mac; not yet run on Windows* (`D-91`). Owner
+  decisions of 2026-10-27: *Text* is today's JPEG unchanged, *Video* is H.264; *Text* first; the last
+  choice remembered separately for *Show my screen* and the full-view window (`preferences.json`); a
+  switch at any time while showing or watching. Self-describing frames (`VideoFrame.codec = "h264"`,
+  one Annex B access unit, IDR with SPS/PPS) and three additive fields — `VideoControl.codec`,
+  `BroadcastRequest.codecs`, `HelperHello.video_decoders`/`video_encoders` — so every mix of builds
+  falls back to JPEG with no protocol version. `Shared/Video/H264/`: `VideoToolboxH264Encoder`/`Decoder`
+  (macOS, `DllImport`), `MediaFoundationH264Encoder`/`Decoder` (the in-box synchronous MFTs through
+  Vortice.MediaFoundation 3.8.3, NV12 in C#), `H264Codecs` (probed once; `LABCONTROL_NO_H264=1` for the
+  fallback drill), `AnnexB`, `Nv12`; `FrameDecoder` decodes by the frame's codec on the console's full
+  view and the PC's `BroadcastPicture`. `ScreenProducer` encodes whole pictures in *Video*, IDRs where
+  a JPEG keyframe would be, holds a refused access unit instead of re-encoding, and falls back to JPEG
+  with `video.h264_unavailable`. `BroadcastHub` runs an H.264 stream at 25 fps for PCs that listed
+  `h264` and the JPEG stream only for those that did not, under the same cap. The VideoToolbox round
+  trip and the end-to-end broadcast and full view in *Video* run on the Mac (`H264Tests`,
+  `H264BroadcastTests`). **Not run on Windows:** every Media Foundation call — the encoder in the
+  helper's full view, the decoder under the broadcast, the probe at helper start, forcing an IDR
+  through `ICodecAPI`, the stride and display area of 1080p output, an N edition without the codecs —
+  and the 25–30 fps the owner asked for, measured on a lab PC and on the MacBook over Wi-Fi with a
+  film playing. **Next:** the VM drill (the *Video* broadcast to the ARM64 clone, its full view in
+  *Video*, `LABCONTROL_NO_H264=1` on either side), then the lab.
 
 **Acceptance criteria**
 

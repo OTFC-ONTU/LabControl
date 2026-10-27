@@ -42,6 +42,9 @@ public partial class App : Application
     private bool _importing;
     private bool _firstActivation = true;
     private ConsoleBootstrap? _bootstrap;
+
+    // The teacher's Text / Video choices (D-91): one per computer, kept across labs and windows.
+    private VideoPreferences? _videoPreferences;
     private ActiveLabController? _controller;
     private LabChooserWindow? _chooser;
     private MainWindow? _main;
@@ -556,7 +559,8 @@ public partial class App : Application
         CloseMain();
 
         var main = new MainWindow();
-        var viewModel = new MainViewModel(session, _bootstrap, main, action => Dispatcher.UIThread.Post(action)) { IsConnecting = connecting };
+        _videoPreferences ??= new VideoPreferences(Program.Options.DataDirectory, _loggers?.CreateLogger<VideoPreferences>());
+        var viewModel = new MainViewModel(session, _bootstrap, main, action => Dispatcher.UIThread.Post(action), video: _videoPreferences) { IsConnecting = connecting };
         viewModel.Settings.Language = NewLanguageChoice();
         main.DataContext = viewModel;
         viewModel.DisconnectRequested += () => _ = DisconnectAsync(main, viewModel, session);

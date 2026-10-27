@@ -281,6 +281,18 @@ passphrase (half of the rehearsed recovery; driving the lab from it remains); th
 (`D-90`: reconnect storm, full views, a week off, an old backup, a full disk, clock skew — sixteen fixes,
 among them online-only reboot/log off and an unlinked PC dialling a beacon whose only fault is its time).
 Tests: 1116 Shared + 370 Console (LabSwitchTests.Twenty_rounds fails on this Mac on clean HEAD too).
+**M7 portion 6 is built (2026-10-27, `D-91`), on the Mac; not yet run on Windows:** H.264 for the broadcast
+and the full view with a *Text / Video* choice. Owner decisions: *Text* is today's JPEG unchanged, *Video*
+is H.264 at 25–30 fps; *Text* first; the last choice remembered separately for *Show my screen* and the
+full-view window (`preferences.json`); a switch at any time. Frames say their codec (`VideoFrame.codec =
+"h264"`, one Annex B access unit, IDR with SPS/PPS in front); `VideoControl.codec`, `BroadcastRequest.codecs`
+and `HelperHello.video_decoders`/`video_encoders` are additive, so an older peer, a Linux console or a PC
+without the codecs gets JPEG — no protocol version. `Shared/Video/H264/`: VideoToolbox through `DllImport`
+(macOS), Windows' in-box synchronous Media Foundation MFTs through Vortice.MediaFoundation 3.8.3 (NV12 in
+C#), `H264Codecs` probed once (`LABCONTROL_NO_H264=1` for the fallback drill); `FrameDecoder` decodes by
+the frame; the producer holds a refused access unit instead of re-encoding; `BroadcastHub` runs an H.264
+stream for PCs that listed `h264` and the JPEG one only for those that did not. VideoToolbox runs end to
+end on the Mac; **no Media Foundation call has run yet**. Tests: 1132 Shared + 375 Console (full runs on this Mac fail 4–5 load-sensitive link/job tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: the VM drill, then the lab.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

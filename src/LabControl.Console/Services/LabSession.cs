@@ -2774,7 +2774,8 @@ public sealed class LabSession : IAsyncDisposable
     /// when it links; one too old to know the message is skipped. Returns how many PCs were
     /// asked; the tiles follow what each PC reports in <c>OverlayState</c>.
     /// </summary>
-    public int StartBroadcast(IEnumerable<string> agentIds)
+    /// <param name="video">The teacher's *Video* (D-91): H.264 for the PCs that can show it; ignored by a running broadcast, which <see cref="BroadcastHub.SetVideo"/> switches.</param>
+    public int StartBroadcast(IEnumerable<string> agentIds, bool video = false)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
         var ids = agentIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -2790,7 +2791,7 @@ public sealed class LabSession : IAsyncDisposable
                         Event.Types.Severity.Error => EventSeverity.Error,
                         Event.Types.Severity.Warning => EventSeverity.Warning,
                         _ => EventSeverity.Info,
-                    }, code, message), BroadcastLimit);
+                    }, code, message), BroadcastLimit, video);
                 started.Expired += OnBroadcastExpired;
                 started.Changed += () => BroadcastChanged?.Invoke();
                 _broadcast = started;

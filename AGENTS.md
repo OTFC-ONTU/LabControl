@@ -256,6 +256,15 @@ the documents relevant to the task:
   installer ran on a real Windows PC and the backup imported there with the passphrase (driving the lab
   from it remains); the robustness pass is built (`D-90`, sixteen fixes; online-only reboot/log off, a
   drifted PC still dials its console). Tests: 1116 Shared + 370 Console.
+- **M7 portion 6 is built (2026-10-27, `D-91`), on the Mac; not yet run on Windows:** H.264 for the
+  broadcast and the full view with a *Text / Video* choice (owner: *Text* = today's JPEG, *Text* first,
+  remembered separately in `preferences.json`, switchable while showing). Frames say their codec
+  (`VideoFrame.codec = "h264"`, Annex B, IDR with SPS/PPS); `VideoControl.codec`, `BroadcastRequest.codecs`
+  and `HelperHello.video_decoders`/`video_encoders` are additive, so every older peer gets JPEG.
+  `Shared/Video/H264/` (VideoToolbox by `DllImport` on macOS, the in-box Media Foundation MFTs through
+  Vortice.MediaFoundation on Windows, none on Linux; `LABCONTROL_NO_H264=1` turns it off), `FrameDecoder`,
+  the producer's held access unit, the hub's H.264 stream beside the JPEG one. VideoToolbox runs end to
+  end on the Mac; no Media Foundation call has run yet. Tests: 1132 Shared + 375 Console (full runs on this Mac fail 4–5 load-sensitive link/job tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: the VM drill.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

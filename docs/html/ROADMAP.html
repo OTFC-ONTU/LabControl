@@ -3208,6 +3208,28 @@ summaries after a restore or a move go into the redesign (portion 7). The 90-min
 computer and the backup imported with the passphrase; driving the lab from it remains. Open for
 Windows: the items listed in <code>D-90</code>'s status.</p>
 </li>
+<li><p><em>Portion 6 — H.264 built (2026-10-27), on the Mac; not yet run on Windows</em> (<code>D-91</code>). Owner
+decisions of 2026-10-27: <em>Text</em> is today's JPEG unchanged, <em>Video</em> is H.264; <em>Text</em> first; the last
+choice remembered separately for <em>Show my screen</em> and the full-view window (<code>preferences.json</code>); a
+switch at any time while showing or watching. Self-describing frames (<code>VideoFrame.codec = &quot;h264&quot;</code>,
+one Annex B access unit, IDR with SPS/PPS) and three additive fields — <code>VideoControl.codec</code>,
+<code>BroadcastRequest.codecs</code>, <code>HelperHello.video_decoders</code>/<code>video_encoders</code> — so every mix of builds
+falls back to JPEG with no protocol version. <code>Shared/Video/H264/</code>: <code>VideoToolboxH264Encoder</code>/<code>Decoder</code>
+(macOS, <code>DllImport</code>), <code>MediaFoundationH264Encoder</code>/<code>Decoder</code> (the in-box synchronous MFTs through
+Vortice.MediaFoundation 3.8.3, NV12 in C#), <code>H264Codecs</code> (probed once; <code>LABCONTROL_NO_H264=1</code> for the
+fallback drill), <code>AnnexB</code>, <code>Nv12</code>; <code>FrameDecoder</code> decodes by the frame's codec on the console's full
+view and the PC's <code>BroadcastPicture</code>. <code>ScreenProducer</code> encodes whole pictures in <em>Video</em>, IDRs where
+a JPEG keyframe would be, holds a refused access unit instead of re-encoding, and falls back to JPEG
+with <code>video.h264_unavailable</code>. <code>BroadcastHub</code> runs an H.264 stream at 25 fps for PCs that listed
+<code>h264</code> and the JPEG stream only for those that did not, under the same cap. The VideoToolbox round
+trip and the end-to-end broadcast and full view in <em>Video</em> run on the Mac (<code>H264Tests</code>,
+<code>H264BroadcastTests</code>). <strong>Not run on Windows:</strong> every Media Foundation call — the encoder in the
+helper's full view, the decoder under the broadcast, the probe at helper start, forcing an IDR
+through <code>ICodecAPI</code>, the stride and display area of 1080p output, an N edition without the codecs —
+and the 25–30 fps the owner asked for, measured on a lab PC and on the MacBook over Wi-Fi with a
+film playing. <strong>Next:</strong> the VM drill (the <em>Video</em> broadcast to the ARM64 clone, its full view in
+<em>Video</em>, <code>LABCONTROL_NO_H264=1</code> on either side), then the lab.</p>
+</li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
 <ul>
@@ -3435,7 +3457,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-27 17:16 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 22:13 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish-uiux-redesign">M7 — Software catalog, localization, polish, UI/UX redesign</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

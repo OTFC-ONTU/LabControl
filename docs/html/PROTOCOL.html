@@ -896,9 +896,9 @@ everything else; the PC is the producer.</p>
 <ul>
 <li><code>VideoFrame { agent_id, seq, at_unix_ms, width, height, mode, repeated Rect dirty, bytes jpeg, keyframe, codec, quality }</code>. <code>width</code>/<code>height</code> are always the size of the <strong>screen</strong> the frame comes
 from; the JPEG itself may be smaller (a thumbnail, or a full-mode delta). <code>codec</code> is
-<code>&quot;jpeg&quot;</code> in this build (<code>Defaults.VideoCodecJpeg</code>); H.264 is an M7 option behind the same
-envelope (<code>D-11</code>). <code>quality</code> is what this frame was encoded at (0 from an agent older
-than <code>D-37</code>), so the console can show it.</li>
+<code>&quot;jpeg&quot;</code> (<code>Defaults.VideoCodecJpeg</code>; empty from older builds means the same) or, since M7
+portion 6, <code>&quot;h264&quot;</code> — see <em>H.264 (Video)</em> below (<code>D-91</code>). <code>quality</code> is what this frame was
+encoded at (0 from an agent older than <code>D-37</code>, and for H.264), so the console can show it.</li>
 <li><strong>Control.</strong> The console sends <code>VideoControl { active, mode, frames_per_second, quality, request_keyframe, max_bits_per_second }</code> on the <code>Link</code> stream: a thumbnail control to every
 PC right after <code>Welcome</code>, a full control when the teacher opens a PC's screen, a thumbnail
 control again when that window closes, and <code>request_keyframe</code> whenever it holds nothing a
@@ -1087,6 +1087,41 @@ held the policy mutex), <code>policy.failed</code> (the enforcer itself threw wh
 throw; logged, reported, the pass abandoned — the link dials and stays up regardless),
 <code>overlay.expired</code>. An agent from before M6 logs the message and ignores it; the console
 greys <em>Lock</em> out for an outdated agent.</p>
+<h3 id="h.264-video-m7-portion-6-d-91">H.264 (Video; M7 portion 6, <code>D-91</code>)<a class="anchor" href="#h.264-video-m7-portion-6-d-91" aria-label="Link to this section">#</a></h3>
+<p>The teacher's <em>Video</em> — for the broadcast and a PC's full view; the mosaic's thumbnails are
+always JPEG. All of it is additive and needs no protocol version: every frame says what it is.</p>
+<ul>
+<li><strong>The frame.</strong> <code>codec: &quot;h264&quot;</code> carries <strong>one access unit in Annex B</strong> (start codes) in the
+payload field (<code>jpeg = 8</code>, named for its first use; the bytes are the codec's). <code>keyframe</code>
+is an IDR with its SPS and PPS in front, so a receiver that joins on it needs nothing
+else; <code>dirty</code> is empty (every H.264 picture is whole); <code>quality</code> is 0; <code>width</code>/<code>height</code>
+are the encoded picture, the screen rounded down to an even size. Baseline profile, no
+B-frames, low latency: one picture in, one access unit out.</li>
+<li><strong>Decode by the frame, never by the request.</strong> A receiver keeps one decoder per stream
+(<code>FrameDecoder</code>): JPEG as before, H.264 through the platform's decoder made on the first
+IDR. A non-IDR unit before an IDR, or one the decoder refuses, is &quot;needs a keyframe&quot; — the
+same rule as a JPEG delta — and the decoder is made again on the next IDR.</li>
+<li><strong><code>VideoControl.codec = 7</code></strong> — the console asks a PC for <code>&quot;h264&quot;</code> in <code>FULL</code> mode (the
+teacher's <em>Video</em> in the full-view window, at <code>FullVideoFramesPerSecond</code> = 30 under
+<code>FullVideoBitsPerSecond</code> = 8 Mbit/s), and only when the console can decode it — a Linux
+console never asks. A PC whose encoder cannot be made or fails answers in JPEG until the
+next control and reports <code>video.h264_unavailable</code> once (Info). An older agent ignores the
+field and sends JPEG. The PC encodes the whole screen every tick that changed something
+and an IDR where a JPEG keyframe would be (first frame, on request, every
+<code>KeyframeInterval</code>). A frame the uplink refuses is <strong>held and offered again</strong> before
+anything new is encoded — the encoder has already moved past it — and one held for more
+than 2 s is dropped for a fresh IDR.</li>
+<li><strong><code>BroadcastRequest.codecs = 2</code></strong> — what the PC can show besides JPEG: <code>&quot;h264&quot;</code> when its
+session helper made a decoder at start. The console sends H.264 only to a PC that listed
+it. An older agent lists nothing and gets JPEG.</li>
+<li><strong>Bit rate.</strong> The encoder aims at three quarters of the cap the pacer enforces
+(<code>H264TargetShareOfCap</code>); a new cap is a new control, so the encoder is made again with it
+and starts with an IDR.</li>
+<li><strong>Codecs.</strong> Windows (the PCs, a Windows console): the in-box synchronous Media Foundation
+H.264 MFTs, NV12 converted in C#; an N edition without the Media Feature Pack has none and
+stays JPEG. macOS (the console): VideoToolbox. Linux: none. <code>LABCONTROL_NO_H264=1</code> turns
+H.264 off on any of them (the fallback drill).</li>
+</ul>
 <h2 id="broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, <code>D-71</code>, <code>D-72</code>)<a class="anchor" href="#broadcast-teacher-students-m6-portion-2-d-71-d-72" aria-label="Link to this section">#</a></h2>
 <pre><code>Overlay { kind: BROADCAST_START, session_id, message, hard_limit_seconds }   console → agent, on Link
 Overlay { kind: BROADCAST_STOP, session_id }                                 console → agent, on Link
@@ -1102,6 +1137,12 @@ drawn in (neither capture includes it). The same <code>ScreenProducer</code> the
 <strong>once</strong> as <code>VideoFrame</code>s in <code>FULL</code> mode — a keyframe, then dirty-rectangle deltas found by
 <code>TileDiff</code>, a keyframe every <code>KeyframeInterval</code> — at <code>BroadcastFramesPerSecond</code> (12) with
 auto quality (<code>D-37</code>). <code>agent_id</code> is empty; <code>seq</code> and <code>at_unix_ms</code> are the console's.</p>
+<p><strong>Text and Video</strong> (M7 portion 6, <code>D-91</code>). That JPEG stream is the teacher's <em>Text</em>. In
+<em>Video</em> a second producer encodes H.264 at <code>BroadcastVideoFramesPerSecond</code> (25) for every PC
+whose <code>BroadcastRequest.codecs</code> lists <code>&quot;h264&quot;</code>; the JPEG producer then runs only while a
+watching PC did not list it. Each PC receives exactly one stream, by the same slot rules,
+and both streams take the same cap below. The teacher may switch at any time: every PC
+moves to the other stream at its next keyframe, which the switch asks for.</p>
 <p><strong>One stream per PC.</strong> <code>BROADCAST_START</code> goes on the <code>Link</code> like a lock and passes the same
 ownership gate; the agent then dials <code>PullBroadcast</code> with the <code>session_id</code>. The console
 serves it only to a PC the teacher chose (<code>PermissionDenied</code> otherwise) and only for the
@@ -1161,7 +1202,8 @@ one implementation both sides use.</p>
 <pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms | language }  service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
-HelperHello  { session_id, process_id, version }         first message after connecting
+HelperHello  { session_id, process_id, version,          first message after connecting
+               video_decoders, video_encoders }       M7 portion 6 (D-91): &quot;h264&quot; when the helper made one
 HelperStatus { input_desktop, screen_width, screen_height, uptime_ms }
 </code></pre>
 <p><strong>Flow (M2).</strong> The service spawns <code>session.exe</code> into the active console session and waits
@@ -1494,6 +1536,13 @@ set in Ukrainian stays Ukrainian after a Russian console takes the PC over.</li>
 from <code>Welcome</code> — to every helper that connects and again after every <code>Welcome</code>. Helper and
 service are always the same build (<code>app\&lt;version&gt;</code>), so no helper meets it unknown.</li>
 </ol>
+<h3 id="m7-additions-portion-6-d-91">M7 additions (portion 6, <code>D-91</code>)<a class="anchor" href="#m7-additions-portion-6-d-91" aria-label="Link to this section">#</a></h3>
+<p>H.264 for the teacher's <em>Video</em> (see <em>H.264 (Video)</em> under <em>Video</em>). Four additive fields,
+none in the frozen subset: <strong><code>VideoControl.codec = 7</code></strong> (the console asks for <code>&quot;h264&quot;</code> in the
+full view), <strong><code>BroadcastRequest.codecs = 2</code></strong> (what the PC shows besides JPEG), and on the pipe
+<strong><code>HelperHello.video_decoders = 4</code></strong> / <strong><code>video_encoders = 5</code></strong> — what the helper could make at
+start, which the service puts into <code>BroadcastRequest.codecs</code> and logs. <code>VideoFrame.codec = 10</code>,
+reserved since M3, now carries <code>&quot;h264&quot;</code>. Every mix of builds falls back to JPEG.</p>
 <h3 id="the-frozen-subset">The frozen subset<a class="anchor" href="#the-frozen-subset" aria-label="Link to this section">#</a></h3>
 <p>Four things are <strong>frozen at wire version 1 and may never change</strong>: the <code>Hello</code> message,
 the <code>Heartbeat</code> message, <code>Job</code> with <code>kind: self_update</code>, and <code>JobResult</code>. Fields may be
@@ -1644,9 +1693,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-27 17:16 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 22:13 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#m7-additions-portion-2-d-87">M7 additions (portion 2, D-87)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl3"><a href="#h.264-video-m7-portion-6-d-91">H.264 (Video; M7 portion 6, D-91)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#m7-additions-portion-2-d-87">M7 additions (portion 2, D-87)</a></li><li class="lvl3"><a href="#m7-additions-portion-6-d-91">M7 additions (portion 6, D-91)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>
 </body>
 </html>

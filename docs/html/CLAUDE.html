@@ -408,6 +408,17 @@ passphrase (half of the rehearsed recovery; driving the lab from it remains); th
 (<code>D-90</code>: reconnect storm, full views, a week off, an old backup, a full disk, clock skew — sixteen fixes,
 among them online-only reboot/log off and an unlinked PC dialling a beacon whose only fault is its time).
 Tests: 1116 Shared + 370 Console (LabSwitchTests.Twenty_rounds fails on this Mac on clean HEAD too).
+<strong>M7 portion 6 is built (2026-10-27, <code>D-91</code>), on the Mac; not yet run on Windows:</strong> H.264 for the broadcast
+and the full view with a <em>Text / Video</em> choice. Owner decisions: <em>Text</em> is today's JPEG unchanged, <em>Video</em>
+is H.264 at 25–30 fps; <em>Text</em> first; the last choice remembered separately for <em>Show my screen</em> and the
+full-view window (<code>preferences.json</code>); a switch at any time. Frames say their codec (<code>VideoFrame.codec = &quot;h264&quot;</code>, one Annex B access unit, IDR with SPS/PPS in front); <code>VideoControl.codec</code>, <code>BroadcastRequest.codecs</code>
+and <code>HelperHello.video_decoders</code>/<code>video_encoders</code> are additive, so an older peer, a Linux console or a PC
+without the codecs gets JPEG — no protocol version. <code>Shared/Video/H264/</code>: VideoToolbox through <code>DllImport</code>
+(macOS), Windows' in-box synchronous Media Foundation MFTs through Vortice.MediaFoundation 3.8.3 (NV12 in
+C#), <code>H264Codecs</code> probed once (<code>LABCONTROL_NO_H264=1</code> for the fallback drill); <code>FrameDecoder</code> decodes by
+the frame; the producer holds a refused access unit instead of re-encoding; <code>BroadcastHub</code> runs an H.264
+stream for PCs that listed <code>h264</code> and the JPEG one only for those that did not. VideoToolbox runs end to
+end on the Mac; <strong>no Media Foundation call has run yet</strong>. Tests: 1132 Shared + 375 Console (full runs on this Mac fail 4–5 load-sensitive link/job tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: the VM drill, then the lab.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
@@ -891,7 +902,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-27 17:16 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 22:13 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

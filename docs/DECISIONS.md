@@ -5387,5 +5387,14 @@ Decision:
    scaling cost) and the full view at `FullVideoFramesPerSecond` (30); *Text* unchanged. Width is
    still `BroadcastWidth` for the broadcast and native for the full view, rounded down to even.
    Sound is not part of this.
+9. **Open.** A helper whose decoder fails mid-broadcast after its start probe shows the last
+   picture and waits for IDRs; it does not yet tell the service to redial as JPEG. Hardware
+   (asynchronous) MFTs are not used. Both wait for what the VM drill and the lab show.
 
-Status: in progress (2026-10-27).
+Status: built 2026-10-27 on the Mac. Run there: the NV12 and Annex B conversions, the
+producer and the hub with a stand-in encoder, and VideoToolbox end to end — the console's
+broadcast decoded by simulated PCs and a simulated PC's full view decoded by the console.
+**Not run on Windows:** every Media Foundation call (the encoder and decoder MFTs, the
+helper's probe, `ICodecAPI` for an IDR and low latency, 1080p's padded output and its
+display area, a PC without the codecs), the `win-x64`/`win-arm64` builds beyond compiling, and
+the 25–30 fps measured in the lab.

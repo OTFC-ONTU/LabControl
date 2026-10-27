@@ -626,9 +626,9 @@ everything else; the PC is the producer.
 - `VideoFrame { agent_id, seq, at_unix_ms, width, height, mode, repeated Rect dirty, bytes jpeg,
   keyframe, codec, quality }`. `width`/`height` are always the size of the **screen** the frame comes
   from; the JPEG itself may be smaller (a thumbnail, or a full-mode delta). `codec` is
-  `"jpeg"` in this build (`Defaults.VideoCodecJpeg`); H.264 is an M7 option behind the same
-  envelope (`D-11`). `quality` is what this frame was encoded at (0 from an agent older
-  than `D-37`), so the console can show it.
+  `"jpeg"` (`Defaults.VideoCodecJpeg`; empty from older builds means the same) or, since M7
+  portion 6, `"h264"` — see *H.264 (Video)* below (`D-91`). `quality` is what this frame was
+  encoded at (0 from an agent older than `D-37`, and for H.264), so the console can show it.
 - **Control.** The console sends `VideoControl { active, mode, frames_per_second, quality,
   request_keyframe, max_bits_per_second }` on the `Link` stream: a thumbnail control to every
   PC right after `Welcome`, a full control when the teacher opens a PC's screen, a thumbnail
@@ -798,6 +798,42 @@ throw; logged, reported, the pass abandoned — the link dials and stays up rega
 `overlay.expired`. An agent from before M6 logs the message and ignores it; the console
 greys *Lock* out for an outdated agent.
 
+### H.264 (Video; M7 portion 6, `D-91`)
+
+The teacher's *Video* — for the broadcast and a PC's full view; the mosaic's thumbnails are
+always JPEG. All of it is additive and needs no protocol version: every frame says what it is.
+
+- **The frame.** `codec: "h264"` carries **one access unit in Annex B** (start codes) in the
+  payload field (`jpeg = 8`, named for its first use; the bytes are the codec's). `keyframe`
+  is an IDR with its SPS and PPS in front, so a receiver that joins on it needs nothing
+  else; `dirty` is empty (every H.264 picture is whole); `quality` is 0; `width`/`height`
+  are the encoded picture, the screen rounded down to an even size. Baseline profile, no
+  B-frames, low latency: one picture in, one access unit out.
+- **Decode by the frame, never by the request.** A receiver keeps one decoder per stream
+  (`FrameDecoder`): JPEG as before, H.264 through the platform's decoder made on the first
+  IDR. A non-IDR unit before an IDR, or one the decoder refuses, is "needs a keyframe" — the
+  same rule as a JPEG delta — and the decoder is made again on the next IDR.
+- **`VideoControl.codec = 7`** — the console asks a PC for `"h264"` in `FULL` mode (the
+  teacher's *Video* in the full-view window, at `FullVideoFramesPerSecond` = 30 under
+  `FullVideoBitsPerSecond` = 8 Mbit/s), and only when the console can decode it — a Linux
+  console never asks. A PC whose encoder cannot be made or fails answers in JPEG until the
+  next control and reports `video.h264_unavailable` once (Info). An older agent ignores the
+  field and sends JPEG. The PC encodes the whole screen every tick that changed something
+  and an IDR where a JPEG keyframe would be (first frame, on request, every
+  `KeyframeInterval`). A frame the uplink refuses is **held and offered again** before
+  anything new is encoded — the encoder has already moved past it — and one held for more
+  than 2 s is dropped for a fresh IDR.
+- **`BroadcastRequest.codecs = 2`** — what the PC can show besides JPEG: `"h264"` when its
+  session helper made a decoder at start. The console sends H.264 only to a PC that listed
+  it. An older agent lists nothing and gets JPEG.
+- **Bit rate.** The encoder aims at three quarters of the cap the pacer enforces
+  (`H264TargetShareOfCap`); a new cap is a new control, so the encoder is made again with it
+  and starts with an IDR.
+- **Codecs.** Windows (the PCs, a Windows console): the in-box synchronous Media Foundation
+  H.264 MFTs, NV12 converted in C#; an N edition without the Media Feature Pack has none and
+  stays JPEG. macOS (the console): VideoToolbox. Linux: none. `LABCONTROL_NO_H264=1` turns
+  H.264 off on any of them (the fallback drill).
+
 ## Broadcast (teacher → students; M6 portion 2, `D-71`, `D-72`)
 
 ```
@@ -816,6 +852,13 @@ drawn in (neither capture includes it). The same `ScreenProducer` the PCs use en
 **once** as `VideoFrame`s in `FULL` mode — a keyframe, then dirty-rectangle deltas found by
 `TileDiff`, a keyframe every `KeyframeInterval` — at `BroadcastFramesPerSecond` (12) with
 auto quality (`D-37`). `agent_id` is empty; `seq` and `at_unix_ms` are the console's.
+
+**Text and Video** (M7 portion 6, `D-91`). That JPEG stream is the teacher's *Text*. In
+*Video* a second producer encodes H.264 at `BroadcastVideoFramesPerSecond` (25) for every PC
+whose `BroadcastRequest.codecs` lists `"h264"`; the JPEG producer then runs only while a
+watching PC did not list it. Each PC receives exactly one stream, by the same slot rules,
+and both streams take the same cap below. The teacher may switch at any time: every PC
+moves to the other stream at its next keyframe, which the switch asks for.
 
 **One stream per PC.** `BROADCAST_START` goes on the `Link` like a lock and passes the same
 ownership gate; the agent then dials `PullBroadcast` with the `session_id`. The console
@@ -885,7 +928,8 @@ one implementation both sides use.
 ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms | language }  service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
-HelperHello  { session_id, process_id, version }         first message after connecting
+HelperHello  { session_id, process_id, version,          first message after connecting
+               video_decoders, video_encoders }       M7 portion 6 (D-91): "h264" when the helper made one
 HelperStatus { input_desktop, screen_width, screen_height, uptime_ms }
 ```
 
@@ -1212,6 +1256,15 @@ none and the PC writes English:
    (`input.*`, `capture.*`) the service sends `ServiceMessage.language = 8` — the PC's language
    from `Welcome` — to every helper that connects and again after every `Welcome`. Helper and
    service are always the same build (`app\<version>`), so no helper meets it unknown.
+
+### M7 additions (portion 6, `D-91`)
+
+H.264 for the teacher's *Video* (see *H.264 (Video)* under *Video*). Four additive fields,
+none in the frozen subset: **`VideoControl.codec = 7`** (the console asks for `"h264"` in the
+full view), **`BroadcastRequest.codecs = 2`** (what the PC shows besides JPEG), and on the pipe
+**`HelperHello.video_decoders = 4`** / **`video_encoders = 5`** — what the helper could make at
+start, which the service puts into `BroadcastRequest.codecs` and logs. `VideoFrame.codec = 10`,
+reserved since M3, now carries `"h264"`. Every mix of builds falls back to JPEG.
 
 ### The frozen subset
 

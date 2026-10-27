@@ -864,4 +864,12 @@ java.exe</value></data>
   <data name="Packages.ArchiveFact" xml:space="preserve"><value>{0} ({1}), запускается {2} из него</value></data>
   <data name="Packages.Problem.RunInvalid" xml:space="preserve"><value>Выберите, какой установщик из архива будут запускать ПК.</value></data>
   <data name="Store.SaveFailed" xml:space="preserve"><value>Не сохранено — этот компьютер не смог записать файл: {0}</value></data>
+  <data name="VideoMode.Label" xml:space="preserve"><value>Изображение</value></data>
+  <data name="VideoMode.Text" xml:space="preserve"><value>Текст</value></data>
+  <data name="VideoMode.Video" xml:space="preserve"><value>Видео</value></data>
+  <data name="VideoMode.Tip" xml:space="preserve"><value>Текст: чёткое изображение для кода и документов. Видео: плавное движение для фильмов и анимаций (H.264).</value></data>
+  <data name="VideoMode.Unavailable" xml:space="preserve"><value>Видео требует H.264, которого на этом компьютере нет: изображение передаётся как Текст.</value></data>
+  <data name="Screen.QualityVideo" xml:space="preserve"><value>видео (H.264)</value></data>
+  <data name="Screen.VideoNotOnPc" xml:space="preserve"><value>{0} не может передавать Видео (нет H.264 или старая версия): показан Текст.</value></data>
+  <data name="Broadcast.StatusTextPcs" xml:space="preserve"><value> · {0} ПК получают Текст: они не могут показать Видео</value></data>
 </root>

@@ -23,12 +23,17 @@ public sealed partial class ScreenViewModel : ObservableObject
     private readonly LabSession _session;
     private readonly Action<Action> _post;
     private readonly InputQueue _queue = new();
+    private readonly VideoPreferences _video;
     private int _pending;
 
-    public ScreenViewModel(LabSession session, MachineTileViewModel tile, Action<Action> post, bool? macOs = null)
+    /// <param name="preferences">Where the last *Text / Video* choice is kept (D-91); an in-memory one when <c>null</c>.</param>
+    public ScreenViewModel(LabSession session, MachineTileViewModel tile, Action<Action> post, bool? macOs = null, VideoPreferences? preferences = null)
     {
         _session = session;
         _post = post;
+        _video = preferences ?? new VideoPreferences();
+        VideoModes = VideoModeOption.All(VideoPreferences.CanWatchVideo);
+        VideoModeTip = Strings.Get(VideoPreferences.CanWatchVideo ? "VideoMode.Tip" : "VideoMode.Unavailable");
         AgentId = tile.AgentId;
         Number = tile.Number;
         Screen = session.Screens.Get(tile.AgentId);
@@ -73,6 +78,30 @@ public sealed partial class ScreenViewModel : ObservableObject
         }
     }
 
+    /// <summary>*Text* and *Video* for this window (M7 portion 6, D-91); *Video* only where this console decodes H.264.</summary>
+    public IReadOnlyList<VideoModeOption> VideoModes { get; }
+
+    public string VideoModeTip { get; }
+
+    /// <summary>The choice in the toolbar: remembered on this computer for the next window, and switched at once (one keyframe).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsText))]
+    public partial VideoModeOption? SelectedVideoMode { get; set; }
+
+    /// <summary>The quality selector applies to *Text* only; *Video* leaves the rate to the encoder.</summary>
+    public bool IsText => SelectedVideoMode?.Video != true;
+
+    partial void OnSelectedVideoModeChanged(VideoModeOption? value)
+    {
+        if (value is null || !_open)
+        {
+            return;
+        }
+
+        _video.FullViewVideo = value.Video;
+        _session.SetScreenMode(AgentId, VideoMode.Full, SelectedQuality?.Quality, value.Video);
+    }
+
     private bool _open;
 
     /// <summary>The picture to draw: the full one once it exists, the thumbnail until then.</summary>
@@ -114,8 +143,9 @@ public sealed partial class ScreenViewModel : ObservableObject
     {
         _session.Screens.Updated += OnUpdated;
         SelectedQuality = QualityOptions.FirstOrDefault(o => o.Quality == Screen.RequestedQuality) ?? QualityOptions[0];
+        SelectedVideoMode = VideoModes.FirstOrDefault(o => o.Video == _video.FullViewVideo) ?? VideoModes[0];
         _open = true;
-        _session.SetScreenMode(AgentId, VideoMode.Full, SelectedQuality.Quality);
+        _session.SetScreenMode(AgentId, VideoMode.Full, SelectedQuality.Quality, SelectedVideoMode.Video);
         Tick();
     }
 
@@ -293,9 +323,14 @@ public sealed partial class ScreenViewModel : ObservableObject
         }
         else
         {
-            var quality = Screen.LastQuality == 0
-                ? Strings.Get("Screen.QualityUnknown")
-                : Strings.Format(Screen.RequestedQuality == Defaults.VideoQualityAuto ? "Screen.QualityNowAuto" : "Screen.QualityNow", Screen.LastQuality);
+            var h264 = Screen.FullDecoder.LastCodec == Defaults.VideoCodecH264;
+            var quality = h264
+                ? Strings.Get("Screen.QualityVideo")
+                : Screen.RequestedVideo && Screen.FullDecoder.LastCodec is not null
+                    ? Strings.Format("Screen.VideoNotOnPc", Name)
+                    : Screen.LastQuality == 0
+                        ? Strings.Get("Screen.QualityUnknown")
+                        : Strings.Format(Screen.RequestedQuality == Defaults.VideoQualityAuto ? "Screen.QualityNowAuto" : "Screen.QualityNow", Screen.LastQuality);
             Status = Strings.Format("Screen.Stats", Screen.Full.ScreenWidth, Screen.Full.ScreenHeight, Screen.FramesPerSecond, Screen.BytesPerSecond * 8 / 1024.0, quality);
         }
     }

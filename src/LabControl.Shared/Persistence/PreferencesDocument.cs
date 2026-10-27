@@ -15,4 +15,10 @@ public sealed class PreferencesDocument : ISchemaVersioned
     /// until the teacher chooses, so the OS display language decides.
     /// </summary>
     public string? Language { get; set; }
+
+    /// <summary>The last *Text / Video* choice next to *Show my screen* (M7 portion 6, D-91); <c>null</c> = *Text*.</summary>
+    public bool? BroadcastVideo { get; set; }
+
+    /// <summary>The last *Text / Video* choice in a PC's full-view window (D-91); <c>null</c> = *Text*.</summary>
+    public bool? FullViewVideo { get; set; }
 }

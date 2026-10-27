@@ -161,4 +161,5 @@
   <data name="PackageInstalledReboot" xml:space="preserve"><value>{0} установлен (версия {1}); Windows нужна перезагрузка, чтобы завершить. ПК не перезагружается сам.</value></data>
   <data name="PackageInstalled" xml:space="preserve"><value>{0} установлен (версия {1}).</value></data>
   <data name="PackageUnpackFailed" xml:space="preserve"><value>Архив {0} не удалось распаковать: {1}</value></data>
+  <data name="RenewalNotSaved" xml:space="preserve"><value>Консоль обновила сертификат этого ПК, но его не удалось здесь сохранить: {0} Текущий сертификат продолжает работать; ПК попросит ещё раз позже.</value></data>
 </root>

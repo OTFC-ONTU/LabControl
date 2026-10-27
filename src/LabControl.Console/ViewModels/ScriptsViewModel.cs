@@ -309,8 +309,15 @@ public sealed partial class ScriptsViewModel : ObservableObject
     [RelayCommand]
     private void AddBuiltIns()
     {
-        var added = _session.Scripts.AddBuiltIns(SeedScripts.Embedded());
-        Status = Strings.Format("Scripts.BuiltInsAdded", added);
+        try
+        {
+            var added = _session.Scripts.AddBuiltIns(SeedScripts.Embedded());
+            Status = Strings.Format("Scripts.BuiltInsAdded", added);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Error = Strings.Format("Store.SaveFailed", ex.Message);
+        }
     }
 
     [RelayCommand]
@@ -382,9 +389,18 @@ public sealed partial class ScriptsViewModel : ObservableObject
             return;
         }
 
+        try
+        {
+            _session.Scripts.Remove(id);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Error = Strings.Format("Store.SaveFailed", ex.Message);
+            return;
+        }
+
         _drafts.Remove(id);
         _loaded = null;
-        _session.Scripts.Remove(id);
     }
 
     private bool CanRun() => Selected is not null && PcCount > 0;

@@ -132,6 +132,7 @@ public sealed class InternetPresetLibrary
                 return new InternetPresetSaveResult(null, nameProblem, problems);
             }
 
+            var before = Snapshot();
             var now = _clock().ToUnixTimeSeconds();
             var index = id is null ? -1 : _document.Presets.FindIndex(p => string.Equals(p.Id, id, StringComparison.Ordinal));
             if (index < 0)
@@ -147,7 +148,7 @@ public sealed class InternetPresetLibrary
                 saved.ModifiedAtUnix = now;
             }
 
-            _store.SaveInternetPresets(_document);
+            SaveOrRestore(before);
             saved = saved.Clone();
         }
 
@@ -159,15 +160,35 @@ public sealed class InternetPresetLibrary
     {
         lock (_gate)
         {
+            var before = Snapshot();
             if (_document.Presets.RemoveAll(p => string.Equals(p.Id, id, StringComparison.Ordinal)) == 0)
             {
                 return false;
             }
 
-            _store.SaveInternetPresets(_document);
+            SaveOrRestore(before);
         }
 
         Changed?.Invoke();
         return true;
+    }
+
+    private List<InternetPreset> Snapshot() => _document.Presets.Select(p => p.Clone()).ToList();
+
+    /// <summary>
+    /// Writes the library; when the disk refuses (full, read-only), puts the presets back as they
+    /// were and throws, so what the dialog shows is what is on disk (M7 robustness pass).
+    /// </summary>
+    private void SaveOrRestore(List<InternetPreset> before)
+    {
+        try
+        {
+            _store.SaveInternetPresets(_document);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _document.Presets = before;
+            throw;
+        }
     }
 }

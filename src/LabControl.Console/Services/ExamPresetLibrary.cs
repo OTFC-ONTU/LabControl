@@ -117,6 +117,7 @@ public sealed class ExamPresetLibrary
                 return new ExamPresetSaveResult(null, InternetPresetLibrary.NameProblems.Taken);
             }
 
+            var before = Snapshot();
             var now = _clock().ToUnixTimeSeconds();
             saved = preset.Clone();
             saved.Name = trimmed;
@@ -143,7 +144,7 @@ public sealed class ExamPresetLibrary
                 _document.Presets[index] = saved;
             }
 
-            _store.SaveExamPresets(_document);
+            SaveOrRestore(before);
             saved = saved.Clone();
         }
 
@@ -155,16 +156,36 @@ public sealed class ExamPresetLibrary
     {
         lock (_gate)
         {
+            var before = Snapshot();
             if (_document.Presets.RemoveAll(p => string.Equals(p.Id, id, StringComparison.Ordinal)) == 0)
             {
                 return false;
             }
 
-            _store.SaveExamPresets(_document);
+            SaveOrRestore(before);
         }
 
         Changed?.Invoke();
         return true;
+    }
+
+    private List<ExamPreset> Snapshot() => _document.Presets.Select(p => p.Clone()).ToList();
+
+    /// <summary>
+    /// Writes the library; when the disk refuses (full, read-only), puts the presets back as they
+    /// were and throws, so what the dialog shows is what is on disk (M7 robustness pass).
+    /// </summary>
+    private void SaveOrRestore(List<ExamPreset> before)
+    {
+        try
+        {
+            _store.SaveExamPresets(_document);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _document.Presets = before;
+            throw;
+        }
     }
 }
 

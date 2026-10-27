@@ -294,9 +294,18 @@ public sealed class ExamDialog : DialogWindow<ExamRequest>
 
     private void DeletePreset()
     {
-        if (_presets.SelectedItem is PresetItem { Preset: { } preset } && _model.DeletePreset(preset.Id))
+        if (_presets.SelectedItem is not PresetItem { Preset: { } preset })
+        {
+            return;
+        }
+
+        if (_model.DeletePreset(preset.Id, out var problem))
         {
             FillPresets(string.Empty);
+        }
+        else if (problem is not null)
+        {
+            Show(problem);
         }
     }
 

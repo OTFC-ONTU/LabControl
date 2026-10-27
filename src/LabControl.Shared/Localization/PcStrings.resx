@@ -161,4 +161,5 @@
   <data name="PackageInstalledReboot" xml:space="preserve"><value>{0} is installed (version {1}); Windows needs a restart to finish. The PC does not restart by itself.</value></data>
   <data name="PackageInstalled" xml:space="preserve"><value>{0} is installed (version {1}).</value></data>
   <data name="PackageUnpackFailed" xml:space="preserve"><value>The archive {0} could not be unpacked: {1}</value></data>
+  <data name="RenewalNotSaved" xml:space="preserve"><value>The console renewed this PC's certificate, but it could not be saved here: {0} The current certificate keeps working; the PC asks again later.</value></data>
 </root>

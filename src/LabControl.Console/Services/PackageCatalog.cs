@@ -182,7 +182,29 @@ public sealed class PackageCatalog
 
         lock (_gate)
         {
-            WriteYaml(entry);
+            try
+            {
+                WriteYaml(entry);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The installer is in place but no entry names it — a disk that filled up with the
+                // copy. Take it back out, unless the entry on disk already names this very file
+                // (the same installer added again): an orphan of hundreds of megabytes nobody can
+                // see in the tab is exactly what the teacher cannot afford on a full disk.
+                if (Find(id) is not { } current || !string.Equals(Path.GetFullPath(InstallerPath(current)), Path.GetFullPath(target), StringComparison.Ordinal))
+                {
+                    TryDelete(target);
+                    RemoveIfEmpty(Path.GetDirectoryName(target)!);
+                    if (!File.Exists(YamlPath(id)))
+                    {
+                        RemoveIfEmpty(Path.Combine(Root, id));
+                    }
+                }
+
+                throw;
+            }
+
             RemoveOtherInstallers(entry);
         }
 
@@ -343,8 +365,17 @@ public sealed class PackageCatalog
         Directory.CreateDirectory(Root);
         var path = YamlPath(entry.Id);
         var temporary = path + ".tmp";
-        File.WriteAllText(temporary, Serialize(entry));
-        File.Move(temporary, path, overwrite: true);
+        try
+        {
+            File.WriteAllText(temporary, Serialize(entry));
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch
+        {
+            // A torn half left by a full disk is not an entry, and must not hold the space either.
+            TryDelete(temporary);
+            throw;
+        }
     }
 
     private void RemoveOtherInstallers(PackageEntry entry)

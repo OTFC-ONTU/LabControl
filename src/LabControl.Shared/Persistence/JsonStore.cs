@@ -132,15 +132,10 @@ public static class JsonStore
         var temporary = TemporaryPathFor(path);
         for (var attempt = 0; ; attempt++)
         {
+            FileStream stream;
             try
             {
-                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                using (var writer = new StreamWriter(stream))
-                {
-                    writer.Write(text);
-                }
-
-                break;
+                stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             }
             catch (IOException) when (attempt < 16 && !Directory.Exists(temporary))
             {
@@ -149,9 +144,30 @@ public static class JsonStore
                 // document, and the saver that lost the race would then rethrow a collision
                 // that has resolved itself. Take a name nobody can be holding instead. A
                 // directory sitting on the name is not a race but broken storage, and is
-                // reported rather than worked around.
+                // reported rather than worked around. (A full disk that refuses even the name
+                // lands here too; it creates nothing, so the retries cost nothing but time.)
                 temporary = $"{path}.{Guid.NewGuid():n}{TemporarySuffix}";
+                continue;
             }
+
+            try
+            {
+                using (stream)
+                using (var writer = new StreamWriter(stream))
+                {
+                    writer.Write(text);
+                }
+            }
+            catch
+            {
+                // This saver created the temporary, so it is this saver's to remove: a disk that
+                // filled up mid-write must not keep the torn half — it holds the last free space,
+                // and as "<document>.tmp" it would push every later save onto a name of its own.
+                TryDelete(temporary);
+                throw;
+            }
+
+            break;
         }
 
         try

@@ -233,7 +233,18 @@ public sealed partial class PackagesViewModel : ObservableObject
             Detect = new DetectRule(DetectIndex == 1 ? DetectKind.Path : DetectKind.UninstallName, DetectValue),
             TimeoutMinutes = minutes,
         };
-        var problem = _catalog.Update(edited);
+        PackageProblem problem;
+        try
+        {
+            problem = _catalog.Update(edited);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The entry on disk is unchanged (the YAML is replaced whole); the fields keep the edit.
+            Error = Strings.Format("Store.SaveFailed", ex.Message);
+            return;
+        }
+
         if (problem != PackageProblem.None)
         {
             Error = ProblemText(problem);

@@ -48,7 +48,16 @@ public sealed class InternetDialogModel
     /// <summary>Saves (or, with an id, updates) a preset; the problems in words, or <c>null</c> when saved.</summary>
     public (InternetPreset? Saved, string? Problem) SavePreset(string? id, string name, IEnumerable<string> hosts)
     {
-        var result = _session.InternetPresets.Save(id, name, hosts);
+        InternetPresetSaveResult result;
+        try
+        {
+            result = _session.InternetPresets.Save(id, name, hosts);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (null, Strings.Format("Store.SaveFailed", ex.Message));
+        }
+
         if (result.Ok)
         {
             return (result.Saved, null);
@@ -64,7 +73,20 @@ public sealed class InternetDialogModel
         return (null, string.Join("\n", lines));
     }
 
-    public bool DeletePreset(string id) => _session.InternetPresets.Delete(id);
+    /// <summary>Deletes a preset; false with the problem in words when the library could not be written.</summary>
+    public bool DeletePreset(string id, out string? problem)
+    {
+        problem = null;
+        try
+        {
+            return _session.InternetPresets.Delete(id);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            problem = Strings.Format("Store.SaveFailed", ex.Message);
+            return false;
+        }
+    }
 
     /// <summary>
     /// The host list as typed — one per line, blanks ignored — normalized, or the problems in

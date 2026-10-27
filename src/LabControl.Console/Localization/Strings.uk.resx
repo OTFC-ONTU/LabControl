@@ -863,4 +863,5 @@ java.exe</value></data>
   <data name="Packages.NoInstallerInArchive" xml:space="preserve"><value>У цьому архіві немає інсталятора .exe чи .msi.</value></data>
   <data name="Packages.ArchiveFact" xml:space="preserve"><value>{0} ({1}), запускається {2} з нього</value></data>
   <data name="Packages.Problem.RunInvalid" xml:space="preserve"><value>Виберіть, який інсталятор з архіву запускатимуть ПК.</value></data>
+  <data name="Store.SaveFailed" xml:space="preserve"><value>Не збережено — цей комп'ютер не зміг записати файл: {0}</value></data>
 </root>

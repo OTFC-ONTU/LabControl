@@ -485,6 +485,25 @@ public sealed class UiTests
             window.Show();
             await Render(window, "chooser-1-labs");
 
+            // Choosing another language shows the restart hint under the list, and the heading keeps
+            // its own column instead of sliding under the selector (2026-10-27).
+            var language = new LanguageChoiceViewModel(directory, LabControl.Shared.Localization.ProductLanguages.English, save: _ => { });
+            vm.Language = language;
+            window.DataContext = null;
+            window.DataContext = vm;
+            var running = language.Selected;
+            language.Selected = language.Languages.First(l => !Equals(l, running));
+            await Render(window, "chooser-1-language");
+            var heading = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "My labs");
+            var selector = window.GetVisualDescendants().OfType<ComboBox>().First();
+            var headingRight = heading.TranslatePoint(new Avalonia.Point(heading.Bounds.Width, 0), window)!.Value.X;
+            var selectorLeft = selector.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X;
+            Assert.True(heading.Bounds.Width > 0 && headingRight <= selectorLeft, $"heading ends at {headingRight}, selector starts at {selectorLeft}");
+            language.Selected = running;
+            vm.Language = null;
+            window.DataContext = null;
+            window.DataContext = vm;
+
             // Two rows; the last-used lab is highlighted and preselected, and nothing is active.
             Assert.Equal(2, vm.Labs.Count);
             Assert.True(vm.HasLabs);

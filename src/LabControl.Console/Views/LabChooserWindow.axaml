@@ -44,12 +44,12 @@
 
     <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
       <!-- The language can be chosen before any lab exists (M7, D-86). -->
-      <DockPanel>
-        <Panel DockPanel.Dock="Right" VerticalAlignment="Top" IsVisible="{Binding Language, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+        <TextBlock Classes="h" Text="{loc:Localize Chooser.Heading}" TextWrapping="Wrap" VerticalAlignment="Top" />
+        <Panel Grid.Column="1" VerticalAlignment="Top" IsVisible="{Binding Language, Converter={x:Static ObjectConverters.IsNotNull}}">
           <views:LanguageSelector DataContext="{Binding Language}" />
         </Panel>
-        <TextBlock Classes="h" Text="{loc:Localize Chooser.Heading}" />
-      </DockPanel>
+      </Grid>
       <TextBlock Classes="p" Text="{loc:Localize Chooser.Hint}" />
     </StackPanel>
 

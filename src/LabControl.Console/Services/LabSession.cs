@@ -199,6 +199,7 @@ public sealed class LabSession : IAsyncDisposable
         ExamPresets = new ExamPresetLibrary(store, identity.LabId, _clock, InternetPresets, loggers.CreateLogger<ExamPresetLibrary>());
         Packages = new PackageCatalog(store, instance.InstanceName, _clock, loggers.CreateLogger<PackageCatalog>());
         PackageStatus = new PackageStatusBook(store, identity.LabId, Jobs, loggers.CreateLogger<PackageStatusBook>());
+        Packages.Changed += DropStaleInstalls;
 
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
@@ -1259,6 +1260,15 @@ public sealed class LabSession : IAsyncDisposable
                     NoteRevocationOfSelf(entry);
                 }
 
+                // Learned here, so news to the other linked PCs too — and a PC linked with the
+                // very certificate this entry revokes is cut now, not at its next link. A console
+                // restored from a backup older than the revocation accepted it a moment ago
+                // (M7 portion 5): the first honest PC to arrive is what tells it otherwise.
+                if (added.Count > 0)
+                {
+                    Push(added);
+                }
+
                 var missing = Registry.Revocations.Except(offered.Select(e => e.Serial));
                 if (missing.Count > 0)
                 {
@@ -1529,6 +1539,39 @@ public sealed class LabSession : IAsyncDisposable
         return [.. InstallPackage(upgrade, entry, InstallMode.Install), .. InstallPackage(missing, entry, InstallMode.Missing)];
     }
 
+    /// <summary>
+    /// An <c>install_package</c> queued for a PC that is off names its installer by hash; once
+    /// the entry is replaced by a new version or deleted, that installer is gone from the catalog
+    /// and the job could only fail — or install last week's version — when the PC returns (M7
+    /// portion 5). Such a job is closed as not delivered with the reason, and the PC is again
+    /// one <i>Install on all missing</i> reaches.
+    /// </summary>
+    private void DropStaleInstalls()
+    {
+        Dictionary<string, string> present;
+        try
+        {
+            present = Packages.List()
+                .Where(item => item.Entry is not null && item.State == InstallerState.Present)
+                .ToDictionary(item => item.Id, item => item.Entry!.Sha256, StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogWarning("package catalog unreadable; queued installs kept: {Message}", ex.Message);
+            return;
+        }
+
+        var dropped = Jobs.DropPending(job => job.Kind == Job.Types.Kind.InstallPackage
+                && job.Args.TryGetValue("package", out var package)
+                && !(present.TryGetValue(package, out var sha256) && string.Equals(sha256, job.Args.GetValueOrDefault("sha256"), StringComparison.OrdinalIgnoreCase)),
+            _clock(), Localization.Strings.Get("Packages.QueuedInstallReplaced"));
+        foreach (var job in dropped)
+        {
+            var number = Registry.FindByAgentId(job.AgentId)?.Number ?? 0;
+            Events.Info("job.not_delivered", $"{string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, number)}: {job.Message}", job.AgentId, number);
+        }
+    }
+
     /// <summary><i>Check PCs</i>: every linked PC evaluates the entry's rule and says whether the program is there.</summary>
     public IReadOnlyList<JobRecord> CheckPackage(PackageEntry entry) =>
         InstallPackage(Linked.Select(c => c.AgentId), entry, InstallMode.Check);
@@ -1596,7 +1639,21 @@ public sealed class LabSession : IAsyncDisposable
         var manifest = Files.OfferBytes(build.Manifest, $"manifest-{build.Version}");
         var request = new SelfUpdateRequest(build.Version, manifest.Reference, manifest.Sha256, signature);
         _log.LogInformation("pushing agent build {Version} from {Folder} ({Bytes} bytes)", build.Version, build.Folder, build.TotalBytes);
-        return CreateJobs(agentIds, Job.Types.Kind.SelfUpdate, request.ToArgs(), Defaults.SelfUpdateJobTimeout);
+
+        // The latest push wins for a PC that is off (M7 portion 5): two builds queued for it
+        // would both be delivered on its return, the second only to be refused while the first
+        // is on probation (D-83), leaving it on the older build with a failed row.
+        var targets = agentIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var wanted = new HashSet<string>(targets, StringComparer.OrdinalIgnoreCase);
+        var superseded = Jobs.DropPending(job => job.Kind == Job.Types.Kind.SelfUpdate && wanted.Contains(job.AgentId),
+            _clock(), Localization.Strings.Format("Update.QueuedSuperseded", build.Version));
+        foreach (var job in superseded)
+        {
+            var number = Registry.FindByAgentId(job.AgentId)?.Number ?? 0;
+            Events.Info("job.not_delivered", $"{string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, number)}: {job.Message}", job.AgentId, number);
+        }
+
+        return CreateJobs(targets, Job.Types.Kind.SelfUpdate, request.ToArgs(), Defaults.SelfUpdateJobTimeout);
     }
 
     private void DeliverJobs(AgentConnection connection, bool resendInFlight, long bootTimeUnix = 0)
@@ -3265,14 +3322,16 @@ public sealed class LabSession : IAsyncDisposable
         var revocation = new Revocation();
         revocation.Entries.AddRange(entries);
         var push = new ConsoleMessage { Revocation = revocation };
-        var serials = entries.Select(e => e.Serial).ToHashSet(StringComparer.Ordinal);
+        var serials = entries.Select(e => LabCertificates.NormalizeSerial(e.Serial)).ToHashSet(StringComparer.Ordinal);
 
         foreach (var connection in Linked)
         {
             connection.TrySend(push);
-            if (serials.Contains(connection.CertificateSerial))
+            if (serials.Contains(LabCertificates.NormalizeSerial(connection.CertificateSerial)))
             {
                 connection.Close("this PC's certificate was revoked");
+                Events.Warning("link.revoked", Localization.Strings.Format("Event.RevokedLinkClosed",
+                    string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, connection.Number)), connection.AgentId, connection.Number);
             }
         }
     }

@@ -639,6 +639,9 @@ LabControl uses it only while you show your screen, and sends the picture only t
   <data name="Key.HolderOtherComputer" xml:space="preserve"><value>Another computer: {0} (remembered)</value></data>
   <data name="Move.ScriptName" xml:space="preserve"><value>Move to the lab's new key</value></data>
   <data name="Event.MoveSent" xml:space="preserve"><value>{0}: sent its move to the new key of “{1}”; it rejoins under the new key within a minute.</value></data>
+  <data name="Event.RevokedLinkClosed" xml:space="preserve"><value>{0}: its certificate is revoked, so its link was closed. It is refused from now on.</value></data>
+  <data name="Packages.QueuedInstallReplaced" xml:space="preserve"><value>Not delivered: the package was replaced or removed from the catalog before the PC came back. Install it again from the Packages tab.</value></data>
+  <data name="Update.QueuedSuperseded" xml:space="preserve"><value>Not delivered: agent build {0} was pushed to this PC while it was still off, and replaces this one.</value></data>
   <data name="Move.Action" xml:space="preserve"><value>Lost the passphrase? Move this lab to a new key…</value></data>
   <data name="Move.Title" xml:space="preserve"><value>Move this lab to a new key</value></data>
   <data name="Move.Explain" xml:space="preserve"><value>Use this only when nobody knows the passphrase of “{0}” and the recovery code is lost too.

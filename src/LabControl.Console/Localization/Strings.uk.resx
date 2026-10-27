@@ -639,6 +639,9 @@ LabControl використовує його лише під час показу
   <data name="Key.HolderOtherComputer" xml:space="preserve"><value>Інший комп'ютер: {0} (запам'ятовано)</value></data>
   <data name="Move.ScriptName" xml:space="preserve"><value>Перенесення на новий ключ лабораторії</value></data>
   <data name="Event.MoveSent" xml:space="preserve"><value>{0}: надіслано перенесення на новий ключ «{1}»; ПК повернеться з новим ключем протягом хвилини.</value></data>
+  <data name="Event.RevokedLinkClosed" xml:space="preserve"><value>{0}: його сертифікат відкликано, тому з’єднання закрито. Відтепер ПК буде відмовлено.</value></data>
+  <data name="Packages.QueuedInstallReplaced" xml:space="preserve"><value>Не доставлено: пакет замінили або видалили з каталогу, перш ніж ПК повернувся. Встановіть його знову на вкладці «Пакети».</value></data>
+  <data name="Update.QueuedSuperseded" xml:space="preserve"><value>Не доставлено: поки ПК був вимкнений, на нього надіслано збірку агента {0}, яка замінює цю.</value></data>
   <data name="Move.Action" xml:space="preserve"><value>Забули парольну фразу? Перенести лабораторію на новий ключ…</value></data>
   <data name="Move.Title" xml:space="preserve"><value>Перенести лабораторію на новий ключ</value></data>
   <data name="Move.Explain" xml:space="preserve"><value>Використовуйте це, лише якщо ніхто не знає парольної фрази «{0}», а код відновлення теж втрачено.

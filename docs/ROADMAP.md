@@ -3017,8 +3017,15 @@ decision 2026-10-27: the manual after the redesign, so it is not rewritten).
   helper's full view, the decoder under the broadcast, the probe at helper start, forcing an IDR
   through `ICodecAPI`, the stride and display area of 1080p output, an N edition without the codecs —
   and the 25–30 fps the owner asked for, measured on a lab PC and on the MacBook over Wi-Fi with a
-  film playing. **Next:** the VM drill (the *Video* broadcast to the ARM64 clone, its full view in
-  *Video*, `LABCONTROL_NO_H264=1` on either side), then the lab.
+  film playing.
+- *Portion 6 VM drill (2026-10-27, clone *M7 isolated H.264 acceptance 2026-10-27*, Windows 11
+  ARM64, owned installation, `student` signed in)* — passed after two fixes (`D-91` item 10): a COM
+  sample released twice after `ProcessOutput` (the helper crashed about a minute into both
+  streams at once) and an H.264 stream encoded for nobody when only JPEG PCs watched. Measured:
+  the *Video* broadcast at 24–25 fps for ~100 kbit/s (*Text*: 11 fps, 3.6 Mbit/s), the PC's full
+  view in *Video* at 26–27 fps while it decoded the broadcast; colours, stride and switching
+  correct; `LABCONTROL_NO_H264=1` falls back to JPEG with the reason shown. **Next:** the lab —
+  `win-x64`, 14 PCs over the MacBook's Wi-Fi with a real film, the encoder's CPU on a lab PC.
 
 **Acceptance criteria**
 

@@ -355,9 +355,19 @@ public sealed unsafe class MediaFoundationH264Encoder : IH264Encoder
                 }
                 finally
                 {
-                    if (!ReferenceEquals(produced, own))
+                    // Vortice hands back a new wrapper even for the sample we passed in; only a
+                    // sample the MFT allocated itself carries a reference of ours to release.
+                    // Comparing the wrappers released our own sample twice (VM drill: an access
+                    // violation in the helper, D-91 item 10).
+                    if (own is null || produced.NativePointer != own.NativePointer)
                     {
                         produced.Dispose();
+                    }
+                    else
+                    {
+                        // The second wrapper of our own sample holds no reference: detach it so
+                        // its finalizer never releases the sample either.
+                        produced.NativePointer = IntPtr.Zero;
                     }
                 }
             }
@@ -517,9 +527,19 @@ public sealed unsafe class MediaFoundationH264Decoder : IH264Decoder
                 }
                 finally
                 {
-                    if (!ReferenceEquals(produced, own))
+                    // Vortice hands back a new wrapper even for the sample we passed in; only a
+                    // sample the MFT allocated itself carries a reference of ours to release.
+                    // Comparing the wrappers released our own sample twice (VM drill: an access
+                    // violation in the helper, D-91 item 10).
+                    if (own is null || produced.NativePointer != own.NativePointer)
                     {
                         produced.Dispose();
+                    }
+                    else
+                    {
+                        // The second wrapper of our own sample holds no reference: detach it so
+                        // its finalizer never releases the sample either.
+                        produced.NativePointer = IntPtr.Zero;
                     }
                 }
             }

@@ -185,8 +185,18 @@ public sealed class BroadcastHub : IAsyncDisposable
         }
     }
 
-    /// <summary>The stream *Text* or *Video* names. Under <see cref="_lock"/> or for a moment's read.</summary>
-    private Stream Primary => _video ? _h264 : _jpeg;
+    /// <summary>
+    /// The stream the PCs mostly receive: H.264 in *Video* unless every watching PC is on JPEG.
+    /// Under <see cref="_lock"/> or for a moment's read.
+    /// </summary>
+    private Stream Primary => H264Wanted ? _h264 : _jpeg;
+
+    /// <summary>
+    /// *Video*, and someone may show it: no PC has dialled yet (the first one most likely can), or
+    /// one that did can decode H.264. With only JPEG PCs watching, encoding H.264 is for nobody
+    /// (VM drill, D-91 item 10). Under <see cref="_lock"/>.
+    /// </summary>
+    private bool H264Wanted => _video && (_subscribers.Count == 0 || _subscribers.Values.Any(s => s.CanH264));
 
     /// <summary>The cap for one stream that <paramref name="watching"/> PCs each receive (D-72).</summary>
     public static int StreamCap(int watching) =>
@@ -383,7 +393,7 @@ public sealed class BroadcastHub : IAsyncDisposable
             }
 
             watching = _subscribers.Count;
-            runH264 = _video;
+            runH264 = H264Wanted;
             runJpeg = !_video || _subscribers.Values.Any(s => !s.CanH264);
             var now = _clock();
             _jpeg.LastKeyframeRequest = now;
@@ -408,7 +418,7 @@ public sealed class BroadcastHub : IAsyncDisposable
 
             stream.LastKeyframeRequest = now;
             watching = _subscribers.Count;
-            if (stream.H264 ? !_video : _video && _subscribers.Values.All(s => s.CanH264))
+            if (stream.H264 ? !H264Wanted : _video && _subscribers.Values.All(s => s.CanH264))
             {
                 return; // not running
             }

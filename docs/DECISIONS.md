@@ -5391,10 +5391,30 @@ Decision:
    picture and waits for IDRs; it does not yet tell the service to redial as JPEG. Hardware
    (asynchronous) MFTs are not used. Both wait for what the VM drill and the lab show.
 
-Status: built 2026-10-27 on the Mac. Run there: the NV12 and Annex B conversions, the
-producer and the hub with a stand-in encoder, and VideoToolbox end to end — the console's
-broadcast decoded by simulated PCs and a simulated PC's full view decoded by the console.
-**Not run on Windows:** every Media Foundation call (the encoder and decoder MFTs, the
-helper's probe, `ICodecAPI` for an IDR and low latency, 1080p's padded output and its
-display area, a PC without the codecs), the `win-x64`/`win-arm64` builds beyond compiling, and
-the 25–30 fps measured in the lab.
+10. **VM drill fixes** (2026-10-27). (a) Vortice returns a **new wrapper** for the output sample
+    `ProcessOutput` fills, even when it is the sample the caller passed in; comparing the wrappers
+    released that sample twice — the encoder failed with *External component has thrown an
+    exception* about 20 s after the decoder started in the same helper, and the helper died with
+    an access violation in `ComObject.DisposeCore`. Now the native pointers are compared and the
+    second wrapper is detached (`NativePointer = 0`) so its finalizer releases nothing either.
+    (b) In *Video* with only JPEG PCs watching, the hub kept encoding H.264 for nobody and the
+    status line showed that stream; H.264 now runs only while no PC has dialled yet or one that
+    did can decode it.
+
+VM drill (2026-10-27, clone *M7 isolated H.264 acceptance 2026-10-27* of the collect clone —
+Windows 11 ARM64, owned installation, `student` signed in, `win-arm64` build moved to a fresh
+`TestLabHost` lab with `Setup.exe --rekey`, hashes compared on host and guest): the helper's probe
+found Microsoft's encoder and decoder MFTs (*decodes h264, encodes h264*); the full view in
+*Video* came through as H.264 at 1280×800 with correct colours and no stride or crop fault;
+the *Video* broadcast (synthetic teacher's screen at 30 fps) ran at **24–25 fps for about
+100 kbit/s** where *Text* gave 11 fps for 3.6 Mbit/s, while the PC's own full view in *Video*
+ran at **26–27 fps** — the PC decoding and encoding at once; *Text ↔ Video* switched both ways
+in the broadcast and the full view; `LABCONTROL_NO_H264=1` gave *jpeg only*, the JPEG stream
+with *1 PC gets Text*, the full view in JPEG with `video.h264_unavailable` naming why, and
+H.264 came back when it was removed. After fix (a): no helper exit and no crash event in
+several minutes of both streams at once. Pictures were read back with `save-screen`.
+
+Status: built 2026-10-27 on the Mac and passed its ARM64 VM drill the same day after two
+fixes (item 10). Not run: `win-x64` on lab hardware, the software encoder's CPU on a lab PC at
+1080p, 14 PCs at once over the MacBook's Wi-Fi with a real film, a Windows console's broadcast,
+a Windows edition without the codecs (only simulated by `LABCONTROL_NO_H264`).

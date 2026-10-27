@@ -3227,8 +3227,16 @@ trip and the end-to-end broadcast and full view in <em>Video</em> run on the Mac
 helper's full view, the decoder under the broadcast, the probe at helper start, forcing an IDR
 through <code>ICodecAPI</code>, the stride and display area of 1080p output, an N edition without the codecs —
 and the 25–30 fps the owner asked for, measured on a lab PC and on the MacBook over Wi-Fi with a
-film playing. <strong>Next:</strong> the VM drill (the <em>Video</em> broadcast to the ARM64 clone, its full view in
-<em>Video</em>, <code>LABCONTROL_NO_H264=1</code> on either side), then the lab.</p>
+film playing.</p>
+</li>
+<li><p><em>Portion 6 VM drill (2026-10-27, clone <em>M7 isolated H.264 acceptance 2026-10-27</em>, Windows 11
+ARM64, owned installation, <code>student</code> signed in)</em> — passed after two fixes (<code>D-91</code> item 10): a COM
+sample released twice after <code>ProcessOutput</code> (the helper crashed about a minute into both
+streams at once) and an H.264 stream encoded for nobody when only JPEG PCs watched. Measured:
+the <em>Video</em> broadcast at 24–25 fps for ~100 kbit/s (<em>Text</em>: 11 fps, 3.6 Mbit/s), the PC's full
+view in <em>Video</em> at 26–27 fps while it decoded the broadcast; colours, stride and switching
+correct; <code>LABCONTROL_NO_H264=1</code> falls back to JPEG with the reason shown. <strong>Next:</strong> the lab —
+<code>win-x64</code>, 14 PCs over the MacBook's Wi-Fi with a real film, the encoder's CPU on a lab PC.</p>
 </li>
 </ul>
 <p><strong>Acceptance criteria</strong></p>
@@ -3457,7 +3465,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-27 22:13 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 22:59 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish-uiux-redesign">M7 — Software catalog, localization, polish, UI/UX redesign</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

@@ -281,7 +281,7 @@ passphrase (half of the rehearsed recovery; driving the lab from it remains); th
 (`D-90`: reconnect storm, full views, a week off, an old backup, a full disk, clock skew — sixteen fixes,
 among them online-only reboot/log off and an unlinked PC dialling a beacon whose only fault is its time).
 Tests: 1116 Shared + 370 Console (LabSwitchTests.Twenty_rounds fails on this Mac on clean HEAD too).
-**M7 portion 6 is built (2026-10-27, `D-91`), on the Mac; not yet run on Windows:** H.264 for the broadcast
+**M7 portion 6 is built (2026-10-27, `D-91`) and passed its ARM64 VM drill the same day:** H.264 for the broadcast
 and the full view with a *Text / Video* choice. Owner decisions: *Text* is today's JPEG unchanged, *Video*
 is H.264 at 25–30 fps; *Text* first; the last choice remembered separately for *Show my screen* and the
 full-view window (`preferences.json`); a switch at any time. Frames say their codec (`VideoFrame.codec =
@@ -292,7 +292,9 @@ without the codecs gets JPEG — no protocol version. `Shared/Video/H264/`: Vide
 C#), `H264Codecs` probed once (`LABCONTROL_NO_H264=1` for the fallback drill); `FrameDecoder` decodes by
 the frame; the producer holds a refused access unit instead of re-encoding; `BroadcastHub` runs an H.264
 stream for PCs that listed `h264` and the JPEG one only for those that did not. VideoToolbox runs end to
-end on the Mac; **no Media Foundation call has run yet**. Tests: 1132 Shared + 375 Console (full runs on this Mac fail 4–5 load-sensitive link/job tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: the VM drill, then the lab.
+end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample released twice after
+`ProcessOutput` crashed the helper; no H.264 encoded for JPEG-only watchers): *Video* broadcast 24–25 fps
+at ~100 kbit/s vs *Text* 11 fps at 3.6 Mbit/s, the PC's full view in *Video* 26–27 fps. Tests: 1132 Shared + 376 Console (full runs on this Mac fail 4–5 load-sensitive link/job tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: the lab (`win-x64`, 14 PCs, a real film over Wi-Fi).
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

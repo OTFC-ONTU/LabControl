@@ -57,6 +57,36 @@ public sealed class H264BroadcastTests
     }
 
     [Fact]
+    public async Task With_only_jpeg_pcs_watching_video_encodes_no_h264()
+    {
+        var made = 0;
+        await using var hub = new BroadcastHub("session", TeacherScreen, TestLogging.Factory.CreateLogger("hub"), () => DateTimeOffset.UtcNow, (_, _, _) => { },
+            video: true, h264: (w, h, _) =>
+            {
+                Interlocked.Increment(ref made);
+                return new FakeH264Encoder(w, h);
+            });
+        hub.Start();
+        var older = new Writer();
+        using var stop = new CancellationTokenSource();
+        var serve = hub.ServeAsync("older", [], older, stop.Token);
+        Assert.True(await Wait.UntilAsync(() => older.Frames.Count >= 5, TimeSpan.FromSeconds(20)));
+
+        // The H.264 stream may have started before the PC dialled; once it did, it stops.
+        var before = hub.FramesEncoded;
+        var h264Before = Volatile.Read(ref made);
+        await Task.Delay(1500, TestContext.Current.CancellationToken);
+        Assert.Equal(h264Before, Volatile.Read(ref made));
+        Assert.Equal(Defaults.VideoCodecJpeg, hub.StreamOf("older"));
+        Assert.Equal(1, hub.WatchingAsText);
+        Assert.True(hub.FramesPerSecond > 0);
+        Assert.All(older.Frames, f => Assert.Equal(Defaults.VideoCodecJpeg, FrameDecoder.CodecOf(f)));
+        Assert.True(hub.FramesEncoded > before);
+        stop.Cancel();
+        await serve;
+    }
+
+    [Fact]
     public async Task Video_needs_an_encoder_on_this_console()
     {
         await using var hub = new BroadcastHub("session", TeacherScreen, TestLogging.Factory.CreateLogger("hub"), () => DateTimeOffset.UtcNow, (_, _, _) => { },

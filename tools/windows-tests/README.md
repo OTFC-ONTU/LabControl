@@ -257,3 +257,18 @@ built USB layout's `Setup.exe --number 1 --no-student --no-reboot --payload <dir
 After the job answers `LABCONTROL_MOVE_SCHEDULED`, read
 `C:\ProgramData\LabControlMove\<id>\move.log` in the guest, stop host A and start
 `TestLabHost --bind <same> --port <A's port> --root <root> --instance moved`: the PC enrols into B.
+
+## M7 H.264 drill (D-91)
+
+Runs on *M7 isolated H.264 acceptance 2026-10-27*, a copy of the collect clone (the same
+shared-NAT MAC — never run the two at once; owned installation, `student` signed in);
+`utm-exec-h264.applescript` is bound to it. Commands: `full-screen` and `broadcast-start` take
+`"video": true` for H.264 (false or absent for *Text*), `broadcast-video` switches a running
+broadcast. Status carries `broadcast` (`video`, `codec`, `fps`, `bytes_per_second`,
+`watching_as_text`, each PC's `stream`) and each screen's `full_codec`, `full_problem`, `fps`.
+`--synthetic-fps N` (default 10) makes the synthetic teacher's screen draw faster, for the rate
+check. The service log names what the helper found (*decodes h264, encodes h264* or *jpeg only*);
+the helper's own log is held open by it — stop the service to copy it. A crash shows in the
+Application log (`.NET Runtime`, `Application Error`). Set `LABCONTROL_NO_H264=1` as a machine
+variable and restart the service for the JPEG fallback; remove it afterwards.
+

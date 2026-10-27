@@ -90,6 +90,8 @@ internal static class TestLabHost
                 // agent's refusal can be observed. No production console is ever built this way.
                 case "--teacher-leaf": teacherLeaf = bool.Parse(args[i]); break;
                 case "--broadcast-source": broadcastSource = args[i] is "synthetic" or "screen" ? args[i] : throw new ArgumentException("Invalid option."); break;
+                // The M7 H.264 rate check (D-91): the synthetic teacher's screen draws this many frames a second.
+                case "--synthetic-fps": SyntheticBroadcastSource.FramesPerSecond = Math.Clamp(int.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture), 1, 60); break;
                 // The fail-safe drill (D-79 item 5): every lock, internet policy and exam proposes this
                 // hard limit instead of the hours-long default; the PC still clamps it to its ceiling.
                 case "--hard-limit-seconds": hardLimit = int.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); break;
@@ -317,8 +319,9 @@ internal static class TestLabHost
                                     result = new { ok = session.Unlock([command.AgentId]) == 1 };
                                 else if (command.Action == "full-screen")
                                 {
-                                    session.SetScreenMode(command.AgentId, LabControl.Shared.Protocol.VideoMode.Full);
-                                    result = new { ok = true };
+                                    // M7 portion 6 (D-91): `video` asks the PC for H.264, false for Text (JPEG).
+                                    session.SetScreenMode(command.AgentId, LabControl.Shared.Protocol.VideoMode.Full, video: command.Video);
+                                    result = new { ok = true, video = command.Video };
                                 }
                                 else if (command.Action == "escape-key")
                                 {
@@ -334,7 +337,11 @@ internal static class TestLabHost
                             case "broadcast-start":
                                 if (command.AgentId is null || !session.IsLinked(command.AgentId))
                                     throw new InvalidOperationException("Choose a linked fixture agent.");
-                                result = new { ok = session.StartBroadcast([command.AgentId]) == 1, source = broadcastSource };
+                                result = new { ok = session.StartBroadcast([command.AgentId], video: command.Video) == 1, source = broadcastSource, video = command.Video };
+                                break;
+                            case "broadcast-video":
+                                // M7 portion 6 (D-91): switch a running broadcast between Text (false) and Video (true).
+                                result = new { ok = session.Broadcast?.SetVideo(command.Video) == true, video = command.Video };
                                 break;
                             case "broadcast-stop":
                                 await session.StopBroadcastAsync();
@@ -488,6 +495,10 @@ internal static class TestLabHost
                     host = bind.ToString(), port = session.Port, beacon_port = beaconPort,
                     lab_key_unlocked = vault.IsUnlocked,
                     broadcast_targets = session.BroadcastTargets.ToArray(), broadcasting = session.Broadcast is not null,
+                    broadcast = session.Broadcast is { } hub ? new { video = hub.Video, codec = hub.StreamCodec, fps = hub.FramesPerSecond,
+                        bytes_per_second = hub.BytesPerSecond, watching = hub.Watching, watching_as_text = hub.WatchingAsText,
+                        streams = hub.WatchingAgents.Select(id => new { agent_id = id, stream = hub.StreamOf(id) }).ToArray(),
+                        console_can_encode = LabControl.Shared.Video.H264.H264Codecs.CanEncode } : null,
                     refused_names = session.RefusedNames().Select(r => new { r.Name, r.PcCount }).ToArray(),
                     events = session.Events.Recent.TakeLast(25)
                         .Select(e => new { at = e.AtUnix, severity = e.Severity.ToString(), code = e.Code, message = Trim(e.Message) }).ToArray(),
@@ -540,6 +551,9 @@ internal static class TestLabHost
         thumbnail_version = screen.Thumbnail.Version,
         last_frame_at = screen.LastFrameAt, frames_received = screen.FramesReceived,
         frames_rejected = screen.FramesRejected, screen_width = screen.ScreenWidth, screen_height = screen.ScreenHeight,
+        full = screen.Full.HasFrame, full_width = screen.Full.Width, full_height = screen.Full.Height, full_version = screen.Full.Version,
+        requested_video = screen.RequestedVideo, full_codec = screen.FullDecoder.LastCodec, full_problem = screen.FullDecoder.Problem,
+        fps = screen.FramesPerSecond, bytes_per_second = screen.BytesPerSecond, last_quality = screen.LastQuality,
     };
 
     private static int ReserveBeaconPort()
@@ -559,5 +573,5 @@ internal static class TestLabHost
     }
     private sealed record Command(string Action, string? AgentId, string? BuildDirectory, string? BaseVersion,
         string? MinimumInstalledVersion, string[]? Paths, bool Open, int? Seconds, string? Instance, bool Teacher,
-        bool Restrict, string? Internet, string[]? Hosts, bool WholeLab, string? CollectFolder);
+        bool Restrict, string? Internet, string[]? Hosts, bool WholeLab, string? CollectFolder, bool Video = false);
 }

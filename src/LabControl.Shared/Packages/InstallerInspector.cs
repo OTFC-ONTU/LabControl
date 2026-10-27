@@ -22,7 +22,13 @@ public sealed record InstallerInfo(
     string? ProductName,
     string? ProductVersion,
     string? Manufacturer,
-    string? ProductCode);
+    string? ProductCode,
+    IReadOnlyList<string>? Runs = null,
+    string? Run = null)
+{
+    /// <summary>A <c>.zip</c> package: <see cref="Runs"/> lists the installers inside, <see cref="Run"/> the one described (D-89 addendum).</summary>
+    public bool IsArchive => Runs is not null;
+}
 
 /// <summary>
 /// Looks at a local <c>.exe</c> / <c>.msi</c> without running it (D-88): one pass computes the
@@ -78,6 +84,66 @@ public static class InstallerInspector
         var sha = Convert.ToHexStringLower(hash.GetHashAndReset());
         var head = window.ToArray();
         var info = new InstallerInfo(Path.GetFileName(path), read, sha, InstallerFamily.Unknown, null, null, null, null);
+        if (head.AsSpan().StartsWith(PackageArchive.Signature))
+        {
+            IReadOnlyList<string> runs;
+            try
+            {
+                file.Position = 0;
+                runs = PackageArchive.Candidates(file);
+            }
+            catch (InvalidDataException)
+            {
+                return info;
+            }
+
+            info = info with { Runs = runs };
+            return runs.Count == 0 ? info : await InspectArchiveEntryAsync(path, info, runs[0], cancellationToken).ConfigureAwait(false);
+        }
+
+        return Describe(file, head, info);
+    }
+
+    /// <summary>
+    /// Describes the installer <paramref name="run"/> inside the archive <paramref name="archive"/>
+    /// already hashed as <paramref name="info"/>: the entry is copied to a temporary file, read the
+    /// way a single installer is, and the copy removed. The hash and size stay the archive's.
+    /// </summary>
+    public static async Task<InstallerInfo> InspectArchiveEntryAsync(string archive, InstallerInfo info, string run, CancellationToken cancellationToken = default)
+    {
+        var temporary = Path.Combine(Path.GetTempPath(), "labcontrol-inspect-" + Guid.NewGuid().ToString("n") + Path.GetExtension(run));
+        try
+        {
+            var bare = info with { Run = run, Family = InstallerFamily.Unknown, ProductName = null, ProductVersion = null, Manufacturer = null, ProductCode = null };
+            if (!await PackageArchive.ExtractEntryAsync(archive, run, temporary, cancellationToken).ConfigureAwait(false))
+            {
+                return bare;
+            }
+
+            await using var entry = new FileStream(temporary, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var head = new byte[(int)Math.Min(entry.Length, MarkerWindow)];
+            entry.ReadExactly(head);
+            return Describe(entry, head, bare);
+        }
+        catch (InvalidDataException)
+        {
+            return info with { Run = run };
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temporary);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    /// <summary>The family and product of one installer, from its first bytes and its structure.</summary>
+    private static InstallerInfo Describe(Stream file, byte[] head, InstallerInfo info)
+    {
 
         if (head.AsSpan().StartsWith(CompoundFile.Signature))
         {

@@ -769,7 +769,7 @@ java.exe</value></data>
   <data name="Tab.Packages" xml:space="preserve"><value>Packages</value></data>
   <data name="Packages.Add" xml:space="preserve"><value>Add package…</value></data>
   <data name="Packages.AddTitle" xml:space="preserve"><value>Add package</value></data>
-  <data name="Packages.AddDescription" xml:space="preserve"><value>Choose a program's installer (.exe or .msi) on this computer. LabControl reads it, proposes how to install it without questions and keeps a copy in this lab's catalog, so the original may be deleted afterwards. The PCs need no internet.</value></data>
+  <data name="Packages.AddDescription" xml:space="preserve"><value>Choose a program's installer (.exe, .msi, or a .zip with its setup and files) on this computer. LabControl reads it, proposes how to install it without questions and keeps a copy in this lab's catalog, so the original may be deleted afterwards. The PCs need no internet.</value></data>
   <data name="Packages.Choose" xml:space="preserve"><value>Choose installer…</value></data>
   <data name="Packages.InstallerFiles" xml:space="preserve"><value>Installers</value></data>
   <data name="Packages.Reading" xml:space="preserve"><value>Reading the installer…</value></data>
@@ -856,4 +856,8 @@ java.exe</value></data>
   <data name="Packages.UntestedConfirm" xml:space="preserve"><value>"{0}" has not been installed on any PC yet. Try it on one PC first: select it in the Lab tab and press Install on selected PCs. Install on {1} PC(s) anyway?</value></data>
   <data name="Packages.InstallAnyway" xml:space="preserve"><value>Install anyway</value></data>
   <data name="Packages.InstallFailed" xml:space="preserve"><value>Not sent: {0}</value></data>
+  <data name="Packages.ArchiveRun" xml:space="preserve"><value>The archive holds these installers; the PC unpacks it and runs the one chosen here:</value></data>
+  <data name="Packages.NoInstallerInArchive" xml:space="preserve"><value>There is no .exe or .msi installer in this archive.</value></data>
+  <data name="Packages.ArchiveFact" xml:space="preserve"><value>{0} ({1}), runs {2} from it</value></data>
+  <data name="Packages.Problem.RunInvalid" xml:space="preserve"><value>Choose which installer inside the archive the PCs run.</value></data>
 </root>

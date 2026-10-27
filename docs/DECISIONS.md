@@ -5162,3 +5162,33 @@ what the file channel is for; the MacBook's Wi-Fi is the measured limit, ROADMAP
 
 Status: built 2026-10-27 on the Mac; the Windows host is compiled, not yet run on a PC. The broken
 package drill and the 14-PC measurement are the physical-lab steps of portion 4.
+
+**Addendum (2026-10-27): `.zip` packages.** The lab's NIC driver for Wake-on-LAN (Realtek's
+*Win10/Win11 Auto Installation Program (NDIS)* for the RTL8168) is distributed as a `.zip` whose
+`setup.exe` needs the files beside it, and many other programs come the same way; one file per
+package could not carry it. Owner's request: make the catalog take it.
+
+1. **The archive is the package.** The wizard accepts a `.zip`, hashes it whole, lists the `.exe`
+   and `.msi` inside (`PackageArchive.Candidates`: nearest the top first, `setup.exe` /
+   `install.exe` before an MSI before anything else, `__MACOSX/` ignored), proposes the first and
+   lets the teacher pick another; the chosen entry is copied to a temporary file and inspected like
+   a single installer (family, product, version), under the archive's hash and size. The entry
+   records it as `run` (`PackageEntry.Run`, YAML `run:`); a `.zip` without a valid `run`, or a
+   `run` on anything else, is `PackageProblem.RunInvalid`; `msi` family is judged by `run`.
+2. **The job carries `run`** (PROTOCOL, *`install_package` in detail*). The PC pulls and verifies the
+   archive as before, unpacks it into `x\` inside the job's staging directory and starts `run` from
+   its own folder — `WindowsPackageHost` sets the working directory to it — so `setup.exe` finds its
+   `.cab` and `.inf` files. An older agent ignores `run` and fails to start a `.zip`
+   (`package.not_run`); the lab gets this build first.
+3. **Unpacking is checked before anything is written** (`PackageArchive.ExtractAsync`): every part
+   of every name must be a Windows leaf name (no `..`, no drive, no absolute path), the target must
+   stay inside the folder, a Unix symbolic link is refused, at most
+   `Defaults.PackageArchiveMaxEntries` (50 000) entries and `Defaults.PackageArchiveMaxBytes` (8 GiB)
+   in all, and an entry that inflates past its stated size is refused. A refusal is
+   `package.not_run` with *the archive could not be unpacked*; the staging directory goes as always.
+
+Rejected: shipping the extra files as separate catalog entries (one install would become several
+jobs that must land together); unpacking on the console and pushing a folder (the file channel
+moves one hash-verified file, `D-23`); self-extracting archives made by the console (a program the
+console would have to build for Windows); downloading the driver for the owner (Realtek's page asks
+for acceptance of its terms and a CAPTCHA, which the owner does himself).

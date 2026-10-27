@@ -54,10 +54,27 @@ public sealed class AddPackageModel
 
         SourcePath = path;
         Info = info;
+        Propose();
+        return null;
+    }
+
+    /// <summary>A <c>.zip</c> package (D-89 addendum): the teacher picked another installer inside it; the proposals follow it.</summary>
+    public async Task ChooseRunAsync(string run, CancellationToken cancellationToken)
+    {
+        if (SourcePath is null || Info is not { IsArchive: true } info || !info.Runs!.Contains(run)) return;
+        Info = await InstallerInspector.InspectArchiveEntryAsync(SourcePath, info, run, cancellationToken);
+        Propose();
+    }
+
+    /// <summary>Every field from what was found; a program already in the catalog keeps the teacher's own arguments, rule and limit.</summary>
+    private void Propose()
+    {
+        var info = Info!;
         Name = info.ProductName ?? Path.GetFileNameWithoutExtension(info.FileName);
         if (Name.Length > PackageEntry.MaxNameLength) Name = Name[..PackageEntry.MaxNameLength].Trim();
         Version = info.ProductVersion ?? string.Empty;
         Silent = InstallerInspector.SilentArguments(info.Family);
+        TimeoutMinutes = (int)LabControl.Shared.Defaults.PackageInstallTimeout.TotalMinutes;
         DetectKind = DetectKind.UninstallName;
         DetectName = Name;
         DetectPath = string.Empty;
@@ -69,9 +86,12 @@ public sealed class AddPackageModel
             if (existing.Detect.Kind == DetectKind.Path) DetectPath = existing.Detect.Value;
             else DetectName = existing.Detect.Value;
         }
-
-        return null;
     }
+
+    /// <summary>The installers inside a <c>.zip</c> package, the chosen one first in the wizard's list; empty for a single installer.</summary>
+    public IReadOnlyList<string> Runs => Info?.Runs ?? [];
+
+    public string? Run => Info?.Run;
 
     /// <summary>The catalog entry the current name would replace, if any.</summary>
     public PackageEntry? Replaces() => string.IsNullOrWhiteSpace(Name) ? null : _catalog.Matching(Name);
@@ -94,6 +114,11 @@ public sealed class AddPackageModel
             return (null, Strings.Get("Packages.NoInstaller"));
         }
 
+        if (Info.IsArchive && Info.Run is null)
+        {
+            return (null, Strings.Get("Packages.NoInstallerInArchive"));
+        }
+
         var entry = new PackageEntry
         {
             Id = PackageEntry.IdFor(Name),
@@ -101,6 +126,7 @@ public sealed class AddPackageModel
             Version = Version.Trim(),
             Family = Info.Family,
             File = Info.FileName,
+            Run = Info.Run ?? string.Empty,
             Size = Info.Size,
             Sha256 = Info.Sha256,
             Silent = Silent.Trim(),

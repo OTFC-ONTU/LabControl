@@ -30,6 +30,7 @@ public enum PackageProblem
     DetectPathInvalid,
     MsiFileExpected,
     TimeoutInvalid,
+    RunInvalid,
 }
 
 /// <summary>
@@ -47,6 +48,12 @@ public sealed record PackageEntry
     public string Version { get; init; } = string.Empty;
     public InstallerFamily Family { get; init; }
     public required string File { get; init; }
+
+    /// <summary>For a <c>.zip</c> package, the installer inside it to run (<c>setup.exe</c>, <c>Driver/setup.exe</c>); empty otherwise (D-89 addendum).</summary>
+    public string Run { get; init; } = string.Empty;
+
+    /// <summary>The file the PC actually starts: <see cref="Run"/> inside an archive, else <see cref="File"/>.</summary>
+    public string Started => Run.Length > 0 ? Path.GetFileName(Run) : File;
     public long Size { get; init; }
     public required string Sha256 { get; init; }
     public string Silent { get; init; } = string.Empty;
@@ -63,7 +70,8 @@ public sealed record PackageEntry
         if (Name.Length > MaxNameLength || Name.Any(char.IsControl)) return PackageProblem.NameTooLong;
         if (Version.Length > 64 || Version.Any(char.IsControl)) return PackageProblem.VersionInvalid;
         if (!SendFileRequest.IsValidName(File)) return PackageProblem.FileNameInvalid;
-        if (Family == InstallerFamily.Msi && !File.EndsWith(".msi", StringComparison.OrdinalIgnoreCase)) return PackageProblem.MsiFileExpected;
+        if (PackageArchive.IsArchive(File) ? !PackageArchive.IsValidRun(Run) : Run.Length > 0) return PackageProblem.RunInvalid;
+        if (Family == InstallerFamily.Msi && !Started.EndsWith(".msi", StringComparison.OrdinalIgnoreCase)) return PackageProblem.MsiFileExpected;
         if (!FileHash.LooksLikeSha256(Sha256)) return PackageProblem.HashInvalid;
         if (Silent.Length > 1024 || Silent.Any(char.IsControl)) return PackageProblem.SilentInvalid;
         if (string.IsNullOrWhiteSpace(Detect.Value) || Detect.Value.Length > 260 || Detect.Value.Any(char.IsControl)) return PackageProblem.DetectMissing;

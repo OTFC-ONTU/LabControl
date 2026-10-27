@@ -160,4 +160,5 @@
   <data name="PackageNotDetected" xml:space="preserve"><value>{0} finished (code {1}), but the program is not found by the package's rule. Check the rule, or whether the installer really installed for all users.</value></data>
   <data name="PackageInstalledReboot" xml:space="preserve"><value>{0} is installed (version {1}); Windows needs a restart to finish. The PC does not restart by itself.</value></data>
   <data name="PackageInstalled" xml:space="preserve"><value>{0} is installed (version {1}).</value></data>
+  <data name="PackageUnpackFailed" xml:space="preserve"><value>The archive {0} could not be unpacked: {1}</value></data>
 </root>

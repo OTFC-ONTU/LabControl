@@ -33,11 +33,12 @@ public sealed record InstallPackageRequest(
     string Silent,
     DetectRule Detect,
     TimeSpan Timeout,
-    InstallMode Mode)
+    InstallMode Mode,
+    string Run = "")
 {
     public static InstallPackageRequest For(PackageEntry entry, InstallMode mode) => new(
         entry.Id, entry.Version, entry.Sha256, entry.Sha256, entry.File, entry.Family, entry.Silent, entry.Detect,
-        TimeSpan.FromMinutes(entry.TimeoutMinutes), mode);
+        TimeSpan.FromMinutes(entry.TimeoutMinutes), mode, entry.Run);
 
     public Dictionary<string, string> ToArgs() => new(StringComparer.Ordinal)
     {
@@ -52,6 +53,7 @@ public sealed record InstallPackageRequest(
         ["detect"] = Detect.Value,
         ["timeout_seconds"] = ((int)Timeout.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture),
         ["mode"] = Mode switch { InstallMode.Missing => "missing", InstallMode.Check => "check", _ => "install" },
+        ["run"] = Run,
     };
 
     public static bool TryParse(Job job, out InstallPackageRequest request, out string error)
@@ -67,11 +69,11 @@ public sealed record InstallPackageRequest(
         if (kind is null || mode is null || !SendFileRequest.IsValidName(Arg("file"))) return false;
 
         var candidate = new InstallPackageRequest(Arg("package"), Arg("version"), Arg("ref"), Arg("sha256").ToLowerInvariant(), Arg("file"),
-            ParseFamily(Arg("family")), Arg("silent"), new DetectRule(kind.Value, Arg("detect")), TimeSpan.FromSeconds(seconds), mode.Value);
+            ParseFamily(Arg("family")), Arg("silent"), new DetectRule(kind.Value, Arg("detect")), TimeSpan.FromSeconds(seconds), mode.Value, Arg("run"));
         var asEntry = new PackageEntry
         {
             Id = candidate.Package, Name = candidate.Package, Version = candidate.Version, Family = candidate.Family, File = candidate.File,
-            Sha256 = candidate.Sha256, Silent = candidate.Silent, Detect = candidate.Detect, TimeoutMinutes = Math.Max(1, seconds / 60),
+            Sha256 = candidate.Sha256, Silent = candidate.Silent, Detect = candidate.Detect, TimeoutMinutes = Math.Max(1, seconds / 60), Run = candidate.Run,
         };
         if (!PackageEntry.IsValidId(candidate.Package) || asEntry.Validate() != PackageProblem.None
             || seconds < 60 || seconds > Defaults.PackageInstallTimeoutMax.TotalSeconds)

@@ -199,4 +199,49 @@ public sealed class PackageInstallTests
             await DisposeAsync(console, machines);
         }
     }
+
+    [Fact]
+    public async Task A_zip_package_is_added_with_its_chosen_installer_and_installed_from_it()
+    {
+        var (console, machines) = await LabAsync(1);
+        try
+        {
+            var session = console.Session;
+            var directory = TestConsole.TempDirectory();
+            Directory.CreateDirectory(directory);
+            var archive = Path.Combine(directory, "driver.zip");
+            using (var zip = System.IO.Compression.ZipFile.Open(archive, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                using (var setup = zip.CreateEntry("Win10/setup.exe").Open())
+                {
+                    setup.Write(File.ReadAllBytes(PackageCatalogTests.NsisInstaller("setup.exe")));
+                }
+
+                using var cab = zip.CreateEntry("Win10/data1.cab").Open();
+                cab.Write([1, 2, 3]);
+            }
+
+            var model = new AddPackageModel(session.Packages);
+            Assert.Null(await model.InspectAsync(archive, null, TestContext.Current.CancellationToken));
+            Assert.Equal(["Win10/setup.exe"], model.Runs);
+            Assert.Equal(InstallerFamily.Nsis, model.Info!.Family);
+            model.Name = "Realtek LAN";
+            var (entry, problem) = await model.AddAsync(null, TestContext.Current.CancellationToken);
+            Assert.Null(problem);
+            Assert.Equal("Win10/setup.exe", entry!.Run);
+            Assert.Equal("driver.zip", entry.File);
+            Assert.Equal(entry, session.Packages.Find(entry.Id));
+            Assert.Contains("run: Win10/setup.exe", File.ReadAllText(session.Packages.YamlPath(entry.Id)), StringComparison.Ordinal);
+
+            var jobs = session.InstallPackage([machines[0].AgentId], entry, InstallMode.Install);
+            Assert.True(await Finished(jobs));
+            Assert.True(jobs[0].Ok, jobs[0].Message);
+            Assert.Equal(PackageOutcomes.Installed, jobs[0].Outcome);
+            Assert.Contains(jobs[0].Output, line => line.Contains("setup.exe", StringComparison.Ordinal));
+        }
+        finally
+        {
+            await DisposeAsync(console, machines);
+        }
+    }
 }

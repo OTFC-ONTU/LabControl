@@ -2948,6 +2948,11 @@ the three languages checked again. H.264 only if M3's measurements demand it.
   **Open:** the VM run (a real MSI, an NSIS and an Inno installer as SYSTEM; a wrong argument
   ending at its limit; 3010), then the physical lab — the broken-package drill on all 14 and
   the measured 14-PC install without internet, written below next to the manual afternoon.
+  *Addendum (2026-10-27):* a package may be a `.zip` with its installer and files — the wizard lists
+  the installers inside and the PC unpacks the archive (checked names, limits) and runs the chosen
+  one from its folder (`D-89` addendum). First use: Realtek's *Win10/Win11 Auto Installation Program
+  (NDIS)* 10.80.50 for the RTL8168, the driver Wake-on-LAN needs; after it every PC still needs the
+  USB repair that sets the NIC's wake properties (`D-66`).
 
 **Acceptance criteria**
 

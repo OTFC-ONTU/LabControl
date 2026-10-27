@@ -247,7 +247,8 @@ the documents relevant to the task:
   package) and `FakePackageHost` (`/fail`, `/reboot`, `/hang`, `/nodetect`); the console's
   `PackageStatusBook` (`package-status.json`) and the *Packages* tab's *Install on N selected PCs*,
   *Install on all missing* (queued for PCs that are off; asks before an untried package) and *Check
-  PCs*. A restart is only reported; an exam refuses. Tests: 1085 Shared + 334 Console. Next: the VM run, the lab drills.
+  PCs*. A restart is only reported; an exam refuses. A package may be a `.zip` with its installer
+  and files (`run`, `PackageArchive`, `D-89` addendum). Tests: 1102 Shared + 335 Console. Next: the VM run, the lab drills.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

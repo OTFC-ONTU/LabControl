@@ -160,4 +160,5 @@
   <data name="PackageNotDetected" xml:space="preserve"><value>{0} завершився (код {1}), але правило пакета не знаходить програму. Перевірте правило або чи справді інсталятор встановив програму для всіх користувачів.</value></data>
   <data name="PackageInstalledReboot" xml:space="preserve"><value>{0} встановлено (версія {1}); Windows потребує перезавантаження, щоб завершити. ПК не перезавантажується сам.</value></data>
   <data name="PackageInstalled" xml:space="preserve"><value>{0} встановлено (версія {1}).</value></data>
+  <data name="PackageUnpackFailed" xml:space="preserve"><value>Архів {0} не вдалося розпакувати: {1}</value></data>
 </root>

@@ -267,8 +267,10 @@ silent arguments, detect rule, limit and a mode (`install` / `missing` / `check`
 the limit, staging emptied at start) and `FakePackageHost` (`/fail`, `/reboot`, `/hang`, `/nodetect`).
 The console's `PackageStatusBook` (`package-status.json`) keeps each PC's answer; the *Packages* tab
 lists every PC and has *Install on N selected PCs*, *Install on all missing* (asks before an untried
-package) and *Check PCs*. Tests: 1085 Shared + 334 Console. Next: the VM run, then the broken-package drill and the
-14-PC measurement in the lab.
+package) and *Check PCs*. A package may also be a `.zip` (`D-89` addendum): the wizard lists the
+installers inside, the PC unpacks it under checked names and limits (`PackageArchive`) and runs the
+chosen one (`run`) from its folder — first for the Realtek RTL8168 driver Wake-on-LAN needs.
+Tests: 1102 Shared + 335 Console. Next: the VM run, then the broken-package drill and the 14-PC measurement in the lab.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

@@ -149,7 +149,24 @@ public sealed class PackageInstallRunner
                 return Result(job, false, PackageOutcomes.NotRun, PcText.Get("PackagePullFailed", request.File, ex.Message));
             }
 
-            await report(new JobProgress { JobId = job.Id, Line = PcText.Get("PackageStarting", request.File, request.Silent) });
+            var installer = staged;
+            if (request.Run.Length > 0)
+            {
+                // A .zip package (D-89 addendum): unpacked beside the archive, run from its own folder.
+                try
+                {
+                    var unpacked = Path.Combine(directory, "x");
+                    await PackageArchive.ExtractAsync(staged, unpacked, token);
+                    installer = Path.Combine(unpacked, Path.Combine(request.Run.Split('/')));
+                    if (!File.Exists(installer)) throw new InvalidDataException(request.Run);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+                {
+                    return Result(job, false, PackageOutcomes.NotRun, PcText.Get("PackageUnpackFailed", request.File, ex.Message));
+                }
+            }
+
+            await report(new JobProgress { JobId = job.Id, Line = PcText.Get("PackageStarting", Path.GetFileName(installer), request.Silent) });
             var started = DateTimeOffset.UtcNow;
             using var heartbeat = CancellationTokenSource.CreateLinkedTokenSource(token);
             var beats = Task.Run(async () =>
@@ -171,7 +188,7 @@ public sealed class PackageInstallRunner
             InstallerExit exit;
             try
             {
-                exit = await _host.RunInstallerAsync(request, staged, token);
+                exit = await _host.RunInstallerAsync(request, installer, token);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
             {

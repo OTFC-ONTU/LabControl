@@ -256,6 +256,7 @@ public sealed class PackageCatalog
         public string? Version { get; set; }
         public string? Family { get; set; }
         public string? File { get; set; }
+        public string? Run { get; set; }
         public long? Size { get; set; }
         public string? Sha256 { get; set; }
         public string? Silent { get; set; }
@@ -278,6 +279,7 @@ public sealed class PackageCatalog
         Version = entry.Version,
         Family = InstallPackageRequest.FamilyCode(entry.Family),
         File = entry.File,
+        Run = entry.Run.Length > 0 ? entry.Run : null,
         Size = entry.Size,
         Sha256 = entry.Sha256,
         Silent = entry.Silent,
@@ -319,6 +321,7 @@ public sealed class PackageCatalog
             Version = raw.Version?.Trim() ?? string.Empty,
             Family = ParseFamily(raw.Family, file),
             File = file,
+            Run = raw.Run?.Trim() ?? string.Empty,
             Size = raw.Size ?? 0,
             Sha256 = raw.Sha256?.Trim().ToLowerInvariant() ?? string.Empty,
             Silent = raw.Silent?.Trim() ?? string.Empty,

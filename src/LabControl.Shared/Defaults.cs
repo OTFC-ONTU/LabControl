@@ -1275,6 +1275,12 @@ public static class Defaults
     /// <summary>The longest an entry may ask for: three hours covers the largest IDE.</summary>
     public static readonly TimeSpan PackageInstallTimeoutMax = TimeSpan.FromHours(3);
 
+    /// <summary>The most a <c>.zip</c> package may unpack to on a PC (D-89 addendum).</summary>
+    public const long PackageArchiveMaxBytes = 8L * 1024 * 1024 * 1024;
+
+    /// <summary>The most entries a <c>.zip</c> package may hold.</summary>
+    public const int PackageArchiveMaxEntries = 50_000;
+
     /// <summary>How often a PC says "still installing" while an installer runs, so the console's inactivity timeout never fires on a long install (D-89).</summary>
     public static readonly TimeSpan PackageInstallHeartbeat = TimeSpan.FromSeconds(20);
     public const string ProfileTemplateArchiveFileName = "profile-template.zip";

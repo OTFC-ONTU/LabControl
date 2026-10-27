@@ -424,7 +424,7 @@ where it lands and what happens next (`D-23`):
 
 | | `install_package` | `send_file` |
 |---|---|---|
-| args | `package`, `version`, `ref`, `sha256`, `file`, `family`, `silent`, `detect_kind`, `detect`, `timeout_seconds`, `mode` (M7 portion 4, `D-89`) | `ref`, `sha256`, `name`, `open` (`true`/`false`, default `false`) |
+| args | `package`, `version`, `ref`, `sha256`, `file`, `family`, `silent`, `detect_kind`, `detect`, `timeout_seconds`, `mode`, `run` (M7 portion 4, `D-89`) | `ref`, `sha256`, `name`, `open` (`true`/`false`, default `false`) |
 | lands in | agent staging directory under `ProgramData`, deleted afterwards | `Materials` on the `student` desktop, overwriting a same-named file |
 | then | run silently as SYSTEM with the catalog's arguments, verify `detect` | if `open`, the helper opens it in the student session with the default application |
 | ever executed | yes — that is the job | never, whatever the extension |
@@ -446,6 +446,7 @@ job — the agent never reads the catalog:
 | `detect_kind`, `detect` | `uninstall_name` (a `DisplayName` in the 64- or 32-bit *Uninstall* keys of HKLM starting with the value, ignoring case) or `path` (a file or folder at that path, environment variables expanded) |
 | `timeout_seconds` | 60 … 10 800: the installer and everything it started are ended after this |
 | `mode` | `install` (run whatever the rule finds), `missing` (skip when the rule finds the program), `check` (evaluate the rule only; nothing is pulled) |
+| `run` | empty, or for a `.zip` package the installer inside it (`Win10/setup.exe`, forward slashes, each part a Windows leaf name): the PC unpacks the archive into `x\\` in the staging directory under the rules of `D-89`'s addendum and starts `run` from its own folder |
 
 The PC refuses during an exam, runs one installer at a time (others wait, reporting every 10 s),
 sends a progress line every `Defaults.PackageInstallHeartbeat` (20 s) while the installer runs —

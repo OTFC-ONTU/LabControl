@@ -14,6 +14,7 @@ name: IntelliJ IDEA Community Edition
 version: "2026.2"
 family: nsis                       # msi | burn | nsis | inno | installshield | exe
 file: ideaIC-2026.2.exe            # pushed to the PCs over the LAN
+# run: Win10/setup.exe             # only for a .zip: the installer inside it the PC runs (D-89 addendum)
 size: 1018234567
 sha256: "<64 hex>"
 silent: /S                         # an MSI runs as msiexec /i <file> followed by these

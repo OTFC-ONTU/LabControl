@@ -24,6 +24,9 @@ public sealed class AddPackageDialog : DialogWindow<PackageEntry>
     private readonly TextBox _name = new() { MinWidth = 320, MaxLength = PackageEntry.MaxNameLength };
     private readonly TextBox _version = new() { MinWidth = 160, MaxLength = 64 };
     private readonly TextBox _silent = new() { MinWidth = 320, MaxLength = 1024, FontFamily = new FontFamily("Menlo, Consolas, monospace") };
+    private readonly ComboBox _runs = new() { MinWidth = 320, IsVisible = false };
+    private readonly TextBlock _runsLabel = new() { TextWrapping = TextWrapping.Wrap, MaxWidth = 460, IsVisible = false };
+    private bool _showing;
     private readonly TextBox _timeout = new() { Width = 80, MaxLength = 3, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly RadioButton _byName = new() { GroupName = "detect", IsChecked = true };
     private readonly RadioButton _byPath = new() { GroupName = "detect" };
@@ -69,6 +72,18 @@ public sealed class AddPackageDialog : DialogWindow<PackageEntry>
         Closed += (_, _) => _work?.Cancel();
 
         _fields = new StackPanel { Spacing = 8, IsEnabled = false };
+        _runsLabel.Text = Strings.Get("Packages.ArchiveRun");
+        _runs.SelectionChanged += async (_, _) =>
+        {
+            if (_showing || _runs.SelectedItem is not string run || run == _model.Run) return;
+            await RunAsync(async token =>
+            {
+                await _model.ChooseRunAsync(run, token);
+                ShowProposals();
+            });
+        };
+        _fields.Children.Add(_runsLabel);
+        _fields.Children.Add(_runs);
         _fields.Children.Add(_family);
         _fields.Children.Add(_familyHint);
         _fields.Children.Add(Pair(Strings.Get("Packages.Name"), _name));
@@ -91,7 +106,7 @@ public sealed class AddPackageDialog : DialogWindow<PackageEntry>
         {
             Title = Strings.Get("Packages.Choose"),
             AllowMultiple = false,
-            FileTypeFilter = [new FilePickerFileType(Strings.Get("Packages.InstallerFiles")) { Patterns = ["*.exe", "*.msi", "*.EXE", "*.MSI"] }],
+            FileTypeFilter = [new FilePickerFileType(Strings.Get("Packages.InstallerFiles")) { Patterns = ["*.exe", "*.msi", "*.zip", "*.EXE", "*.MSI", "*.ZIP"] }],
         });
         if (files.Count == 0) return;
         if (files[0].TryGetLocalPath() is not { } path)
@@ -113,8 +128,22 @@ public sealed class AddPackageDialog : DialogWindow<PackageEntry>
                 return;
             }
 
+            ShowProposals();
+            _fields.IsEnabled = true;
+            _add.IsEnabled = true;
+        });
+    }
+
+    private void ShowProposals()
+    {
+        _showing = true;
+        try
+        {
+            _runs.ItemsSource = _model.Runs;
+            _runs.SelectedItem = _model.Run;
+            _runs.IsVisible = _runsLabel.IsVisible = _model.Info?.IsArchive == true;
             _family.Text = _model.FamilyText;
-            _familyHint.Text = _model.FamilyHint;
+            _familyHint.Text = _model.Info is { IsArchive: true, Run: null } ? Strings.Get("Packages.NoInstallerInArchive") : _model.FamilyHint;
             _name.Text = _model.Name;
             _version.Text = _model.Version;
             _silent.Text = _model.Silent;
@@ -124,9 +153,11 @@ public sealed class AddPackageDialog : DialogWindow<PackageEntry>
             _byName.IsChecked = _model.DetectKind == DetectKind.UninstallName;
             _byPath.IsChecked = _model.DetectKind == DetectKind.Path;
             ShowReplaces();
-            _fields.IsEnabled = true;
-            _add.IsEnabled = true;
-        });
+        }
+        finally
+        {
+            _showing = false;
+        }
     }
 
     private async Task AddAsync()

@@ -769,7 +769,7 @@ java.exe</value></data>
   <data name="Tab.Packages" xml:space="preserve"><value>Пакеты</value></data>
   <data name="Packages.Add" xml:space="preserve"><value>Добавить пакет…</value></data>
   <data name="Packages.AddTitle" xml:space="preserve"><value>Добавить пакет</value></data>
-  <data name="Packages.AddDescription" xml:space="preserve"><value>Выберите установщик программы (.exe или .msi) на этом компьютере. LabControl прочитает его, предложит, как устанавливать без вопросов, и сохранит копию в каталоге этой лаборатории, так что оригинал потом можно удалить. Интернет на ПК не нужен.</value></data>
+  <data name="Packages.AddDescription" xml:space="preserve"><value>Выберите установщик программы (.exe, .msi или .zip с установщиком и его файлами) на этом компьютере. LabControl прочитает его, предложит, как устанавливать без вопросов, и сохранит копию в каталоге этой лаборатории, так что оригинал потом можно удалить. Интернет на ПК не нужен.</value></data>
   <data name="Packages.Choose" xml:space="preserve"><value>Выбрать установщик…</value></data>
   <data name="Packages.InstallerFiles" xml:space="preserve"><value>Установщики</value></data>
   <data name="Packages.Reading" xml:space="preserve"><value>Читаю установщик…</value></data>
@@ -856,4 +856,8 @@ java.exe</value></data>
   <data name="Packages.UntestedConfirm" xml:space="preserve"><value>«{0}» ещё не устанавливали ни на один ПК. Сначала попробуйте на одном: выберите его на вкладке «Лаборатория» и нажмите «Установить на выбранных ПК». Всё равно установить на {1} ПК?</value></data>
   <data name="Packages.InstallAnyway" xml:space="preserve"><value>Всё равно установить</value></data>
   <data name="Packages.InstallFailed" xml:space="preserve"><value>Не отправлено: {0}</value></data>
+  <data name="Packages.ArchiveRun" xml:space="preserve"><value>В архиве есть такие установщики; ПК распаковывает архив и запускает выбранный здесь:</value></data>
+  <data name="Packages.NoInstallerInArchive" xml:space="preserve"><value>В этом архиве нет установщика .exe или .msi.</value></data>
+  <data name="Packages.ArchiveFact" xml:space="preserve"><value>{0} ({1}), запускается {2} из него</value></data>
+  <data name="Packages.Problem.RunInvalid" xml:space="preserve"><value>Выберите, какой установщик из архива будут запускать ПК.</value></data>
 </root>

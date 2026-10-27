@@ -161,7 +161,9 @@ public sealed partial class PackagesViewModel : ObservableObject
         TimeoutText = entry?.TimeoutMinutes.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
         Facts = entry is null ? string.Empty : string.Join("\n",
             Strings.Format("Packages.FactKind", FamilyName(entry.Family)),
-            Strings.Format("Packages.FileFormat", entry.File, FormatSize(entry.Size)),
+            entry.Run.Length > 0
+                ? Strings.Format("Packages.ArchiveFact", entry.File, FormatSize(entry.Size), entry.Run)
+                : Strings.Format("Packages.FileFormat", entry.File, FormatSize(entry.Size)),
             Strings.Format("Packages.FactHash", entry.Sha256),
             Strings.Format("Packages.FactChanged", entry.ChangedBy,
                 DateTimeOffset.FromUnixTimeSeconds(entry.ChangedAtUnix).ToLocalTime().ToString("g", CultureInfo.CurrentCulture)));

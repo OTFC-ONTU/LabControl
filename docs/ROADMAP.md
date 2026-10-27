@@ -2951,13 +2951,17 @@ the three languages checked again. H.264 only if M3's measurements demand it.
   *Addendum (2026-10-27):* a package may be a `.zip` with its installer and files — the wizard lists
   the installers inside and the PC unpacks the archive (checked names, limits) and runs the chosen
   one from its folder (`D-89` addendum). First use: Realtek's *Win10/Win11 Auto Installation Program
-  (NDIS)* 10.80.50 for the RTL8168, the driver Wake-on-LAN needs; after it every PC still needs the
-  USB repair that sets the NIC's wake properties (`D-66`).
+  (NDIS)* 10.80.50 for the RTL8168, the driver Wake-on-LAN needs.
   **First run on a physical PC (2026-10-27):** the Realtek driver `.zip` was installed through the
   catalog on one PC of lab `444-2` (agent `1.0.0+8cfded14`), followed by the USB repair from a fresh
   stick and the BIOS settings (ErP off, *Power On By PCI-E* on); shutdown from the console and
-  *Wake* then woke the PC — **Wake-on-LAN's first success in the lab**. Next: *Install on all
-  missing* for the other 13, the same stick's repair and the BIOS on each, and the room-wide wake.
+  *Wake* then woke the PC — **Wake-on-LAN's first success in the lab**. The driver then went to the
+  other 13 through *Install on all missing*. **PC-02 woke with the driver and the BIOS alone, without
+  the USB repair**: the vendor driver's defaults already enable wake on a magic packet from shutdown,
+  so the repair is not needed for wake from S5 (it still sets *only magic packet*, Energy-Efficient
+  Ethernet off and *allow this device to wake the computer*, and refreshes the tile's NIC advisory,
+  which otherwise stays as an informational tooltip, `D-66`). Next: the BIOS on the rest and the
+  room-wide wake.
 
 **Acceptance criteria**
 

@@ -312,7 +312,10 @@ actionable issues in amber and renders plain-language details in the tooltip/eve
 Unverified physical wake and a network driver that exposes no Wake-on-LAN settings
 (the Microsoft in-box Realtek driver, for one) remain informational advisories: tooltip
 only, one event line when the snapshot changes, no amber (`D-66`). Wake-on-LAN on such a
-PC needs the vendor's NIC driver followed by a USB repair. The installer's green result
+PC needs the vendor's NIC driver — in the lab installed through the console's package catalog —
+and the BIOS's wake settings; with the Realtek RTL8168 driver's defaults that was enough to wake
+from shutdown (PC-02, 2026-10-27), and a USB repair additionally applies the NIC properties above
+and refreshes the advisory. The installer's green result
 certifies local files, identity and service checks; it does not assert that the teacher
 console is reachable or that BIOS/UEFI and the physical LAN can wake the PC.
 

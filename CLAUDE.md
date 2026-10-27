@@ -764,8 +764,8 @@ Setup, enrolled in lab `444-2`, linked to the MacBook console over Wi-Fi with au
 and development moves on (M5 portion 2 onwards); the remaining nine PCs, the vendor NIC
 driver, the wake test and the other M4 physical checks continue alongside, tracked in
 ROADMAP's *Physical lab* row and the on-site checklist. **Wake-on-LAN first worked on 2026-10-27 on one PC**
-(the Realtek driver `.zip` installed through the catalog, the USB repair, ErP off and *Power On By PCI-E*
-on in the BIOS); do not describe it as working for the room until all fourteen wake.
+(the Realtek driver `.zip` installed through the catalog, ErP off and *Power On By PCI-E* on in the BIOS;
+PC-02 woke without the USB repair, so the driver's defaults suffice for wake from shutdown); do not describe it as working for the room until all fourteen wake.
 
 **Physical lab, 2026-10-20:** all fourteen PCs (PC-01…PC-14) are installed and linked. The owner had
 forgotten the lab key's passphrase; the lab was moved to a new key with *Move this lab to a new key*

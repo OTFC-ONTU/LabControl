@@ -16,6 +16,9 @@
          macOS natives come with SkiaSharp itself, Linux needs the extra package. -->
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+    <!-- H.264 through Windows' in-box Media Foundation MFTs, for the PCs and a Windows console
+         (M7 portion 6, D-91); macOS uses VideoToolbox through DllImport, Linux has none. -->
+    <PackageReference Include="Vortice.MediaFoundation" />
   </ItemGroup>
 
   <ItemGroup>

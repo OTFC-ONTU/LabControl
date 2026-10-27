@@ -277,10 +277,10 @@ message VideoFrame {
   int32     height     = 5;
   VideoMode mode       = 6;
   repeated Rect dirty  = 7;
-  bytes     jpeg       = 8;
-  bool      keyframe   = 9;
-  string    codec      = 10;  // reserved: "jpeg" today, "h264" is an M6 option
-  int32     quality    = 11;  // the JPEG quality this frame was encoded at (D-37: auto mode varies it)
+  bytes     jpeg       = 8;   // the encoded picture: a JPEG, or for codec "h264" one access unit in Annex B (D-91)
+  bool      keyframe   = 9;   // for "h264": an IDR with SPS and PPS in front
+  string    codec      = 10;  // "jpeg" (empty = "jpeg", from older builds) or "h264" (M7 portion 6, D-91); decode by this, never by what was asked
+  int32     quality    = 11;  // the JPEG quality this frame was encoded at (D-37: auto mode varies it); 0 for "h264"
 }
 
 message VideoAck { uint64 last_seq = 1; }
@@ -294,6 +294,9 @@ message VideoAck { uint64 last_seq = 1; }
 // survives a restart.
 message BroadcastRequest {
   string session_id = 1;  // from Overlay.session_id of the BROADCAST_START
+  // M7 portion 6 (D-91): the codecs this PC can show besides "jpeg" -- "h264" when its session
+  // helper created an H.264 decoder. Empty (and from older agents) = JPEG only.
+  repeated string codecs = 2;
 }
 
 message VideoControl {
@@ -303,6 +306,9 @@ message VideoControl {
   int32     quality              = 4;
   bool      request_keyframe     = 5;
   int32     max_bits_per_second  = 6;
+  // M7 portion 6 (D-91): the codec the console asks for in FULL mode -- "h264" for the teacher's
+  // *Video*, empty for JPEG. A PC that cannot encode it sends JPEG; older agents ignore the field.
+  string    codec                = 7;
 }
 
 message Input {
@@ -604,6 +610,9 @@ message HelperHello {
   uint32 session_id = 1;  // the session the helper found itself in
   uint32 process_id = 2;
   string version    = 3;
+  // M7 portion 6 (D-91): codecs besides "jpeg" the helper could create at start -- "h264".
+  repeated string video_decoders = 4;  // for the broadcast; the service names them in BroadcastRequest.codecs
+  repeated string video_encoders = 5;  // for the full view
 }
 
 // What only a process inside the session can see. In M2 it is the whole point of the

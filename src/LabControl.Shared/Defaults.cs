@@ -907,8 +907,26 @@ public static class Defaults
 
     public static readonly TimeSpan KeyframeInterval = TimeSpan.FromSeconds(5);
 
-    /// <summary>The only codec in this build; <c>VideoFrame.codec</c> names it (D-11).</summary>
+    /// <summary>The picture codec every build has; <c>VideoFrame.codec</c> names it (D-11), and an empty codec means it.</summary>
     public const string VideoCodecJpeg = "jpeg";
+
+    /// <summary>
+    /// The teacher's *Video* (M7 portion 6, D-91): H.264, one access unit in Annex B per frame,
+    /// through the platform's own codec — Media Foundation on Windows, VideoToolbox on macOS.
+    /// </summary>
+    public const string VideoCodecH264 = "h264";
+
+    /// <summary>A PC's full view in *Video*: 30 fps where the DXGI capture keeps up (D-91 item 8).</summary>
+    public const double FullVideoFramesPerSecond = 30;
+
+    /// <summary>
+    /// The cap of a PC's full view in *Video*; the encoder aims at three quarters of it (D-91
+    /// item 5). A 1080p desktop with a playing film fits; a still one takes a fraction.
+    /// </summary>
+    public const int FullVideoBitsPerSecond = 8 * 1024 * 1024;
+
+    /// <summary>The encoder's target as a share of the stream's cap; the rest is headroom for keyframes (D-91 item 5).</summary>
+    public const double H264TargetShareOfCap = 0.75;
 
     /// <summary>A producer never runs faster than this whatever the console asks.</summary>
     public const double VideoMaxFramesPerSecond = 30;
@@ -1011,6 +1029,9 @@ public static class Defaults
 
     /// <summary>The broadcast's capture rate; the bandwidth caps below lower what actually goes out.</summary>
     public const double BroadcastFramesPerSecond = 12;
+
+    /// <summary>The broadcast's capture rate in *Video* (D-91 item 8): what the console's capture and scaling keep up with.</summary>
+    public const double BroadcastVideoFramesPerSecond = 25;
 
     /// <summary>
     /// The most one PC's copy of the broadcast may take (D-72). Every PC receives the same

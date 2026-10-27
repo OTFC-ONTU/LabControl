@@ -4900,6 +4900,7 @@ or 2; whether Linux and Windows PCs must coexist in one lab.
 | SkiaSharp, SkiaSharp.NativeAssets.Linux | Shared (so Console, FakeAgent, Agent.Session) | JPEG encode/decode, scaling, the simulator's synthetic desktops (M3, D-34); pinned to the version Avalonia ships |
 | Microsoft.Windows.CsWin32 | Agent, Agent.Session, Setup | Win32 P/Invoke source generator; names listed in `NativeMethods.txt`, never a hand-written `DllImport` (M2) |
 | Vortice.Direct3D11, Vortice.DXGI | Agent.Session | DXGI Desktop Duplication and the D3D11 staging texture it is read through (M3, D-35); the maintained successor of SharpDX |
+| Vortice.MediaFoundation | Shared (so Agent.Session and the Windows console) | H.264 encode/decode through Windows' in-box Media Foundation MFTs — no codec or runtime installed on a PC (M7 portion 6, D-91); same family and version as Vortice.DXGI |
 | Microsoft.Extensions.Hosting.WindowsServices | Agent | Windows service hosting (M2) |
 | System.Management | Setup | WMI (profiles, NIC properties) |
 | YamlDotNet | Console | package catalog `<id>.yaml`, read and written by the *Add package* wizard (D-07, D-88) |
@@ -5318,3 +5319,73 @@ Status: built 2026-10-27 on the Mac, merged from three parallel worktrees. Not r
 torn temporary after a failed flush on NTFS, `DirectoryAgentStore` under DPAPI and the ProgramData
 ACLs, a real `ERROR_DISK_FULL` in staging (set `LABCONTROL_FULL_DISK_VOLUME` to a small VHD), Schannel
 with a client certificate whose start is in the PC's future, and clock drift in the physical lab.
+
+## D-91 — H.264 for the broadcast and the full view: platform codecs, self-describing frames, *Text / Video* at every show (M7 portion 6)
+
+Context (2026-10-27): the broadcast reaches about 10 fps at best — every frame is a JPEG sent once
+per PC under the 24 Mbit/s total the console's Wi-Fi carries (`D-72`) — so a film or an animated
+presentation is not watchable. The owner decided H.264 for the broadcast and for a PC's full view,
+with a *Text / Video* choice; the mosaic stays JPEG (ROADMAP M7). `D-11` deferred H.264 behind the
+same envelope; `VideoFrame.codec` was reserved for it from M3.
+
+Owner decisions of 2026-10-27: **Text is today's JPEG picture**, unchanged (tiles, deltas, the
+full view's quality selector), and **Video is H.264** at 25–30 fps; the first choice is *Text*; the
+last choice is remembered **separately** for *Show my screen* and for the full-view window, on this
+computer; the teacher may **switch at any time** while showing or watching (one keyframe).
+
+Decision:
+
+1. **Platform codecs only, nothing installed on a PC** (`D-03`). The PCs encode (full view) and
+   decode (broadcast) with Windows' in-box Media Foundation H.264 MFTs, through
+   **Vortice.MediaFoundation 3.8.3** — the same family and version as Vortice.DXGI, a managed
+   wrapper compiled into the self-contained exe. Only the **synchronous** software MFTs are used
+   (Microsoft's H.264 encoder and decoder, found with `MFTEnumEx(SYNCMFT)`): hardware MFTs are
+   asynchronous and need the event model, a later optimisation if the lab's CPUs need it. Encoder
+   input and decoder output are NV12, converted in C# (`Nv12`). The macOS console calls
+   **VideoToolbox** through hand-written `DllImport`s (no NuGet), which picks the hardware codec
+   itself; the Windows console uses the same Media Foundation code as the PCs; **Linux has no
+   H.264** and offers *Video* disabled. A Windows N edition without the Media Feature Pack has no
+   MFT: it reports none and gets JPEG.
+2. **Self-describing frames, no protocol version.** `VideoFrame.codec` says what each frame is;
+   `"h264"` frames carry **one access unit in Annex B** (start codes) in the existing payload
+   field (still named `jpeg` on the wire — renaming it changes nothing on the wire and every
+   caller in code), `keyframe` = an IDR with SPS and PPS in front, `dirty` empty, `quality` 0.
+   A receiver decodes by the frame's codec, never by what it asked for, so every mix of builds
+   works: an older agent ignores what it does not know and sends JPEG, an older console never
+   asks, an encoder that cannot start falls back to JPEG on the PC by itself (one
+   `video.h264_unavailable` event per stream).
+3. **Who asks for what** (all additive): `VideoControl.codec` — the console asks a PC for `"h264"`
+   in the full view, only in *Video* and only when the console itself can decode it;
+   `HelperHello.video_decoders` / `video_encoders` — what the helper found at start (a decoder or
+   encoder it could create); `BroadcastRequest.codecs` — what the PC's helper can decode, so the
+   console never sends H.264 to a PC that cannot show it. An empty list is JPEG only.
+4. **Keyframes and loss.** An H.264 P-frame needs every frame before it exactly like a JPEG delta,
+   so the existing rules hold unchanged: the hub's per-PC one-frame slot breaks a PC's chain when
+   it is still full and the PC skips to the next IDR (asked for at most every
+   `BroadcastKeyframeRequestInterval`), `BroadcastPicture` drops non-key frames after an
+   overflow, a keyframe every `KeyframeInterval` or on request. One difference on the PC's
+   uplink: a JPEG frame the sink refuses is re-encoded next tick from what is owed, but an
+   encoded H.264 frame has already advanced the encoder — so the producer **holds** the refused
+   access unit and offers it again before encoding anything new. Baseline profile (no B-frames)
+   and low-latency mode: one frame in, one out.
+5. **Bitrate.** The encoder's target is three quarters of the stream cap the pacer already
+   enforces (headroom for keyframes). The broadcast still encodes once for everyone under
+   `min(BroadcastBitsPerSecond, BroadcastTotalBitsPerSecond / watching)` — about 1.7 Mbit/s each
+   at 14 PCs and 0.8 at 30, enough for 1280-wide video. A new cap is a new `VideoControl`, which
+   already starts a new budget and a keyframe; the encoder is re-created with it (no `ICodecAPI`
+   needed). The full view's *Video* target is `FullVideoBitsPerSecond`.
+6. **Mixed fan-out.** In *Video* the hub runs the H.264 producer for PCs that listed `"h264"` and,
+   only while at least one watching PC did not, a second JPEG producer for those — each PC
+   receives exactly one stream, and both count against the same total cap. In *Text* only the
+   JPEG producer runs. Switching moves every PC to the other producer starting at a keyframe.
+7. ***Text / Video* for the teacher.** A choice next to *Show my screen* (and beside *Stop showing*
+   while showing) and in the full-view window; the quality selector applies to *Text* only. The
+   last choice for each is kept in `preferences.json` (`broadcast_video`, `full_view_video`),
+   never in a backup or lab file. *Video* that a PC cannot do shows the picture as *Text* and the
+   window says why.
+8. **Rates.** *Video*: the broadcast at `BroadcastVideoFramesPerSecond` (25; the Mac's capture and
+   scaling cost) and the full view at `FullVideoFramesPerSecond` (30); *Text* unchanged. Width is
+   still `BroadcastWidth` for the broadcast and native for the full view, rounded down to even.
+   Sound is not part of this.
+
+Status: in progress (2026-10-27).

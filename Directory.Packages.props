@@ -26,6 +26,8 @@
     <!-- DXGI Desktop Duplication in the session helper (D-35); the maintained successor of SharpDX. -->
     <PackageVersion Include="Vortice.Direct3D11" Version="3.8.3" />
     <PackageVersion Include="Vortice.DXGI" Version="3.8.3" />
+    <!-- H.264 encode/decode through Windows' in-box Media Foundation MFTs (M7 portion 6, D-91). -->
+    <PackageVersion Include="Vortice.MediaFoundation" Version="3.8.3" />
   </ItemGroup>
 
   <ItemGroup Label="Transport">

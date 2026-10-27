@@ -9,6 +9,10 @@ using Xunit;
 
 namespace LabControl.Console.Tests;
 
+/// <summary>The M7 robustness drills (a full room relinking, a full room streaming): never beside other test classes.</summary>
+[CollectionDefinition(nameof(RobustnessCollection), DisableParallelization = true)]
+public sealed class RobustnessCollection;
+
 /// <summary>
 /// M7 robustness pass, the reconnect storm (ROADMAP M7): a full room of
 /// <see cref="Defaults.MaxStudentPcs"/> PCs loses the link at the same moment — the console
@@ -17,6 +21,11 @@ namespace LabControl.Console.Tests;
 /// (the agent's ledger, D-32 item 7), the console's picture of the room must end consistent,
 /// and nothing — threads, TCP connections, linked entries — may grow from storm to storm.
 /// </summary>
+/// <remarks>
+/// Thirty linked PCs and a whole room's TLS handshakes in one process: these run alone, like
+/// the lab-switch drills, so they neither starve nor are starved by the other test classes.
+/// </remarks>
+[Collection(nameof(RobustnessCollection))]
 public sealed class ReconnectStormTests
 {
     /// <summary>

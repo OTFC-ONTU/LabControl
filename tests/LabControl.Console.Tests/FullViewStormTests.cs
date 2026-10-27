@@ -18,6 +18,7 @@ namespace LabControl.Console.Tests;
 /// window must return its PC to thumbnails with nothing left streaming, and opening and
 /// closing again and again must leave nothing behind.
 /// </summary>
+[Collection(nameof(RobustnessCollection))]
 public sealed class FullViewStormTests
 {
     /// <summary>How many of the room's windows the teacher opens at once: half the room.</summary>

@@ -2953,6 +2953,11 @@ the three languages checked again. H.264 only if M3's measurements demand it.
   one from its folder (`D-89` addendum). First use: Realtek's *Win10/Win11 Auto Installation Program
   (NDIS)* 10.80.50 for the RTL8168, the driver Wake-on-LAN needs; after it every PC still needs the
   USB repair that sets the NIC's wake properties (`D-66`).
+  **First run on a physical PC (2026-10-27):** the Realtek driver `.zip` was installed through the
+  catalog on one PC of lab `444-2` (agent `1.0.0+8cfded14`), followed by the USB repair from a fresh
+  stick and the BIOS settings (ErP off, *Power On By PCI-E* on); shutdown from the console and
+  *Wake* then woke the PC — **Wake-on-LAN's first success in the lab**. Next: *Install on all
+  missing* for the other 13, the same stick's repair and the BIOS on each, and the room-wide wake.
 
 **Acceptance criteria**
 

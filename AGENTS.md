@@ -262,7 +262,9 @@ the documents relevant to the task:
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the
   `1.0.0` media; the owner declared the baseline established and moved development on
   to M5. Remaining PCs, the vendor Realtek driver and the wake test continue alongside
-  (ROADMAP *Physical lab* row and on-site checklist). Never claim Wake-on-LAN works here.
+  (ROADMAP *Physical lab* row and on-site checklist). Wake-on-LAN first worked on one PC on 2026-10-27
+  (Realtek driver via the catalog, USB repair, BIOS ErP off / Power On By PCI-E on); never claim it for
+  the room until all fourteen wake.
 - `1.0.0` is the current physical-lab release candidate (owner decision 2026-09-08).
   Do not call it released until the remaining M4 physical acceptance checks pass; the
   later additive M5 portion-5 `Welcome.console_access` field preserves the frozen

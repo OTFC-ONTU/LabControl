@@ -3024,8 +3024,16 @@ decision 2026-10-27: the manual after the redesign, so it is not rewritten).
   streams at once) and an H.264 stream encoded for nobody when only JPEG PCs watched. Measured:
   the *Video* broadcast at 24–25 fps for ~100 kbit/s (*Text*: 11 fps, 3.6 Mbit/s), the PC's full
   view in *Video* at 26–27 fps while it decoded the broadcast; colours, stride and switching
-  correct; `LABCONTROL_NO_H264=1` falls back to JPEG with the reason shown. **Next:** the lab —
-  `win-x64`, 14 PCs over the MacBook's Wi-Fi with a real film, the encoder's CPU on a lab PC.
+  correct; `LABCONTROL_NO_H264=1` falls back to JPEG with the reason shown.
+- *Portion 6, everything the VM can test (2026-10-27, same clone)* (`D-91` item 11): a PC whose
+  H.264 decoder breaks mid-broadcast now dials again for JPEG and keeps its screen
+  (`HelperStatus.video_decoders`, `broadcast.text_fallback`); drilled with
+  `LABCONTROL_H264_DECODE_FAIL_AFTER=20`. The `win-x64` build ran under the clone's x64 emulation
+  with the same results (*Video* broadcast 24–25 fps, full view 26–28 fps). **Owner decision
+  (2026-10-27): the VM drill is enough for now** — the lab visit may not come before the end of
+  M7, and portion 7 (the redesign) goes ahead. Open for the lab (*On-site verification
+  checklist*, M7 portion 6): `win-x64` on real PCs, 14 PCs over Wi-Fi with a real film, the
+  encoder's CPU on a lab PC, a Windows console's broadcast.
 
 **Acceptance criteria**
 
@@ -3152,6 +3160,20 @@ Do this on the first visit to the lab; several milestones depend on the answers.
 - [ ] Do the PCs have internet at all, and is it permanent or occasional?
 - [ ] Screen resolutions (drives the mosaic tile sizing).
 - [ ] Which folder should be offered as the default when setting up *collect work*?
+- [ ] **M7 portion 6, H.264** (`D-91`; passed on the ARM64 VM, `win-x64` only emulated). After
+      *Push agent build…* to one PC and then the room:
+  - [ ] *Show my screen to all* in *Video* with a film or an animated presentation playing on the
+        MacBook, all 14 PCs: the status line's fps and Mbit/s each, the PCs' pictures smooth and
+        without broken blocks; then *Text* for comparison. (VM: 24–25 fps at ~100 kbit/s for a
+        synthetic screen; a film costs far more.)
+  - [ ] One PC's full view in *Video* with a video playing full screen on that PC: fps in the
+        window, and `session.exe`'s CPU on the PC (Task Manager under *Control*, or
+        `Get-Process session` from the script library). Well above 30–40 % means hardware MFTs
+        (`D-91` item 9).
+  - [ ] The service log on a lab PC says *decodes h264, encodes h264* (a lab PC without the
+        codecs would say *jpeg only*).
+  - [ ] *Show my screen* in *Video* from the Windows console (portion 5's computer) to one or two
+        PCs.
 
 Record the answers as an update to `D-10` in `docs/DECISIONS.md`.
 

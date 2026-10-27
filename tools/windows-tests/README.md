@@ -272,3 +272,10 @@ the helper's own log is held open by it — stop the service to copy it. A crash
 Application log (`.NET Runtime`, `Application Error`). Set `LABCONTROL_NO_H264=1` as a machine
 variable and restart the service for the JPEG fallback; remove it afterwards.
 
+The mid-broadcast decoder failure (`D-91` item 11): set `LABCONTROL_H264_DECODE_FAIL_AFTER=20` as a
+machine variable (the helper reads it at start; the service does not need a reboot because the helper's
+environment is built fresh), restart the service, start a *Video* broadcast and expect
+`broadcast.text_fallback` about 20 s later with the stream on `jpeg` and the overlay still up. The
+`win-x64` build runs on the ARM64 clone under x64 emulation — check the PE machine (`0x8664`) — which
+proves the build and x64 Media Foundation, not lab speed.
+

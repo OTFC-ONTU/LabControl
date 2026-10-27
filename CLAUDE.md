@@ -294,7 +294,11 @@ the frame; the producer holds a refused access unit instead of re-encoding; `Bro
 stream for PCs that listed `h264` and the JPEG one only for those that did not. VideoToolbox runs end to
 end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample released twice after
 `ProcessOutput` crashed the helper; no H.264 encoded for JPEG-only watchers): *Video* broadcast 24–25 fps
-at ~100 kbit/s vs *Text* 11 fps at 3.6 Mbit/s, the PC's full view in *Video* 26–27 fps. Tests: 1132 Shared + 376 Console (full runs on this Mac fail 4–5 load-sensitive link/job tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: the lab (`win-x64`, 14 PCs, a real film over Wi-Fi).
+at ~100 kbit/s vs *Text* 11 fps at 3.6 Mbit/s, the PC's full view in *Video* 26–27 fps; then a decoder that
+breaks mid-broadcast falls back to JPEG keeping the screen (`HelperStatus.video_decoders`, `broadcast.text_fallback`,
+`LABCONTROL_H264_DECODE_FAIL_AFTER`), and `win-x64` passed under the VM's x64 emulation. Owner decision: the VM
+drill is enough for now; the lab checks (ROADMAP on-site checklist) wait for the next visit and portion 7 goes
+ahead. Tests: 1134 Shared + 377 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7 (the redesign); the H.264 lab checks on the next visit.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

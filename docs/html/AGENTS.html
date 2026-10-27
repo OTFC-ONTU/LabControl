@@ -406,7 +406,8 @@ Vortice.MediaFoundation on Windows, none on Linux; <code>LABCONTROL_NO_H264=1</c
 the producer's held access unit, the hub's H.264 stream beside the JPEG one. VideoToolbox runs end to
 end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample double-released after
 <code>ProcessOutput</code>; no H.264 encoded for JPEG-only watchers): <em>Video</em> broadcast 24–25 fps, the PC's full view
-26–27 fps. Tests: 1132 Shared + 376 Console (full runs on this Mac fail 4–5 load-sensitive link/job tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: the lab.</li>
+26–27 fps; a decoder breaking mid-broadcast falls back to JPEG (<code>broadcast.text_fallback</code>), and <code>win-x64</code> passed
+under x64 emulation. Owner: the VM drill is enough for now; lab checks wait, portion 7 goes ahead. Tests: 1134 Shared + 377 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7; the H.264 lab checks on the next visit.</li>
 <li><strong>M6 in the physical lab (2026-10-26, build <code>1.0.0+68d0ae5</code>)</strong> passed sections 0–6 of the checklist.
 Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (<code>D-75</code>
 item 12), ends asked while a PC was off are sent on its return with the same session (<code>D-79</code> item 8),
@@ -573,7 +574,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-27 22:59 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 23:27 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

@@ -266,7 +266,8 @@ the documents relevant to the task:
   the producer's held access unit, the hub's H.264 stream beside the JPEG one. VideoToolbox runs end to
   end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample double-released after
   `ProcessOutput`; no H.264 encoded for JPEG-only watchers): *Video* broadcast 24–25 fps, the PC's full view
-  26–27 fps. Tests: 1132 Shared + 376 Console (full runs on this Mac fail 4–5 load-sensitive link/job tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: the lab.
+  26–27 fps; a decoder breaking mid-broadcast falls back to JPEG (`broadcast.text_fallback`), and `win-x64` passed
+  under x64 emulation. Owner: the VM drill is enough for now; lab checks wait, portion 7 goes ahead. Tests: 1134 Shared + 377 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7; the H.264 lab checks on the next visit.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

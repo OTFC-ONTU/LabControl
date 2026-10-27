@@ -825,7 +825,11 @@ always JPEG. All of it is additive and needs no protocol version: every frame sa
   than 2 s is dropped for a fresh IDR.
 - **`BroadcastRequest.codecs = 2`** — what the PC can show besides JPEG: `"h264"` when its
   session helper made a decoder at start. The console sends H.264 only to a PC that listed
-  it. An older agent lists nothing and gets JPEG.
+  it. An older agent lists nothing and gets JPEG. A helper whose decoder fails three times in
+  a row gives H.264 up for the rest of its life and says so in `HelperStatus.video_decoders`
+  at once; the agent then dials `PullBroadcast` again without `"h264"`, keeping the screen, and
+  reports `broadcast.text_fallback`. `LABCONTROL_H264_DECODE_FAIL_AFTER=N` (seconds after the
+  first decoded picture) breaks the decoder on purpose, for that drill.
 - **Bit rate.** The encoder aims at three quarters of the cap the pacer enforces
   (`H264TargetShareOfCap`); a new cap is a new control, so the encoder is made again with it
   and starts with an IDR.
@@ -898,8 +902,10 @@ Nothing survives a service restart.
 
 **Events.** `broadcast.started` / `broadcast.stopped` / `broadcast.expired` on the console;
 from a PC, `broadcast.expired` (it ended at the PC's own limit), `broadcast.stalled` (no
-frame for `BroadcastStallTimeout`) and `broadcast.failed` (the console refused the stream,
-it is too old to have `PullBroadcast`, or the machine could not take the screen). A stream
+frame for `BroadcastStallTimeout`), `broadcast.failed` (the console refused the stream,
+it is too old to have `PullBroadcast`, or the machine could not take the screen) and
+`broadcast.text_fallback` (its H.264 decoder broke during the broadcast; it dialled again for
+JPEG and carries on, `D-91` item 11). A stream
 that ends with its connection — `Unavailable`, or a transport exception — is the link
 ending, not a failure, and raises no event (`D-71` item 11). The console's capture reports `capture.permission` (macOS has not granted
 *Screen Recording*), `capture.unsupported`, `capture.no_display`, `capture.gdi_failed`,
@@ -930,7 +936,8 @@ HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | Overla
 
 HelperHello  { session_id, process_id, version,          first message after connecting
                video_decoders, video_encoders }       M7 portion 6 (D-91): "h264" when the helper made one
-HelperStatus { input_desktop, screen_width, screen_height, uptime_ms }
+HelperStatus { input_desktop, screen_width, screen_height, uptime_ms,
+               video_decoders }                       M7 portion 6 (D-91 item 11): what it decodes now; "h264" goes when its decoder broke
 ```
 
 **Flow (M2).** The service spawns `session.exe` into the active console session and waits
@@ -1263,7 +1270,9 @@ H.264 for the teacher's *Video* (see *H.264 (Video)* under *Video*). Four additi
 none in the frozen subset: **`VideoControl.codec = 7`** (the console asks for `"h264"` in the
 full view), **`BroadcastRequest.codecs = 2`** (what the PC shows besides JPEG), and on the pipe
 **`HelperHello.video_decoders = 4`** / **`video_encoders = 5`** — what the helper could make at
-start, which the service puts into `BroadcastRequest.codecs` and logs. `VideoFrame.codec = 10`,
+start, which the service puts into `BroadcastRequest.codecs` and logs — and
+**`HelperStatus.video_decoders = 5`**, what it decodes now, which drops `"h264"` when its decoder
+broke during a broadcast. `VideoFrame.codec = 10`,
 reserved since M3, now carries `"h264"`. Every mix of builds falls back to JPEG.
 
 ### The frozen subset

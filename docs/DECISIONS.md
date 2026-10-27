@@ -5387,9 +5387,9 @@ Decision:
    scaling cost) and the full view at `FullVideoFramesPerSecond` (30); *Text* unchanged. Width is
    still `BroadcastWidth` for the broadcast and native for the full view, rounded down to even.
    Sound is not part of this.
-9. **Open.** A helper whose decoder fails mid-broadcast after its start probe shows the last
-   picture and waits for IDRs; it does not yet tell the service to redial as JPEG. Hardware
-   (asynchronous) MFTs are not used. Both wait for what the VM drill and the lab show.
+9. **Open.** Hardware (asynchronous) MFTs are not used; the lab's measurement of the software
+   encoder's CPU decides whether they are needed. (A decoder that breaks mid-broadcast was
+   open here; item 11 closed it.)
 
 10. **VM drill fixes** (2026-10-27). (a) Vortice returns a **new wrapper** for the output sample
     `ProcessOutput` fills, even when it is the sample the caller passed in; comparing the wrappers
@@ -5414,7 +5414,30 @@ with *1 PC gets Text*, the full view in JPEG with `video.h264_unavailable` namin
 H.264 came back when it was removed. After fix (a): no helper exit and no crash event in
 several minutes of both streams at once. Pictures were read back with `save-screen`.
 
+11. **A decoder that breaks mid-broadcast** (2026-10-27, owner: everything the VM can test before
+    the lab). `FrameDecoder` gives H.264 up after `FailuresBeforeBroken` (3) failures in a row — a
+    success starts the count again — and raises `BrokeDown` once. The helper then marks the
+    process JPEG-only (`H264Codecs.MarkDecoderBroken`) and sends `HelperStatus` at once, now with
+    `video_decoders` (additive, field 5; helper and service are one build); the service keeps
+    the helper's latest word. `BroadcastReceiver` checks on every frame whether a codec it asked
+    with is gone and, if so, dials `PullBroadcast` again with what is left — the screen stays
+    taken, the stall timer runs on — and reports `broadcast.text_fallback`. The simulator does the
+    same through `FakeMachineState`. `LABCONTROL_H264_DECODE_FAIL_AFTER=N` is the drill's switch.
+    Three failures, not one: a P-frame after a lost frame fails by nature and the next IDR mends it.
+
+Second VM drill the same day (same clone): with `LABCONTROL_H264_DECODE_FAIL_AFTER=20` the
+broadcast ran as H.264, the decoder broke 20 s in, the picture held still for a few seconds,
+then the PC dialled again and carried on as JPEG with `broadcast.text_fallback` — the overlay
+never came down and no `broadcast.stalled` or `broadcast.failed`. Then the **`win-x64`** build
+(PE machine `0x8664`, hashes compared) ran under Windows 11 ARM's x64 emulation: the helper
+found x64 Media Foundation's encoder and decoder, the *Video* broadcast ran at 24–25 fps and the
+PC's full view in *Video* at 26–28 fps, switching worked, colours correct. The only crash events
+in the Application log were UTM's `spice-webdavd.exe`, which fails at every boot of a clone with
+shared folders off. Owner decision (2026-10-27): the VM drill is enough for now; the lab checks
+below wait for the next visit, possibly the end of M7, and the redesign (portion 7) goes ahead.
+
 Status: built 2026-10-27 on the Mac and passed its ARM64 VM drill the same day after two
-fixes (item 10). Not run: `win-x64` on lab hardware, the software encoder's CPU on a lab PC at
+fixes (item 10), then the decoder-failure fallback and `win-x64` under emulation. Not run:
+`win-x64` on lab hardware (only emulated), the software encoder's CPU on a lab PC at
 1080p, 14 PCs at once over the MacBook's Wi-Fi with a real film, a Windows console's broadcast,
 a Windows edition without the codecs (only simulated by `LABCONTROL_NO_H264`).

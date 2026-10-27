@@ -1113,7 +1113,11 @@ anything new is encoded — the encoder has already moved past it — and one he
 than 2 s is dropped for a fresh IDR.</li>
 <li><strong><code>BroadcastRequest.codecs = 2</code></strong> — what the PC can show besides JPEG: <code>&quot;h264&quot;</code> when its
 session helper made a decoder at start. The console sends H.264 only to a PC that listed
-it. An older agent lists nothing and gets JPEG.</li>
+it. An older agent lists nothing and gets JPEG. A helper whose decoder fails three times in
+a row gives H.264 up for the rest of its life and says so in <code>HelperStatus.video_decoders</code>
+at once; the agent then dials <code>PullBroadcast</code> again without <code>&quot;h264&quot;</code>, keeping the screen, and
+reports <code>broadcast.text_fallback</code>. <code>LABCONTROL_H264_DECODE_FAIL_AFTER=N</code> (seconds after the
+first decoded picture) breaks the decoder on purpose, for that drill.</li>
 <li><strong>Bit rate.</strong> The encoder aims at three quarters of the cap the pacer enforces
 (<code>H264TargetShareOfCap</code>); a new cap is a new control, so the encoder is made again with it
 and starts with an IDR.</li>
@@ -1178,8 +1182,10 @@ that relinks while the broadcast runs is sent <code>BROADCAST_START</code> again
 Nothing survives a service restart.</p>
 <p><strong>Events.</strong> <code>broadcast.started</code> / <code>broadcast.stopped</code> / <code>broadcast.expired</code> on the console;
 from a PC, <code>broadcast.expired</code> (it ended at the PC's own limit), <code>broadcast.stalled</code> (no
-frame for <code>BroadcastStallTimeout</code>) and <code>broadcast.failed</code> (the console refused the stream,
-it is too old to have <code>PullBroadcast</code>, or the machine could not take the screen). A stream
+frame for <code>BroadcastStallTimeout</code>), <code>broadcast.failed</code> (the console refused the stream,
+it is too old to have <code>PullBroadcast</code>, or the machine could not take the screen) and
+<code>broadcast.text_fallback</code> (its H.264 decoder broke during the broadcast; it dialled again for
+JPEG and carries on, <code>D-91</code> item 11). A stream
 that ends with its connection — <code>Unavailable</code>, or a transport exception — is the link
 ending, not a failure, and raises no event (<code>D-71</code> item 11). The console's capture reports <code>capture.permission</code> (macOS has not granted
 <em>Screen Recording</em>), <code>capture.unsupported</code>, <code>capture.no_display</code>, <code>capture.gdi_failed</code>,
@@ -1204,7 +1210,8 @@ HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | Overla
 
 HelperHello  { session_id, process_id, version,          first message after connecting
                video_decoders, video_encoders }       M7 portion 6 (D-91): &quot;h264&quot; when the helper made one
-HelperStatus { input_desktop, screen_width, screen_height, uptime_ms }
+HelperStatus { input_desktop, screen_width, screen_height, uptime_ms,
+               video_decoders }                       M7 portion 6 (D-91 item 11): what it decodes now; &quot;h264&quot; goes when its decoder broke
 </code></pre>
 <p><strong>Flow (M2).</strong> The service spawns <code>session.exe</code> into the active console session and waits
 for a connection (<code>HelperConnectTimeout</code>, 15 s). The helper sends <code>HelperHello</code>; the
@@ -1541,7 +1548,9 @@ service are always the same build (<code>app\&lt;version&gt;</code>), so no help
 none in the frozen subset: <strong><code>VideoControl.codec = 7</code></strong> (the console asks for <code>&quot;h264&quot;</code> in the
 full view), <strong><code>BroadcastRequest.codecs = 2</code></strong> (what the PC shows besides JPEG), and on the pipe
 <strong><code>HelperHello.video_decoders = 4</code></strong> / <strong><code>video_encoders = 5</code></strong> — what the helper could make at
-start, which the service puts into <code>BroadcastRequest.codecs</code> and logs. <code>VideoFrame.codec = 10</code>,
+start, which the service puts into <code>BroadcastRequest.codecs</code> and logs — and
+<strong><code>HelperStatus.video_decoders = 5</code></strong>, what it decodes now, which drops <code>&quot;h264&quot;</code> when its decoder
+broke during a broadcast. <code>VideoFrame.codec = 10</code>,
 reserved since M3, now carries <code>&quot;h264&quot;</code>. Every mix of builds falls back to JPEG.</p>
 <h3 id="the-frozen-subset">The frozen subset<a class="anchor" href="#the-frozen-subset" aria-label="Link to this section">#</a></h3>
 <p>Four things are <strong>frozen at wire version 1 and may never change</strong>: the <code>Hello</code> message,
@@ -1693,7 +1702,7 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-27 22:59 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 23:27 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl3"><a href="#h.264-video-m7-portion-6-d-91">H.264 (Video; M7 portion 6, D-91)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#m7-additions-portion-2-d-87">M7 additions (portion 2, D-87)</a></li><li class="lvl3"><a href="#m7-additions-portion-6-d-91">M7 additions (portion 6, D-91)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>

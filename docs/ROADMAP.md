@@ -1804,7 +1804,11 @@ contract, then desktop integration (`D-54` item 6).
   run); the installer under an ordinary interactive user profile rather than a service
   account; the unsigned-download warning; the Linux `SO_PEERCRED` path of the single
   instance (portion 6); and a real GNOME or KDE application menu. Those stay in portion 7's
-  manual matrix and must not be reported as passing until they are run. **Rough edges for a
+  manual matrix and must not be reported as passing until they are run. **Update
+  (owner, 2026-10-27):** the `win-x64` package (`dc2d948`) was installed from a USB stick on a
+  real Windows computer under an ordinary interactive profile — the unsigned-file warning
+  answered, the console started and a `.lcbak` imported with the passphrase; Explorer's
+  double-click on a lab document, a real elevation prompt and Linux remain unrun. **Rough edges for a
   later pass**, none of them wrong behaviour: the dry run prints its plan header twice; a
   repeat install reports steps as *written* where the code's comments promise *already*, so
   the machine is idempotent but the wording is not; and uninstall leaves the now-empty
@@ -2990,6 +2994,11 @@ measurements demand it.
   **Passed** (owner, 2026-10-27): several full 90-minute lessons in the physical lab without a
   console restart during M6 and M7.
 - The recovery procedure is executed once for real, from the backup, and it works.
+  **First half done** (owner, 2026-10-27): the console was installed on a second, Windows
+  computer from the per-user `LabControl-Console-1.0.0-win-x64-Setup.exe` (build `dc2d948`)
+  and the lab's backup `444-2 2026-10-27.lcbak` imported there with the passphrase — the backup
+  opens and the passphrase is known. Still to do: drive the lab from that computer (take the
+  PCs over, enrol, push), i.e. the full "the teacher machine died" run.
 - Every screen listed in the redesign item has been reviewed and the changes are in; every
   teacher action that is refused or fails on some PCs shows its reason and those PCs where
   the teacher acted, without opening *Jobs*.

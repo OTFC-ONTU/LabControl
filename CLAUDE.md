@@ -273,7 +273,10 @@ installed on the room with it; open: the broken-package drill and the measured 1
 A package may also be a `.zip` (`D-89` addendum): the wizard lists the
 installers inside, the PC unpacks it under checked names and limits (`PackageArchive`) and runs the
 chosen one (`run`) from its folder — first for the Realtek RTL8168 driver Wake-on-LAN needs.
-Tests: 1102 Shared + 335 Console. Next: the VM run, then the broken-package drill and the 14-PC measurement in the lab.
+Tests: 1102 Shared + 335 Console. Next: the broken-package drill and the 14-PC measurement in the lab.
+**M7 portion 5 has started (2026-10-27):** the 90-minute lesson criterion passed (owner, several lessons);
+the `win-x64` console installer ran on a real Windows computer and the lab backup imported there with the
+passphrase (half of the rehearsed recovery; driving the lab from it remains); the robustness pass is running.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

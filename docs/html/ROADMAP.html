@@ -1998,7 +1998,11 @@ so Windows cannot show one); anything on <code>win-x64</code> (only the ARM64 pa
 run); the installer under an ordinary interactive user profile rather than a service
 account; the unsigned-download warning; the Linux <code>SO_PEERCRED</code> path of the single
 instance (portion 6); and a real GNOME or KDE application menu. Those stay in portion 7's
-manual matrix and must not be reported as passing until they are run. <strong>Rough edges for a
+manual matrix and must not be reported as passing until they are run. <strong>Update
+(owner, 2026-10-27):</strong> the <code>win-x64</code> package (<code>dc2d948</code>) was installed from a USB stick on a
+real Windows computer under an ordinary interactive profile — the unsigned-file warning
+answered, the console started and a <code>.lcbak</code> imported with the passphrase; Explorer's
+double-click on a lab document, a real elevation prompt and Linux remain unrun. <strong>Rough edges for a
 later pass</strong>, none of them wrong behaviour: the dry run prints its plan header twice; a
 repeat install reports steps as <em>written</em> where the code's comments promise <em>already</em>, so
 the machine is idempotent but the wording is not; and uninstall leaves the now-empty
@@ -3195,7 +3199,12 @@ three instruction variants with English fallback for any unsupported culture.</l
 <li>The console runs a full 90-minute lesson without a restart, a leak, or a stuck job.
 <strong>Passed</strong> (owner, 2026-10-27): several full 90-minute lessons in the physical lab without a
 console restart during M6 and M7.</li>
-<li>The recovery procedure is executed once for real, from the backup, and it works.</li>
+<li>The recovery procedure is executed once for real, from the backup, and it works.
+<strong>First half done</strong> (owner, 2026-10-27): the console was installed on a second, Windows
+computer from the per-user <code>LabControl-Console-1.0.0-win-x64-Setup.exe</code> (build <code>dc2d948</code>)
+and the lab's backup <code>444-2 2026-10-27.lcbak</code> imported there with the passphrase — the backup
+opens and the passphrase is known. Still to do: drive the lab from that computer (take the
+PCs over, enrol, push), i.e. the full &quot;the teacher machine died&quot; run.</li>
 <li>Every screen listed in the redesign item has been reviewed and the changes are in; every
 teacher action that is refused or fails on some PCs shows its reason and those PCs where
 the teacher acted, without opening <em>Jobs</em>.</li>
@@ -3399,7 +3408,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-27 13:56 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 14:09 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish-uiux-redesign">M7 — Software catalog, localization, polish, UI/UX redesign</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

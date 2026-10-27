@@ -250,7 +250,10 @@ the documents relevant to the task:
   *Install on all missing* (queued for PCs that are off; asks before an untried package) and *Check
   PCs*. A restart is only reported; an exam refuses. A package may be a `.zip` with its installer
   and files (`run`, `PackageArchive`, `D-89` addendum). Working in the lab (owner, 2026-10-27); open: the
-  broken-package drill and the measured 14-PC IDE install. Tests: 1102 Shared + 335 Console. Next: the VM run, the lab drills.
+  broken-package drill and the measured 14-PC IDE install. Tests: 1102 Shared + 335 Console. Next: the lab drills.
+- **M7 portion 5 has started (2026-10-27)**: the 90-minute lesson passed (owner); the `win-x64` console
+  installer ran on a real Windows PC and the backup imported there with the passphrase (driving the lab
+  from it remains); the robustness pass is running.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

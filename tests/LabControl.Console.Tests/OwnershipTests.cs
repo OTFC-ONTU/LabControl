@@ -486,7 +486,7 @@ public sealed class OwnershipTests
     }
 
     /// <summary>Every dialog cancelled: these tests only read what the view model computed.</summary>
-    private sealed class SilentDialogs : IDialogs
+    internal sealed class SilentDialogs : IDialogs
     {
         public Task<UnlockAnswer?> UnlockAsync(string reason, bool offerRemember = false) => Task.FromResult<UnlockAnswer?>(null);
 
@@ -522,8 +522,9 @@ public sealed class OwnershipTests
 
         public Task<AgentBuild?> PushAgentBuildAsync(int pcCount) => Task.FromResult<AgentBuild?>(null);
 
-        public void ShowScreen(ScreenViewModel screen)
-        {
-        }
+        /// <summary>What "opening the window" does; nothing by default (the robustness tests open the view model as the window would).</summary>
+        public Action<ScreenViewModel>? OnShowScreen { get; init; }
+
+        public void ShowScreen(ScreenViewModel screen) => OnShowScreen?.Invoke(screen);
     }
 }

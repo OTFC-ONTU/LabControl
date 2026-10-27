@@ -174,6 +174,19 @@ public sealed class ScreenStore : IDisposable
     {
         var now = _clock();
         var screen = Get(agentId);
+
+        // A full-mode frame for a PC whose window is closed was on its way before the PC read
+        // the thumbnail control (a 1080p keyframe is a tenth of a second on the wire at the
+        // cap). Applying it would rebuild the native-resolution picture the window's Close
+        // just released — and keep it, about 8 MB per 1080p PC, until the lab closes, shown
+        // stale the next time the window opens (M7 robustness pass). It is counted as
+        // traffic, not as a rejection, and goes no further.
+        if (frame.Mode == VideoMode.Full && screen.RequestedMode != VideoMode.Full)
+        {
+            screen.Count(frame, FrameOutcome.Applied, now);
+            return FrameOutcome.Applied;
+        }
+
         var outcome = frame.Mode == VideoMode.Full
             ? ApplyFull(screen, frame, now)
             : screen.Thumbnail.Apply(frame, now);

@@ -224,8 +224,9 @@ recovery*). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.
 
 **M6 is done (owner decision 2026-10-26)**: all six portions built, accepted in the physical lab on all
 14 PCs (builds `1.0.0+68d0ae5` → `1.0.0+cc39651`), the lab's findings fixed and retested; open check:
-teacher access in the lab (no second teacher device). Next by the roadmap: M7, whose portion 6 is a UI/UX redesign of every screen
-(owner decision 2026-10-26) that also carries the visible answer to failed actions, followed by portion 7,
+teacher access in the lab (no second teacher device). Next by the roadmap: M7, whose portion 6 is H.264 for the broadcast and the full view with a *Text / Video* choice (owner
+decision 2026-10-27), portion 7 a UI/UX redesign of every screen
+(owner decision 2026-10-26) that also carries the visible answer to failed actions, followed by portion 8,
 the README as a teacher's manual written for the redesigned screens (owner decision 2026-10-27: swapped).
 **M7 portion 1 is built (2026-10-26, `D-86`), on the Mac:** the console speaks Ukrainian, English
 and Russian — `Shared/Localization/ProductLanguages` (stored choice, else a supported OS language,

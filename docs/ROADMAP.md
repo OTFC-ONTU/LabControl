@@ -2849,8 +2849,17 @@ department. The catalog ships **empty** — the deliverable is the ease of filli
   lesson, what to do when a PC does not appear, how to move the console to a new
   computer. Written **after** the redesign (owner decision 2026-10-27), so it describes the
   screens as they will stay.
-- Optional, and only if M3's measurements demand it: H.264 via Media Foundation behind
-  the existing `VideoFrame` envelope. Decide with numbers, not taste.
+- **H.264 for the broadcast and the full view** (owner decision 2026-10-27, replacing the
+  optional item "only if M3's measurements demand it"): the broadcast runs at about 10 fps at
+  best and a video or an animated presentation is not watchable, because every frame is a JPEG
+  sent once per PC under a 24 Mbit/s total cap the console's Wi-Fi needs. H.264 behind the
+  existing `VideoFrame` envelope — the console encodes with the platform's encoder (macOS
+  VideoToolbox, Windows Media Foundation; Linux keeps JPEG), the PCs decode with Media
+  Foundation; the full view's PC → console stream likewise. A **Text / Video** choice at every
+  show — next to *Show my screen* and in the PC's full-view window, the last choice remembered
+  (owner decision 2026-10-27): *Text* keeps the sharp picture at a low rate, *Video* aims at
+  25–30 fps. The mosaic's thumbnails stay JPEG at 2 fps. JPEG stays the fallback for a peer
+  without the codec.
 - **UI/UX redesign — the last M7 item before the manual** (owner decisions 2026-10-26 and
   2026-10-27): a complete review of
   every console screen, dialog and window — the mosaic and its tiles, full view, *My labs*,
@@ -2882,11 +2891,11 @@ messages in that language, Setup and removal following the Windows display langu
 their remaining literals moved to resources, a VM run in all three; **(3)** the package
 catalog and the *Add package* wizard on the console; **(4)** `install_package` on the agent,
 *Install on all missing*, the broken-package drill and the 14-PC measurement; **(5)** the
-robustness pass, the 90-minute lesson and the rehearsed recovery; **(6)** the UI/UX redesign
-with the visible answer to failed actions, and the three languages checked again; **(7)** the
-README as a teacher's manual, written for the redesigned screens (owner decision 2026-10-27:
-portions 6 and 7 swapped, so the manual is not rewritten after the redesign). H.264 only if M3's
-measurements demand it.
+robustness pass, the 90-minute lesson and the rehearsed recovery; **(6)** H.264 for the
+broadcast and the full view with the *Text / Video* choice (owner decision 2026-10-27); **(7)**
+the UI/UX redesign with the visible answer to failed actions, and the three languages checked
+again; **(8)** the README as a teacher's manual, written for the redesigned screens (owner
+decision 2026-10-27: the manual after the redesign, so it is not rewritten).
 
 - *Portion 1 built (2026-10-26), on the Mac.* `Shared/Localization/ProductLanguages` (the
   three languages under their own names and the rule: a stored choice, else a supported OS
@@ -2903,7 +2912,7 @@ measurements demand it.
   dialogs in each language; with `LABCONTROL_UI_SHOTS` the `lang-uk-…`/`lang-ru-…` PNGs are
   the clipping check); both test projects pin English, since the owner's Mac reports `ru-UA`.
   **Open:** the owner's read-through of both translations; clipping fixes wait for the
-  redesign (portion 6) unless a screen is unusable; agent-originated text (events from a PC,
+  redesign (portion 7) unless a screen is unusable; agent-originated text (events from a PC,
   job output) is still English until portion 2.
 - *Portion 2 built (2026-10-26), on the Mac; not yet run on Windows* (`D-87`). The console's
   language travels in `Welcome.language`, and each lock and exam carries its own

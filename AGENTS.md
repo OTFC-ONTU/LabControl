@@ -213,8 +213,9 @@ the documents relevant to the task:
   procedures in ROADMAP M6, *The portion-6 drills*. Tests: 1003 Shared + 308 Console.
 - **M6 is done (owner decision 2026-10-26)**: accepted in the physical lab on all 14 PCs, the
   findings fixed and retested on `1.0.0+cc39651`; open check: teacher access in the lab (no second
-  teacher device). Next by the roadmap: M7; its portion 6 is a UI/UX redesign of every screen
-  (owner decision 2026-10-26), which also carries the failed-action feedback, and portion 7 the README
+  teacher device). Next by the roadmap: M7; its portion 6 is H.264 for the broadcast and full view with a *Text / Video* choice
+  (owner decision 2026-10-27), portion 7 a UI/UX redesign of every screen
+  (owner decision 2026-10-26), which also carries the failed-action feedback, and portion 8 the README
   manual written for the redesigned screens (owner decision 2026-10-27: 6 and 7 swapped).
 - **M7 portion 1 is built (2026-10-26, `D-86`), on the Mac**: the console in Ukrainian, English and
   Russian — `Shared/Localization/ProductLanguages` (stored choice, else a supported OS language,

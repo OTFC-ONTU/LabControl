@@ -3053,8 +3053,17 @@ tomorrow&quot; performed end to end from the backup.</li>
 lesson, what to do when a PC does not appear, how to move the console to a new
 computer. Written <strong>after</strong> the redesign (owner decision 2026-10-27), so it describes the
 screens as they will stay.</li>
-<li>Optional, and only if M3's measurements demand it: H.264 via Media Foundation behind
-the existing <code>VideoFrame</code> envelope. Decide with numbers, not taste.</li>
+<li><strong>H.264 for the broadcast and the full view</strong> (owner decision 2026-10-27, replacing the
+optional item &quot;only if M3's measurements demand it&quot;): the broadcast runs at about 10 fps at
+best and a video or an animated presentation is not watchable, because every frame is a JPEG
+sent once per PC under a 24 Mbit/s total cap the console's Wi-Fi needs. H.264 behind the
+existing <code>VideoFrame</code> envelope — the console encodes with the platform's encoder (macOS
+VideoToolbox, Windows Media Foundation; Linux keeps JPEG), the PCs decode with Media
+Foundation; the full view's PC → console stream likewise. A <strong>Text / Video</strong> choice at every
+show — next to <em>Show my screen</em> and in the PC's full-view window, the last choice remembered
+(owner decision 2026-10-27): <em>Text</em> keeps the sharp picture at a low rate, <em>Video</em> aims at
+25–30 fps. The mosaic's thumbnails stay JPEG at 2 fps. JPEG stays the fallback for a peer
+without the codec.</li>
 <li><strong>UI/UX redesign — the last M7 item before the manual</strong> (owner decisions 2026-10-26 and
 2026-10-27): a complete review of
 every console screen, dialog and window — the mosaic and its tiles, full view, <em>My labs</em>,
@@ -3088,11 +3097,11 @@ messages in that language, Setup and removal following the Windows display langu
 their remaining literals moved to resources, a VM run in all three; <strong>(3)</strong> the package
 catalog and the <em>Add package</em> wizard on the console; <strong>(4)</strong> <code>install_package</code> on the agent,
 <em>Install on all missing</em>, the broken-package drill and the 14-PC measurement; <strong>(5)</strong> the
-robustness pass, the 90-minute lesson and the rehearsed recovery; <strong>(6)</strong> the UI/UX redesign
-with the visible answer to failed actions, and the three languages checked again; <strong>(7)</strong> the
-README as a teacher's manual, written for the redesigned screens (owner decision 2026-10-27:
-portions 6 and 7 swapped, so the manual is not rewritten after the redesign). H.264 only if M3's
-measurements demand it.</p>
+robustness pass, the 90-minute lesson and the rehearsed recovery; <strong>(6)</strong> H.264 for the
+broadcast and the full view with the <em>Text / Video</em> choice (owner decision 2026-10-27); <strong>(7)</strong>
+the UI/UX redesign with the visible answer to failed actions, and the three languages checked
+again; <strong>(8)</strong> the README as a teacher's manual, written for the redesigned screens (owner
+decision 2026-10-27: the manual after the redesign, so it is not rewritten).</p>
 <ul>
 <li><em>Portion 1 built (2026-10-26), on the Mac.</em> <code>Shared/Localization/ProductLanguages</code> (the
 three languages under their own names and the rule: a stored choice, else a supported OS
@@ -3109,7 +3118,7 @@ code names exists), <code>LanguageRenderTests</code> (the chooser, every main-wi
 dialogs in each language; with <code>LABCONTROL_UI_SHOTS</code> the <code>lang-uk-…</code>/<code>lang-ru-…</code> PNGs are
 the clipping check); both test projects pin English, since the owner's Mac reports <code>ru-UA</code>.
 <strong>Open:</strong> the owner's read-through of both translations; clipping fixes wait for the
-redesign (portion 6) unless a screen is unusable; agent-originated text (events from a PC,
+redesign (portion 7) unless a screen is unusable; agent-originated text (events from a PC,
 job output) is still English until portion 2.</li>
 <li><em>Portion 2 built (2026-10-26), on the Mac; not yet run on Windows</em> (<code>D-87</code>). The console's
 language travels in <code>Welcome.language</code>, and each lock and exam carries its own
@@ -3408,7 +3417,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-27 14:18 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-27 14:28 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish-uiux-redesign">M7 — Software catalog, localization, polish, UI/UX redesign</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

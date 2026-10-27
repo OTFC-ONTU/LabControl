@@ -184,6 +184,16 @@ public static class Defaults
     public static readonly TimeSpan LabAuthorityLifetime = TimeSpan.FromDays(20 * 365);
 
     /// <summary>
+    /// Every certificate's <c>NotBefore</c> is this far before the moment it was minted (a leaf's
+    /// never before its authority's). Student PCs on an isolated LAN have no time source beyond
+    /// their own battery-backed clock, and the teacher's machine may be off the other way, so a
+    /// PC hours behind the console must not reject the certificate it was just issued as "not
+    /// valid yet" — at enrolment the single-use code is already spent by then (M7 robustness
+    /// pass; it was five minutes). Nothing relies on <c>NotBefore</c> but validity itself.
+    /// </summary>
+    public static readonly TimeSpan CertificateBackdate = TimeSpan.FromDays(1);
+
+    /// <summary>
     /// A leaf certificate is renewed over the existing link once it has less than this
     /// left (D-25). Long enough that the "certificates need renewing" banner is seen and the
     /// lab key unlocked at a convenient moment, well before anything actually expires.

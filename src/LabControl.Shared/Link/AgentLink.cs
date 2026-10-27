@@ -1844,6 +1844,23 @@ public sealed partial class AgentLink : IAsyncDisposable
                     return;
                 }
             }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && !token.IsCancellationRequested)
+            {
+                // The console signed, but this PC could not keep the result — a full disk, most
+                // likely. The store changed nothing, so the current pair still links; say so and
+                // ask again later instead of letting renewal end silently until the next link.
+                key.Dispose();
+                _log.LogWarning("{Pc}: the renewed certificate could not be saved: {Message}", Name, ex.Message);
+                Report(Event.Types.Severity.Warning, "renew.not_saved", PcText.Get("RenewalNotSaved", ex.Message));
+                try
+                {
+                    await Task.Delay(backoff.Next(), token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
             catch (OperationCanceledException)
             {
                 key.Dispose();

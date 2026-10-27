@@ -161,4 +161,5 @@
   <data name="PackageInstalledReboot" xml:space="preserve"><value>{0} встановлено (версія {1}); Windows потребує перезавантаження, щоб завершити. ПК не перезавантажується сам.</value></data>
   <data name="PackageInstalled" xml:space="preserve"><value>{0} встановлено (версія {1}).</value></data>
   <data name="PackageUnpackFailed" xml:space="preserve"><value>Архів {0} не вдалося розпакувати: {1}</value></data>
+  <data name="RenewalNotSaved" xml:space="preserve"><value>Консоль оновила сертифікат цього ПК, але його не вдалося тут зберегти: {0} Поточний сертифікат працює далі; ПК попросить ще раз пізніше.</value></data>
 </root>

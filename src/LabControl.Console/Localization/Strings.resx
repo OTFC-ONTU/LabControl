@@ -860,4 +860,5 @@ java.exe</value></data>
   <data name="Packages.NoInstallerInArchive" xml:space="preserve"><value>There is no .exe or .msi installer in this archive.</value></data>
   <data name="Packages.ArchiveFact" xml:space="preserve"><value>{0} ({1}), runs {2} from it</value></data>
   <data name="Packages.Problem.RunInvalid" xml:space="preserve"><value>Choose which installer inside the archive the PCs run.</value></data>
+  <data name="Store.SaveFailed" xml:space="preserve"><value>Not saved — this computer could not write the file: {0}</value></data>
 </root>

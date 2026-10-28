@@ -140,6 +140,44 @@ public sealed class H264Tests
     }
 
     [Fact]
+    public void The_platform_encoder_does_not_grow_memory_frame_by_frame()
+    {
+        if (!H264Codecs.CanEncode)
+        {
+            Assert.Skip($"no H.264 here: {H264Codecs.WhyNoEncoder}");
+        }
+
+        // Review finding: the macOS encoder leaked a whole picture buffer per frame (~1.35 MB at 1280×720).
+        const int width = 1280, height = 720;
+        var bgra = Gradient(width, height, out var rowBytes);
+        using var encoder = H264Codecs.CreateEncoder(width, height, 25, 2 * 1024 * 1024);
+        for (var i = 0; i < 30; i++)
+        {
+            encoder.Encode(bgra, rowBytes, keyframe: i == 0, out _);
+        }
+
+        var before = Resident();
+        for (var i = 0; i < 300; i++)
+        {
+            bgra[(i * 4 * 997) % bgra.Length] ^= 0xFF;
+            encoder.Encode(bgra, rowBytes, keyframe: i % 100 == 0, out _);
+        }
+
+        var grown = Resident() - before;
+        Assert.True(grown < 120L * 1024 * 1024, $"resident memory grew by {grown / (1024 * 1024)} MB over 300 frames");
+    }
+
+    private static long Resident()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        process.Refresh();
+        return process.WorkingSet64;
+    }
+
+    [Fact]
     public void A_decoder_without_an_idr_first_refuses()
     {
         if (!H264Codecs.CanEncode || !H264Codecs.CanDecode)

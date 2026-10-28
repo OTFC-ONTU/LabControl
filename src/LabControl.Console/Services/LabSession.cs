@@ -192,6 +192,7 @@ public sealed class LabSession : IAsyncDisposable
         Files = new FileOffers();
         Screens = new ScreenStore(_clock);
         Screens.KeyframeNeeded += screen => RequestKeyframe(screen.AgentId);
+        Screens.VideoBroken += OnFullVideoBroken;
         Events = new EventLog(store.LogsDirectory, _clock);
         _journal = new JobJournal(store.LogsDirectory);
         BatchLogs = new JobBatchLogs(store.LogsDirectory, Jobs, id => Registry.FindByAgentId(id)?.Number ?? 0, _clock);
@@ -1956,7 +1957,10 @@ public sealed class LabSession : IAsyncDisposable
 
         if (video is { } wanted)
         {
+            // A choice made again (or a window opened again) gives H.264 another chance.
             screen.RequestedVideo = wanted;
+            screen.VideoBroken = false;
+            screen.FullDecoder.Reset();
         }
 
         var connection = FindLinked(agentId);
@@ -1979,7 +1983,24 @@ public sealed class LabSession : IAsyncDisposable
     /// H.264 (D-91) — only when this console can decode it, so a Linux console never asks.
     /// </summary>
     private static VideoControl FullControlFor(AgentScreen screen, bool requestKeyframe = true) =>
-        VideoSettings.FullControl(requestKeyframe, screen.RequestedQuality, video: screen.RequestedVideo && H264Codecs.CanDecode);
+        VideoSettings.FullControl(requestKeyframe, screen.RequestedQuality, video: screen.RequestedVideo && !screen.VideoBroken && H264Codecs.CanDecode);
+
+    /// <summary>
+    /// This console could not decode a PC's H.264 three times in a row: the full view goes on in
+    /// JPEG and the teacher is told (review of D-91). The window's status line already says the
+    /// PC is sending Text.
+    /// </summary>
+    private void OnFullVideoBroken(AgentScreen screen)
+    {
+        var number = Registry.Document.Machines.FirstOrDefault(m => string.Equals(m.AgentId, screen.AgentId, StringComparison.OrdinalIgnoreCase))?.Number ?? 0;
+        Events.Warning("video.console_decode_failed",
+            Localization.Strings.Format("Event.VideoDecodeFailed", string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, number), screen.FullDecoder.Problem ?? string.Empty),
+            screen.AgentId, number);
+        if (screen.RequestedMode == VideoMode.Full && FindLinked(screen.AgentId) is { IsOutdated: false } connection)
+        {
+            connection.TrySend(new ConsoleMessage { VideoControl = FullControlFor(screen) });
+        }
+    }
 
     /// <summary>
     /// The teacher's mouse and keyboard for the PC in the single-PC window (PROTOCOL

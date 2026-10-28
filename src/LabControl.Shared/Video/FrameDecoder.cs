@@ -21,6 +21,9 @@ public sealed class FrameDecoder : IDisposable
     private bool _disposed;
     private int _failures;
 
+    // The visible part of a padded picture, reused from frame to frame.
+    private SkiaSharp.SKBitmap? _cropped;
+
     /// <summary>Decoder failures in a row — on a keyframe or after one — before H.264 is given up here.</summary>
     public const int FailuresBeforeBroken = 3;
 
@@ -101,8 +104,31 @@ public sealed class FrameDecoder : IDisposable
 
                 if (frame.Width > 0 && frame.Height > 0 && (picture.Width > frame.Width || picture.Height > frame.Height))
                 {
-                    DropDecoder();
-                    return FrameOutcome.Malformed;
+                    // A decoder that gives the macroblock-padded picture without its display area
+                    // (review): up to one macroblock more is padding and is cropped away; more
+                    // than that is a stream that does not match its frame, counted as a failure.
+                    if (picture.Width - frame.Width >= 16 || picture.Height - frame.Height >= 16)
+                    {
+                        // Worded before the decoder goes: the picture is the decoder's and dies with it.
+                        var why = $"a {picture.Width}×{picture.Height} picture for a {frame.Width}×{frame.Height} frame";
+                        DropDecoder();
+                        return Fail(why) ? FrameOutcome.Undecodable : FrameOutcome.NeedsKeyframe;
+                    }
+
+                    var width = Math.Min(picture.Width, frame.Width);
+                    var height = Math.Min(picture.Height, frame.Height);
+                    if (_cropped is null || _cropped.Width != width || _cropped.Height != height)
+                    {
+                        _cropped?.Dispose();
+                        _cropped = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(width, height, JpegCodec.PixelFormat, SkiaSharp.SKAlphaType.Premul));
+                    }
+
+                    JpegCodec.Blit(picture, 0, 0, width, height, _cropped, 0, 0);
+                    image.Replace(_cropped, frame.Width, frame.Height, now);
+                    LastCodec = codec;
+                    Problem = null;
+                    _failures = 0;
+                    return FrameOutcome.Applied;
                 }
 
                 image.Replace(picture, frame.Width > 0 ? frame.Width : picture.Width, frame.Height > 0 ? frame.Height : picture.Height, now);
@@ -140,13 +166,19 @@ public sealed class FrameDecoder : IDisposable
         return true;
     }
 
-    /// <summary>Forgets the stream: the next H.264 frame must be an IDR.</summary>
+    /// <summary>
+    /// Forgets the stream: the next H.264 frame must be an IDR, and a decoder given up is tried
+    /// again (a full-view window closed and opened again; review) — whoever asks for H.264 next
+    /// gets three more chances before JPEG.
+    /// </summary>
     public void Reset()
     {
         lock (_lock)
         {
             DropDecoder();
             LastCodec = null;
+            Broken = false;
+            _failures = 0;
         }
     }
 
@@ -169,6 +201,8 @@ public sealed class FrameDecoder : IDisposable
         {
             _disposed = true;
             DropDecoder();
+            _cropped?.Dispose();
+            _cropped = null;
         }
     }
 }

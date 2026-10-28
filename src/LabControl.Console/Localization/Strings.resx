@@ -872,4 +872,5 @@ java.exe</value></data>
   <data name="Screen.QualityVideo" xml:space="preserve"><value>video (H.264)</value></data>
   <data name="Screen.VideoNotOnPc" xml:space="preserve"><value>{0} cannot send Video (no H.264 there, or an older version): showing Text.</value></data>
   <data name="Broadcast.StatusTextPcs" xml:space="preserve"><value> · {0} PC(s) get Text: they cannot show Video</value></data>
+  <data name="Event.VideoDecodeFailed" xml:space="preserve"><value>{0}: this console could not show its full view as Video (H.264), so it continues as Text: {1}</value></data>
 </root>

@@ -79,16 +79,19 @@ internal sealed class SessionSupervisor : IAsyncDisposable
     public PolicyEnforcer? Policy { get; set; }
 
     /// <summary>
+    /// The codecs besides JPEG the helper decodes — <c>BroadcastRequest.codecs</c> (D-91 item 3):
+    /// what the last helper said, kept while a helper restarts, so a restart during a broadcast is
+    /// not taken for a broken decoder (review). Empty until a helper has said anything.
+    /// </summary>
+    public IReadOnlyList<string> HelperVideoDecoders => _videoDecoders;
+
+    private volatile IReadOnlyList<string> _videoDecoders = [];
+
+    /// <summary>
     /// Writes a message down the pipe to the connected helper, fire-and-forget (D-35 item 8);
     /// <c>false</c> when no helper is connected, and the caller knows the message is not
     /// queued — the helper is told the current state when it connects.
     /// </summary>
-    /// <summary>
-    /// The codecs besides JPEG the connected helper decodes — <c>BroadcastRequest.codecs</c>
-    /// (D-91 item 3). Empty while no helper is connected: a broadcast dialled then is JPEG.
-    /// </summary>
-    public IReadOnlyList<string> HelperVideoDecoders => _helper is { Connected: true } helper ? helper.VideoDecoders : [];
-
     public bool SendToHelper(ServiceMessage message)
     {
         var helper = _helper;
@@ -675,6 +678,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             helper.LastHeard = DateTimeOffset.UtcNow;
             helper.Version = hello.Hello.Version;
             helper.VideoDecoders = hello.Hello.VideoDecoders.ToArray();
+            _videoDecoders = helper.VideoDecoders;
             _log.LogInformation("session.exe {Version} (pid {Pid}) connected from session {Session}; decodes {Decoders}, encodes {Encoders}",
                 hello.Hello.Version, hello.Hello.ProcessId, hello.Hello.SessionId,
                 hello.Hello.VideoDecoders.Count > 0 ? string.Join(",", hello.Hello.VideoDecoders) : "jpeg only",
@@ -716,6 +720,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                         {
                             _log.LogWarning("session.exe now decodes {Decoders}", status.VideoDecoders.Count > 0 ? string.Join(",", status.VideoDecoders) : "jpeg only");
                             helper.VideoDecoders = status.VideoDecoders.ToArray();
+                            _videoDecoders = helper.VideoDecoders;
                         }
                         if (!announced)
                         {
@@ -932,13 +937,30 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             return;
         }
 
-        if (_link.TryPushVideo(frame))
+        // An H.264 frame needs every one before it (D-91 item 4): after one was refused, the ones
+        // that follow until the next IDR would only smear the console's picture, so they are
+        // dropped too (review). A JPEG delta stands on its own and is offered as before.
+        var h264 = FrameDecoder.CodecOf(frame) == Defaults.VideoCodecH264;
+        if (h264 && helper.H264Gap && !frame.Keyframe)
         {
-            helper.KeyframeAsked = false;
             return;
         }
 
-        if (helper.KeyframeAsked)
+        if (_link.TryPushVideo(frame))
+        {
+            helper.KeyframeAsked = false;
+            if (frame.Keyframe)
+            {
+                helper.H264Gap = false;
+            }
+
+            return;
+        }
+
+        helper.H264Gap |= h264;
+
+        // A refused keyframe asks again: nothing behind it can be shown until one gets through.
+        if (helper.KeyframeAsked && !frame.Keyframe)
         {
             return;
         }
@@ -992,6 +1014,9 @@ internal sealed class SessionSupervisor : IAsyncDisposable
 
         /// <summary>A keyframe was requested after a refused frame and no frame has been accepted since.</summary>
         public volatile bool KeyframeAsked;
+
+        /// <summary>An H.264 frame was refused; every following one is dropped until a keyframe gets through (D-91).</summary>
+        public volatile bool H264Gap;
 
         /// <summary>One writer at a time on the pipe; a failure is logged, never thrown — the pump notices the pipe ending.</summary>
         public async Task SendAsync(ServiceMessage message, ILogger log)

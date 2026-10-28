@@ -261,7 +261,6 @@ public sealed class BroadcastReceiver : IAsyncDisposable
             outcome.Detail.Length > 0 ? $" ({outcome.Detail})" : string.Empty);
     }
 
-    /// <summary>On the first frame: the screen is the broadcast's from now on. False when the machine cannot show it.</summary>
     /// <summary>A codec this stream was asked with is no longer one the machine decodes.</summary>
     private bool LostCodec(IReadOnlyCollection<string> asked)
     {
@@ -283,6 +282,7 @@ public sealed class BroadcastReceiver : IAsyncDisposable
         }
     }
 
+    /// <summary>On the first frame: the screen is the broadcast's from now on. False when the machine cannot show it.</summary>
     private bool TakeScreen(BroadcastSession session, int generation)
     {
         MachineResult result;

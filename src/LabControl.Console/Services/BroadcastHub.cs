@@ -39,6 +39,12 @@ public sealed class BroadcastHub : IAsyncDisposable
     private readonly bool _canEncode;
     private readonly Dictionary<string, Subscriber> _subscribers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _lock = new();
+
+    // Held across "which streams should run" and the Apply calls that make it so, so two joins,
+    // a switch and a keyframe request never apply their decisions out of order (review: a join
+    // that saw only H.264 PCs could stop the JPEG stream another join had just started). Taken
+    // before _lock, never inside it; a producer never calls back into the hub under its own lock.
+    private readonly Lock _reconcile = new();
     private readonly Timer _limit;
     private ulong _seq;
     private bool _video;
@@ -336,6 +342,7 @@ public sealed class BroadcastHub : IAsyncDisposable
     private ValueTask<bool> SinkAsync(Stream stream, VideoFrame frame)
     {
         Subscriber[] subscribers;
+        bool keyframeWanted;
         var now = _clock();
         lock (_lock)
         {
@@ -356,12 +363,15 @@ public sealed class BroadcastHub : IAsyncDisposable
             stream.Recent.Enqueue((now, frame.Jpeg.Length));
             stream.RecentBytes += frame.Jpeg.Length;
             subscribers = _subscribers.Values.Where(s => InVideo(s) == stream.H264).ToArray();
-        }
 
-        var keyframeWanted = false;
-        foreach (var subscriber in subscribers)
-        {
-            keyframeWanted |= subscriber.Offer(frame);
+            // Offered under the lock that SetVideo's Restart takes too, so a frame of the stream a
+            // PC just left never lands in its slot after the switch (review). An offer only
+            // touches the PC's own slot; it never waits.
+            keyframeWanted = false;
+            foreach (var subscriber in subscribers)
+            {
+                keyframeWanted |= subscriber.Offer(frame);
+            }
         }
 
         if (keyframeWanted)
@@ -382,50 +392,62 @@ public sealed class BroadcastHub : IAsyncDisposable
     /// </summary>
     private void Reconcile(bool keyframe)
     {
-        bool runJpeg;
-        bool runH264;
-        int watching;
-        lock (_lock)
+        lock (_reconcile)
         {
-            if (_disposed || !_started)
+            bool runJpeg;
+            bool runH264;
+            int watching;
+            lock (_lock)
             {
-                return;
+                if (_disposed || !_started)
+                {
+                    return;
+                }
+
+                watching = _subscribers.Count;
+                runH264 = H264Wanted;
+                runJpeg = JpegWanted;
+                var now = _clock();
+                _jpeg.LastKeyframeRequest = now;
+                _h264.LastKeyframeRequest = now;
             }
 
-            watching = _subscribers.Count;
-            runH264 = H264Wanted;
-            runJpeg = !_video || _subscribers.Values.Any(s => !s.CanH264);
-            var now = _clock();
-            _jpeg.LastKeyframeRequest = now;
-            _h264.LastKeyframeRequest = now;
+            var cap = StreamCap(watching);
+            _jpeg.Producer.Apply(runJpeg ? JpegControl(cap, keyframe) : null);
+            _h264.Producer.Apply(runH264 ? VideoControl(cap, keyframe) : null);
         }
-
-        var cap = StreamCap(watching);
-        _jpeg.Producer.Apply(runJpeg ? JpegControl(cap, keyframe) : null);
-        _h264.Producer.Apply(runH264 ? VideoControl(cap, keyframe) : null);
     }
+
+    /// <summary>*Text*, or a watching PC that cannot decode H.264. Under <see cref="_lock"/>.</summary>
+    private bool JpegWanted => !_video || _subscribers.Values.Any(s => !s.CanH264);
 
     private void RequestKeyframe(Stream stream)
     {
-        var now = _clock();
-        int watching;
-        lock (_lock)
+        // Under the reconcile lock, so a keyframe request never restarts a stream a switch or a
+        // leave has just stopped (review).
+        lock (_reconcile)
         {
-            if (_disposed || now - stream.LastKeyframeRequest < Defaults.BroadcastKeyframeRequestInterval)
+            var now = _clock();
+            int watching;
+            lock (_lock)
             {
-                return;
+                if (_disposed || now - stream.LastKeyframeRequest < Defaults.BroadcastKeyframeRequestInterval)
+                {
+                    return;
+                }
+
+                if (stream.H264 ? !H264Wanted : !JpegWanted)
+                {
+                    return; // not running
+                }
+
+                stream.LastKeyframeRequest = now;
+                watching = _subscribers.Count;
             }
 
-            stream.LastKeyframeRequest = now;
-            watching = _subscribers.Count;
-            if (stream.H264 ? !H264Wanted : _video && _subscribers.Values.All(s => s.CanH264))
-            {
-                return; // not running
-            }
+            var cap = StreamCap(watching);
+            stream.Producer.Apply(stream.H264 ? VideoControl(cap, keyframe: true) : JpegControl(cap, keyframe: true));
         }
-
-        var cap = StreamCap(watching);
-        stream.Producer.Apply(stream.H264 ? VideoControl(cap, keyframe: true) : JpegControl(cap, keyframe: true));
     }
 
     private static VideoControl JpegControl(int bitsPerSecond, bool keyframe) => new()

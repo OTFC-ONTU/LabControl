@@ -79,6 +79,22 @@ internal static unsafe class MediaFoundation
     }
 
     /// <summary>
+    /// <see cref="Find"/> with every failure as an <see cref="H264Exception"/> — Vortice throws its
+    /// own exceptions from <c>MFTEnumEx</c>, which must still mean "no H.264 here, use JPEG" (review).
+    /// </summary>
+    public static IMFTransform FindOrThrow(Guid category, Guid input, Guid? output)
+    {
+        try
+        {
+            return Find(category, input, output);
+        }
+        catch (Exception ex) when (ex is not H264Exception)
+        {
+            throw new H264Exception($"Media Foundation could not be asked for an H.264 codec: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
     /// <c>ICodecAPI::SetValue</c> with a <c>VT_UI4</c>, through the interface's vtable (Vortice
     /// does not wrap it). <c>false</c> when the codec has no <c>ICodecAPI</c> or refused.
     /// </summary>
@@ -191,7 +207,7 @@ public sealed unsafe class MediaFoundationH264Encoder : IH264Encoder
         Width = width;
         Height = height;
         _frameRate = Math.Max(1, (int)Math.Round(framesPerSecond));
-        _transform = MediaFoundation.Find(TransformCategoryGuids.VideoEncoder, VideoFormatGuids.NV12, VideoFormatGuids.H264);
+        _transform = MediaFoundation.FindOrThrow(TransformCategoryGuids.VideoEncoder, VideoFormatGuids.NV12, VideoFormatGuids.H264);
         try
         {
             MediaFoundation.LowLatencyOn(_transform);
@@ -431,7 +447,7 @@ public sealed unsafe class MediaFoundationH264Decoder : IH264Decoder
 
     public MediaFoundationH264Decoder()
     {
-        _transform = MediaFoundation.Find(TransformCategoryGuids.VideoDecoder, VideoFormatGuids.H264, null);
+        _transform = MediaFoundation.FindOrThrow(TransformCategoryGuids.VideoDecoder, VideoFormatGuids.H264, null);
         try
         {
             MediaFoundation.LowLatencyOn(_transform);

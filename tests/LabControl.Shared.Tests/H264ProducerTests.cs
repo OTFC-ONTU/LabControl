@@ -248,6 +248,28 @@ public sealed class H264ProducerTests
     }
 
     [Fact]
+    public void A_padded_picture_is_cropped_and_a_wrong_sized_one_counts_as_a_failure()
+    {
+        // Review: a decoder giving the macroblock-padded size without its display area was refused for ever.
+        using var image = new ScreenImage();
+        using (var padded = new FrameDecoder(() => new FakeH264Decoder(72, 48)))
+        {
+            Assert.Equal(FrameOutcome.Applied, padded.Apply(image, H264Frame(idr: true), DateTimeOffset.UtcNow));
+            Assert.Equal((64, 48), (image.Width, image.Height));
+        }
+
+        using var wrong = new FrameDecoder(() => new FakeH264Decoder(128, 48));
+        for (var i = 0; i < FrameDecoder.FailuresBeforeBroken; i++)
+        {
+            Assert.NotEqual(FrameOutcome.Applied, wrong.Apply(image, H264Frame(idr: true), DateTimeOffset.UtcNow));
+        }
+
+        Assert.True(wrong.Broken);
+        wrong.Reset();
+        Assert.False(wrong.Broken);
+    }
+
+    [Fact]
     public void A_success_between_failures_starts_the_count_again()
     {
         using var image = new ScreenImage();

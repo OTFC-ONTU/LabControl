@@ -205,6 +205,62 @@ public sealed class H264BroadcastTests
     }
 
     [Fact]
+    public async Task A_mixed_room_joining_at_once_keeps_both_streams_running()
+    {
+        // Review: Reconcile decided under the lock and applied outside it, so a join that saw only
+        // H.264 PCs could stop the JPEG stream a JPEG PC's join had just started.
+        for (var round = 0; round < 5; round++)
+        {
+            await using var hub = new BroadcastHub("session", TeacherScreen, TestLogging.Factory.CreateLogger("hub"), () => DateTimeOffset.UtcNow, (_, _, _) => { },
+                video: true, h264: (w, h, _) => new FakeH264Encoder(w, h));
+            hub.Start();
+            using var stop = new CancellationTokenSource();
+            var writers = Enumerable.Range(0, 14).Select(_ => new Writer()).ToArray();
+            var serving = writers.Select((w, i) => Task.Run(() => hub.ServeAsync($"pc{i}", i % 3 == 0 ? [] : [Defaults.VideoCodecH264], w, stop.Token))).ToArray();
+            Assert.True(await Wait.UntilAsync(() => writers.All(w => w.Frames.Count >= 3), TimeSpan.FromSeconds(20)),
+                $"round {round}: " + string.Join(",", writers.Select(w => w.Frames.Count)));
+            for (var i = 0; i < writers.Length; i++)
+            {
+                var expected = i % 3 == 0 ? Defaults.VideoCodecJpeg : Defaults.VideoCodecH264;
+                Assert.All(writers[i].Frames, f => Assert.Equal(expected, FrameDecoder.CodecOf(f)));
+            }
+
+            stop.Cancel();
+            await Task.WhenAll(serving);
+        }
+    }
+
+    [Fact]
+    public async Task A_console_that_cannot_decode_a_pcs_h264_asks_it_for_text()
+    {
+        await using var console = await TestConsole.CreateLabAsync();
+        console.Session.Screens.H264Decoder = () => throw new H264Exception("this console's decoder is broken");
+        const string agent = "pc-under-test";
+        console.Session.SetScreenMode(agent, VideoMode.Full, video: true);
+        var screen = console.Session.Screens.Get(agent);
+        var broken = 0;
+        console.Session.Screens.VideoBroken += _ => Interlocked.Increment(ref broken);
+
+        for (var i = 0; i < 5; i++)
+        {
+            console.Session.Screens.Apply(agent, new VideoFrame
+            {
+                Width = 64, Height = 48, Mode = VideoMode.Full, Keyframe = true, Codec = Defaults.VideoCodecH264,
+                Jpeg = Google.Protobuf.ByteString.CopyFrom(new byte[] { 0, 0, 0, 1, 0x67, 1, 0, 0, 0, 1, 0x68, 2, 0, 0, 0, 1, 0x65, 3 }),
+            });
+        }
+
+        Assert.Equal(1, broken);
+        Assert.True(screen.VideoBroken);
+        Assert.Contains(console.Session.Events.Recent, e => e.Code == "video.console_decode_failed");
+
+        // The teacher choosing again gives H.264 another chance.
+        console.Session.SetScreenMode(agent, VideoMode.Full, video: true);
+        Assert.False(screen.VideoBroken);
+        Assert.False(screen.FullDecoder.Broken);
+    }
+
+    [Fact]
     public void The_choices_are_remembered_separately_on_this_computer()
     {
         var directory = TestConsole.TempDirectory();

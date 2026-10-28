@@ -34,8 +34,16 @@ public sealed unsafe class VideoToolboxH264Encoder : IH264Encoder
         Height = height;
         _frameRate = Math.Max(1, (int)Math.Round(framesPerSecond));
         _self = GCHandle.Alloc(this);
-        var status = VTCompressionSessionCreate(IntPtr.Zero, width, height, CodecH264, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero,
+
+        // BGRA buffers from the session's own pool, so each picture is a recycled buffer, never a
+        // new allocation (review: without these attributes the pool hands out 420v buffers).
+        var sourceAttributes = Dictionary(
+            (CV("kCVPixelBufferPixelFormatTypeKey"), Int32(unchecked((int)PixelFormatBgra)), true),
+            (CV("kCVPixelBufferWidthKey"), Int32(width), true),
+            (CV("kCVPixelBufferHeightKey"), Int32(height), true));
+        var status = VTCompressionSessionCreate(IntPtr.Zero, width, height, CodecH264, IntPtr.Zero, sourceAttributes, IntPtr.Zero,
             &OnEncoded, GCHandle.ToIntPtr(_self), out _session);
+        Release(sourceAttributes);
         if (status != 0 || _session == IntPtr.Zero)
         {
             _self.Free();
@@ -155,10 +163,16 @@ public sealed unsafe class VideoToolboxH264Encoder : IH264Encoder
     {
         IntPtr pixels;
         var pool = VTCompressionSessionGetPixelBufferPool(_session);
-        if (pool != IntPtr.Zero && CVPixelBufferPoolCreatePixelBuffer(IntPtr.Zero, pool, out pixels) == 0 && pixels != IntPtr.Zero
-            && CVPixelBufferGetPixelFormatType(pixels) == PixelFormatBgra)
+        if (pool != IntPtr.Zero && CVPixelBufferPoolCreatePixelBuffer(IntPtr.Zero, pool, out pixels) == 0 && pixels != IntPtr.Zero)
         {
-            return pixels;
+            if (CVPixelBufferGetPixelFormatType(pixels) == PixelFormatBgra)
+            {
+                return pixels;
+            }
+
+            // Ours to release even when it is not the format we can fill (review: it leaked a
+            // whole picture per frame — 34 MB/s at 1280×720, 25 fps).
+            Release(pixels);
         }
 
         var status = CVPixelBufferCreate(IntPtr.Zero, (nuint)Width, (nuint)Height, PixelFormatBgra, IntPtr.Zero, out pixels);

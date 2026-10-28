@@ -633,7 +633,7 @@ public sealed class ScreenProducer : IAsyncDisposable
                 Jpeg = ByteString.CopyFrom(unit),
             };
         }
-        catch (Exception ex) when (ex is H264Exception or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException or DllNotFoundException or EntryPointNotFoundException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             isKeyframe = false;
             FailH264(state, ex.Message);

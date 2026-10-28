@@ -872,4 +872,5 @@ java.exe</value></data>
   <data name="Screen.QualityVideo" xml:space="preserve"><value>видео (H.264)</value></data>
   <data name="Screen.VideoNotOnPc" xml:space="preserve"><value>{0} не может передавать Видео (нет H.264 или старая версия): показан Текст.</value></data>
   <data name="Broadcast.StatusTextPcs" xml:space="preserve"><value> · {0} ПК получают Текст: они не могут показать Видео</value></data>
+  <data name="Event.VideoDecodeFailed" xml:space="preserve"><value>{0}: эта консоль не смогла показать его полный экран как Видео (H.264), поэтому он продолжается как Текст: {1}</value></data>
 </root>

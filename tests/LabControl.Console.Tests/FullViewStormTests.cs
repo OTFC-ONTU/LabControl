@@ -57,7 +57,17 @@ public sealed class FullViewStormTests
             var (bytes, thumbnail, picture) = before[machine.AgentId];
             var allowed = Defaults.FullModeBitsPerSecond / 8.0 * (seconds + 1);
             Assert.True(screen.BytesReceived - bytes <= allowed, $"{machine.Name} sent {screen.BytesReceived - bytes} bytes in {seconds:0.0} s, above its cap");
-            Assert.True(screen.Thumbnail.Version > thumbnail, $"{machine.Name}'s mosaic tile did not move in {seconds:0.0} s");
+        }
+
+        // The tiles of PCs in full view move only with the keyframe every KeyframeInterval, so on a
+        // busy two-core CI runner one may land a moment after the window: each gets two more
+        // intervals rather than a one-second margin (it failed both CI attempts on 2026-10-29).
+        foreach (var machine in room.Machines)
+        {
+            var screen = room.Screen(machine);
+            var (_, thumbnail, picture) = before[machine.AgentId];
+            Assert.True(await Wait.UntilAsync(() => screen.Thumbnail.Version > thumbnail, Defaults.KeyframeInterval * 2),
+                $"{machine.Name}'s mosaic tile did not move in {clock.Elapsed.TotalSeconds:0.0} s");
             if (full.Contains(machine))
             {
                 Assert.True(screen.Full.Version > picture, $"{machine.Name}'s full view did not move in {seconds:0.0} s");

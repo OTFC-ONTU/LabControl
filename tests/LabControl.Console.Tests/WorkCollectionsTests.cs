@@ -55,7 +55,12 @@ public sealed class WorkCollectionsTests
         Assert.Equal(CollectedState.Failed, collection.Rows.Single().State);
         Assert.Equal(0, uploads.InProgressCount);
         Assert.Empty(Directory.GetFiles(collection.Directory, "*.partial"));
-        Assert.Contains("FAILED", File.ReadAllText(Path.Combine(collection.Directory, Defaults.CollectReportFileName)));
+
+        // The row settles first and report.txt is written right after, on the unpacking task when
+        // the PC said ok — waited for, not read at once (it lost that race on the Linux CI).
+        var report = Path.Combine(collection.Directory, Defaults.CollectReportFileName);
+        Assert.True(SpinWait.SpinUntil(() => File.Exists(report) && File.ReadAllText(report).Contains("FAILED", StringComparison.Ordinal), TimeSpan.FromSeconds(10)),
+            File.Exists(report) ? File.ReadAllText(report) : "no report.txt");
     }
 
     [Fact]

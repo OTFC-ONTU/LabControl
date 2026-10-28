@@ -829,7 +829,13 @@ always JPEG. All of it is additive and needs no protocol version: every frame sa
   a row gives H.264 up for the rest of its life and says so in `HelperStatus.video_decoders`
   at once; the agent then dials `PullBroadcast` again without `"h264"`, keeping the screen, and
   reports `broadcast.text_fallback`. `LABCONTROL_H264_DECODE_FAIL_AFTER=N` (seconds after the
-  first decoded picture) breaks the decoder on purpose, for that drill.
+  first decoded picture) breaks the decoder on purpose, for that drill. A helper that restarts
+  is not a lost codec: the service keeps the last helper's list until the new one speaks.
+- **On the PC's uplink** the helper's pipe never refuses, so the service does what the
+  producer's held frame does elsewhere: after an `h264` frame is refused it drops every
+  following non-keyframe until a keyframe gets through, and asks for one again if a keyframe is
+  refused. If the **console** cannot decode a PC's H.264 three times in a row it asks that PC
+  for JPEG (`video.console_decode_failed`) until the teacher chooses *Video* again.
 - **Bit rate.** The encoder aims at three quarters of the cap the pacer enforces
   (`H264TargetShareOfCap`); a new cap is a new control, so the encoder is made again with it
   and starts with an IDR.

@@ -267,7 +267,8 @@ the documents relevant to the task:
   end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample double-released after
   `ProcessOutput`; no H.264 encoded for JPEG-only watchers): *Video* broadcast 24–25 fps, the PC's full view
   26–27 fps; a decoder breaking mid-broadcast falls back to JPEG (`broadcast.text_fallback`), and `win-x64` passed
-  under x64 emulation. Owner: the VM drill is enough for now; lab checks wait, portion 7 goes ahead. Tests: 1134 Shared + 377 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7; the H.264 lab checks on the next visit.
+  under x64 emulation. Owner: the VM drill is enough for now; lab checks wait, portion 7 goes ahead. PR
+  OTFC-ONTU/LabControl#6; its review (`D-91` item 12) fixed a macOS encoder leak, a hub race and decoder fallbacks, re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7; the H.264 lab checks on the next visit.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),

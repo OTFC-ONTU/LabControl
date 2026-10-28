@@ -3034,6 +3034,11 @@ decision 2026-10-27: the manual after the redesign, so it is not rewritten).
   M7, and portion 7 (the redesign) goes ahead. Open for the lab (*On-site verification
   checklist*, M7 portion 6): `win-x64` on real PCs, 14 PCs over Wi-Fi with a real film, the
   encoder's CPU on a lab PC, a Windows console's broadcast.
+- *Portion 6 review (2026-10-28, PR OTFC-ONTU/LabControl#6)* (`D-91` item 12): an independent review found
+  a per-frame pixel-buffer leak in the macOS encoder (~34 MB/s while broadcasting in *Video*), a race
+  that could stop the JPEG stream for a mixed room, a console full-view decoder that could stay broken,
+  H.264 frames relayed after a lost one on the PC, a helper restart taken for a broken decoder, and a
+  narrow catch; all fixed, with regression tests, and re-drilled on the ARM64 clone.
 
 **Acceptance criteria**
 

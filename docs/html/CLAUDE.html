@@ -424,7 +424,9 @@ at ~100 kbit/s vs <em>Text</em> 11 fps at 3.6 Mbit/s, the PC's full view in <em>
 breaks mid-broadcast falls back to JPEG keeping the screen (<code>HelperStatus.video_decoders</code>, <code>broadcast.text_fallback</code>,
 <code>LABCONTROL_H264_DECODE_FAIL_AFTER</code>), and <code>win-x64</code> passed under the VM's x64 emulation. Owner decision: the VM
 drill is enough for now; the lab checks (ROADMAP on-site checklist) wait for the next visit and portion 7 goes
-ahead. Tests: 1134 Shared + 377 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7 (the redesign); the H.264 lab checks on the next visit.
+ahead. PR OTFC-ONTU/LabControl#6; its independent review (2026-10-28, <code>D-91</code> item 12) found and fixed a per-frame
+pixel-buffer leak in the macOS encoder, a hub stream race, a console decoder that could stay broken, H.264 relayed
+after a lost frame, a helper restart taken for a broken decoder — re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7 (the redesign); the H.264 lab checks on the next visit.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
@@ -908,7 +910,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-27 23:27 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-28 23:12 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

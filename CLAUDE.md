@@ -298,7 +298,9 @@ at ~100 kbit/s vs *Text* 11 fps at 3.6 Mbit/s, the PC's full view in *Video* 26�
 breaks mid-broadcast falls back to JPEG keeping the screen (`HelperStatus.video_decoders`, `broadcast.text_fallback`,
 `LABCONTROL_H264_DECODE_FAIL_AFTER`), and `win-x64` passed under the VM's x64 emulation. Owner decision: the VM
 drill is enough for now; the lab checks (ROADMAP on-site checklist) wait for the next visit and portion 7 goes
-ahead. Tests: 1134 Shared + 377 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7 (the redesign); the H.264 lab checks on the next visit.
+ahead. PR OTFC-ONTU/LabControl#6; its independent review (2026-10-28, `D-91` item 12) found and fixed a per-frame
+pixel-buffer leak in the macOS encoder, a hub stream race, a console decoder that could stay broken, H.264 relayed
+after a lost frame, a helper restart taken for a broken decoder — re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7 (the redesign); the H.264 lab checks on the next visit.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

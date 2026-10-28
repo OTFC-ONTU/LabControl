@@ -5436,8 +5436,35 @@ in the Application log were UTM's `spice-webdavd.exe`, which fails at every boot
 shared folders off. Owner decision (2026-10-27): the VM drill is enough for now; the lab checks
 below wait for the next visit, possibly the end of M7, and the redesign (portion 7) goes ahead.
 
+12. **Independent review fixes** (2026-10-28, PR OTFC-ONTU/LabControl#6). (a) **The macOS encoder
+    leaked a whole picture per frame** — the session's pool, created without source attributes,
+    gave `420v` buffers, which were refused and never released; a Mac broadcasting in *Video*
+    grew by about 34 MB/s. The pool now gives BGRA (`kCVPixelBufferPixelFormatTypeKey`, width,
+    height) and any other buffer is released; `H264Tests` pins resident memory over 300 frames
+    (401 MB without the fix). (b) **The hub's streams raced**: `Reconcile` decided under the lock
+    and applied after it, so a join that saw only H.264 PCs could stop the JPEG stream another
+    join had just started, and a keyframe request could restart a stream just stopped; one
+    reconcile lock now covers the decision and both `Apply` calls, and frames are offered under
+    the hub's lock, so a PC that switched stream never gets the old one's frame. (c) **The
+    console's own full-view decoder** given up (`FrameDecoder.Broken`) now asks that PC for JPEG,
+    with `video.console_decode_failed` for the teacher; choosing *Video* again or reopening the
+    window tries H.264 again (`Reset` clears `Broken`). (d) A picture up to one macroblock larger
+    than its frame (padding without a display area) is cropped; a larger one counts as a
+    failure. (e) **The PC's service drops H.264 frames after a refused one** until a keyframe
+    passes (`Helper.H264Gap`) — on a PC the helper's sink never refuses, so item 4's held frame
+    applies to the simulator and the hub, and this is the PC's equivalent; a refused keyframe
+    asks again. (f) **A helper restart is not a broken decoder**: the service keeps the last
+    helper's codecs while a new one starts, so `broadcast.text_fallback` fires only on a real
+    failure. (g) Any encoder exception falls back to JPEG instead of ending the producer loop;
+    Vortice's own exceptions from `MFTEnumEx` become `H264Exception`. A use-after-free the new
+    crop test found — the picture read after its decoder was disposed — was fixed with it.
+    Re-drilled on the ARM64 clone (build `1.0.0-m7-p6d`): both streams in *Video* with switching,
+    `session.exe` killed mid-broadcast (stayed H.264, no false fallback), the decoder-failure
+    fallback, no LabControl crash event.
+
 Status: built 2026-10-27 on the Mac and passed its ARM64 VM drill the same day after two
-fixes (item 10), then the decoder-failure fallback and `win-x64` under emulation. Not run:
+fixes (item 10), then the decoder-failure fallback and `win-x64` under emulation; review fixes
+(item 12) re-drilled on the VM on 2026-10-28. Not run:
 `win-x64` on lab hardware (only emulated), the software encoder's CPU on a lab PC at
 1080p, 14 PCs at once over the MacBook's Wi-Fi with a real film, a Windows console's broadcast,
 a Windows edition without the codecs (only simulated by `LABCONTROL_NO_H264`).

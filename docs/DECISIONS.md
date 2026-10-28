@@ -4327,6 +4327,14 @@ answer); following links as SYSTEM (a junction to `C:\Windows\System32\config` w
 registry); retrying a PC that was off when it comes back (owner decision); persisting exam
 collections across a console restart (the exam itself is in memory on the console, `D-76`).
 
+Addendum (2026-10-29): on Linux, .NET answers an empty string for the Documents folder while
+`~/Documents` does not exist, so the default destination became the relative
+`LabControl/Collected`, which the *Exam* and *Collect files* dialogs refuse — a Linux console's
+teacher would have seen "choose a destination" for the default. `WorkCollections.DefaultDestination`
+now names `~/Documents/LabControl/Collected` whether or not it exists (`DoNotVerify`, then the
+profile's `Documents`); the collection creates it. The UI test that waited for that dialog without
+a bound hung the Linux CI for its whole 30 minutes since 2026-10-26; it now waits at most 20 s.
+
 ## D-78 — Profile reset uses DeleteProfile by the recorded SID; a light reset empties three known folders under the student's token (M6 portion 5)
 
 Context (2026-10-23): `ARCHITECTURE` §6 promised `Win32_UserProfile.Delete`; the corrected M6

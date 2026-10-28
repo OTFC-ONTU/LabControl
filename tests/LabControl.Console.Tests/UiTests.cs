@@ -832,7 +832,8 @@ public sealed class UiTests
             var confirm = reset.GetVisualDescendants().OfType<Button>().Single(b => b.Classes.Contains("danger"));
             Assert.Equal(Localization.Strings.Get("Reset.ConfirmFull"), confirm.Content);
             confirm.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(LabControl.Shared.Jobs.ResetMode.Full, await reset.Completion);
+            // Bounded: a dialog that refuses its input stays open, and the test must fail, not hang the run.
+            Assert.Equal(LabControl.Shared.Jobs.ResetMode.Full, await reset.Completion.WaitAsync(TimeSpan.FromSeconds(20)));
 
             // The exam dialog's collect switch, from a preset that has it on.
             var preset = new ExamPreset { Id = "p1", Name = "Practical", TimerMinutes = 40, CollectWork = true, CollectFolder = @"Documents\Lab3" };
@@ -843,7 +844,7 @@ public sealed class UiTests
             Assert.Contains(exam.GetVisualDescendants().OfType<TextBox>(), b => b.Text == @"Documents\Lab3");
             exam.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, Localization.Strings.Get("Exam.Start")))
                 .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            var request = await exam.Completion;
+            var request = await exam.Completion.WaitAsync(TimeSpan.FromSeconds(20));
             Assert.NotNull(request);
             Assert.Equal(@"Documents\Lab3", request.CollectFolder);
             Assert.Equal(WorkCollections.DefaultDestination, request.CollectDestination);

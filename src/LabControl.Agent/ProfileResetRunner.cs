@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Principal;
@@ -6,6 +7,7 @@ using LabControl.Shared;
 using LabControl.Shared.Files;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 using Windows.Win32;
@@ -30,19 +32,19 @@ internal sealed class ProfileResetRunner(AgentLink link, ILogger log)
         JobResult Result(bool ok, string message) => new() { JobId = job.Id, Ok = ok, ExitCode = ok ? 0 : -1, Message = message };
         if (!ResetProfileRequest.TryParse(job, out var request, out var error)) return Result(false, error);
         if (ExamHeld?.Invoke() == true)
-            return Result(false, "An exam is in progress on this PC; end it before resetting the profile, or its work would be lost.");
+            return Result(false, PcText.Get("ExamBlocksReset"));
         try
         {
             return request.Mode == ResetMode.Light ? await LightAsync(job, report, token) : await FullAsync(job, report, token);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("no managed student", StringComparison.OrdinalIgnoreCase))
         {
-            return Result(false, "This PC was installed without the LabControl student account, so its profiles are never reset.");
+            return Result(false, PcText.Get("ResetNoStudentAccount"));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
             or Win32Exception or SecurityException)
         {
-            return Result(false, $"Could not reset the profile: {ex.Message}");
+            return Result(false, PcText.Get("ResetFailed", ex.Message));
         }
     }
 
@@ -63,11 +65,11 @@ internal sealed class ProfileResetRunner(AgentLink link, ILogger log)
                 () => ProfileWipe.Clear(folder, Defaults.ProfileWipeMaxEntries, Defaults.ProfileWipeMaxDuration, token));
             removed += summary.Removed;
             left += summary.Left;
-            await report(new JobProgress { JobId = job.Id, Line = $"{name}: {summary.Removed} removed, {summary.Left} left." });
+            await report(new JobProgress { JobId = job.Id, Line = PcText.Get("ResetFolderProgress", name, summary.Removed, summary.Left) });
         }
 
-        var message = $"Emptied Desktop, Documents and Downloads: {removed} item(s) removed.";
-        if (left > 0) message += $" {left} could not be removed (open in a program?); log the student off and reset again.";
+        var message = PcText.Get("ResetEmptied", removed);
+        if (left > 0) message += PcText.Get("ResetLeft", left);
         return new JobResult { JobId = job.Id, Ok = left == 0, ExitCode = left == 0 ? 0 : 1, Message = message };
     }
 
@@ -83,15 +85,15 @@ internal sealed class ProfileResetRunner(AgentLink link, ILogger log)
 
         var problem = PowerControl.PrepareShutdown();
         if (problem is not null)
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"Cannot reboot after the reset: {problem}" };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("ResetCannotReboot", problem) };
 
         if (sessionId is { } id)
         {
             ExamCoordination.PauseForPowerJob();
             var failure = PowerControl.Logoff(id);
             if (failure is not null)
-                return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"Could not log the student off: {failure}" };
-            await report(new JobProgress { JobId = job.Id, Line = "Logging the student off." });
+                return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("ResetLogoffFailed", failure) };
+            await report(new JobProgress { JobId = job.Id, Line = PcText.Get("ResetLoggingOff") });
         }
 
         var deleted = false;
@@ -124,12 +126,12 @@ internal sealed class ProfileResetRunner(AgentLink link, ILogger log)
             if (failure is not null)
             {
                 log.LogError("reboot after a profile reset failed: {Failure}", failure);
-                link.ReportForJob(job.Id, Event.Types.Severity.Error, "power.failed", $"The reboot after the profile reset did not happen: {failure}");
+                link.ReportForJob(job.Id, Event.Types.Severity.Error, "power.failed", PcText.Get("ResetRebootFailed", failure));
             }
         });
 
         return deleted
-            ? new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = $"The student's profile was deleted; rebooting in {Defaults.PowerJobDelay.TotalSeconds:0} s into a new one." }
-            : new JobResult { JobId = job.Id, Ok = false, ExitCode = lastError, Message = $"Windows still held the student's profile ({new Win32Exception(lastError).Message}); rebooting anyway — reset again once the PC is back." };
+            ? new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = PcText.Get("ResetDeleted", Defaults.PowerJobDelay.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)) }
+            : new JobResult { JobId = job.Id, Ok = false, ExitCode = lastError, Message = PcText.Get("ResetStillHeld", new Win32Exception(lastError).Message) };
     }
 }

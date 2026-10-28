@@ -32,7 +32,7 @@ public static class HeadlessApp
 /// </summary>
 public sealed class UiTests
 {
-    private static readonly HeadlessUnitTestSession Session = HeadlessUnitTestSession.StartNew(typeof(HeadlessApp));
+    internal static readonly HeadlessUnitTestSession Session = HeadlessUnitTestSession.StartNew(typeof(HeadlessApp));
 
     [Fact]
     public async Task The_first_run_wizard_creates_a_lab_and_insists_on_a_backup()
@@ -390,16 +390,16 @@ public sealed class UiTests
 
                 Assert.True(await Wait.UntilAsync(() => vm.Jobs.Count == 2 && vm.Jobs.All(j => j.IsFinished)));
                 var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
-                tabs.SelectedIndex = 2;
+                tabs.SelectedIndex = 3;
                 Assert.False(vm.ExportBatchLogsCommand.CanExecute(null));
                 vm.SelectedJob = vm.Jobs[0];
                 Assert.True(vm.ExportBatchLogsCommand.CanExecute(null));
                 await Render(window, "main-3-jobs");
                 Assert.Contains(window.GetVisualDescendants().OfType<Button>(),
                     button => Equals(button.Content, "Export batch logs…") && button.IsEnabled);
-                tabs.SelectedIndex = 3;
-                await Render(window, "main-4-events");
                 tabs.SelectedIndex = 4;
+                await Render(window, "main-4-events");
+                tabs.SelectedIndex = 5;
                 await Render(window, "main-5-settings");
                 Assert.All(vm.Jobs, j => Assert.Equal("Reboot", j.Kind));
 
@@ -484,6 +484,25 @@ public sealed class UiTests
             window.DataContext = vm;
             window.Show();
             await Render(window, "chooser-1-labs");
+
+            // Choosing another language shows the restart hint under the list, and the heading keeps
+            // its own column instead of sliding under the selector (2026-10-27).
+            var language = new LanguageChoiceViewModel(directory, LabControl.Shared.Localization.ProductLanguages.English, save: _ => { });
+            vm.Language = language;
+            window.DataContext = null;
+            window.DataContext = vm;
+            var running = language.Selected;
+            language.Selected = language.Languages.First(l => !Equals(l, running));
+            await Render(window, "chooser-1-language");
+            var heading = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "My labs");
+            var selector = window.GetVisualDescendants().OfType<ComboBox>().First();
+            var headingRight = heading.TranslatePoint(new Avalonia.Point(heading.Bounds.Width, 0), window)!.Value.X;
+            var selectorLeft = selector.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X;
+            Assert.True(heading.Bounds.Width > 0 && headingRight <= selectorLeft, $"heading ends at {headingRight}, selector starts at {selectorLeft}");
+            language.Selected = running;
+            vm.Language = null;
+            window.DataContext = null;
+            window.DataContext = vm;
 
             // Two rows; the last-used lab is highlighted and preselected, and nothing is active.
             Assert.Equal(2, vm.Labs.Count);
@@ -709,7 +728,7 @@ public sealed class UiTests
             window.DataContext = vm;
             window.Show();
             var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
-            tabs.SelectedIndex = 4;
+            tabs.SelectedIndex = 5;
             await Render(window, "settings-teacher-devices");
 
             Assert.True(vm.Settings.IsAdministrator);
@@ -766,7 +785,7 @@ public sealed class UiTests
             window.DataContext = vm;
             window.Show();
             var tabs = window.GetVisualDescendants().OfType<TabControl>().First();
-            tabs.SelectedIndex = 2;
+            tabs.SelectedIndex = 3;
             await Render(window, "main-9-restored-jobs");
 
             Assert.Equal(2, vm.Jobs.Count);
@@ -813,7 +832,8 @@ public sealed class UiTests
             var confirm = reset.GetVisualDescendants().OfType<Button>().Single(b => b.Classes.Contains("danger"));
             Assert.Equal(Localization.Strings.Get("Reset.ConfirmFull"), confirm.Content);
             confirm.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(LabControl.Shared.Jobs.ResetMode.Full, await reset.Completion);
+            // Bounded: a dialog that refuses its input stays open, and the test must fail, not hang the run.
+            Assert.Equal(LabControl.Shared.Jobs.ResetMode.Full, await reset.Completion.WaitAsync(TimeSpan.FromSeconds(20)));
 
             // The exam dialog's collect switch, from a preset that has it on.
             var preset = new ExamPreset { Id = "p1", Name = "Practical", TimerMinutes = 40, CollectWork = true, CollectFolder = @"Documents\Lab3" };
@@ -824,7 +844,7 @@ public sealed class UiTests
             Assert.Contains(exam.GetVisualDescendants().OfType<TextBox>(), b => b.Text == @"Documents\Lab3");
             exam.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, Localization.Strings.Get("Exam.Start")))
                 .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            var request = await exam.Completion;
+            var request = await exam.Completion.WaitAsync(TimeSpan.FromSeconds(20));
             Assert.NotNull(request);
             Assert.Equal(@"Documents\Lab3", request.CollectFolder);
             Assert.Equal(WorkCollections.DefaultDestination, request.CollectDestination);
@@ -834,7 +854,7 @@ public sealed class UiTests
         Assert.True(done);
     }
 
-    private static async Task Render(Window window, string name)
+    internal static async Task Render(Window window, string name)
     {
         for (var i = 0; i < 3; i++)
         {

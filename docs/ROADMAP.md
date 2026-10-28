@@ -21,7 +21,7 @@ implement.
 | **M4** | Deployment: USB installer, files, self-update | **in progress — `1.0.0` is the physical-lab release candidate (owner decision 2026-09-08); script/file flows, USB Setup and signed self-update implemented; isolated Windows installation, delivery and recovery checks passed. Removal, administrator-access and physical-lab acceptance remain (`D-38`, `D-41`…`D-52`; verification ledger below)** | M3 |
 | **M5** | Lab files, teacher access and fast switching between rooms | **in progress — design recorded 2026-09-08 (`D-53`…`D-60`), extended by `D-68`; all eight portions built and reviewed (1–3 on 2026-09-08 — profile store and migration; `ActiveLabController`, the *My labs* chooser, *Disconnect*, bulk `.lcbak` import; signed `.lclab`/`.lcreq`/`.lcgrant` exchange, teacher sessions without a vault, `instance:` withdrawal with confirmed delivery, dormant imported codes — and 4–8 on 2026-09-09: results bound to the delivering console instance and in-flight job restoration; the take-over decided on the agent's own clock, the four ownership states this console can prove and the informational `Welcome.console_access`, followed by the portion-5 security fixes that refuse a withdrawn instance's beacon where the beacon is judged and attribute ownership only on the PC's own departure report; command-line documents, single-instance forwarding and macOS file activation; the per-user Windows console installer, the LAN-access banner and the macOS and Linux packages, run on Windows for the first time on 2026-09-09 and fixed for the four defects that run found — the `app.manifest` double hyphen that stopped the installer starting at all, the firewall profile constant that opened Public and rejected a real private-and-domain rule, the `group=` argument that made the printed `netsh` line create nothing, and the argument-list quoting that left a 148 MB copy in the temp directory; and the acceptance drills with the gaps an adversarial audit of every acceptance criterion found — a combined picker filter, batched authorization, the departure flow every leaving route uses, the beacon-resume step-over that relinks thirty refused PCs in 2.7 s instead of 30.3 s, and events bound to the console that delivered their job), migration tried on a copy of the live data, portion 3 smoke-tested on two copies, portion 4 also proved with a real agent on the isolated Windows VM clone, portions 6–8 checked on the owner's Mac, and portion 7 also run on the isolated Windows 11 ARM64 clone (guest `PC-27`) on 2026-09-09 — the installer, its plan and dry run, the per-user install by a non-administrator, the shortcut, the Installed-apps entry, both file-type registrations, an idempotent repeat run, the lock refusal, document forwarding into a running console over the Windows named pipe with spaces and Ukrainian in the path, the real Windows Firewall rules and the banner going from missing to allowed, uninstall including the temporary copy's self-deletion, all three `--remove-data` answers and a DPAPI-sealed key surviving replacement; main stands at 984 tests (755 Shared + 229 Console, 13 macOS bundle tests skipping unless the package has been built). **Still unverified:** on Windows, Explorer's own double-click, a real elevation prompt a teacher answers, `win-x64` (only ARM64 was built and run), the installer under an ordinary interactive profile rather than a service account, and the unsigned-download warning — the clone has no interactive session, so every unelevated step ran as `LOCAL SERVICE` and the elevated one as `SYSTEM`; on Linux, the `SO_PEERCRED` path and a real desktop menu; portion 5 on Windows with two consoles and skewed clocks against a real agent, the Avalonia quit hook by hand, and the milestone in the physical lab; real-Mac switch timing under investigation** | M4 |
 | **M6** | Classroom control: broadcast, lock, exam mode | **done 2026-10-26 (owner decision)** — all six portions built (`D-69`…`D-79`), portions 1–5 VM-drilled, and the whole milestone accepted in the physical lab on all 14 PCs (2026-10-26, builds `1.0.0+68d0ae5` → `1.0.0+cc39651`): lock, broadcast, internet control, exam mode, collect work, profile reset, the fail-safe checks and the departure dialog; the lab's findings fixed and retested the same day (`D-75` item 12, `D-79` items 8–9, `D-81` and `D-83` addenda). **Open check:** teacher access in the lab — there is no second teacher device yet (proven over the real link on the Mac, `TeacherAccessTests`). The portion-6 VM drills were not run separately; the lab covered them | M5 |
-| **M7** | Software catalog, localization, polish | not started | M6 |
+| **M7** | Software catalog, localization, polish, UI/UX redesign | **in progress — portions 1–2 (languages, `D-86`, `D-87`) done; portions 3–4 (catalog, wizard, `install_package`, `.zip` packages, `D-88`, `D-89`) working in the lab 2026-10-27 — Wake-on-LAN's driver installed on the room through it; next: portion 5** | M6 |
 
 Update the **State** column (`not started` / `in progress` / `done <date>`) in the same
 change that finishes the work, and regenerate the HTML mirror (see
@@ -1804,7 +1804,11 @@ contract, then desktop integration (`D-54` item 6).
   run); the installer under an ordinary interactive user profile rather than a service
   account; the unsigned-download warning; the Linux `SO_PEERCRED` path of the single
   instance (portion 6); and a real GNOME or KDE application menu. Those stay in portion 7's
-  manual matrix and must not be reported as passing until they are run. **Rough edges for a
+  manual matrix and must not be reported as passing until they are run. **Update
+  (owner, 2026-10-27):** the `win-x64` package (`dc2d948`) was installed from a USB stick on a
+  real Windows computer under an ordinary interactive profile — the unsigned-file warning
+  answered, the console started and a `.lcbak` imported with the passphrase; Explorer's
+  double-click on a lab document, a real elevation prompt and Linux remain unrun. **Rough edges for a
   later pass**, none of them wrong behaviour: the dry run prints its plan header twice; a
   repeat install reports steps as *written* where the code's comments promise *already*, so
   the machine is idempotent but the wording is not; and uninstall leaves the now-empty
@@ -2816,7 +2820,7 @@ and the 5 m readability check on a real panel, `win-x64` and the physical lab.
   the lab (no second teacher device yet).
 ---
 
-## M7 — Software catalog, localization, polish
+## M7 — Software catalog, localization, polish, UI/UX redesign
 
 **Goal.** Everything that makes the system pleasant to own for one person with no IT
 department. The catalog ships **empty** — the deliverable is the ease of filling it.
@@ -2843,15 +2847,198 @@ department. The catalog ships **empty** — the deliverable is the ease of filli
   tomorrow" performed end to end from the backup.
 - `README.md` rewritten as a teacher-facing operating manual: what to click before a
   lesson, what to do when a PC does not appear, how to move the console to a new
-  computer.
-- Optional, and only if M3's measurements demand it: H.264 via Media Foundation behind
-  the existing `VideoFrame` envelope. Decide with numbers, not taste.
-- **A visible answer to every teacher action that fails** (owner, physical lab 2026-10-26): a
-  refused or failed action — a profile reset during an exam, a lock refused by a PC, a job that
-  failed on some PCs — today shows only as a row in *Jobs* or a line in the events, so the
-  teacher pressing a button gets no answer. Add a notification the teacher sees where they
-  acted (a toast or a status strip with the reason and the PCs), as part of a UI redesign; **not
-  before M7** — no redesign during M6.
+  computer. Written **after** the redesign (owner decision 2026-10-27), so it describes the
+  screens as they will stay.
+- **H.264 for the broadcast and the full view** (owner decision 2026-10-27, replacing the
+  optional item "only if M3's measurements demand it"): the broadcast runs at about 10 fps at
+  best and a video or an animated presentation is not watchable, because every frame is a JPEG
+  sent once per PC under a 24 Mbit/s total cap the console's Wi-Fi needs. H.264 behind the
+  existing `VideoFrame` envelope — the console encodes with the platform's encoder (macOS
+  VideoToolbox, Windows Media Foundation; Linux keeps JPEG), the PCs decode with Media
+  Foundation; the full view's PC → console stream likewise. A **Text / Video** choice at every
+  show — next to *Show my screen* and in the PC's full-view window, the last choice remembered
+  (owner decision 2026-10-27): *Text* keeps the sharp picture at a low rate, *Video* aims at
+  25–30 fps. The mosaic's thumbnails stay JPEG at 2 fps. JPEG stays the fallback for a peer
+  without the codec.
+- **UI/UX redesign — the last M7 item before the manual** (owner decisions 2026-10-26 and
+  2026-10-27): a complete review of
+  every console screen, dialog and window — the mosaic and its tiles, full view, *My labs*,
+  *Scripts*, *Jobs*, the lock / broadcast / internet / exam / collect dialogs, the departure
+  dialog, *Teacher devices*, the package wizard — plus the student-facing lock screen and exam
+  strip, judged for what a teacher does before, during and after a lesson rather than one
+  screen at a time. It comes after the catalog and the robustness pass so the screens M7 adds
+  are reviewed with the rest, and before the README manual, which then describes the redesigned
+  screens. It absorbs:
+  - **A visible answer to every teacher action that fails** (owner, physical lab 2026-10-26): a
+    refused or failed action — a profile reset during an exam, a lock refused by a PC, a job
+    that failed on some PCs — today shows only as a row in *Jobs* or a line in the events, so
+    the teacher pressing a button gets no answer. Add a notification the teacher sees where
+    they acted (a toast or a status strip with the reason and the PCs); no redesign during M6.
+
+**Settled before implementation** (owner decisions 2026-10-26, `D-86`): a new language takes
+effect when the console starts again — the choice is saved at once and *Restart now* quits
+through the ordinary departure question; the student sees stock text (lock screen, exam strip,
+*Time is up*) in the **teacher console's** language, which therefore travels to the PC; "lab"
+is *лабораторія* / *лаборатория*.
+
+**How it is being built.** In seven portions, each committed and, where a PC is involved, run
+on the Windows VM before the next: **(1)** the console's languages — the selector in
+*Settings* and the lab chooser, `preferences.json`, the shared resolution rule, Ukrainian and
+Russian resources for every product `.resx`, the completeness tests and the per-language
+renders, `INSTALL.txt` in the console's language (`D-86`); **(2)** languages on the PC — the
+console's language over the link, the agent's stock overlay and exam text and its event
+messages in that language, Setup and removal following the Windows display language with
+their remaining literals moved to resources, a VM run in all three; **(3)** the package
+catalog and the *Add package* wizard on the console; **(4)** `install_package` on the agent,
+*Install on all missing*, the broken-package drill and the 14-PC measurement; **(5)** the
+robustness pass, the 90-minute lesson and the rehearsed recovery; **(6)** H.264 for the
+broadcast and the full view with the *Text / Video* choice (owner decision 2026-10-27); **(7)**
+the UI/UX redesign with the visible answer to failed actions, and the three languages checked
+again; **(8)** the README as a teacher's manual, written for the redesigned screens (owner
+decision 2026-10-27: the manual after the redesign, so it is not rewritten).
+
+- *Portion 1 built (2026-10-26), on the Mac.* `Shared/Localization/ProductLanguages` (the
+  three languages under their own names and the rule: a stored choice, else a supported OS
+  display language, else English), `Persistence/PreferencesDocument` (`preferences.json` at
+  the data root, never in a backup or lab file), `Console/Services/ConsoleLanguage` (applied
+  in `Program.Main` before the first string; an unreadable or newer file means no choice and
+  is logged), `LanguageChoiceViewModel` + `LanguageSelector` in *Settings* and the chooser,
+  *Restart now* through the quit path and a relaunch after the lock is released;
+  `Strings.uk.resx` / `Strings.ru.resx` and the Ukrainian and Russian siblings of
+  `SetupStrings`, `OverlayStrings`, `PolicyStrings` and `UsbInstallerStrings`. Tests:
+  `ResourceTranslationTests` (every neutral `.resx` has both siblings with its keys and
+  placeholders), `ConsoleLanguageTests` (saving, a newer file not overwritten, every key the
+  code names exists), `LanguageRenderTests` (the chooser, every main-window tab and six
+  dialogs in each language; with `LABCONTROL_UI_SHOTS` the `lang-uk-…`/`lang-ru-…` PNGs are
+  the clipping check); both test projects pin English, since the owner's Mac reports `ru-UA`.
+  **Open:** the owner's read-through of both translations; clipping fixes wait for the
+  redesign (portion 7) unless a screen is unusable; agent-originated text (events from a PC,
+  job output) is still English until portion 2.
+- *Portion 2 built (2026-10-26), on the Mac; not yet run on Windows* (`D-87`). The console's
+  language travels in `Welcome.language`, and each lock and exam carries its own
+  (`Overlay.language`, `ExamMode.language`): the student's lock screen, exam strip, notices and
+  *Time is up* are in the language of the console that **set** them, kept with the session in
+  `policy.json` through a reboot and a take-over; the helper draws in it (`ExamStrip.language`,
+  `OverlayText` never reads the process culture). What the PC writes to the teacher — events,
+  job results, refusals, problems, the student's shutdown notice — is in the last `Welcome`'s
+  language (`PcLanguage`, kept in `agent.json`), from `PolicyStrings` and the new `PcStrings`
+  (140 keys); the session helper is told with `ServiceMessage.language`. Stable codes, the
+  developer log, Windows' own error text and teacher data stay as they are. Setup and removal
+  resolve the Windows display language before the first string; their dialogs, plan, warnings,
+  refusals and closing lines are resources (35 new `SetupStrings` keys), the step trace shared
+  with `setup.log` stays English. An older console or agent costs English, nothing else.
+  Tests: `StudentTextLanguageTests`, `PcLanguageTests` (Shared and Console). **Accepted by the
+  owner (2026-10-27)** after the physical lab on build `1.0.0+c8e3c9b`: exam, lock and the
+  language switch in the console's language. Script output (*PC-INFO* prints English labels)
+  is the script's own text — data, not translated (`D-67` item 2). Not run: Setup and removal
+  under each Windows display language.
+- *Portion 3 built (2026-10-27), on the Mac* (`D-88`). Owner decisions of 2026-10-27: the
+  wizard copies the installer into the lab's catalog; the proposed rule is the program's name in
+  Windows' list of installed programs (a file path the alternative); a new version replaces the
+  entry of the same program; the install buttons come with portion 4. `Shared/Packages` reads an
+  installer without running it — `CompoundFile` + `MsiProperties` (an MSI's `Property` table),
+  `PeVersionInfo` (an executable's version resource), `InstallerInspector` (SHA-256, the family
+  — MSI, WiX bundle, NSIS, Inno Setup, InstallShield — and its silent arguments) — and
+  `PackageEntry` / `DetectRule` hold the rules. `Console/Services/PackageCatalog` writes
+  `packages/<id>.yaml` (YamlDotNet) and copies the installer, hash-checked, into
+  `packages/<id>/<hash prefix>/`; the *Packages* tab lists the catalog with *catalog last
+  changed on …*, edits and deletes an entry, and *Add package…* is the wizard. A backup still
+  carries only the YAML, so another computer shows the entry as *installer not on this
+  computer*. Tests: `PackageInspectionTests` (an MSI written byte by byte, a real PE, every
+  family's marker, damaged files), `PackageCatalogTests`, the wizard in the per-language renders.
+  **Open:** the owner adds a real package through the wizard (acceptance, with portion 4); real
+  installers of each family have not been inspected yet — only synthetic ones and a real PE.
+- *Portion 4 built (2026-10-27), on the Mac; not yet run on Windows* (`D-89`). Owner decisions
+  of 2026-10-27: an installer may run 15 minutes by default, changeable per package; *Install on
+  all missing* queues for PCs that are off; a restart the installer asks for is only reported;
+  a PC in an exam refuses. `install_package` carries the file, family, silent arguments, detect
+  rule, limit and a mode — `install`, `missing`, `check` — and answers with a stable
+  `JobResult.outcome` (`package.installed`, `.reboot_required`, `.present`, `.absent`, `.failed`,
+  `.not_detected`, `.timed_out`, `.not_run`, `.exam`). `Shared/Packages/PackageInstallRunner`
+  holds the rules for both hosts: `WindowsPackageHost` (SYSTEM, session 0, no window, the
+  *Uninstall* keys or a file, the process tree ended at the limit) and the simulator's
+  `FakePackageHost` (`/fail`, `/reboot`, `/hang`, `/nodetect`). The console's
+  `PackageStatusBook` (`package-status.json`) remembers each PC's answer; the *Packages* tab
+  lists every PC's state and has *Install on N selected PCs* (the test install), *Install on all
+  missing* (asks before an untried package goes to the lab; an older version gets a plain
+  install) and *Check PCs*; the per-package time limit is in the tab and the wizard. Tests:
+  `PackageInstallRunnerTests`, `PackageInstallTests` (simulated PCs over the real link).
+  **Open:** the VM run (a real MSI, an NSIS and an Inno installer as SYSTEM; a wrong argument
+  ending at its limit; 3010), then the physical lab — the broken-package drill on all 14 and
+  the measured 14-PC install without internet, written below next to the manual afternoon.
+  *Addendum (2026-10-27):* a package may be a `.zip` with its installer and files — the wizard lists
+  the installers inside and the PC unpacks the archive (checked names, limits) and runs the chosen
+  one from its folder (`D-89` addendum). First use: Realtek's *Win10/Win11 Auto Installation Program
+  (NDIS)* 10.80.50 for the RTL8168, the driver Wake-on-LAN needs.
+  **First run on a physical PC (2026-10-27):** the Realtek driver `.zip` was installed through the
+  catalog on one PC of lab `444-2` (agent `1.0.0+8cfded14`), followed by the USB repair from a fresh
+  stick and the BIOS settings (ErP off, *Power On By PCI-E* on); shutdown from the console and
+  *Wake* then woke the PC — **Wake-on-LAN's first success in the lab**. The driver then went to the
+  other 13 through *Install on all missing*. **PC-02 woke with the driver and the BIOS alone, without
+  the USB repair**: the vendor driver's defaults already enable wake on a magic packet from shutdown,
+  so the repair is not needed for wake from S5 (it still sets *only magic packet*, Energy-Efficient
+  Ethernet off and *allow this device to wake the computer*, and refreshes the tile's NIC advisory,
+  which otherwise stays as an informational tooltip, `D-66`). **Owner's confirmation (2026-10-27):
+  Wake-on-LAN works in the lab and the mass install through the catalog works** — the driver
+  installed on the room with *Install on all missing*, the BIOS set on every PC, the room woke from
+  the console. Still open for portion 4's acceptance: the deliberately broken package on all 14 and
+  the measured install of a real program (an IDE) on 14 PCs without internet, written here next to
+  the manual afternoon.
+
+- *Portion 5 — robustness pass built (2026-10-27), on the Mac* (`D-90`). The six scenarios were
+  reproduced in tests — a reconnect storm of 30 PCs, half the room in full view, a PC off for a week,
+  a console restored from an older backup, a full disk (a real RAM-disk volume), clocks ±3 h — by three
+  parallel worktrees, and sixteen defects fixed: power actions online-only (owner decision), stale
+  queued installs and superseded queued updates dropped, a revocation learned from a PC cutting the
+  revoked PC, torn temporaries removed, teacher saves on a full disk answered instead of crashing the
+  console, no orphan installer, atomic certificate renewal and its failure reported, certificates
+  backdated a day, an unlinked PC dialling a beacon whose only fault is its time (with `clock.skew`
+  told to the teacher), faster reconnects, late full frames ignored. Owner decision: the missing
+  summaries after a restore or a move go into the redesign (portion 7). The 90-minute lesson passed
+  (owner). The rehearsed recovery is half done — the `win-x64` console installed on a Windows
+  computer and the backup imported with the passphrase; driving the lab from it remains. Open for
+  Windows: the items listed in `D-90`'s status.
+- *Portion 6 — H.264 built (2026-10-27), on the Mac; not yet run on Windows* (`D-91`). Owner
+  decisions of 2026-10-27: *Text* is today's JPEG unchanged, *Video* is H.264; *Text* first; the last
+  choice remembered separately for *Show my screen* and the full-view window (`preferences.json`); a
+  switch at any time while showing or watching. Self-describing frames (`VideoFrame.codec = "h264"`,
+  one Annex B access unit, IDR with SPS/PPS) and three additive fields — `VideoControl.codec`,
+  `BroadcastRequest.codecs`, `HelperHello.video_decoders`/`video_encoders` — so every mix of builds
+  falls back to JPEG with no protocol version. `Shared/Video/H264/`: `VideoToolboxH264Encoder`/`Decoder`
+  (macOS, `DllImport`), `MediaFoundationH264Encoder`/`Decoder` (the in-box synchronous MFTs through
+  Vortice.MediaFoundation 3.8.3, NV12 in C#), `H264Codecs` (probed once; `LABCONTROL_NO_H264=1` for the
+  fallback drill), `AnnexB`, `Nv12`; `FrameDecoder` decodes by the frame's codec on the console's full
+  view and the PC's `BroadcastPicture`. `ScreenProducer` encodes whole pictures in *Video*, IDRs where
+  a JPEG keyframe would be, holds a refused access unit instead of re-encoding, and falls back to JPEG
+  with `video.h264_unavailable`. `BroadcastHub` runs an H.264 stream at 25 fps for PCs that listed
+  `h264` and the JPEG stream only for those that did not, under the same cap. The VideoToolbox round
+  trip and the end-to-end broadcast and full view in *Video* run on the Mac (`H264Tests`,
+  `H264BroadcastTests`). **Not run on Windows:** every Media Foundation call — the encoder in the
+  helper's full view, the decoder under the broadcast, the probe at helper start, forcing an IDR
+  through `ICodecAPI`, the stride and display area of 1080p output, an N edition without the codecs —
+  and the 25–30 fps the owner asked for, measured on a lab PC and on the MacBook over Wi-Fi with a
+  film playing.
+- *Portion 6 VM drill (2026-10-27, clone *M7 isolated H.264 acceptance 2026-10-27*, Windows 11
+  ARM64, owned installation, `student` signed in)* — passed after two fixes (`D-91` item 10): a COM
+  sample released twice after `ProcessOutput` (the helper crashed about a minute into both
+  streams at once) and an H.264 stream encoded for nobody when only JPEG PCs watched. Measured:
+  the *Video* broadcast at 24–25 fps for ~100 kbit/s (*Text*: 11 fps, 3.6 Mbit/s), the PC's full
+  view in *Video* at 26–27 fps while it decoded the broadcast; colours, stride and switching
+  correct; `LABCONTROL_NO_H264=1` falls back to JPEG with the reason shown.
+- *Portion 6, everything the VM can test (2026-10-27, same clone)* (`D-91` item 11): a PC whose
+  H.264 decoder breaks mid-broadcast now dials again for JPEG and keeps its screen
+  (`HelperStatus.video_decoders`, `broadcast.text_fallback`); drilled with
+  `LABCONTROL_H264_DECODE_FAIL_AFTER=20`. The `win-x64` build ran under the clone's x64 emulation
+  with the same results (*Video* broadcast 24–25 fps, full view 26–28 fps). **Owner decision
+  (2026-10-27): the VM drill is enough for now** — the lab visit may not come before the end of
+  M7, and portion 7 (the redesign) goes ahead. Open for the lab (*On-site verification
+  checklist*, M7 portion 6): `win-x64` on real PCs, 14 PCs over Wi-Fi with a real film, the
+  encoder's CPU on a lab PC, a Windows console's broadcast.
+- *Portion 6 review (2026-10-28, PR OTFC-ONTU/LabControl#6)* (`D-91` item 12): an independent review found
+  a per-frame pixel-buffer leak in the macOS encoder (~34 MB/s while broadcasting in *Video*), a race
+  that could stop the JPEG stream for a mixed room, a console full-view decoder that could stay broken,
+  H.264 frames relayed after a lost one on the PC, a helper restart taken for a broken decoder, and a
+  narrow catch; all fixed, with regression tests, and re-drilled on the ARM64 clone.
 
 **Acceptance criteria**
 
@@ -2868,7 +3055,19 @@ department. The catalog ships **empty** — the deliverable is the ease of filli
 - Setup/removal is exercised in all three languages, and the USB builder emits each of the
   three instruction variants with English fallback for any unsupported culture.
 - The console runs a full 90-minute lesson without a restart, a leak, or a stuck job.
+  **Passed** (owner, 2026-10-27): several full 90-minute lessons in the physical lab without a
+  console restart during M6 and M7.
 - The recovery procedure is executed once for real, from the backup, and it works.
+  **First half done** (owner, 2026-10-27): the console was installed on a second, Windows
+  computer from the per-user `LabControl-Console-1.0.0-win-x64-Setup.exe` (build `dc2d948`)
+  and the lab's backup `444-2 2026-10-27.lcbak` imported there with the passphrase — the backup
+  opens and the passphrase is known. Still to do: drive the lab from that computer (take the
+  PCs over, enrol, push), i.e. the full "the teacher machine died" run.
+- Every screen listed in the redesign item has been reviewed and the changes are in; every
+  teacher action that is refused or fails on some PCs shows its reason and those PCs where
+  the teacher acted, without opening *Jobs*.
+- The redesigned screens are re-rendered and re-checked in all three languages for clipping
+  and wrapping.
 
 **Rough size.** Medium.
 
@@ -2949,12 +3148,15 @@ Do this on the first visit to the lab; several milestones depend on the answers.
       is found by every installed PC and they enrol and link within seconds (2026-09-08).
 - [ ] Is it a switch or a real hub? Bandwidth headroom for 14 (later 30) video streams.
 - [ ] DHCP lease behaviour; do PCs keep their IPs?
-- [ ] Per PC: BIOS/UEFI "Wake on LAN" / "Power on by PCI-E" enabled. — Not yet checked;
-      pointless until the NIC driver below is replaced.
+- [x] Per PC: BIOS/UEFI "Wake on LAN" / "Power on by PCI-E" enabled. — Done on every PC on
+      2026-10-27 (ASUS: Advanced → APM Configuration: ErP Ready *Disabled*, Power On By PCI-E
+      *Enabled*); with the vendor driver the whole room wakes from the console.
 - [x] NIC models across the PCs (Realtek/Intel differences change the WoL settings). —
       All seen so far: Realtek PCIe GbE (RTL8168) on ASUS boards with the Microsoft
       in-box driver 9.1.410.2015, which exposes no Wake-on-LAN settings at all (`D-66`).
-      The vendor driver is required before any wake test.
+      The vendor driver is required before any wake test — Realtek's *Win10/Win11 Auto
+      Installation Program (NDIS)* 10.80.50, installed on all 14 through the package catalog
+      on 2026-10-27 (`D-89` addendum); its defaults wake from shutdown without a USB repair.
 - [ ] Windows edition and build (Home vs Pro changes some policy options).
 - [ ] Local administrator account name and password, per PC or common.
 - [x] Antivirus in use — Defender only, or a third-party product that Setup cannot
@@ -2963,6 +3165,20 @@ Do this on the first visit to the lab; several milestones depend on the answers.
 - [ ] Do the PCs have internet at all, and is it permanent or occasional?
 - [ ] Screen resolutions (drives the mosaic tile sizing).
 - [ ] Which folder should be offered as the default when setting up *collect work*?
+- [ ] **M7 portion 6, H.264** (`D-91`; passed on the ARM64 VM, `win-x64` only emulated). After
+      *Push agent build…* to one PC and then the room:
+  - [ ] *Show my screen to all* in *Video* with a film or an animated presentation playing on the
+        MacBook, all 14 PCs: the status line's fps and Mbit/s each, the PCs' pictures smooth and
+        without broken blocks; then *Text* for comparison. (VM: 24–25 fps at ~100 kbit/s for a
+        synthetic screen; a film costs far more.)
+  - [ ] One PC's full view in *Video* with a video playing full screen on that PC: fps in the
+        window, and `session.exe`'s CPU on the PC (Task Manager under *Control*, or
+        `Get-Process session` from the script library). Well above 30–40 % means hardware MFTs
+        (`D-91` item 9).
+  - [ ] The service log on a lab PC says *decodes h264, encodes h264* (a lab PC without the
+        codecs would say *jpeg only*).
+  - [ ] *Show my screen* in *Video* from the Windows console (portion 5's computer) to one or two
+        PCs.
 
 Record the answers as an update to `D-10` in `docs/DECISIONS.md`.
 

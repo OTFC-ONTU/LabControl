@@ -7,6 +7,7 @@ using Google.Protobuf;
 using Grpc.Core;
 using LabControl.Shared.Discovery;
 using LabControl.Shared.Identity;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
@@ -90,6 +91,10 @@ public sealed partial class AgentLink : IAsyncDisposable
     private Task? _loop;
     private CancellationTokenSource? _session;
     private long _linkEpoch;
+
+    // Counts Welcomes: the pinned-host retry loop abandons a backoff step once a link came up
+    // during it, however briefly that link lasted (M7 reconnect storm).
+    private long _welcomes;
     private string? _pendingEndpoint;
     private string? _pendingReason;
     private string? _previousInstanceId;
@@ -114,6 +119,9 @@ public sealed partial class AgentLink : IAsyncDisposable
                 store.Config.Revocations.Remove(record);
             }
         }
+
+        // What this PC reports before the next Welcome is in the last console's language (D-87).
+        PcLanguage.Set(store.Config.ConsoleLanguage);
     }
 
     public LinkState State { get; private set; }
@@ -727,6 +735,8 @@ public sealed partial class AgentLink : IAsyncDisposable
         return await _dials.Reader.ReadAsync(stopping);
     }
 
+    private static readonly TimeSpan PinnedRetrySlice = TimeSpan.FromMilliseconds(250);
+
     private async Task RetryPinnedHostAsync(CancellationToken stopping)
     {
         var endpoint = $"{_store.Config.ConsoleHost}:{_store.Config.ConsolePort.ToString(CultureInfo.InvariantCulture)}";
@@ -742,8 +752,21 @@ public sealed partial class AgentLink : IAsyncDisposable
             try
             {
                 // While linked or dialling, look again every second so a dropped link is
-                // followed by a dial without waiting out a whole backoff step.
-                await Task.Delay(searching ? _pinnedBackoff.Next() : TimeSpan.FromSeconds(1), stopping);
+                // followed by a dial without waiting out a whole backoff step. A long step
+                // taken while searching is waited out in short slices and abandoned as soon
+                // as a Welcome arrived during it: the backoff was reset by that Welcome, and a
+                // link lost soon after must not wait for the rest of a step from before it
+                // (M7 reconnect storm: a PC whose link dropped right after it came back
+                // redialled only when its 4 s step ran out).
+                var delay = searching ? _pinnedBackoff.Next() : TimeSpan.FromSeconds(1);
+                var until = DateTimeOffset.UtcNow + delay;
+                var welcomes = Interlocked.Read(ref _welcomes);
+                do
+                {
+                    var left = until - DateTimeOffset.UtcNow;
+                    await Task.Delay(left < PinnedRetrySlice ? (left > TimeSpan.Zero ? left : TimeSpan.Zero) : PinnedRetrySlice, stopping);
+                }
+                while (DateTimeOffset.UtcNow < until && Interlocked.Read(ref _welcomes) == welcomes);
             }
             catch (OperationCanceledException)
             {
@@ -859,7 +882,24 @@ public sealed partial class AgentLink : IAsyncDisposable
         var config = _store.Config;
         var certificate = _store.Certificate!;
 
-        using var channel = ConsoleChannel.Open(host, port, _store.Authority, config.LabId, CertificateWithKey(certificate), _revocations);
+        // The channel takes its own TLS copy of the identity; the key-bearing copy made here
+        // only for that is released at once instead of leaving one native key handle per
+        // dial to the finalizer (M7 reconnect storm: a PC may dial many times in a lesson).
+        ConsoleChannel channelOpened;
+        var withKey = CertificateWithKey(certificate);
+        try
+        {
+            channelOpened = ConsoleChannel.Open(host, port, _store.Authority, config.LabId, withKey, _revocations);
+        }
+        finally
+        {
+            if (!ReferenceEquals(withKey, certificate))
+            {
+                withKey.Dispose();
+            }
+        }
+
+        using var channel = channelOpened;
         var client = new AgentService.AgentServiceClient(channel.Channel);
         var linked = false;
         var endedBy = "the console closed the link";
@@ -917,12 +957,20 @@ public sealed partial class AgentLink : IAsyncDisposable
 
             var outgoing = Channel.CreateUnbounded<AgentMessage>(new UnboundedChannelOptions { SingleReader = true });
             var writer = WriteLoopAsync(call.RequestStream, outgoing.Reader, token);
-            var heartbeats = HeartbeatLoopAsync(outgoing.Writer, token);
+
+            // The heartbeat and renewal loops end with the stream, not only with the session
+            // token: a console that closes the link ends the response stream gracefully, and
+            // the session token is then never cancelled, so the teardown below would wait for
+            // the heartbeat's next tick — up to HeartbeatInterval (5 s) before this PC even
+            // starts to dial back. Measured in the M7 reconnect storm: of thirty PCs closed by
+            // the console at once, the slowest noticed 4.9 s late; now all notice at once.
+            using var perLink = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var heartbeats = HeartbeatLoopAsync(outgoing.Writer, perLink.Token);
 
             // Only an administrator console can sign a renewal (D-56 item 5): asking a teacher
             // console would only fill its event log with refusals, and a leaf whose OU this build
             // does not know has no authority at all. The PC asks the next administrator instead.
-            var renewal = LinkedConsoleAccess != ConsoleAccess.Administrator ? Task.CompletedTask : RenewalLoopAsync(client, certificate, token);
+            var renewal = LinkedConsoleAccess != ConsoleAccess.Administrator ? Task.CompletedTask : RenewalLoopAsync(client, certificate, perLink.Token);
 
             var video = new VideoUplink(client, config.AgentId, _log, token,
                 (code, message) => Report(Event.Types.Severity.Warning, code, message));
@@ -1025,6 +1073,7 @@ public sealed partial class AgentLink : IAsyncDisposable
                 }
 
                 outgoing.Writer.TryComplete();
+                perLink.Cancel();
                 await Task.WhenAll(SwallowAsync(writer), SwallowAsync(heartbeats), SwallowAsync(renewal), SwallowAsync(video.DisposeAsync().AsTask()));
 
                 // The producer must not keep capturing for a console that is gone.
@@ -1111,7 +1160,7 @@ public sealed partial class AgentLink : IAsyncDisposable
         {
             _log.LogWarning("{Pc}: the console's certificate names instance {Certified} but its Welcome says {Claimed}; the certificate is the one that counts", Name, certified, welcome.InstanceId);
             Report(Event.Types.Severity.Warning, "console.instance_mismatch",
-                $"The console's certificate names instance {certified} but its Welcome says {welcome.InstanceId}; the certificate is the one this PC uses.");
+                PcText.Get("InstanceMismatch", certified, welcome.InstanceId));
         }
 
         lock (_gateLock)
@@ -1132,6 +1181,7 @@ public sealed partial class AgentLink : IAsyncDisposable
     {
         var now = _options.Clock();
         ClockSkew = DateTimeOffset.FromUnixTimeSeconds(welcome.ServerTimeUnix) - now;
+        var skewReported = ClockSkew.Duration() > Defaults.BeaconMaxSkew;
 
         LinkedInstanceId = instanceId;
         LinkedInstanceName = welcome.InstanceName;
@@ -1148,16 +1198,35 @@ public sealed partial class AgentLink : IAsyncDisposable
         }
         _lastRefusal = string.Empty;
         _pinnedBackoff.Reset();
+        Interlocked.Increment(ref _welcomes);
         _gate.Linked(instanceId, endpoint, now);
 
-        if (!string.Equals(_store.Config.LastInstanceId, instanceId, StringComparison.OrdinalIgnoreCase))
+        // The teacher's language for everything this PC writes from now on (D-87); an older
+        // console sends none, which is English.
+        var language = ProductLanguages.Of(welcome.Language).Code;
+        PcLanguage.Set(language);
+
+        var lastInstance = !string.Equals(_store.Config.LastInstanceId, instanceId, StringComparison.OrdinalIgnoreCase);
+        var lastLanguage = !string.Equals(_store.Config.ConsoleLanguage, language, StringComparison.Ordinal);
+        if (lastInstance || lastLanguage)
         {
             _store.Config.LastInstanceId = instanceId;
+            _store.Config.ConsoleLanguage = language;
             _store.SaveConfig();
         }
 
         _log.LogInformation("{Pc}: linked to {Console} ({Instance}) at {Endpoint}", Name, welcome.InstanceName, instanceId, endpoint);
         Linked?.Invoke(instanceId, welcome.InstanceName);
+
+        // A clock past the beacon window is told to the teacher (M7 portion 5): this PC found the
+        // console only because an unlinked PC dials a beacon whose sole fault is its time, and a
+        // take-over by another teacher machine cannot move it until the clocks agree again.
+        if (skewReported)
+        {
+            var minutes = Math.Max(1, (int)Math.Round(ClockSkew.Duration().TotalMinutes));
+            Report(Event.Types.Severity.Warning, "clock.skew",
+                PcText.Get(ClockSkew > TimeSpan.Zero ? "ClockBehindConsole" : "ClockAheadOfConsole", minutes));
+        }
     }
 
     /// <summary>The informational <c>Welcome</c> field in this build's terms; anything unknown stays unknown.</summary>
@@ -1448,11 +1517,11 @@ public sealed partial class AgentLink : IAsyncDisposable
         string? why = null;
         if (serial is not null && _revocations.IsRevoked(serial))
         {
-            why = $"the linked console's certificate {serial} is revoked";
+            why = PcText.Get("ConsoleRevokedCertificate", serial);
         }
         else if (_revocations.IsRevoked(LabCertificates.InstanceSerial(instanceId)))
         {
-            why = $"the linked console's access ({LinkedInstanceName ?? instanceId}) was withdrawn";
+            why = PcText.Get("ConsoleRevokedAccess", LinkedInstanceName ?? instanceId);
         }
 
         if (why is null)
@@ -1460,7 +1529,7 @@ public sealed partial class AgentLink : IAsyncDisposable
             return;
         }
 
-        Report(Event.Types.Severity.Warning, "console.revoked", $"Leaving {LinkedInstanceName ?? instanceId}: {why}.");
+        Report(Event.Types.Severity.Warning, "console.revoked", PcText.Get("LeavingConsole", LinkedInstanceName ?? instanceId, why));
         Disconnect(why);
     }
 
@@ -1476,10 +1545,10 @@ public sealed partial class AgentLink : IAsyncDisposable
             // the ledger: an administrator console re-sending the same job id later must be
             // admitted, not answered from a cache of this refusal.
             var refusal = LinkedConsoleAccess == ConsoleAccess.Teacher
-                ? "refused: this console has teacher access"
-                : "refused: this console's certificate carries no known access level";
+                ? PcText.Get("RefusedTeacherAccess")
+                : PcText.Get("RefusedUnknownAccess");
             _log.LogWarning("{Pc}: job {Job} ({Kind}) refused — {Reason}", Name, job.Id, job.Kind, refusal);
-            Report(Event.Types.Severity.Warning, "job.refused_by_role", $"{job.Kind} job {job.Id} {refusal}; only an administrator console can send it.", BoundInstanceId);
+            Report(Event.Types.Severity.Warning, "job.refused_by_role", PcText.Get("JobRefusedByRole", job.Kind, job.Id, refusal), BoundInstanceId);
             await outgoing.WriteAsync(new AgentMessage { JobResult = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = refusal } }, token);
             return;
         }
@@ -1504,9 +1573,9 @@ public sealed partial class AgentLink : IAsyncDisposable
             // Another console delivered this id (D-57 item 4). Its result — finished or still
             // to come — is that console's alone: not revealed, not run a second time, and not
             // silently swallowed either, so this console's row closes with the reason.
-            const string refusal = "refused: this job was delivered by another console; its result is kept for that console";
+            var refusal = PcText.Get("RefusedOtherInstance");
             _log.LogWarning("{Pc}: job {Job} was delivered by instance {Other}, not {This}; refused", Name, job.Id, admission.OtherInstanceId, instanceId);
-            Report(Event.Types.Severity.Warning, "job.other_instance", $"Job {job.Id} was delivered by another console; its result is kept for that console.", instanceId);
+            Report(Event.Types.Severity.Warning, "job.other_instance", PcText.Get("JobOtherInstance", job.Id), instanceId);
             await outgoing.WriteAsync(new AgentMessage { JobResult = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = refusal } }, token);
             return;
         }
@@ -1538,7 +1607,7 @@ public sealed partial class AgentLink : IAsyncDisposable
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                result = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"The agent failed to run this job: {ex.Message}" };
+                result = new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("JobAgentFailed", ex.Message) };
             }
             catch (OperationCanceledException)
             {
@@ -1607,7 +1676,7 @@ public sealed partial class AgentLink : IAsyncDisposable
             // consoles that are not here, and this line says nothing about anyone's output —
             // it is the PC saying it ran out of room, which whoever is in the room should see.
             Report(Event.Types.Severity.Warning, "job.result_dropped",
-                $"This PC keeps at most {_options.MaxPendingResults} finished job results for consoles that have not come back; {evicted} of the oldest were dropped and cannot be shown any more.");
+                PcText.Get("JobResultsDropped", _options.MaxPendingResults, evicted));
         }
     }
 
@@ -1823,6 +1892,23 @@ public sealed partial class AgentLink : IAsyncDisposable
             {
                 key.Dispose();
                 _log.LogWarning("{Pc}: renewal call failed: {Detail}", Name, ex.Status.Detail);
+                try
+                {
+                    await Task.Delay(backoff.Next(), token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && !token.IsCancellationRequested)
+            {
+                // The console signed, but this PC could not keep the result — a full disk, most
+                // likely. The store changed nothing, so the current pair still links; say so and
+                // ask again later instead of letting renewal end silently until the next link.
+                key.Dispose();
+                _log.LogWarning("{Pc}: the renewed certificate could not be saved: {Message}", Name, ex.Message);
+                Report(Event.Types.Severity.Warning, "renew.not_saved", PcText.Get("RenewalNotSaved", ex.Message));
                 try
                 {
                     await Task.Delay(backoff.Next(), token);

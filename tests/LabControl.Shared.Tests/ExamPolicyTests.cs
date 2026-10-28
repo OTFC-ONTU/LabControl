@@ -153,7 +153,7 @@ public sealed class ExamPolicyTests
         Assert.Equal(Instance, held.Overlay.SetByInstance);
         Assert.Equal(0, held.Overlay.UntilUnix);
         Assert.Equal(Now + 600 + (long)Defaults.LockHardLimit.TotalSeconds, held.Overlay.HardLimitUnix);
-        Assert.Equal(OverlayText.TimeUpMessage, held.Overlay.Message);
+        Assert.Equal(OverlayText.TimeUpMessage("en"), held.Overlay.Message);
         Assert.Contains(rig.Events, e => e.Code == PolicyEvents.ExamTimeUp);
         Assert.Equal(Overlay.Types.Kind.Lock, rig.Journal.OverlayStateOf(Now + 601).Kind);
         Assert.False(rig.Journal.ExamStateOf(Now + 601).Active);

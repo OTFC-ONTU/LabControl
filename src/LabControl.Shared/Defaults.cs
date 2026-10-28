@@ -184,6 +184,16 @@ public static class Defaults
     public static readonly TimeSpan LabAuthorityLifetime = TimeSpan.FromDays(20 * 365);
 
     /// <summary>
+    /// Every certificate's <c>NotBefore</c> is this far before the moment it was minted (a leaf's
+    /// never before its authority's). Student PCs on an isolated LAN have no time source beyond
+    /// their own battery-backed clock, and the teacher's machine may be off the other way, so a
+    /// PC hours behind the console must not reject the certificate it was just issued as "not
+    /// valid yet" — at enrolment the single-use code is already spent by then (M7 robustness
+    /// pass; it was five minutes). Nothing relies on <c>NotBefore</c> but validity itself.
+    /// </summary>
+    public static readonly TimeSpan CertificateBackdate = TimeSpan.FromDays(1);
+
+    /// <summary>
     /// A leaf certificate is renewed over the existing link once it has less than this
     /// left (D-25). Long enough that the "certificates need renewing" banner is seen and the
     /// lab key unlocked at a convenient moment, well before anything actually expires.
@@ -211,10 +221,14 @@ public static class Defaults
     public const int EnrollmentSchemaVersion = 2;
     public const int AgentConfigSchemaVersion = 1;
     public const int PackageCatalogSchemaVersion = 1;
+    /// <summary><c>package-status.json</c> (M7 portion 4, D-89).</summary>
+    public const int PackageStatusSchemaVersion = 1;
     public const int BackupSchemaVersion = 1;
     public const int ScriptsSchemaVersion = 1;
     /// <summary><c>internet-presets.json</c>, the teacher's named whitelist presets (M6, D-73).</summary>
     public const int InternetPresetsSchemaVersion = 1;
+    /// <summary><c>preferences.json</c>, this device's console preferences (M7, D-86).</summary>
+    public const int PreferencesSchemaVersion = 1;
     /// <summary><c>exam-presets.json</c>, the teacher's named exam presets (M6 portion 4, D-76).</summary>
     public const int ExamPresetsSchemaVersion = 1;
     /// <summary><c>device-key.json</c>, this computer's way into the lab key when it is remembered here (D-82).</summary>
@@ -249,6 +263,9 @@ public static class Defaults
     public const string InternetPresetsFileName = "internet-presets.json";
     /// <summary>The named exam presets (M6 portion 4, D-76): beside <c>lab.json</c>, inside the backup, never in the lab file.</summary>
     public const string ExamPresetsFileName = "exam-presets.json";
+
+    /// <summary><c>package-status.json</c>: what each PC last said about each catalog package (M7 portion 4, D-89); this console only, never in a backup.</summary>
+    public const string PackageStatusFileName = "package-status.json";
     /// <summary>
     /// This computer's way into the lab key when it is remembered here (D-82): the reference to
     /// a random secret in the OS store. Per computer — never in a backup or a lab file.
@@ -300,6 +317,13 @@ public static class Defaults
 
     /// <summary>A teacher profile's authorization state (M5 portion 3); the name is reserved here.</summary>
     public const string AccessFileName = "access.json";
+
+    /// <summary>
+    /// This device's own console preferences at the data root (M7, D-86): today only the
+    /// interface language. Never in a backup or a lab file — it belongs to the person at
+    /// this computer, not to a lab.
+    /// </summary>
+    public const string PreferencesFileName = "preferences.json";
 
     /// <summary>The app-level Serilog file at the data root; Serilog inserts the date before the extension.</summary>
     public const string ConsoleLogFileName = ConsoleLogFilePrefix + ConsoleLogFileExtension;
@@ -883,8 +907,26 @@ public static class Defaults
 
     public static readonly TimeSpan KeyframeInterval = TimeSpan.FromSeconds(5);
 
-    /// <summary>The only codec in this build; <c>VideoFrame.codec</c> names it (D-11).</summary>
+    /// <summary>The picture codec every build has; <c>VideoFrame.codec</c> names it (D-11), and an empty codec means it.</summary>
     public const string VideoCodecJpeg = "jpeg";
+
+    /// <summary>
+    /// The teacher's *Video* (M7 portion 6, D-91): H.264, one access unit in Annex B per frame,
+    /// through the platform's own codec — Media Foundation on Windows, VideoToolbox on macOS.
+    /// </summary>
+    public const string VideoCodecH264 = "h264";
+
+    /// <summary>A PC's full view in *Video*: 30 fps where the DXGI capture keeps up (D-91 item 8).</summary>
+    public const double FullVideoFramesPerSecond = 30;
+
+    /// <summary>
+    /// The cap of a PC's full view in *Video*; the encoder aims at three quarters of it (D-91
+    /// item 5). A 1080p desktop with a playing film fits; a still one takes a fraction.
+    /// </summary>
+    public const int FullVideoBitsPerSecond = 8 * 1024 * 1024;
+
+    /// <summary>The encoder's target as a share of the stream's cap; the rest is headroom for keyframes (D-91 item 5).</summary>
+    public const double H264TargetShareOfCap = 0.75;
 
     /// <summary>A producer never runs faster than this whatever the console asks.</summary>
     public const double VideoMaxFramesPerSecond = 30;
@@ -987,6 +1029,9 @@ public static class Defaults
 
     /// <summary>The broadcast's capture rate; the bandwidth caps below lower what actually goes out.</summary>
     public const double BroadcastFramesPerSecond = 12;
+
+    /// <summary>The broadcast's capture rate in *Video* (D-91 item 8): what the console's capture and scaling keep up with.</summary>
+    public const double BroadcastVideoFramesPerSecond = 25;
 
     /// <summary>
     /// The most one PC's copy of the broadcast may take (D-72). Every PC receives the same
@@ -1251,6 +1296,24 @@ public static class Defaults
     public static readonly Guid StudentDesktopKnownFolderId = new("B4BFCC3A-DB2C-424C-B029-7FE99A87C641");
     public const string WindowsExplorerExecutableName = "explorer.exe";
     public const string HandoutStagingDirectoryName = "handouts";
+
+    /// <summary>Where <c>install_package</c> stages an installer, under the agent's private data directory (M7 portion 4, D-89).</summary>
+    public const string PackageStagingDirectoryName = "packages";
+
+    /// <summary>How long an installer may run before the PC ends it as stuck — usually one waiting for a click nobody can see (owner decision 2026-10-27, D-89); each catalog entry may set its own.</summary>
+    public static readonly TimeSpan PackageInstallTimeout = TimeSpan.FromMinutes(15);
+
+    /// <summary>The longest an entry may ask for: three hours covers the largest IDE.</summary>
+    public static readonly TimeSpan PackageInstallTimeoutMax = TimeSpan.FromHours(3);
+
+    /// <summary>The most a <c>.zip</c> package may unpack to on a PC (D-89 addendum).</summary>
+    public const long PackageArchiveMaxBytes = 8L * 1024 * 1024 * 1024;
+
+    /// <summary>The most entries a <c>.zip</c> package may hold.</summary>
+    public const int PackageArchiveMaxEntries = 50_000;
+
+    /// <summary>How often a PC says "still installing" while an installer runs, so the console's inactivity timeout never fires on a long install (D-89).</summary>
+    public static readonly TimeSpan PackageInstallHeartbeat = TimeSpan.FromSeconds(20);
     public const string ProfileTemplateArchiveFileName = "profile-template.zip";
     public const string ProfileTemplatePlanFileName = "profile-template.json";
     public const string ProfileTemplateStagingDirectoryName = "profile-template-staging";

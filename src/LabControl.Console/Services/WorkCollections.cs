@@ -130,9 +130,25 @@ public sealed class WorkCollections
     /// <summary>Raised when a row changed; the console redraws.</summary>
     public event Action? Changed;
 
-    /// <summary>The default destination (owner decision 2026-10-23): <c>Documents/LabControl/Collected</c>.</summary>
-    public static string DefaultDestination =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Defaults.CollectedWorkRelativePath);
+    /// <summary>
+    /// The default destination (owner decision 2026-10-23): <c>Documents/LabControl/Collected</c>.
+    /// Named even when the Documents folder does not exist yet — on Linux .NET answers an empty
+    /// string for it then, which made the default a relative path the dialogs refuse (and hung
+    /// the Linux CI's exam-dialog test, 2026-10-29); the collection creates the folder.
+    /// </summary>
+    public static string DefaultDestination
+    {
+        get
+        {
+            var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments, Environment.SpecialFolderOption.DoNotVerify);
+            if (string.IsNullOrEmpty(documents))
+            {
+                documents = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Documents");
+            }
+
+            return Path.Combine(documents, Defaults.CollectedWorkRelativePath);
+        }
+    }
 
     public IReadOnlyList<WorkCollection> All()
     {

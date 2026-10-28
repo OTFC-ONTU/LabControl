@@ -46,7 +46,11 @@ without any other exchange.
 The beacon is verifiable **offline, with no shared secret**. An agent accepts it only if
 `lab` matches its own, `end` verifies against the **pinned CA public key**, `sig`
 verifies against `pub`, and `ts` is within ±60 s. Then it dials `host:port` and completes
-mutual TLS, which is the real gate — the beacon only says *where* to look.
+mutual TLS, which is the real gate — the beacon only says *where* to look. **A PC that is not
+linked** also dials a beacon whose only fault is `ts` (M7 portion 5, `D-90`): the lab has no
+time source, and a PC whose clock drifted would otherwise never link again; once linked it
+reports `clock.skew` with the minutes. A linked PC never acts on such a beacon — a take-over
+needs the clocks within the window.
 
 **What exactly is signed** (`D-24`). Both signatures are ECDSA P-256 over SHA-256, in the
 IEEE P1363 fixed-width form, so each is exactly 64 bytes. The signed bytes are UTF-8 of a
@@ -220,7 +224,8 @@ wire is unchanged; the binding is the agent's own bookkeeping. The departure not
 `link.taken_over` (above) travels the same way, unbound, on the link being left.
 
 `ConsoleMessage` (oneof): `Welcome` (server time, instance id and name, the serials the
-console holds revoked, and `console_access` — informational, see *M5 additions*),
+console holds revoked, `console_access` — informational, see *M5 additions* — and
+`language`, the console's interface language, see *M7 additions*),
 `Ping`, `Job` (see below), `VideoControl` (start/stop, mode
 `thumbnail|full`, fps, quality), `Input` (mouse move/button/wheel, key down/up, unicode
 text), `Overlay` (lock / unlock / broadcast start / broadcast stop, message text),
@@ -262,10 +267,12 @@ kinds: shutdown | reboot | logoff | run_script | install_package | reset_profile
        send_file | collect_files | set_config | self_update | rekey
 ```
 Agent replies with `JobProgress` (0–100 + line of output) and finally `JobResult`
-`{id, ok, exit_code, message, artifact_ref?}`. Jobs are idempotent by `id`; a
+`{id, ok, exit_code, message, artifact_ref?, outcome?}` (`outcome`, a stable code, since M7
+portion 4 — see *Files*). Jobs are idempotent by `id`; a
 re-sent job with a known `id` returns the cached result. Jobs for offline agents are
 queued in the console (`pending`) and delivered on the next `Link`, unless
-`deliver: online_only` (default for `shutdown`), which is **never** queued: created for a
+`deliver: online_only` (default for `shutdown`, `reboot` and `logoff` — since M7 portion 5,
+owner decision 2026-10-27, `D-90`), which is **never** queued: created for a
 PC that is not linked it is `not_delivered` on the spot, and one the PC had not collected
 when its link dropped is closed the same way rather than kept for its return (`D-25`).
 
@@ -422,13 +429,50 @@ where it lands and what happens next (`D-23`):
 
 | | `install_package` | `send_file` |
 |---|---|---|
-| args | `package`, `version`, `ref`, `sha256` | `ref`, `sha256`, `name`, `open` (`true`/`false`, default `false`) |
+| args | `package`, `version`, `ref`, `sha256`, `file`, `family`, `silent`, `detect_kind`, `detect`, `timeout_seconds`, `mode`, `run` (M7 portion 4, `D-89`) | `ref`, `sha256`, `name`, `open` (`true`/`false`, default `false`) |
 | lands in | agent staging directory under `ProgramData`, deleted afterwards | `Materials` on the `student` desktop, overwriting a same-named file |
 | then | run silently as SYSTEM with the catalog's arguments, verify `detect` | if `open`, the helper opens it in the student session with the default application |
 | ever executed | yes — that is the job | never, whatever the extension |
 
 `install_package` is the older and more important of the two and its behaviour is fixed;
 `send_file` is one job per file so that a batch reports per file, per PC.
+
+**`install_package` in detail** (M7 portion 4, `D-89`). Everything the PC needs travels in the
+job — the agent never reads the catalog:
+
+| arg | meaning |
+|---|---|
+| `package` | the catalog id (`[a-z0-9-]`, ≤ 48) — the console keys its per-PC status on it |
+| `version` | the catalog's version, informational |
+| `ref`, `sha256` | the installer by reference and hash (equal, `D-31`); pulled with `PullFile`, verified |
+| `file` | the installer's Windows leaf name; staged as `%ProgramData%\LabControl\packages\<guid>\<file>` |
+| `family` | `msi` \| `burn` \| `nsis` \| `inno` \| `installshield` \| `exe` — an `msi` runs as `msiexec.exe /i "<file>" <silent>`, anything else as itself with `<silent>` |
+| `silent` | the arguments, passed verbatim |
+| `detect_kind`, `detect` | `uninstall_name` (a `DisplayName` in the 64- or 32-bit *Uninstall* keys of HKLM starting with the value, ignoring case) or `path` (a file or folder at that path, environment variables expanded) |
+| `timeout_seconds` | 60 … 10 800: the installer and everything it started are ended after this |
+| `mode` | `install` (run whatever the rule finds), `missing` (skip when the rule finds the program), `check` (evaluate the rule only; nothing is pulled) |
+| `run` | empty, or for a `.zip` package the installer inside it (`Win10/setup.exe`, forward slashes, each part a Windows leaf name): the PC unpacks the archive into `x\\` in the staging directory under the rules of `D-89`'s addendum and starts `run` from its own folder |
+
+The PC refuses during an exam, runs one installer at a time (others wait, reporting every 10 s),
+sends a progress line every `Defaults.PackageInstallHeartbeat` (20 s) while the installer runs —
+the console's inactivity budget is therefore short (`FileChunkTimeout` + grace) — and evaluates
+the rule again afterwards. Exit codes 0, 3010 and 1641 are success (the latter two: restart
+needed; the PC does not restart). The answer carries **`JobResult.outcome = 6`**, additive and
+outside the frozen subset (an older agent answers "not in this build" without it):
+
+| outcome | `ok` | when |
+|---|---|---|
+| `package.installed` | true | the installer succeeded and the rule finds the program |
+| `package.reboot_required` | true | the same, with 3010 / 1641 |
+| `package.present` | true | `missing` or `check`: the rule already finds it; nothing ran |
+| `package.absent` | true | `check`: the rule finds nothing |
+| `package.failed` | false | another exit code (`exit_code` carries it; 1618 is named as another install running) |
+| `package.not_detected` | false | success code, but the rule still finds nothing |
+| `package.timed_out` | false | ended after `timeout_seconds` — usually a question nobody can see |
+| `package.not_run` | false | the job's arguments, the pull, the staging or the start failed |
+| `package.exam` | false | an exam is held on this PC |
+
+The staging directory is removed after every install and emptied when the service starts.
 
 The console dispatch and FakeAgent implementation are built (D-44); Windows delivery is
 pending managed-account ownership (D-40). `SendFileRequest` validates Windows leaf names
@@ -515,6 +559,7 @@ ExamMode {                        console → agent, on Link
   int64  hard_limit_seconds;      // proposed; clamped to ExamHardLimit (4 h) on the PC's clock; <= 0 = the ceiling
   bool   restrict_programs;       // the allowed-programs switch
   string preset_name;             // for the tile badge
+  string language;                // M7 (D-87): the strip's stock words, its notices and "time is up", in the setting console's language
 }
 
 ExamState {                       agent → console
@@ -581,9 +626,9 @@ everything else; the PC is the producer.
 - `VideoFrame { agent_id, seq, at_unix_ms, width, height, mode, repeated Rect dirty, bytes jpeg,
   keyframe, codec, quality }`. `width`/`height` are always the size of the **screen** the frame comes
   from; the JPEG itself may be smaller (a thumbnail, or a full-mode delta). `codec` is
-  `"jpeg"` in this build (`Defaults.VideoCodecJpeg`); H.264 is an M7 option behind the same
-  envelope (`D-11`). `quality` is what this frame was encoded at (0 from an agent older
-  than `D-37`), so the console can show it.
+  `"jpeg"` (`Defaults.VideoCodecJpeg`; empty from older builds means the same) or, since M7
+  portion 6, `"h264"` — see *H.264 (Video)* below (`D-91`). `quality` is what this frame was
+  encoded at (0 from an agent older than `D-37`, and for H.264), so the console can show it.
 - **Control.** The console sends `VideoControl { active, mode, frames_per_second, quality,
   request_keyframe, max_bits_per_second }` on the `Link` stream: a thumbnail control to every
   PC right after `Welcome`, a full control when the teacher opens a PC's screen, a thumbnail
@@ -681,7 +726,8 @@ interactive session and a PC whose helper is down.
 
 ```
 Overlay { kind: LOCK | UNLOCK | BROADCAST_START | BROADCAST_STOP, message,
-          session_id, until_seconds, hard_limit_seconds }            console → agent
+          session_id, until_seconds, hard_limit_seconds,
+          language }                                                 console → agent
 OverlayState { kind, session_id, since_unix, until_unix, hard_limit_unix,
                input_blocked, reason, set_by_instance, problem,
                remaining_seconds }                                   agent → console
@@ -752,6 +798,52 @@ throw; logged, reported, the pass abandoned — the link dials and stays up rega
 `overlay.expired`. An agent from before M6 logs the message and ignores it; the console
 greys *Lock* out for an outdated agent.
 
+### H.264 (Video; M7 portion 6, `D-91`)
+
+The teacher's *Video* — for the broadcast and a PC's full view; the mosaic's thumbnails are
+always JPEG. All of it is additive and needs no protocol version: every frame says what it is.
+
+- **The frame.** `codec: "h264"` carries **one access unit in Annex B** (start codes) in the
+  payload field (`jpeg = 8`, named for its first use; the bytes are the codec's). `keyframe`
+  is an IDR with its SPS and PPS in front, so a receiver that joins on it needs nothing
+  else; `dirty` is empty (every H.264 picture is whole); `quality` is 0; `width`/`height`
+  are the encoded picture, the screen rounded down to an even size. Baseline profile, no
+  B-frames, low latency: one picture in, one access unit out.
+- **Decode by the frame, never by the request.** A receiver keeps one decoder per stream
+  (`FrameDecoder`): JPEG as before, H.264 through the platform's decoder made on the first
+  IDR. A non-IDR unit before an IDR, or one the decoder refuses, is "needs a keyframe" — the
+  same rule as a JPEG delta — and the decoder is made again on the next IDR.
+- **`VideoControl.codec = 7`** — the console asks a PC for `"h264"` in `FULL` mode (the
+  teacher's *Video* in the full-view window, at `FullVideoFramesPerSecond` = 30 under
+  `FullVideoBitsPerSecond` = 8 Mbit/s), and only when the console can decode it — a Linux
+  console never asks. A PC whose encoder cannot be made or fails answers in JPEG until the
+  next control and reports `video.h264_unavailable` once (Info). An older agent ignores the
+  field and sends JPEG. The PC encodes the whole screen every tick that changed something
+  and an IDR where a JPEG keyframe would be (first frame, on request, every
+  `KeyframeInterval`). A frame the uplink refuses is **held and offered again** before
+  anything new is encoded — the encoder has already moved past it — and one held for more
+  than 2 s is dropped for a fresh IDR.
+- **`BroadcastRequest.codecs = 2`** — what the PC can show besides JPEG: `"h264"` when its
+  session helper made a decoder at start. The console sends H.264 only to a PC that listed
+  it. An older agent lists nothing and gets JPEG. A helper whose decoder fails three times in
+  a row gives H.264 up for the rest of its life and says so in `HelperStatus.video_decoders`
+  at once; the agent then dials `PullBroadcast` again without `"h264"`, keeping the screen, and
+  reports `broadcast.text_fallback`. `LABCONTROL_H264_DECODE_FAIL_AFTER=N` (seconds after the
+  first decoded picture) breaks the decoder on purpose, for that drill. A helper that restarts
+  is not a lost codec: the service keeps the last helper's list until the new one speaks.
+- **On the PC's uplink** the helper's pipe never refuses, so the service does what the
+  producer's held frame does elsewhere: after an `h264` frame is refused it drops every
+  following non-keyframe until a keyframe gets through, and asks for one again if a keyframe is
+  refused. If the **console** cannot decode a PC's H.264 three times in a row it asks that PC
+  for JPEG (`video.console_decode_failed`) until the teacher chooses *Video* again.
+- **Bit rate.** The encoder aims at three quarters of the cap the pacer enforces
+  (`H264TargetShareOfCap`); a new cap is a new control, so the encoder is made again with it
+  and starts with an IDR.
+- **Codecs.** Windows (the PCs, a Windows console): the in-box synchronous Media Foundation
+  H.264 MFTs, NV12 converted in C#; an N edition without the Media Feature Pack has none and
+  stays JPEG. macOS (the console): VideoToolbox. Linux: none. `LABCONTROL_NO_H264=1` turns
+  H.264 off on any of them (the fallback drill).
+
 ## Broadcast (teacher → students; M6 portion 2, `D-71`, `D-72`)
 
 ```
@@ -770,6 +862,13 @@ drawn in (neither capture includes it). The same `ScreenProducer` the PCs use en
 **once** as `VideoFrame`s in `FULL` mode — a keyframe, then dirty-rectangle deltas found by
 `TileDiff`, a keyframe every `KeyframeInterval` — at `BroadcastFramesPerSecond` (12) with
 auto quality (`D-37`). `agent_id` is empty; `seq` and `at_unix_ms` are the console's.
+
+**Text and Video** (M7 portion 6, `D-91`). That JPEG stream is the teacher's *Text*. In
+*Video* a second producer encodes H.264 at `BroadcastVideoFramesPerSecond` (25) for every PC
+whose `BroadcastRequest.codecs` lists `"h264"`; the JPEG producer then runs only while a
+watching PC did not list it. Each PC receives exactly one stream, by the same slot rules,
+and both streams take the same cap below. The teacher may switch at any time: every PC
+moves to the other stream at its next keyframe, which the switch asks for.
 
 **One stream per PC.** `BROADCAST_START` goes on the `Link` like a lock and passes the same
 ownership gate; the agent then dials `PullBroadcast` with the `session_id`. The console
@@ -809,8 +908,10 @@ Nothing survives a service restart.
 
 **Events.** `broadcast.started` / `broadcast.stopped` / `broadcast.expired` on the console;
 from a PC, `broadcast.expired` (it ended at the PC's own limit), `broadcast.stalled` (no
-frame for `BroadcastStallTimeout`) and `broadcast.failed` (the console refused the stream,
-it is too old to have `PullBroadcast`, or the machine could not take the screen). A stream
+frame for `BroadcastStallTimeout`), `broadcast.failed` (the console refused the stream,
+it is too old to have `PullBroadcast`, or the machine could not take the screen) and
+`broadcast.text_fallback` (its H.264 decoder broke during the broadcast; it dialled again for
+JPEG and carries on, `D-91` item 11). A stream
 that ends with its connection — `Unavailable`, or a transport exception — is the link
 ending, not a failure, and raises no event (`D-71` item 11). The console's capture reports `capture.permission` (macOS has not granted
 *Screen Recording*), `capture.unsupported`, `capture.no_display`, `capture.gdi_failed`,
@@ -836,11 +937,13 @@ one implementation both sides use.
 **Envelopes.**
 
 ```
-ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms }  service → helper
+ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms | language }  service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
-HelperHello  { session_id, process_id, version }         first message after connecting
-HelperStatus { input_desktop, screen_width, screen_height, uptime_ms }
+HelperHello  { session_id, process_id, version,          first message after connecting
+               video_decoders, video_encoders }       M7 portion 6 (D-91): "h264" when the helper made one
+HelperStatus { input_desktop, screen_width, screen_height, uptime_ms,
+               video_decoders }                       M7 portion 6 (D-91 item 11): what it decodes now; "h264" goes when its decoder broke
 ```
 
 **Flow (M2).** The service spawns `session.exe` into the active console session and waits
@@ -914,7 +1017,7 @@ running to stop, and re-asserts one the helper does not show.
 
 **The exam over the pipe (M6 portion 4, `D-75`).** The service owns the exam and the
 whitelist; the helper only shows the strip and asks windows to close.
-`ExamStrip { show, message, until_seconds, notice, session_id }` is sent when the exam starts,
+`ExamStrip { show, message, until_seconds, notice, session_id, language }` is sent when the exam starts,
 is re-stated or ends (`show` false), when the whitelist closed something (`notice`: "X is not
 allowed during the exam", shown for `ExamNoticeDuration`, 8 s) and to every freshly connected
 helper (the journal's re-assert). The helper stamps `until_seconds` onto its clock and shows a
@@ -1139,6 +1242,44 @@ item 6 — the versioning wording — is untouched by this portion.
    An older console meeting an M5 agent sees an `instance:` entry as an odd serial and a
    `Welcome` field it did not send; both are harmless.
 7. **Files exchanged offline** *(implemented, portion 3)* — the section above.
+
+### M7 additions (portion 2, `D-87`)
+
+The console's language reaches the PC (`D-86` item 5). Three additive fields, none in the
+frozen subset; an older agent ignores them and keeps writing English, an older console sends
+none and the PC writes English:
+
+1. **`Welcome.language = 7`** — the console's interface language, `uk`, `en` or `ru`. The agent
+   writes what it sends on that link in it — event messages, `JobResult.message`, refusals,
+   `problem` texts — and keeps it in `agent.json` (`console_language`), so what it reports
+   after a restart, before any console is back, is still in it. Empty or unknown is English.
+   Stable codes (`Event.code`, `reason` codes, `OverlayReasons`, `ExamReasons`) never change
+   with the language; teacher-typed text, program names, paths and Windows' own error text
+   are data and are passed through untranslated.
+2. **`Overlay.language = 6`** (on `LOCK`) and **`ExamMode.language = 14`** — the language of
+   the stock words on the student's screen (the lock's title, default message, countdown and
+   PC name line; the strip's title, countdown and notices; *Time is up*). The PC keeps it with
+   the session in `policy.json` (`language`, optional — a file without it is English), so a
+   lock re-applied after a reboot is in the language it was set in; the *time is up* lock
+   takes the exam's. The **setting** console's language decides, not the linked one's: a lock
+   set in Ukrainian stays Ukrainian after a Russian console takes the PC over.
+3. **On the pipe**, the service passes the session's language down as `Overlay.language` and
+   `ExamStrip.language = 6`; the helper draws in it, never in the process culture of
+   `session.exe` (which is whoever Windows started it as). For the helper's own events
+   (`input.*`, `capture.*`) the service sends `ServiceMessage.language = 8` — the PC's language
+   from `Welcome` — to every helper that connects and again after every `Welcome`. Helper and
+   service are always the same build (`app\<version>`), so no helper meets it unknown.
+
+### M7 additions (portion 6, `D-91`)
+
+H.264 for the teacher's *Video* (see *H.264 (Video)* under *Video*). Four additive fields,
+none in the frozen subset: **`VideoControl.codec = 7`** (the console asks for `"h264"` in the
+full view), **`BroadcastRequest.codecs = 2`** (what the PC shows besides JPEG), and on the pipe
+**`HelperHello.video_decoders = 4`** / **`video_encoders = 5`** — what the helper could make at
+start, which the service puts into `BroadcastRequest.codecs` and logs — and
+**`HelperStatus.video_decoders = 5`**, what it decodes now, which drops `"h264"` when its decoder
+broke during a broadcast. `VideoFrame.codec = 10`,
+reserved since M3, now carries `"h264"`. Every mix of builds falls back to JPEG.
 
 ### The frozen subset
 

@@ -132,14 +132,14 @@ internal static class UninstallCleanup
             }
             if (Directory.EnumerateFileSystemEntries(Defaults.UninstallRecoveryRootDirectory).All(path => path == directory))
                 _ = PInvoke.MoveFileEx(Defaults.UninstallRecoveryRootDirectory, null, MOVE_FILE_FLAGS.MOVEFILE_DELAY_UNTIL_REBOOT);
-            System.Console.WriteLine("LabControl was removed. Reboot to remove the protected temporary cleanup executable.");
+            System.Console.WriteLine(SetupDialog.Text("Removed"));
             return 0;
         }
         catch (Exception)
         {
             System.Console.Error.WriteLine(criticalRemoved
-                ? "The agent and its data were removed, but cleanup metadata remains. Reboot, then review the private LabControl Removal folder if it remains."
-                : "Removal cleanup is incomplete. Retry LabControl in Installed apps; its protected cleanup executable and unresolved history were retained.");
+                ? SetupDialog.Text("CleanupMetadataRemains")
+                : SetupDialog.Text("CleanupIncomplete"));
             return 1;
         }
     }

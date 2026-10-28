@@ -99,7 +99,7 @@ internal sealed class ExamStripController : IDisposable
 
             var now = DateTimeOffset.UtcNow;
             long? remaining = _untilUnix > 0 ? Math.Max(0, _untilUnix - now.ToUnixTimeSeconds()) : null;
-            return new ExamStripContent(strip.Message, remaining, now < _noticeUntil ? _notice : string.Empty);
+            return new ExamStripContent(strip.Message, remaining, now < _noticeUntil ? _notice : string.Empty, strip.Language);
         }
     }
 

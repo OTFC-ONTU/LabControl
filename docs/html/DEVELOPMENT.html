@@ -453,13 +453,47 @@ undo a policy by hand: <code>netsh advfirewall set allprofiles firewallpolicy bl
 then <code>netsh advfirewall firewall delete rule name=&quot;LabControl Internet (sites)&quot;</code> and the same for
 <code>(loopback)</code>, <code>(local subnet)</code> and <code>(agent)</code> (<code>netsh</code> has no <code>group=</code> for deleting, the portion-7
 lesson); DNS then needs <code>netsh interface ip set dns &quot;&lt;adapter&gt;&quot; dhcp</code> per interface.</p>
-<p><strong>Languages.</strong> The product UI is English today. M7 must ship the complete product-facing
-experience in <strong>Ukrainian, English and Russian</strong>, including the teacher console, Windows
-Setup/removal, stock student-facing text and generated USB instructions. The console will
-have a saved language selector; English remains the safe fallback (<code>D-67</code>).</p>
+<p><strong>Languages.</strong> The console ships in <strong>Ukrainian, English and Russian</strong> (M7 portion 1, <code>D-86</code>):
+English is the neutral <code>*.resx</code>, Ukrainian and Russian are <code>*.uk.resx</code> / <code>*.ru.resx</code> beside it
+for every product resource set (console, Setup, overlay, policy texts, <code>INSTALL.txt</code>). A new
+key goes into all three files in the same change — <code>ResourceTranslationTests</code> fails otherwise,
+and <code>ConsoleLanguageTests</code> fails on a key the code names but the English file lacks. The
+language is chosen in <em>Settings</em> or the lab chooser, saved in <code>preferences.json</code> at the data
+root, and applied at the next start; with no choice the OS display language decides
+(<code>ru-UA</code> → Russian), anything unsupported is English. Both test projects pin English, so the
+tests are the same on any Mac. To look at the three languages, run the console tests with
+<code>LABCONTROL_UI_SHOTS=&lt;dir&gt;</code> and open the <code>lang-uk-*</code> / <code>lang-ru-*</code> PNGs.</p>
+<p>On the PC (M7 portion 2, <code>D-87</code>) the console's language arrives in <code>Welcome.language</code>: the
+agent writes its events and job results in it (<code>PcLanguage</code>, kept in <code>agent.json</code> as
+<code>console_language</code>; the texts are <code>Shared/Localization/PcStrings.resx</code> and <code>PolicyStrings</code>),
+and each lock and exam carries its own <code>language</code> for the stock words on the student's screen
+(<code>OverlayText</code> takes it explicitly, never the process culture; <code>policy.json</code> keeps it). The
+simulator follows the same rule, so <code>FakeAgent</code> against a Ukrainian console draws a Ukrainian
+lock. <code>PcLanguage</code> is process-wide: a test that sets it runs in the language collection and
+puts English back. Setup follows the Windows display language (INSTALLER, <em>What Setup.exe does</em>).</p>
+<p><strong>Packages</strong> (M7 portion 3, <code>D-88</code>). The <em>Packages</em> tab and its <em>Add package…</em> wizard work on the
+Mac: any <code>.exe</code> or <code>.msi</code> can be chosen, it is read (never run) and copied into
+<code>labs/&lt;lab_id&gt;/packages/&lt;id&gt;/&lt;hash prefix&gt;/</code> beside <code>&lt;id&gt;.yaml</code>. The wizard's guesses come from
+<code>Shared/Packages/InstallerInspector</code>; to see what it makes of a real installer, add it in the
+console and open the <code>.yaml</code>. The tests build their MSI byte by byte (<code>MsiBuilder</code> in
+<code>PackageInspectionTests</code>) and use a real managed DLL as the PE; real installers of each family
+are worth inspecting by hand before the owner's acceptance run.</p>
+<p>Installing (M7 portion 4, <code>D-89</code>) works against <code>FakeAgent</code>: the simulated PC really pulls the
+installer and checks its hash, then pretends to run it, steered by the package's silent
+arguments — <code>/fail</code> ends with 1603, <code>/reboot</code> with 3010, <code>/hang</code> (or no arguments on an
+unrecognised installer) waits out the package's time limit, <code>/nodetect</code> succeeds without
+installing; anything else installs. What a simulated PC has is <code>installed-packages.json</code> in its
+directory. To try the broken-package drill on the Mac, edit an entry's arguments to <code>/S /fail</code>
+and press <em>Install on all missing</em>.</p>
+<p><strong>Robustness tests</strong> (M7 portion 5, <code>D-90</code>). <code>ReconnectStormTests</code> and <code>FullViewStormTests</code> run in
+their own non-parallel collection (thirty TLS links in one process). The full-disk tests use a real
+full volume: on macOS <code>FullVolume</code> makes a 4–8 MB RAM disk with <code>hdiutil</code>, fills it and detaches it
+afterwards (a stray <code>LCFULL…</code> volume in Finder is one of them still mounted); elsewhere they skip
+unless <code>LABCONTROL_FULL_DISK_VOLUME</code> names a dedicated volume of at most 64 MB — on Windows, a small
+VHD.</p>
 
 </article>
-<footer>Generated 2026-10-26 15:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-29 00:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#requirements">Requirements</a></li><li class="lvl2"><a href="#teacher-console-packages">Teacher-console packages</a></li><li class="lvl2"><a href="#console-command-line">Console command line</a></li><li class="lvl2"><a href="#the-simulator-fakeagent">The simulator: FakeAgent</a></li><li class="lvl2"><a href="#ui-screenshots-from-the-headless-tests">UI screenshots from the headless tests</a></li><li class="lvl2"><a href="#testing-the-agent-in-a-windows-vm">Testing the agent in a Windows VM</a></li><li class="lvl2"><a href="#downgrading-to-a-pre-m5-build">Downgrading to a pre-M5 build</a></li><li class="lvl2"><a href="#status-notes-by-milestone">Status notes by milestone</a></li></ul></nav>
 </div>

@@ -101,7 +101,7 @@ public sealed class OverlayTextTests
     {
         // VM drill 2026-10-23: at a third of a 1312 px screen the warning was cut before "save your work".
         var plain = OverlayText.StripSize(1312, 805);
-        var warning = new ExamStripContent("Test", 599, OverlayText.ClosingText(["Notepad.exe"], 10));
+        var warning = new ExamStripContent("Test", 599, OverlayText.ClosingText(["Notepad.exe"], 10, "en"));
         var wide = OverlayText.StripSize(1312, 805, warning);
         Assert.True(wide.Width > plain.Width, $"{wide.Width} <= {plain.Width}");
         Assert.True(wide.Width <= 1312 * 9 / 10);
@@ -109,7 +109,7 @@ public sealed class OverlayTextTests
         Assert.Equal(wide, OverlayText.StripSize(1312, 805, warning with { RemainingSeconds = 588 }));
 
         // A long list still fits the screen, ellipsized; a short message keeps the third.
-        var many = new ExamStripContent("", null, OverlayText.ClosingText(Enumerable.Range(1, 40).Select(n => $"program{n}.exe"), 10));
+        var many = new ExamStripContent("", null, OverlayText.ClosingText(Enumerable.Range(1, 40).Select(n => $"program{n}.exe"), 10, "en"));
         Assert.Equal(1312 * 9 / 10, OverlayText.StripSize(1312, 805, many).Width);
         Assert.Equal(plain, OverlayText.StripSize(1312, 805, new ExamStripContent("Test", 60, "")));
     }

@@ -3807,6 +3807,16 @@ does); a NuGet screen-capture package (`D-03`'s "no second product", and every d
 needs its line here); scaling in the producer (would change the code every PC runs for a
 console-only need); encoding per PC (thirty encodes on a laptop).
 
+**Addendum (2026-10-27): no `CAPTUREBLT`.** On a Windows console the teacher's own cursor
+flickered during a broadcast while the students saw a steady one. `StretchBlt`/`BitBlt` with
+`CAPTUREBLT` makes Windows hide the cursor for the copy so it can include layered windows — once
+per frame, hence the flicker. Since Windows 8 the desktop is always composed by DWM and a plain
+`SRCCOPY` from the screen DC already includes layered windows, so the flag is dropped in
+`GdiDisplayScreenSource` (the console's broadcast capture) and in the helper's `GdiScreenSource`
+(the PCs' GDI fallback, which would flicker the student's cursor the same way; DXGI, the usual
+path, never had it). The pointer the students see is still drawn into the picture by
+`ScaledScreenSource`. Not yet run on Windows after the change.
+
 ## D-73 — Internet control is the profiles' default outbound action plus an owned rule group; other programs' outbound allow rules are switched off for the policy; the watchdog task restores and re-applies nothing (M6 portion 3)
 
 Context (2026-10-17): `D-22` chose Windows Firewall for every internet mode and `D-69` built
@@ -4316,6 +4326,14 @@ the client, `D-05`); uploading the folder file by file (thousands of grants and 
 answer); following links as SYSTEM (a junction to `C:\Windows\System32\config` would upload the
 registry); retrying a PC that was off when it comes back (owner decision); persisting exam
 collections across a console restart (the exam itself is in memory on the console, `D-76`).
+
+Addendum (2026-10-29): on Linux, .NET answers an empty string for the Documents folder while
+`~/Documents` does not exist, so the default destination became the relative
+`LabControl/Collected`, which the *Exam* and *Collect files* dialogs refuse — a Linux console's
+teacher would have seen "choose a destination" for the default. `WorkCollections.DefaultDestination`
+now names `~/Documents/LabControl/Collected` whether or not it exists (`DoNotVerify`, then the
+profile's `Documents`); the collection creates it. The UI test that waited for that dialog without
+a bound hung the Linux CI for its whole 30 minutes since 2026-10-26; it now waits at most 20 s.
 
 ## D-78 — Profile reset uses DeleteProfile by the recorded SID; a light reset empties three known folders under the student's token (M6 portion 5)
 
@@ -4890,11 +4908,571 @@ or 2; whether Linux and Windows PCs must coexist in one lab.
 | SkiaSharp, SkiaSharp.NativeAssets.Linux | Shared (so Console, FakeAgent, Agent.Session) | JPEG encode/decode, scaling, the simulator's synthetic desktops (M3, D-34); pinned to the version Avalonia ships |
 | Microsoft.Windows.CsWin32 | Agent, Agent.Session, Setup | Win32 P/Invoke source generator; names listed in `NativeMethods.txt`, never a hand-written `DllImport` (M2) |
 | Vortice.Direct3D11, Vortice.DXGI | Agent.Session | DXGI Desktop Duplication and the D3D11 staging texture it is read through (M3, D-35); the maintained successor of SharpDX |
+| Vortice.MediaFoundation | Shared (so Agent.Session and the Windows console) | H.264 encode/decode through Windows' in-box Media Foundation MFTs — no codec or runtime installed on a PC (M7 portion 6, D-91); same family and version as Vortice.DXGI |
 | Microsoft.Extensions.Hosting.WindowsServices | Agent | Windows service hosting (M2) |
 | System.Management | Setup | WMI (profiles, NIC properties) |
-| YamlDotNet | Console | package catalog |
+| YamlDotNet | Console | package catalog `<id>.yaml`, read and written by the *Add package* wizard (D-07, D-88) |
 | Serilog.Extensions.Logging, Serilog.Sinks.Console, Serilog.Sinks.File | all | logging |
 | xunit.v3 | tests | testing; it hosts its own Microsoft.Testing.Platform runner, so no VSTest packages are needed (D-18) |
 | Avalonia.Headless, Avalonia.Skia | tests | the console's windows built and rendered off screen for the UI tests (D-27) |
 | NSubstitute | tests | *planned* — added when the first interface actually needs faking |
 | Markdig | tools/DocsBuild | Markdown → HTML mirror of the documentation (D-12) |
+
+## D-86 — The console's language: chosen once, applied at start, carried to the PCs (M7 portion 1)
+
+Context (2026-10-26): `D-67` fixed the three languages and the rule; M7 starts with them. The
+console's text is resolved when a window, a view model or a tile is built — `LocalizeExtension`
+returns a string, view models format labels once — so a live switch would leave half the
+screen in the old language unless every one of them were rebuilt.
+
+Decisions:
+
+1. **Applied at start, saved at once** (owner, 2026-10-26). `ConsoleLanguage.Apply` runs in
+   `Program.Main` before the first string is read and sets `Strings.Culture` and the process's
+   UI culture, so Shared resources (policy texts, `INSTALL.txt`) follow. Number and date
+   formats keep the OS region. Choosing in the selector writes `preferences.json` at once;
+   *Restart now* is an ordinary quit — the departure question, the lab released, the data
+   directory's lock let go — after which `Program` starts the same executable with the same
+   options and none of the documents (they were imported). *Stay* clears the restart.
+2. **`preferences.json` at the data root**, schema 1, `language` = `uk` | `en` | `ru` or absent.
+   It belongs to the person at this computer, so it is never in a backup or a lab file. A
+   torn, foreign or newer file means "no choice" for reading (the OS language decides and the
+   log says why); a newer one is not overwritten by a later choice.
+3. **One rule, in Shared** (`ProductLanguages.Resolve`): a supported stored code, else the OS
+   display language or one of its parents (`uk-UA` → `uk`), else English. Setup uses the same
+   rule from the Windows display language (portion 2).
+4. **The selector** shows each language under its own name (`D-67` item 3) in *Settings* and in
+   the lab chooser, so it can be reached before any lab exists.
+5. **The student's language is the console's** (owner, 2026-10-26): stock text drawn on a PC —
+   the lock screen, the exam strip, *Time is up* — is in the language of the console that set
+   it, not the PC's Windows language. Portion 2 carries the language over the link as an
+   additive field; an older agent shows English. Teacher-typed messages are data and are never
+   translated.
+6. **"Lab" is *лабораторія* / *лаборатория*** (owner, 2026-10-26); the remaining terminology
+   is a glossary the owner reviews in the resource files.
+7. **Tests pin English.** Both test assemblies set the UI culture to English in a module
+   initializer and `Strings.Culture` defaults to English until `Apply`, because the owner's Mac
+   reports `ru-UA` and the tests assert English text. The per-language renders run in their
+   own non-parallel collection because the language is process-wide.
+
+Rejected: switching live (every window and cached label rebuilt — more code for a choice made
+once); the language in `profiles.json` (a lab index, not a preference — and a schema bump for
+it); the PC's Windows language for student text (an English Windows would show English whatever
+the teacher chose).
+
+
+## D-87 — Languages on the PC: the setting console's language for the student, the linked console's for the teacher, Windows' for Setup (M7 portion 2)
+
+Context (2026-10-26): `D-86` item 5 settled that stock text on a student's screen is in the
+teacher console's language, carried over the link. The PC also writes text the teacher reads —
+event messages, job results, refusals, the `problem` of a refused lock or exam — and until now
+wrote it in English, and Setup/removal still printed much of their own text as literals. Two
+programs draw the student's text: the service (the strip's notices, *Time is up*) and the
+session helper, a separate process whose culture is whatever Windows started it with.
+
+Decisions:
+
+1. **Three additive fields** (PROTOCOL, *M7 additions*): `Welcome.language = 7` for what the PC
+   writes on that link, and `Overlay.language = 6` / `ExamMode.language = 14` for the stock
+   words of that lock or exam. On the pipe the service passes the session's language down as
+   `Overlay.language` and `ExamStrip.language = 6`. Codes are `uk`, `en`, `ru`; empty or unknown
+   is English (`ProductLanguages.Of`), so an older console or a newer build's language costs
+   nothing but English. No field is in the frozen subset.
+2. **The setting console's language decides the student's words**, and it rides in the message
+   that sets them rather than being read off the link: a lock outlives its link, and a take-over
+   by a console in another language must not change the words on a screen the student is
+   already reading. The journal keeps it on the session (`PolicySession.Language`, `language` in
+   `policy.json`), so a lock re-applied after a reboot is in the language it was set in, and the
+   *time is up* lock takes the exam's. The member is optional, so a file from an older build is
+   English and no schema bump is needed (unknown members are ignored, so a rolled-back agent
+   still reads a newer file).
+3. **`OverlayText` takes the language explicitly** — `OverlayContent.Language`,
+   `ExamStripContent.Language`, a `language` argument on every word it returns — and never reads
+   `CultureInfo.CurrentUICulture`: the helper and the service run as SYSTEM or as the student,
+   whose cultures say nothing about the teacher.
+4. **What the PC writes to the teacher is in the language of the last `Welcome`**, held in one
+   process-wide `PcLanguage` and kept in `agent.json` (`console_language`) so what the PC reports
+   after a restart, before any console is back, is still in it. Process-wide on purpose: a real
+   PC has one link, and the simulator's PCs share one console. A message is written when it is
+   reported, so one queued before a language change keeps the language it was written in.
+   `PolicyEvents.Text` and the new `Shared/Localization/PcStrings.resx` (`PcText.Get`, 140 keys)
+   read it. The session helper is another process and cannot see `Welcome`, so the service
+   tells it with `ServiceMessage.language` on connect and after every `Welcome`. Left English:
+   the link's local status while no console is linked (it never reaches one), the reasons the
+   service restarts a helper (the log's), and `VideoUplink` / beacon-socket details.
+   `UpdateTerminalReport` re-sends `update.stable` once after a language change, because it
+   re-sends a message that differs from the last.
+5. **Stable things stay English.** Event codes, `reason` codes and every other identifier the
+   console keys on never change with the language; the developer log (`ILogger`) stays English
+   (`D-67` item 2). Teacher-typed text, program names, paths and Windows' or .NET's own error
+   text are data, passed through untranslated inside a translated sentence.
+6. **Setup and removal follow the Windows display language** (`D-67` item 3): `Program.Main`
+   resolves `ProductLanguages.Resolve(null, CurrentUICulture)` before the first string and makes
+   it the UI culture — no stored choice and no switch, the stick carries no preference. Their
+   dialogs, plan, warnings, refusals and closing lines come from `SetupStrings`. The step trace
+   (`[AlreadyDone] Firewall Discovery`, `[Conflict] PC name: …`) stays English in the window as
+   in `setup.log`: the step names are diagnostic identifiers and the detail is usually Windows'
+   own text. The native adapters' integrity failures (`Windows*Store`, staging and ownership
+   checks) stay English for the same reason; they reach the window only after a translated
+   headline or the translated failure dialog.
+7. **Tests.** Both test projects pin English (`D-86` item 7); a test that changes what the PC
+   writes runs in the non-parallel language collection and puts English back.
+
+Rejected: reading the student's language off the link at the moment of drawing (a take-over or a
+relink would change a lock on screen, and a lock re-applied at boot has no link); threading a
+language argument through every report site of the agent (one PC, one link — the process-wide
+value is the PC's reality, and the argument would reach code that has no link to ask); the PC's
+own Windows language for anything (`D-86`); a `--language` switch for Setup (the owner's rule is
+the Windows display language, and a switch is one more thing to get wrong on fourteen PCs).
+
+Status: built 2026-10-26; accepted by the owner on 2026-10-27 after the physical lab (build
+`1.0.0+c8e3c9b`: exam, lock, language switch). Setup and removal in the three languages were not run.
+
+## D-88 — The package catalog and the *Add package* wizard: read the installer on the console, copy it in, one entry per program (M7 portion 3)
+
+Context (2026-10-27): M7's first acceptance criterion is that the owner adds a package of his
+choosing without reading the source. `D-07` fixed the shape (`packages/<name>.yaml`, the installer
+cached on the console, pushed over the LAN) and `D-23` fixed what `install_package` does on the PC;
+nothing filled the catalog yet. The console may run on a Mac, so the wizard cannot start the
+installer, call `msiexec` or ask Windows anything about it. Portion 3 is the console's half; the
+agent's `install_package`, *Install on all missing* and the test install on one PC are portion 4.
+
+Owner decisions (2026-10-27): the wizard **copies** the installer into the lab's catalog, so the
+original may be deleted; the proposed detect rule is the program's **name in Windows' list of
+installed programs**, with a file path as the alternative; a new version **replaces** the entry
+of the same program (one entry per program); the install buttons come with portion 4, not as
+disabled placeholders now.
+
+Decisions:
+
+1. **The installer is read, never run** (`Shared/Packages`). One pass computes the SHA-256 and keeps
+   the first `InstallerInspector.MarkerWindow` (32 MiB) for the family markers. An `.msi` is an OLE
+   compound file: `CompoundFile` reads the root storage's streams (FAT, DIFAT, mini stream; every
+   chain bounded by the file's sector count, so a damaged file is `InvalidDataException`, never a
+   loop) and `MsiProperties` decodes the string pool and the `Property` table — 2- or 3-byte string
+   references, strings of 64 KiB and more, the database codepage — for `ProductName`,
+   `ProductVersion`, `Manufacturer`, `ProductCode`. An `.exe`'s version resource is read through
+   `System.Reflection.PortableExecutable` (`PeVersionInfo`). A file that is neither is still a
+   package: it has a hash, the teacher supplies the rest.
+2. **Five families and their silent arguments**, recognised in this order: `msi` (the compound-file
+   signature; run as `msiexec /i <file>` followed by `/qn /norestart`), WiX `burn` (a `.wixburn` PE
+   section; `/quiet /norestart`), `nsis` (`0xDEADBEEF` + `NullsoftInst`; `/S`), `inno`
+   (`Inno Setup Setup Data`, the loader's `rDlPtS02`, or *Inno Setup* in the version resource;
+   `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-`), `installshield` (the name in the stub or its
+   version resource; `/s /v"/qn /norestart"`). Anything else is *unrecognised*, its arguments empty,
+   and the wizard refuses to add it until the teacher types some — an installer without them would
+   wait for a click on every PC. Each family carries one sentence of advice in the wizard (NSIS's
+   case-sensitive `/S`, Inno's per-user installers landing in SYSTEM's profile, InstallScript's
+   answer file).
+3. **The detect rule** (`DetectRule`): `uninstall_name` — an entry of the 64- and 32-bit
+   *Uninstall* keys whose `DisplayName` **starts with** the value, ignoring case, because display
+   names carry versions (`IntelliJ IDEA Community Edition 2026.2`); proposed from the product name.
+   Or `path` — a file at an absolute Windows path, `C:\…` or `%Variable%\…`, no `..`, no `/`.
+   `command` (named in ARCHITECTURE since M0) is left out: nothing needs it, and it would be one
+   more thing to run as SYSTEM. The PC evaluates the rule in portion 4.
+4. **One entry per program, its id fixed at creation.** The id (`IdFor`: lower-case ASCII words
+   joined by hyphens, at most 48 characters, `package` for a name with none) names
+   `packages/<id>.yaml`. A new installer whose name matches an entry's name (ignoring case) or id
+   is a new version of it: the wizard says so (*This replaces …*), proposes the old entry's own
+   silent arguments and detect rule when the family is the same — the teacher may have corrected
+   them — and the add replaces the entry. Several versions side by side were rejected by the owner.
+5. **Installers live in `packages/<id>/<first 12 hex of SHA-256>/<file>`** — not beside the YAML
+   as the M0 README sketched — so two packages may both be called `setup.exe`, and a new version is
+   copied in full beside the old one before the YAML points at it; only then is the old directory
+   removed. The copy is hashed as it is written into `<file>.partial` and refused when the hash or
+   size is no longer what was inspected (the file changed in between), leaving nothing behind.
+   Copying, not referencing, is the owner's choice: a stick or a downloads folder may be gone by the
+   next lesson.
+6. **The YAML** (`PackageCatalog`, YamlDotNet): `schema_version`, `name`, `version`, `family`,
+   `file`, `size`, `sha256`, `silent`, `detect: {uninstall_name | path}`, `changed_by` (the console
+   instance), `changed_at`. Unknown keys are ignored (the old README's `run_as` and `reboot`: the
+   installer always runs as SYSTEM, `D-23`, and restarts are portion 4's), a missing `family` is
+   taken from the extension, a missing `size` is not checked; a newer schema or an entry that does
+   not validate is listed as unreadable with its reason rather than hidden. The backup keeps
+   carrying the YAML only (`BackupPayload.Catalog`); a console that imported one shows each entry
+   as *installer not on this computer — add the same installer again*, and re-adding it restores the
+   entry. The newest `changed_by`/`changed_at` is the *catalog last changed on …* line ARCHITECTURE
+   §3.6 promised, so a stale copy on another teacher machine is visible.
+7. **The *Packages* tab**: the catalog on the left (name, version, kind, size; an entry whose
+   installer is missing or changed says so), the selected entry on the right with the fields the
+   teacher may correct — name, version, silent arguments, the rule — *Save*, *Revert*, *Delete*
+   (the entry and its installer; programs already installed on PCs stay), and *Add package…*, the
+   wizard as one dialog: choose, read what was found, correct, *Add to catalog* with a progress bar
+   and *Cancel*. Every word is in the three languages; family, hint, state and problem words are
+   keyed by enum names, checked by a test.
+8. **Dependency.** YamlDotNet 16.3.0 enters the console, as the ledger has listed since M0; no other
+   project parses the catalog — the agent receives a job's arguments, not YAML.
+
+Rejected: running or unpacking the installer on the console (impossible on a Mac, unsafe anywhere);
+proposing the MSI `ProductCode` as the rule (exact, but a new version has a new code, so the rule
+of an entry replaced by its next version would always say *missing*); the name proposed as an
+exact match (display names change with every version); the installer referenced in place (owner);
+a JSON catalog (the format has been YAML since `D-07` and backups already carry `*.yaml`).
+
+Status: built 2026-10-27 on the Mac. No PC is involved until portion 4.
+
+## D-89 — `install_package` on the PC: the rule decides, the outcome is a code, the console remembers each PC's answer (M7 portion 4)
+
+Context (2026-10-27): portion 3 (`D-88`) filled the catalog; the agent answered `install_package`
+with "not in this build". `D-23` fixed the landing (private staging, silent, SYSTEM, `detect`
+verified, file deleted). Left open: how a stuck installer ends, how the console knows which PCs
+lack a program, what *Install on all missing* sends to a PC with an older version, and how a test
+install on one PC fits in.
+
+Owner decisions (2026-10-27): an installer may run **15 minutes** by default, changeable per
+package; *Install on all missing* **queues** for PCs that are off, like *Send files*; a restart
+the installer asks for is **only reported** — the PC never restarts by itself; a PC holding an
+**exam refuses** the install.
+
+Decisions:
+
+1. **The job carries everything** (PROTOCOL, *`install_package` in detail*): the catalog's file
+   name, family, silent arguments, detect rule and time limit travel as job arguments, validated
+   with the catalog entry's own rules on the PC (`InstallPackageRequest`). The agent never reads
+   the catalog, so a teacher console with a different catalog copy cannot confuse a PC, and the
+   YAML stays the console's private format.
+2. **Three modes.** `install` runs the installer whatever the rule finds — the test install on the
+   selected PCs and a new version over an old one; `missing` skips when the rule already finds the
+   program — *Install on all missing*; `check` only evaluates the rule, pulls nothing and is sent
+   to linked PCs only (a check is about now). A rule finds a program by name, not version, so
+   `missing` alone could never upgrade: the console sends `install` to a PC whose last answer was a
+   successful install of **another** installer of the same entry, and `missing` to the rest.
+3. **One shared runner, two hosts** (`Shared/Packages/PackageInstallRunner` over `IPackageHost`):
+   exam refusal, the modes, the pull into a fresh directory under the private staging root, one
+   install at a time per PC (Windows Installer refuses a second with 1618 anyway), a progress line
+   every `Defaults.PackageInstallHeartbeat` (20 s), the exit code, the rule evaluated again, the
+   directory removed. `WindowsPackageHost` runs the installer as SYSTEM in session 0 with no window
+   and **no redirected streams** — a child that inherits a pipe would keep it open past the
+   installer's exit, which is why `ProcessRunner` is not used — and ends it with its whole process
+   tree after the limit (wall clock, not inactivity: an installer prints nothing). The staging root
+   is emptied when the service starts. `FakePackageHost` really pulls and verifies, and pretends to
+   run: `/fail` → 1603, `/reboot` → 3010, `/hang` (or no arguments for an unrecognised installer)
+   → waits out the limit, `/nodetect` → success without the program.
+4. **Exit codes**: 0 is success; 3010 and 1641 are success with a restart needed
+   (`package.reboot_required`, `ok`); anything else is `package.failed` with the code, 1618 named as
+   another installation running. Success while the rule still finds nothing is
+   `package.not_detected` and **not** success — the usual sign of a per-user installer that went
+   into SYSTEM's profile, or of a wrong rule.
+5. **`JobResult.outcome = 6`**, a stable code (`PackageOutcomes`), additive, outside the frozen
+   subset (`D-19`): the message is in the console's language (`D-87`), so the console must never
+   parse it. `JobRecord.Outcome` keeps it.
+6. **The console remembers each PC's answer** (`PackageStatusBook`, `package-status.json` beside
+   `lab.json`, never in a backup — a cache rebuilt by *Check PCs*): package → PC → outcome, the
+   installer's hash, the message, the time. A PC's state for an entry — installed, restart needed,
+   not installed, failed, in progress, not known — counts only answers about the entry's current
+   installer, except `present`/`absent`, which come from the rule and hold for any version. A job
+   the console gave up on is recorded as `console.timed_out` (failed).
+7. **The test install is the selection.** The *Packages* tab's *Install on N selected PCs* uses the
+   lab view's selection, like the *Scripts* tab; the hint under it says to try one PC first. *Install
+   on all missing* asks before it sends an installer no PC has installed yet (*Not tried on a PC
+   yet … Install anyway?*). The tab lists every PC of the lab with its state and the PC's own words.
+8. **Budgets.** The console's inactivity timeout for the job is `FileChunkTimeout` (30 s) or two
+   heartbeats, whichever is longer, plus `JobTimeoutGrace`: the PC reports while waiting for the
+   previous install, while receiving and while running, and ends a stuck installer itself, so the
+   console never needs the package's own limit. Queued jobs live in the console's memory only:
+   `install_package` is not re-sent by a returning session (`InFlightJobPolicy`, `D-57` item 4).
+
+Rejected: a version-aware rule (`DisplayVersion` formats differ from the installer's own version
+strings — IntelliJ lists `262.4852.47` for *2026.2* — so a comparison would mislead more than help);
+reporting installed catalog packages in `Inventory.packages` (the PC does not know the catalog, and
+a check job answers the same question when asked); restarting the PC automatically (owner);
+installing during an exam (owner); one PC at a time across the lab (fourteen pulls in parallel are
+what the file channel is for; the MacBook's Wi-Fi is the measured limit, ROADMAP M7).
+
+Status: built 2026-10-27 on the Mac; the Windows host is compiled, not yet run on a PC. The broken
+package drill and the 14-PC measurement are the physical-lab steps of portion 4.
+
+**Addendum (2026-10-27): `.zip` packages.** The lab's NIC driver for Wake-on-LAN (Realtek's
+*Win10/Win11 Auto Installation Program (NDIS)* for the RTL8168) is distributed as a `.zip` whose
+`setup.exe` needs the files beside it, and many other programs come the same way; one file per
+package could not carry it. Owner's request: make the catalog take it.
+
+1. **The archive is the package.** The wizard accepts a `.zip`, hashes it whole, lists the `.exe`
+   and `.msi` inside (`PackageArchive.Candidates`: nearest the top first, `setup.exe` /
+   `install.exe` before an MSI before anything else, `__MACOSX/` ignored), proposes the first and
+   lets the teacher pick another; the chosen entry is copied to a temporary file and inspected like
+   a single installer (family, product, version), under the archive's hash and size. The entry
+   records it as `run` (`PackageEntry.Run`, YAML `run:`); a `.zip` without a valid `run`, or a
+   `run` on anything else, is `PackageProblem.RunInvalid`; `msi` family is judged by `run`.
+2. **The job carries `run`** (PROTOCOL, *`install_package` in detail*). The PC pulls and verifies the
+   archive as before, unpacks it into `x\` inside the job's staging directory and starts `run` from
+   its own folder — `WindowsPackageHost` sets the working directory to it — so `setup.exe` finds its
+   `.cab` and `.inf` files. An older agent ignores `run` and fails to start a `.zip`
+   (`package.not_run`); the lab gets this build first.
+3. **Unpacking is checked before anything is written** (`PackageArchive.ExtractAsync`): every part
+   of every name must be a Windows leaf name (no `..`, no drive, no absolute path), the target must
+   stay inside the folder, a Unix symbolic link is refused, at most
+   `Defaults.PackageArchiveMaxEntries` (50 000) entries and `Defaults.PackageArchiveMaxBytes` (8 GiB)
+   in all, and an entry that inflates past its stated size is refused. A refusal is
+   `package.not_run` with *the archive could not be unpacked*; the staging directory goes as always.
+
+Rejected: shipping the extra files as separate catalog entries (one install would become several
+jobs that must land together); unpacking on the console and pushing a folder (the file channel
+moves one hash-verified file, `D-23`); self-extracting archives made by the console (a program the
+console would have to build for Windows); downloading the driver for the owner (Realtek's page asks
+for acceptance of its terms and a CAPTCHA, which the owner does himself).
+
+## D-90 — The robustness pass: what a reconnect storm, many full views, a week off, an old backup, a full disk and a drifting clock broke (M7 portion 5)
+
+Context (2026-10-27): M7 asks for a robustness pass — reconnect storms, many full views, a full
+disk, clock skew, a PC off for a week, a backup older than the machine list. Each scenario was
+reproduced in tests on the Mac (real TLS links, the simulator, a real full RAM-disk volume via
+`hdiutil` in `FullVolume`, controllable clocks); what held is pinned by those tests, what broke is
+below. Owner decisions of 2026-10-27: reboot and log off become online-only like shutdown; the
+missing summaries after a restore or a move go into the redesign (portion 7).
+
+**A PC off for a week** (`WeekOffTests`, `PolicyJournalTests`):
+
+1. **Power actions are online-only** — `JobQueue.DefaultDeliveryFor` now returns `OnlineOnly` for
+   `reboot` and `logoff` as for `shutdown`: a *Reboot all* clicked while one PC was off restarted
+   it whenever it was next switched on, a week later mid-lesson (PROTOCOL `Job`; amends `D-25`
+   item 4).
+2. **A queued install whose installer is gone is dropped** — a pending `install_package` names its
+   installer by hash; when the entry is replaced or deleted (`PackageCatalog.Changed`), the job is
+   closed as not delivered with *the installer was replaced* (`JobQueue.DropPending`), so the PC is
+   again one *Install on all missing* reaches (`D-89`).
+3. **The latest push wins** — `PushAgentBuild` closes a still-pending `self_update` for the same PCs
+   before queuing the new one; two queued builds would both be delivered and the second refused
+   while the first is on probation (`D-83`), leaving the PC on the older build.
+
+Held: a certificate that entered its renewal window while the PC was off is renewed on the first
+link; an expired one is refused with `link.refused` (only a USB rekey brings it back — open, low
+risk with a five-year lifetime); a protocol-1 agent gets its queued update and never a lock; a
+revocation made meanwhile reaches it on its first link; a lock, exam or policy it held is not
+re-applied after a week. Open: a PC that was off during a `D-82` move is moved only while the old
+lab is active, and the new lab does not say so (redesign).
+
+**A console restored from an old backup** (`OldBackupTests`):
+
+4. **A revocation learned from a PC cuts the revoked PC** — `HandleIncoming` now pushes newly
+   learned revocation entries to every linked PC and closes a link whose certificate they revoke
+   (`link.revoked`); serials are compared normalised. Before, a restored console that never had the
+   revocation kept a removed, revoked PC linked even after an honest PC brought the entry. Inherent
+   limit: the revoked PC is accepted until the first PC carrying the revocation links.
+
+Held: PCs added after the backup heal into the list (`link.new_machine`); scripts, presets and
+catalog entries load (installers do not travel, as designed); codes burned after the backup are
+dormant (`D-60`; activating them reopens that risk, as accepted there).
+
+**A full disk** (`DiskFullTests` in both projects):
+
+5. **`JsonStore.Save` removes the temporary it tore** — a write that failed mid-way left a partial
+   `<doc>.tmp` holding the last free space and pushing every later save onto a GUID name.
+6. **Teacher saves no longer crash the console** — script, internet-preset, exam-preset and package
+   saves caught nothing, and the console has no global handler; the libraries roll memory back to
+   disk and the views say *Not saved — this computer could not write the file* (`Store.SaveFailed`).
+7. **No orphan installer** — `PackageCatalog.AddAsync` removes the copied installer when its YAML
+   cannot be written, unless the existing entry names that very file.
+8. **Renewal writes key and certificate atomically** — `DirectoryAgentStore.InstallCertificate`
+   writes both beside their places before either replaces anything; a torn in-place write could
+   leave a truncated `agent.key` or a new key beside the old certificate — a USB visit. A small
+   window remains between the two renames.
+9. **Renewal reports a write failure and retries** — `AgentLink`'s renewal loop caught only
+   `RpcException`; an `IOException` now raises `renew.not_saved` and retries on the backoff.
+
+Open: an enrolment while `enrollment.json` cannot be saved burns the code in memory only (a restart
+before the next successful save would accept it again); a full console disk produces one
+`jobs.log_failed` warning per job update; a brand-new lab cannot be created on a full disk.
+
+**Clock skew** (`ClockSkewTests`, `BeaconGateTests`):
+
+10. **Certificates are backdated a day** (`Defaults.CertificateBackdate`, was five minutes): a console
+    more than five minutes ahead issued a certificate the PC called "not yet valid" after the
+    single-use code was spent — the PC was refused as "code already used" for ever. A leaf still
+    never starts before its CA.
+11. **An unlinked PC dials a beacon whose only fault is its time** (`BeaconGate`, PROTOCOL
+    *Discovery beacon*): the timestamp is checked last, after the CA endorsement and the instance
+    signature, so such a beacon is this lab's; TLS authenticates whoever answers. A PC more than
+    ±`BeaconMaxSkew` off the teacher's machine — the lab has no time source — silently never linked
+    again. A linked PC never acts on it, so a replayed press cannot move a room. After `Welcome` the
+    PC reports `clock.skew` (*This PC's clock is N min behind/ahead…*) in the console's language.
+
+Held: lock, internet and exam limits are durations on the PC's clock (±3 h tested end to end);
+install jobs, package status and renewal at ±3 h. Open: `InFlightJobPolicy` compares the console's
+delivery time with the PC's boot time, so a PC behind may have a restored `run_script` run twice
+(`D-57` accepts a second run); a PC years off (dead CMOS battery) still fails TLS.
+
+**A reconnect storm** (`ReconnectStormTests`, thirty PCs dropped at once by the console or on the PCs):
+
+12. **A PC notices a console-side close at once** — `AgentLink`'s heartbeat and renewal loops now end
+    with the link's stream (a per-link token), not only with the session: a console that closed the
+    link ended the stream gracefully and the teardown waited for the next heartbeat tick, so the
+    slowest of thirty PCs started dialling back 4.9 s late.
+13. **A link lost right after it came up is redialled within a second** — the pinned-host retry waits
+    out a long backoff step in 250 ms slices and abandons it once a `Welcome` arrived during it.
+14. **The key-bearing certificate copy made for each dial is disposed** at once, not left to the
+    finalizer — one native key handle per dial, many dials per lesson.
+
+Held: jobs running or queued at the drop are neither lost nor run twice (the agent's ledger,
+`D-32` item 7); the console's linked set, tiles and job rows end consistent; threads and
+connections do not grow from storm to storm.
+
+**Many full views at once** (`FullViewStormTests`, half the room opened and closed repeatedly):
+
+15. **A full frame after its window closed is counted, not applied** (`ScreenStore`), so a late frame
+    cannot rebuild the released full picture and keep its memory.
+16. **`ScreenImage.HasFrame` follows the bitmap**, not the version: after `Clear` a reopened window
+    shows the thumbnail until its keyframe instead of nothing.
+
+Held: every stream stays within its cap, the mosaic keeps updating, a closed window returns its PC
+to thumbnails with nothing left streaming. The drills run alone (`RobustnessCollection`), like the
+lab-switch drills.
+
+Rejected: a time server on the console (one more service on a teacher's laptop, and a PC need not
+trust a console's time to find it); persisting the `Welcome` offset to correct the beacon check (it
+cannot help a PC that never linked); queuing power actions with an expiry (a click the teacher
+cannot see the consequence of, a week later, is the problem itself).
+
+Status: built 2026-10-27 on the Mac, merged from three parallel worktrees. Not run on Windows: the delete of a
+torn temporary after a failed flush on NTFS, `DirectoryAgentStore` under DPAPI and the ProgramData
+ACLs, a real `ERROR_DISK_FULL` in staging (set `LABCONTROL_FULL_DISK_VOLUME` to a small VHD), Schannel
+with a client certificate whose start is in the PC's future, and clock drift in the physical lab.
+
+## D-91 — H.264 for the broadcast and the full view: platform codecs, self-describing frames, *Text / Video* at every show (M7 portion 6)
+
+Context (2026-10-27): the broadcast reaches about 10 fps at best — every frame is a JPEG sent once
+per PC under the 24 Mbit/s total the console's Wi-Fi carries (`D-72`) — so a film or an animated
+presentation is not watchable. The owner decided H.264 for the broadcast and for a PC's full view,
+with a *Text / Video* choice; the mosaic stays JPEG (ROADMAP M7). `D-11` deferred H.264 behind the
+same envelope; `VideoFrame.codec` was reserved for it from M3.
+
+Owner decisions of 2026-10-27: **Text is today's JPEG picture**, unchanged (tiles, deltas, the
+full view's quality selector), and **Video is H.264** at 25–30 fps; the first choice is *Text*; the
+last choice is remembered **separately** for *Show my screen* and for the full-view window, on this
+computer; the teacher may **switch at any time** while showing or watching (one keyframe).
+
+Decision:
+
+1. **Platform codecs only, nothing installed on a PC** (`D-03`). The PCs encode (full view) and
+   decode (broadcast) with Windows' in-box Media Foundation H.264 MFTs, through
+   **Vortice.MediaFoundation 3.8.3** — the same family and version as Vortice.DXGI, a managed
+   wrapper compiled into the self-contained exe. Only the **synchronous** software MFTs are used
+   (Microsoft's H.264 encoder and decoder, found with `MFTEnumEx(SYNCMFT)`): hardware MFTs are
+   asynchronous and need the event model, a later optimisation if the lab's CPUs need it. Encoder
+   input and decoder output are NV12, converted in C# (`Nv12`). The macOS console calls
+   **VideoToolbox** through hand-written `DllImport`s (no NuGet), which picks the hardware codec
+   itself; the Windows console uses the same Media Foundation code as the PCs; **Linux has no
+   H.264** and offers *Video* disabled. A Windows N edition without the Media Feature Pack has no
+   MFT: it reports none and gets JPEG.
+2. **Self-describing frames, no protocol version.** `VideoFrame.codec` says what each frame is;
+   `"h264"` frames carry **one access unit in Annex B** (start codes) in the existing payload
+   field (still named `jpeg` on the wire — renaming it changes nothing on the wire and every
+   caller in code), `keyframe` = an IDR with SPS and PPS in front, `dirty` empty, `quality` 0.
+   A receiver decodes by the frame's codec, never by what it asked for, so every mix of builds
+   works: an older agent ignores what it does not know and sends JPEG, an older console never
+   asks, an encoder that cannot start falls back to JPEG on the PC by itself (one
+   `video.h264_unavailable` event per stream).
+3. **Who asks for what** (all additive): `VideoControl.codec` — the console asks a PC for `"h264"`
+   in the full view, only in *Video* and only when the console itself can decode it;
+   `HelperHello.video_decoders` / `video_encoders` — what the helper found at start (a decoder or
+   encoder it could create); `BroadcastRequest.codecs` — what the PC's helper can decode, so the
+   console never sends H.264 to a PC that cannot show it. An empty list is JPEG only.
+4. **Keyframes and loss.** An H.264 P-frame needs every frame before it exactly like a JPEG delta,
+   so the existing rules hold unchanged: the hub's per-PC one-frame slot breaks a PC's chain when
+   it is still full and the PC skips to the next IDR (asked for at most every
+   `BroadcastKeyframeRequestInterval`), `BroadcastPicture` drops non-key frames after an
+   overflow, a keyframe every `KeyframeInterval` or on request. One difference on the PC's
+   uplink: a JPEG frame the sink refuses is re-encoded next tick from what is owed, but an
+   encoded H.264 frame has already advanced the encoder — so the producer **holds** the refused
+   access unit and offers it again before encoding anything new. Baseline profile (no B-frames)
+   and low-latency mode: one frame in, one out.
+5. **Bitrate.** The encoder's target is three quarters of the stream cap the pacer already
+   enforces (headroom for keyframes). The broadcast still encodes once for everyone under
+   `min(BroadcastBitsPerSecond, BroadcastTotalBitsPerSecond / watching)` — about 1.7 Mbit/s each
+   at 14 PCs and 0.8 at 30, enough for 1280-wide video. A new cap is a new `VideoControl`, which
+   already starts a new budget and a keyframe; the encoder is re-created with it (no `ICodecAPI`
+   needed). The full view's *Video* target is `FullVideoBitsPerSecond`.
+6. **Mixed fan-out.** In *Video* the hub runs the H.264 producer for PCs that listed `"h264"` and,
+   only while at least one watching PC did not, a second JPEG producer for those — each PC
+   receives exactly one stream, and both count against the same total cap. In *Text* only the
+   JPEG producer runs. Switching moves every PC to the other producer starting at a keyframe.
+7. ***Text / Video* for the teacher.** A choice next to *Show my screen* (and beside *Stop showing*
+   while showing) and in the full-view window; the quality selector applies to *Text* only. The
+   last choice for each is kept in `preferences.json` (`broadcast_video`, `full_view_video`),
+   never in a backup or lab file. *Video* that a PC cannot do shows the picture as *Text* and the
+   window says why.
+8. **Rates.** *Video*: the broadcast at `BroadcastVideoFramesPerSecond` (25; the Mac's capture and
+   scaling cost) and the full view at `FullVideoFramesPerSecond` (30); *Text* unchanged. Width is
+   still `BroadcastWidth` for the broadcast and native for the full view, rounded down to even.
+   Sound is not part of this.
+9. **Open.** Hardware (asynchronous) MFTs are not used; the lab's measurement of the software
+   encoder's CPU decides whether they are needed. (A decoder that breaks mid-broadcast was
+   open here; item 11 closed it.)
+
+10. **VM drill fixes** (2026-10-27). (a) Vortice returns a **new wrapper** for the output sample
+    `ProcessOutput` fills, even when it is the sample the caller passed in; comparing the wrappers
+    released that sample twice — the encoder failed with *External component has thrown an
+    exception* about 20 s after the decoder started in the same helper, and the helper died with
+    an access violation in `ComObject.DisposeCore`. Now the native pointers are compared and the
+    second wrapper is detached (`NativePointer = 0`) so its finalizer releases nothing either.
+    (b) In *Video* with only JPEG PCs watching, the hub kept encoding H.264 for nobody and the
+    status line showed that stream; H.264 now runs only while no PC has dialled yet or one that
+    did can decode it.
+
+VM drill (2026-10-27, clone *M7 isolated H.264 acceptance 2026-10-27* of the collect clone —
+Windows 11 ARM64, owned installation, `student` signed in, `win-arm64` build moved to a fresh
+`TestLabHost` lab with `Setup.exe --rekey`, hashes compared on host and guest): the helper's probe
+found Microsoft's encoder and decoder MFTs (*decodes h264, encodes h264*); the full view in
+*Video* came through as H.264 at 1280×800 with correct colours and no stride or crop fault;
+the *Video* broadcast (synthetic teacher's screen at 30 fps) ran at **24–25 fps for about
+100 kbit/s** where *Text* gave 11 fps for 3.6 Mbit/s, while the PC's own full view in *Video*
+ran at **26–27 fps** — the PC decoding and encoding at once; *Text ↔ Video* switched both ways
+in the broadcast and the full view; `LABCONTROL_NO_H264=1` gave *jpeg only*, the JPEG stream
+with *1 PC gets Text*, the full view in JPEG with `video.h264_unavailable` naming why, and
+H.264 came back when it was removed. After fix (a): no helper exit and no crash event in
+several minutes of both streams at once. Pictures were read back with `save-screen`.
+
+11. **A decoder that breaks mid-broadcast** (2026-10-27, owner: everything the VM can test before
+    the lab). `FrameDecoder` gives H.264 up after `FailuresBeforeBroken` (3) failures in a row — a
+    success starts the count again — and raises `BrokeDown` once. The helper then marks the
+    process JPEG-only (`H264Codecs.MarkDecoderBroken`) and sends `HelperStatus` at once, now with
+    `video_decoders` (additive, field 5; helper and service are one build); the service keeps
+    the helper's latest word. `BroadcastReceiver` checks on every frame whether a codec it asked
+    with is gone and, if so, dials `PullBroadcast` again with what is left — the screen stays
+    taken, the stall timer runs on — and reports `broadcast.text_fallback`. The simulator does the
+    same through `FakeMachineState`. `LABCONTROL_H264_DECODE_FAIL_AFTER=N` is the drill's switch.
+    Three failures, not one: a P-frame after a lost frame fails by nature and the next IDR mends it.
+
+Second VM drill the same day (same clone): with `LABCONTROL_H264_DECODE_FAIL_AFTER=20` the
+broadcast ran as H.264, the decoder broke 20 s in, the picture held still for a few seconds,
+then the PC dialled again and carried on as JPEG with `broadcast.text_fallback` — the overlay
+never came down and no `broadcast.stalled` or `broadcast.failed`. Then the **`win-x64`** build
+(PE machine `0x8664`, hashes compared) ran under Windows 11 ARM's x64 emulation: the helper
+found x64 Media Foundation's encoder and decoder, the *Video* broadcast ran at 24–25 fps and the
+PC's full view in *Video* at 26–28 fps, switching worked, colours correct. The only crash events
+in the Application log were UTM's `spice-webdavd.exe`, which fails at every boot of a clone with
+shared folders off. Owner decision (2026-10-27): the VM drill is enough for now; the lab checks
+below wait for the next visit, possibly the end of M7, and the redesign (portion 7) goes ahead.
+
+12. **Independent review fixes** (2026-10-28, PR OTFC-ONTU/LabControl#6). (a) **The macOS encoder
+    leaked a whole picture per frame** — the session's pool, created without source attributes,
+    gave `420v` buffers, which were refused and never released; a Mac broadcasting in *Video*
+    grew by about 34 MB/s. The pool now gives BGRA (`kCVPixelBufferPixelFormatTypeKey`, width,
+    height) and any other buffer is released; `H264Tests` pins resident memory over 300 frames
+    (401 MB without the fix). (b) **The hub's streams raced**: `Reconcile` decided under the lock
+    and applied after it, so a join that saw only H.264 PCs could stop the JPEG stream another
+    join had just started, and a keyframe request could restart a stream just stopped; one
+    reconcile lock now covers the decision and both `Apply` calls, and frames are offered under
+    the hub's lock, so a PC that switched stream never gets the old one's frame. (c) **The
+    console's own full-view decoder** given up (`FrameDecoder.Broken`) now asks that PC for JPEG,
+    with `video.console_decode_failed` for the teacher; choosing *Video* again or reopening the
+    window tries H.264 again (`Reset` clears `Broken`). (d) A picture up to one macroblock larger
+    than its frame (padding without a display area) is cropped; a larger one counts as a
+    failure. (e) **The PC's service drops H.264 frames after a refused one** until a keyframe
+    passes (`Helper.H264Gap`) — on a PC the helper's sink never refuses, so item 4's held frame
+    applies to the simulator and the hub, and this is the PC's equivalent; a refused keyframe
+    asks again. (f) **A helper restart is not a broken decoder**: the service keeps the last
+    helper's codecs while a new one starts, so `broadcast.text_fallback` fires only on a real
+    failure. (g) Any encoder exception falls back to JPEG instead of ending the producer loop;
+    Vortice's own exceptions from `MFTEnumEx` become `H264Exception`. A use-after-free the new
+    crop test found — the picture read after its decoder was disposed — was fixed with it.
+    Re-drilled on the ARM64 clone (build `1.0.0-m7-p6d`): both streams in *Video* with switching,
+    `session.exe` killed mid-broadcast (stayed H.264, no false fallback), the decoder-failure
+    fallback, no LabControl crash event.
+
+Status: built 2026-10-27 on the Mac and passed its ARM64 VM drill the same day after two
+fixes (item 10), then the decoder-failure fallback and `win-x64` under emulation; review fixes
+(item 12) re-drilled on the VM on 2026-10-28. Not run:
+`win-x64` on lab hardware (only emulated), the software encoder's CPU on a lab PC at
+1080p, 14 PCs at once over the MacBook's Wi-Fi with a real film, a Windows console's broadcast,
+a Windows edition without the codecs (only simulated by `LABCONTROL_NO_H264`).

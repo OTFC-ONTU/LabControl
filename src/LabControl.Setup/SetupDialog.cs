@@ -9,6 +9,9 @@ internal static class SetupDialog
     private static readonly ResourceManager Resources = new("LabControl.Setup.SetupStrings", typeof(SetupDialog).Assembly);
     internal static string Text(string name) => Resources.GetString(name) ?? throw new InvalidOperationException("Missing setup text.");
 
+    internal static string Format(string name, params object?[] arguments) =>
+        string.Format(System.Globalization.CultureInfo.CurrentCulture, Text(name), arguments);
+
     private static System.Drawing.Icon LoadIcon()
     {
         using var stream = typeof(SetupDialog).Assembly.GetManifestResourceStream("LabControl.Setup.AppIcon")

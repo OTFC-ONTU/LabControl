@@ -17,6 +17,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The real full volume the disk-full tests fill (M7 robustness pass), shared with the Shared tests. -->
+    <Compile Include="..\LabControl.Shared.Tests\FullVolume.cs" Link="FullVolume.cs" />
+    <Compile Include="..\LabControl.Shared.Tests\FakeH264.cs" Link="FakeH264.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The console's non-UI core (LabSession, the gRPC server) lives in the console
          project itself so the product stays at six projects (D-27); the tests reference
          the executable assembly and never touch Avalonia. -->

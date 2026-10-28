@@ -95,10 +95,10 @@ internal sealed class OverlayWindow : IDisposable
     /// <summary>This window shows a broadcast, not a lock.</summary>
     public bool IsBroadcast => _broadcast is not null;
 
-    public OverlayWindow(ILogger log, string message, string pcName, long untilUnix, long hardLimitUnix)
+    public OverlayWindow(ILogger log, string message, string pcName, long untilUnix, long hardLimitUnix, string language)
     {
         _log = log;
-        _content = new OverlayContent(message, pcName, null);
+        _content = new OverlayContent(message, pcName, null, language);
         _untilUnix = untilUnix;
         _hardLimitUnix = hardLimitUnix;
         _thread = new Thread(Run) { Name = "overlay", IsBackground = true };
@@ -117,11 +117,11 @@ internal sealed class OverlayWindow : IDisposable
     public string? Problem { get; private set; }
 
     /// <summary>A re-stated lock: new text or limits; the window repaints on its next tick.</summary>
-    public void Update(string message, long untilUnix, long hardLimitUnix)
+    public void Update(string message, long untilUnix, long hardLimitUnix, string language)
     {
         lock (_lock)
         {
-            _content = _content with { Message = message };
+            _content = _content with { Message = message, Language = language };
             _untilUnix = untilUnix;
             _hardLimitUnix = hardLimitUnix;
             _countdown = string.Empty;
@@ -296,7 +296,7 @@ internal sealed class OverlayWindow : IDisposable
         lock (_lock)
         {
             var remaining = OverlayText.Remaining(_untilUnix, _hardLimitUnix, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-            countdown = OverlayText.CountdownText(remaining);
+            countdown = OverlayText.CountdownText(remaining, _content.Language);
             if (!force && countdown == _countdown && _picture is not null)
             {
                 return;

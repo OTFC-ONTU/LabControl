@@ -50,13 +50,35 @@ public sealed class ExamDialogModel
             return (preset, null);
         }
 
-        var result = _session.ExamPresets.Save(id, preset);
+        ExamPresetSaveResult result;
+        try
+        {
+            result = _session.ExamPresets.Save(id, preset);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (null, Strings.Format("Store.SaveFailed", ex.Message));
+        }
+
         return result.Ok
             ? (result.Saved, null)
             : (null, Strings.Get("Internet.Preset." + result.NameProblem!.Replace("preset.", string.Empty, StringComparison.Ordinal)));
     }
 
-    public bool DeletePreset(string id) => _session?.ExamPresets.Delete(id) ?? false;
+    /// <summary>Deletes a preset; false with the problem in words when the library could not be written.</summary>
+    public bool DeletePreset(string id, out string? problem)
+    {
+        problem = null;
+        try
+        {
+            return _session?.ExamPresets.Delete(id) ?? false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            problem = Strings.Format("Store.SaveFailed", ex.Message);
+            return false;
+        }
+    }
 
     /// <summary>
     /// The program list as typed — one per line, blanks ignored — normalized, or the problems in

@@ -5,6 +5,7 @@ using LabControl.Shared;
 using LabControl.Shared.Files;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 
 namespace LabControl.Agent;
@@ -23,7 +24,7 @@ internal sealed class CollectRunner(AgentLink link)
     public async Task<JobResult> RunAsync(Job job, Func<JobProgress, Task> report, CancellationToken token)
     {
         while (!await Gate.WaitAsync(TimeSpan.FromSeconds(10), token))
-            await report(new JobProgress { JobId = job.Id, Line = "Waiting for this PC's previous collection." });
+            await report(new JobProgress { JobId = job.Id, Line = PcText.Get("CollectWaiting") });
         try { return await RunCoreAsync(job, report, token); }
         finally { Gate.Release(); }
     }
@@ -71,8 +72,8 @@ internal sealed class CollectRunner(AgentLink link)
                 // Reads drop to the student's token; the output stays the SYSTEM handle opened above.
                 var exists = WindowsIdentity.RunImpersonated(student.Token, () => Directory.Exists(folder));
                 if (!exists)
-                    return Result(true, $"{request.Folder} does not exist on this PC: nothing to collect.");
-                await report(new JobProgress { JobId = job.Id, Line = $"Packing {request.Folder}." });
+                    return Result(true, PcText.Get("CollectMissingFolder", request.Folder));
+                await report(new JobProgress { JobId = job.Id, Line = PcText.Get("CollectPacking", request.Folder) });
                 summary = WindowsIdentity.RunImpersonated(student.Token,
                     () => WorkArchive.Create(folder, output, Defaults.CollectMaxBytes, Defaults.CollectMaxFiles, token));
             }
@@ -84,7 +85,7 @@ internal sealed class CollectRunner(AgentLink link)
             output.Position = 0;
 
             var reference = await link.RequestUploadAsync(job.Id, size, sha256, token);
-            await report(new JobProgress { JobId = job.Id, Percent = 50, Line = $"Sending {summary.Files} file(s), {size} bytes packed." });
+            await report(new JobProgress { JobId = job.Id, Percent = 50, Line = PcText.Get("CollectSending", summary.Files, size) });
 
             // The upload says nothing on Link; a line every few seconds keeps a slow upload over
             // Wi-Fi from looking like a silent, dead job to the console's timeout.
@@ -96,7 +97,7 @@ internal sealed class CollectRunner(AgentLink link)
                     while (true)
                     {
                         await Task.Delay(Defaults.CollectProgressInterval, sending.Token);
-                        await report(new JobProgress { JobId = job.Id, Percent = 50, Line = "Still sending the collected work." });
+                        await report(new JobProgress { JobId = job.Id, Percent = 50, Line = PcText.Get("CollectStillSending") });
                     }
                 }
                 catch (OperationCanceledException)
@@ -118,7 +119,7 @@ internal sealed class CollectRunner(AgentLink link)
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilePushException
             or InvalidOperationException or Win32Exception or SecurityException or ArgumentException)
         {
-            return Result(false, $"Could not collect {request.Folder}: {ex.Message}");
+            return Result(false, PcText.Get("CollectFailed", request.Folder, ex.Message));
         }
         finally
         {
@@ -126,17 +127,17 @@ internal sealed class CollectRunner(AgentLink link)
             {
                 try { File.Delete(staged); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                { link.ReportForJob(job.Id, Event.Types.Severity.Warning, "files.cleanup_failed", "A private staged collection could not be removed."); }
+                { link.ReportForJob(job.Id, Event.Types.Severity.Warning, "files.cleanup_failed", PcText.Get("CollectCleanupFailed")); }
             }
         }
     }
 
     internal static string Describe(CollectSummary summary)
     {
-        var text = $"Collected {summary.Files} file(s), {summary.Bytes} bytes.";
-        if (summary.InUse.Count > 0) text += $" Could not read (open in a program?): {string.Join(", ", summary.InUse)}.";
-        if (summary.Links > 0) text += $" {summary.Links} link(s) left out.";
-        if (summary.Skipped.Count > 0) text += $" Left out (a name or depth the console cannot store): {string.Join(", ", summary.Skipped)}.";
+        var text = PcText.Get("CollectDone", summary.Files, summary.Bytes);
+        if (summary.InUse.Count > 0) text += PcText.Get("CollectInUse", string.Join(", ", summary.InUse));
+        if (summary.Links > 0) text += PcText.Get("CollectLinks", summary.Links);
+        if (summary.Skipped.Count > 0) text += PcText.Get("CollectSkipped", string.Join(", ", summary.Skipped));
         return text;
     }
 }

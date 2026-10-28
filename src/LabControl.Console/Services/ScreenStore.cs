@@ -16,7 +16,12 @@ public sealed class AgentScreen : IDisposable
     private readonly Queue<(DateTimeOffset At, int Bytes)> _recent = new();
     private long _recentBytes;
 
-    public AgentScreen(string agentId) => AgentId = agentId;
+    /// <param name="h264">The full view's H.264 decoder (a test's stand-in); the platform's when <c>null</c>.</param>
+    public AgentScreen(string agentId, Func<LabControl.Shared.Video.H264.IH264Decoder>? h264 = null)
+    {
+        AgentId = agentId;
+        FullDecoder = new FrameDecoder(h264);
+    }
 
     public string AgentId { get; }
 
@@ -25,6 +30,18 @@ public sealed class AgentScreen : IDisposable
 
     /// <summary>The native-resolution picture; empty until the full view has been opened.</summary>
     public ScreenImage Full { get; } = new();
+
+    /// <summary>The full view's decoder: JPEG, or H.264 when the teacher chose *Video* and the PC can (D-91).</summary>
+    public FrameDecoder FullDecoder { get; }
+
+    /// <summary>Whether the teacher chose *Video* for this PC's full view (D-91); the PC may still answer in JPEG.</summary>
+    public bool RequestedVideo { get; internal set; }
+
+    /// <summary>
+    /// This console's decoder gave up on this PC's H.264 (review of D-91): the full view asks for
+    /// JPEG until the teacher chooses again or opens the window again.
+    /// </summary>
+    public bool VideoBroken { get; internal set; }
 
     /// <summary>What the console last asked this PC for; <see cref="VideoMode.Unspecified"/> when nothing.</summary>
     public VideoMode RequestedMode { get; internal set; }
@@ -114,6 +131,7 @@ public sealed class AgentScreen : IDisposable
 
     public void Dispose()
     {
+        FullDecoder.Dispose();
         Thumbnail.Dispose();
         Full.Dispose();
     }
@@ -132,6 +150,9 @@ public sealed class ScreenStore : IDisposable
 
     public ScreenStore(Func<DateTimeOffset> clock) => _clock = clock;
 
+    /// <summary>The H.264 decoder for screens made from now on; the platform's when <c>null</c>. For the tests.</summary>
+    public Func<LabControl.Shared.Video.H264.IH264Decoder>? H264Decoder { get; set; }
+
     /// <summary>True after <see cref="Dispose"/>: the session left its lab and every picture was released (M5).</summary>
     public bool IsDisposed => _disposed;
 
@@ -141,13 +162,16 @@ public sealed class ScreenStore : IDisposable
     /// <summary>The picture needs a keyframe before deltas make sense (first frame, or the screen changed size).</summary>
     public event Action<AgentScreen>? KeyframeNeeded;
 
+    /// <summary>The console gave up decoding this PC's H.264 full view; the session asks it for JPEG. On a gRPC thread.</summary>
+    public event Action<AgentScreen>? VideoBroken;
+
     /// <summary>
     /// This PC's screen, created on first use. After <see cref="Dispose"/> a caller that is
     /// still holding a stale view model gets a detached, empty screen that is never stored:
     /// nothing from a departed lab is kept alive by a late frame or a late tile.
     /// </summary>
     public AgentScreen Get(string agentId) =>
-        _disposed ? new AgentScreen(agentId) : _screens.GetOrAdd(agentId, id => new AgentScreen(id));
+        _disposed ? new AgentScreen(agentId) : _screens.GetOrAdd(agentId, id => new AgentScreen(id, H264Decoder));
 
     public AgentScreen? Find(string agentId) => _screens.GetValueOrDefault(agentId);
 
@@ -174,13 +198,31 @@ public sealed class ScreenStore : IDisposable
     {
         var now = _clock();
         var screen = Get(agentId);
+
+        // A full-mode frame for a PC whose window is closed was on its way before the PC read
+        // the thumbnail control (a 1080p keyframe is a tenth of a second on the wire at the
+        // cap). Applying it would rebuild the native-resolution picture the window's Close
+        // just released — and keep it, about 8 MB per 1080p PC, until the lab closes, shown
+        // stale the next time the window opens (M7 robustness pass). It is counted as
+        // traffic, not as a rejection, and goes no further.
+        if (frame.Mode == VideoMode.Full && screen.RequestedMode != VideoMode.Full)
+        {
+            screen.Count(frame, FrameOutcome.Applied, now);
+            return FrameOutcome.Applied;
+        }
+
         var outcome = frame.Mode == VideoMode.Full
             ? ApplyFull(screen, frame, now)
             : screen.Thumbnail.Apply(frame, now);
 
         screen.Count(frame, outcome, now);
 
-        if (outcome == FrameOutcome.NeedsKeyframe)
+        if (frame.Mode == VideoMode.Full && screen.FullDecoder.Broken && !screen.VideoBroken)
+        {
+            screen.VideoBroken = true;
+            VideoBroken?.Invoke(screen);
+        }
+        else if (outcome == FrameOutcome.NeedsKeyframe)
         {
             KeyframeNeeded?.Invoke(screen);
         }
@@ -191,14 +233,16 @@ public sealed class ScreenStore : IDisposable
 
     private static FrameOutcome ApplyFull(AgentScreen screen, VideoFrame frame, DateTimeOffset now)
     {
-        var outcome = screen.Full.Apply(frame, now);
-        if (outcome != FrameOutcome.Applied || !(frame.Keyframe || frame.Dirty.Count == 0))
+        var outcome = screen.FullDecoder.Apply(screen.Full, frame, now);
+        var whole = FrameDecoder.CodecOf(frame) == Defaults.VideoCodecH264 ? frame.Keyframe : frame.Keyframe || frame.Dirty.Count == 0;
+        if (outcome != FrameOutcome.Applied || !whole || !screen.Full.HasFrame)
         {
             return outcome;
         }
 
         // The mosaic keeps moving while the full view is open: every keyframe (one per
-        // KeyframeInterval) is scaled into the thumbnail, which the PC stopped sending.
+        // KeyframeInterval) is scaled into the thumbnail, which the PC stopped sending. Every
+        // H.264 picture is whole, but only its IDRs are — the thumbnail would cost a scale per frame.
         using var picture = screen.Full.Snapshot();
         if (picture is null)
         {

@@ -1,9 +1,11 @@
 using System.Globalization;
 using System.IO.Pipes;
 using LabControl.Shared;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Session;
 using LabControl.Shared.Video;
+using LabControl.Shared.Video.H264;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
@@ -131,7 +133,22 @@ internal static class Program
             }
         }
 
-        await SendAsync(new HelperMessage { Hello = new HelperHello { SessionId = session ?? 0, ProcessId = (uint)pid, Version = Version } });
+        // What this session can encode and decode besides JPEG (D-91): found once by making a small
+        // Media Foundation encoder and decoder, so a PC without the codecs is told apart at once.
+        var hello = new HelperHello { SessionId = session ?? 0, ProcessId = (uint)pid, Version = Version };
+        hello.VideoDecoders.AddRange(H264Codecs.Decoders);
+        hello.VideoEncoders.AddRange(H264Codecs.Encoders);
+        if (H264Codecs.WhyNoDecoder is { } noDecoder)
+        {
+            log.LogInformation("no H.264 decoder, the broadcast comes as JPEG: {Why}", noDecoder);
+        }
+
+        if (H264Codecs.WhyNoEncoder is { } noEncoder)
+        {
+            log.LogInformation("no H.264 encoder, the full view goes as JPEG: {Why}", noEncoder);
+        }
+
+        await SendAsync(new HelperMessage { Hello = hello });
         log.LogInformation("connected to the service");
 
         // Fire-and-forget for writes that must not hold up a read loop; a failure is logged,
@@ -170,6 +187,15 @@ internal static class Program
         // every status and on every change, so the service always knows what is shown.
         using var overlay = new OverlayController(loggers.CreateLogger("overlay"), state => Send(new HelperMessage { OverlayState = state }), Environment.MachineName);
 
+        // A broadcast decoder that broke (D-91 item 11): this process decodes JPEG only from now
+        // on, and the service hears it at once so it dials the broadcast again without H.264.
+        overlay.H264Failed += why =>
+        {
+            log.LogWarning("the H.264 decoder broke, asking for JPEG: {Why}", why);
+            H264Codecs.MarkDecoderBroken(why);
+            Send(new HelperMessage { Status = StatusNow() });
+        };
+
         // The exam strip and the opening sweep's close request (D-75); a lock or a broadcast covers the strip.
         using var exam = new ExamStripController(loggers.CreateLogger("exam"), () => overlay.CoversScreen);
 
@@ -178,7 +204,7 @@ internal static class Program
             var lastDesktop = string.Empty;
             while (!token.IsCancellationRequested)
             {
-                var status = DesktopProbe.Status();
+                var status = StatusNow();
                 if (status.InputDesktop != lastDesktop)
                 {
                     log.LogInformation("input desktop: {Desktop} ({Width}x{Height})", status.InputDesktop, status.ScreenWidth, status.ScreenHeight);
@@ -191,6 +217,14 @@ internal static class Program
             }
         }, token);
 
+        // What only this session sees, and what it decodes besides JPEG right now (D-91 item 11).
+        static HelperStatus StatusNow()
+        {
+            var status = DesktopProbe.Status();
+            status.VideoDecoders.AddRange(H264Codecs.Decoders);
+            return status;
+        }
+
         var exit = ExitPipeClosed;
         try
         {
@@ -201,7 +235,7 @@ internal static class Program
                     case ServiceMessage.PayloadOneofCase.Ping:
                         // Never await a write from the read loop (D-35 item 8): the service may be
                         // waiting for us to read its next message before it reads ours.
-                        Send(new HelperMessage { Status = DesktopProbe.Status() });
+                        Send(new HelperMessage { Status = StatusNow() });
                         overlay.Report();
                         break;
 
@@ -229,6 +263,10 @@ internal static class Program
                         exam.Close(message.ClosePrograms);
                         break;
 
+                    case ServiceMessage.PayloadOneofCase.Language:
+                        PcLanguage.Set(message.Language);
+                        break;
+
                     default:
                         // A message this build does not know; say so once per message.
                         log.LogWarning("the service sent {What}, which this build does not do yet", message.PayloadCase);
@@ -238,7 +276,7 @@ internal static class Program
                             {
                                 Severity = Event.Types.Severity.Warning,
                                 Code = "session.not_in_this_build",
-                                Message = $"The session helper {Version} does not handle {message.PayloadCase} yet.",
+                                Message = PcText.Get("HelperNotInThisBuild", Version, message.PayloadCase),
                                 AtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                             },
                         });

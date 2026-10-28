@@ -302,7 +302,9 @@ the Markdown — including either agent's applicable instructions — is not fin
 <li>Code, identifiers, commits, comments: English. English is the neutral resource and
 fallback locale; M7 must ship Ukrainian, English and Russian across the ordinary
 product-facing surfaces, with an explicit persistent console language choice (<code>D-67</code>).
-Resource files are used from day one and UI text is never hard-coded.</li>
+Resource files are used from day one and UI text is never hard-coded. Every new or changed
+key goes into the neutral <code>.resx</code> and its <code>.uk.resx</code> / <code>.ru.resx</code> siblings in the same change;
+<code>ResourceTranslationTests</code> enforces it (<code>D-86</code>).</li>
 <li>Agent must never crash the student's session: every Win32 call is wrapped, every
 failure is reported to the console as an event, never thrown out of the service loop.</li>
 <li>Never log the <code>student</code> password, the lab key or its passphrase. Never commit
@@ -349,7 +351,83 @@ network, kept its agent id and number and enrolled into the new lab on its own (
 recovery</em>). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.</p>
 <p><strong>M6 is done (owner decision 2026-10-26)</strong>: all six portions built, accepted in the physical lab on all
 14 PCs (builds <code>1.0.0+68d0ae5</code> → <code>1.0.0+cc39651</code>), the lab's findings fixed and retested; open check:
-teacher access in the lab (no second teacher device). Next by the roadmap: M7. The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
+teacher access in the lab (no second teacher device). Next by the roadmap: M7, whose portion 6 is H.264 for the broadcast and the full view with a <em>Text / Video</em> choice (owner
+decision 2026-10-27), portion 7 a UI/UX redesign of every screen
+(owner decision 2026-10-26) that also carries the visible answer to failed actions, followed by portion 8,
+the README as a teacher's manual written for the redesigned screens (owner decision 2026-10-27: swapped).
+<strong>M7 portion 1 is built (2026-10-26, <code>D-86</code>), on the Mac:</strong> the console speaks Ukrainian, English
+and Russian — <code>Shared/Localization/ProductLanguages</code> (stored choice, else a supported OS language,
+else English), <code>preferences.json</code> at the data root, <code>ConsoleLanguage</code> applied in <code>Program.Main</code>
+before the first string, the selector in <em>Settings</em> and the lab chooser with <em>Restart now</em> through
+the ordinary quit, and <code>*.uk.resx</code> / <code>*.ru.resx</code> beside every product <code>.resx</code> (console, Setup,
+overlay, policy texts, <code>INSTALL.txt</code>). Every new key goes into all three files in the same change
+(<code>ResourceTranslationTests</code>); both test projects pin English because the owner's Mac reports
+<code>ru-UA</code>. Owner decisions: the language applies on restart, the student sees the console's language
+(portion 2 carries it to the PC), &quot;lab&quot; = лабораторія / лаборатория. ROADMAP M7 holds the seven
+portions. Tests: 1032 Shared + 316 Console. Next: the owner reads both translations; portion 2.
+<strong>M7 portion 2 is done (built 2026-10-26, <code>D-87</code>; accepted by the owner 2026-10-27 after the lab on
+<code>1.0.0+c8e3c9b</code> — exam, lock, language switch; Setup's languages not run):</strong> the console's
+language reaches the PC. <code>Welcome.language</code> sets <code>Shared/Localization/PcLanguage</code> (kept in
+<code>agent.json</code> as <code>console_language</code>), in which the PC writes its events, job results and refusals
+(<code>PolicyStrings</code> and the new <code>PcStrings</code> via <code>PcText.Get</code>; the helper learns it from
+<code>ServiceMessage.language</code>). Each lock and exam carries its own <code>language</code> (<code>Overlay.language</code>,
+<code>ExamMode.language</code>, kept on the session in <code>policy.json</code>, passed down as <code>ExamStrip.language</code>):
+the student's words are in the <strong>setting</strong> console's language, and <code>OverlayText</code> takes it
+explicitly, never the process culture. Setup and removal resolve the Windows display language
+before the first string; the step trace shared with <code>setup.log</code> stays English. <code>PcLanguage</code> is
+process-wide, so a test that changes it runs in the language collection and restores English.
+Tests: 1050 Shared + 317 Console. Built-in scripts' output stays English (data). Next: portion 3.
+<strong>M7 portion 3 is built (2026-10-27, <code>D-88</code>), on the Mac:</strong> the package catalog and the <em>Add package</em>
+wizard. Owner decisions: the installer is copied into the lab's catalog, the proposed detect rule is
+the program's name in Windows' installed programs (a file path the alternative), a new version
+replaces the entry of the same program, the install buttons come with portion 4. <code>Shared/Packages</code>
+reads an installer without running it (<code>CompoundFile</code> + <code>MsiProperties</code> for an MSI's <code>Property</code>
+table, <code>PeVersionInfo</code>, <code>InstallerInspector</code>: SHA-256, family — MSI, WiX bundle, NSIS, Inno,
+InstallShield — and its silent arguments; <code>PackageEntry</code>/<code>DetectRule</code>). <code>Console/Services/PackageCatalog</code>
+writes <code>packages/&lt;id&gt;.yaml</code> (YamlDotNet) and copies the installer, hash-checked, into
+<code>packages/&lt;id&gt;/&lt;hash prefix&gt;/</code>; the <em>Packages</em> tab edits and deletes entries. A backup carries only
+the YAML. Tests: 1073 Shared + 327 Console. Next: portion 4 (<code>install_package</code> on the agent).
+<strong>M7 portion 4 is built (2026-10-27, <code>D-89</code>), on the Mac; not yet run on Windows:</strong> <code>install_package</code>.
+Owner decisions: 15 minutes per installer by default (per package), <em>Install on all missing</em> queues for
+PCs that are off, a restart is only reported, a PC in an exam refuses. The job carries file, family,
+silent arguments, detect rule, limit and a mode (<code>install</code> / <code>missing</code> / <code>check</code>) and answers with
+<code>JobResult.outcome</code> (additive, <code>PackageOutcomes</code>). <code>Shared/Packages/PackageInstallRunner</code> over
+<code>IPackageHost</code>: <code>WindowsPackageHost</code> (SYSTEM, session 0, no redirected streams, process tree ended at
+the limit, staging emptied at start) and <code>FakePackageHost</code> (<code>/fail</code>, <code>/reboot</code>, <code>/hang</code>, <code>/nodetect</code>).
+The console's <code>PackageStatusBook</code> (<code>package-status.json</code>) keeps each PC's answer; the <em>Packages</em> tab
+lists every PC and has <em>Install on N selected PCs</em>, <em>Install on all missing</em> (asks before an untried
+package) and <em>Check PCs</em>. <strong>Working in the lab (owner, 2026-10-27)</strong>: the Wake-on-LAN driver was
+installed on the room with it; open: the broken-package drill and the measured 14-PC IDE install.
+A package may also be a <code>.zip</code> (<code>D-89</code> addendum): the wizard lists the
+installers inside, the PC unpacks it under checked names and limits (<code>PackageArchive</code>) and runs the
+chosen one (<code>run</code>) from its folder — first for the Realtek RTL8168 driver Wake-on-LAN needs.
+Tests: 1102 Shared + 335 Console. Next: the broken-package drill and the 14-PC measurement in the lab.
+<strong>M7 portion 5 has started (2026-10-27):</strong> the 90-minute lesson criterion passed (owner, several lessons);
+the <code>win-x64</code> console installer ran on a real Windows computer and the lab backup imported there with the
+passphrase (half of the rehearsed recovery; driving the lab from it remains); the robustness pass is built
+(<code>D-90</code>: reconnect storm, full views, a week off, an old backup, a full disk, clock skew — sixteen fixes,
+among them online-only reboot/log off and an unlinked PC dialling a beacon whose only fault is its time).
+Tests: 1116 Shared + 370 Console (LabSwitchTests.Twenty_rounds fails on this Mac on clean HEAD too).
+<strong>M7 portion 6 is built (2026-10-27, <code>D-91</code>) and passed its ARM64 VM drill the same day:</strong> H.264 for the broadcast
+and the full view with a <em>Text / Video</em> choice. Owner decisions: <em>Text</em> is today's JPEG unchanged, <em>Video</em>
+is H.264 at 25–30 fps; <em>Text</em> first; the last choice remembered separately for <em>Show my screen</em> and the
+full-view window (<code>preferences.json</code>); a switch at any time. Frames say their codec (<code>VideoFrame.codec = &quot;h264&quot;</code>, one Annex B access unit, IDR with SPS/PPS in front); <code>VideoControl.codec</code>, <code>BroadcastRequest.codecs</code>
+and <code>HelperHello.video_decoders</code>/<code>video_encoders</code> are additive, so an older peer, a Linux console or a PC
+without the codecs gets JPEG — no protocol version. <code>Shared/Video/H264/</code>: VideoToolbox through <code>DllImport</code>
+(macOS), Windows' in-box synchronous Media Foundation MFTs through Vortice.MediaFoundation 3.8.3 (NV12 in
+C#), <code>H264Codecs</code> probed once (<code>LABCONTROL_NO_H264=1</code> for the fallback drill); <code>FrameDecoder</code> decodes by
+the frame; the producer holds a refused access unit instead of re-encoding; <code>BroadcastHub</code> runs an H.264
+stream for PCs that listed <code>h264</code> and the JPEG one only for those that did not. VideoToolbox runs end to
+end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample released twice after
+<code>ProcessOutput</code> crashed the helper; no H.264 encoded for JPEG-only watchers): <em>Video</em> broadcast 24–25 fps
+at ~100 kbit/s vs <em>Text</em> 11 fps at 3.6 Mbit/s, the PC's full view in <em>Video</em> 26–27 fps; then a decoder that
+breaks mid-broadcast falls back to JPEG keeping the screen (<code>HelperStatus.video_decoders</code>, <code>broadcast.text_fallback</code>,
+<code>LABCONTROL_H264_DECODE_FAIL_AFTER</code>), and <code>win-x64</code> passed under the VM's x64 emulation. Owner decision: the VM
+drill is enough for now; the lab checks (ROADMAP on-site checklist) wait for the next visit and portion 7 goes
+ahead. PR OTFC-ONTU/LabControl#6; its independent review (2026-10-28, <code>D-91</code> item 12) found and fixed a per-frame
+pixel-buffer leak in the macOS encoder, a hub stream race, a console decoder that could stay broken, H.264 relayed
+after a lost frame, a helper restart taken for a broken decoder — re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7 (the redesign); the H.264 lab checks on the next visit.
+The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a <code>teacher</code>-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, <em>Settled before implementation</em>; M6 reserves <code>D-69</code>…<code>D-79</code>.</p>
@@ -819,8 +897,9 @@ Setup, enrolled in lab <code>444-2</code>, linked to the MacBook console over Wi
 <code>student</code> sign-in and live screens. The owner considers the physical baseline established
 and development moves on (M5 portion 2 onwards); the remaining nine PCs, the vendor NIC
 driver, the wake test and the other M4 physical checks continue alongside, tracked in
-ROADMAP's <em>Physical lab</em> row and the on-site checklist. Do not describe Wake-on-LAN as
-working in this lab until the vendor-driver rerun proves it.</p>
+ROADMAP's <em>Physical lab</em> row and the on-site checklist. <strong>Wake-on-LAN works in the lab (owner, 2026-10-27)</strong>: Realtek's
+vendor driver <code>.zip</code> installed on all fourteen through the package catalog, ErP off and <em>Power On By
+PCI-E</em> on in each BIOS; no USB repair is needed for wake from shutdown (PC-02 proved it).</p>
 <p><strong>Physical lab, 2026-10-20:</strong> all fourteen PCs (PC-01…PC-14) are installed and linked. The owner had
 forgotten the lab key's passphrase; the lab was moved to a new key with <em>Move this lab to a new key</em>
 (<code>D-82</code>) — all fourteen moved over the network in half a minute — and the new key is remembered on the
@@ -831,7 +910,7 @@ The lab also showed monitors going dark under a broadcast or a lock (the 20-minu
 the helper now holds the display on while either shows (<code>D-84</code>), built and not yet run on Windows.</p>
 
 </article>
-<footer>Generated 2026-10-26 15:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-29 00:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#what-this-is-read-first">What this is (read first)</a></li><li class="lvl2"><a href="#why-it-exists">Why it exists</a></li><li class="lvl2"><a href="#hard-requirements-do-not-silently-relax-these">Hard requirements (do not silently relax these)</a></li><li class="lvl2"><a href="#tech-stack-decided-see-docsdecisions.md">Tech stack (decided — see docs/DECISIONS.md)</a></li><li class="lvl2"><a href="#repository-layout">Repository layout</a></li><li class="lvl2"><a href="#development-environment-realities">Development environment realities</a></li><li class="lvl2"><a href="#conventions-for-claude-code">Conventions for Claude Code</a></li><li class="lvl2"><a href="#quick-commands">Quick commands</a></li><li class="lvl2"><a href="#current-status">Current status</a></li></ul></nav>
 </div>

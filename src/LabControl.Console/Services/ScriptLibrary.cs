@@ -1,3 +1,4 @@
+using LabControl.Console.Localization;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Persistence;
 using Microsoft.Extensions.Logging;
@@ -120,6 +121,7 @@ public sealed class ScriptLibrary
             }
 
             var index = Document.Scripts.FindIndex(s => string.Equals(s.Id, script.Id, StringComparison.Ordinal));
+            var previous = index < 0 ? null : Document.Scripts[index];
             if (index < 0)
             {
                 Document.Scripts.Add(stored);
@@ -129,7 +131,27 @@ public sealed class ScriptLibrary
                 Document.Scripts[index] = stored;
             }
 
-            _store.SaveScripts(Document);
+            try
+            {
+                _store.SaveScripts(Document);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A full or read-only disk: the library stays what is on disk, and the editor keeps
+                // the teacher's text as an unsaved draft (M7 robustness pass).
+                if (previous is null)
+                {
+                    Document.Scripts.Remove(stored);
+                }
+                else
+                {
+                    Document.Scripts[index] = previous;
+                }
+
+                _log.LogWarning("script library not saved: {Message}", ex.Message);
+                error = Strings.Format("Store.SaveFailed", ex.Message);
+                return false;
+            }
         }
 
         Changed?.Invoke();
@@ -142,6 +164,7 @@ public sealed class ScriptLibrary
         var added = 0;
         lock (_gate)
         {
+            var before = Document.Scripts.ToList();
             foreach (var file in seed)
             {
                 var record = ScriptSeed.ToRecord(file, _clock());
@@ -150,7 +173,7 @@ public sealed class ScriptLibrary
                 Document.Scripts.Add(record);
                 added++;
             }
-            if (added > 0) _store.SaveScripts(Document);
+            if (added > 0) SaveOrRestore(before);
         }
         if (added > 0) Changed?.Invoke();
         return added;
@@ -160,16 +183,32 @@ public sealed class ScriptLibrary
     {
         lock (_gate)
         {
+            var before = Document.Scripts.ToList();
             if (Document.Scripts.RemoveAll(s => string.Equals(s.Id, id, StringComparison.Ordinal)) == 0)
             {
                 return false;
             }
 
-            _store.SaveScripts(Document);
+            SaveOrRestore(before);
         }
 
         Changed?.Invoke();
         return true;
+    }
+
+    /// <summary>Writes the library; when the disk refuses, puts the scripts back as they were and throws.</summary>
+    private void SaveOrRestore(List<ScriptRecord> before)
+    {
+        try
+        {
+            _store.SaveScripts(Document);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Document.Scripts.Clear();
+            Document.Scripts.AddRange(before);
+            throw;
+        }
     }
 }
 

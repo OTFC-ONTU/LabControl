@@ -15,7 +15,7 @@ internal static class SetupCoordinator
         bool held;
         try { held = mutex.WaitOne(0); }
         catch (AbandonedMutexException) { held = true; }
-        if (!held) { mutex.Dispose(); throw new IOException("Another Setup or removal process is running."); }
+        if (!held) { mutex.Dispose(); throw new IOException(SetupDialog.Text("AnotherSetupRunning")); }
         return new MutexLease(mutex);
     }
     private sealed class MutexLease(Mutex mutex) : IDisposable
@@ -28,16 +28,16 @@ internal static class SetupCoordinator
         Preflight();
         if (arguments.DryRun)
         {
-            Console.WriteLine("[plan] Stop the service, replace only lab trust while retaining this PC identity, then restart.");
+            Console.WriteLine(SetupDialog.Text("PlanRekey"));
             return 0;
         }
         using var scope = AccountSetupScope.Open();
         var installation = new InstallationState(Defaults.AgentDataDirectory).Read()
-            ?? throw new InvalidOperationException("Rekey requires an owned installation.");
+            ?? throw new InvalidOperationException(SetupDialog.Text("RekeyNeedsInstallation"));
         if (installation.RemovalReady || installation.StudentRemovalPending || installation.StudentRemoved)
-            throw new InvalidOperationException("Finish the pending uninstall before replacing trust.");
+            throw new InvalidOperationException(SetupDialog.Text("RekeyFinishRemoval"));
         if (new WindowsSetupService(installation.InstallationId).Read() is null)
-            throw new InvalidOperationException("Rekey requires the owned agent service.");
+            throw new InvalidOperationException(SetupDialog.Text("RekeyNeedsService"));
         using var updateLease = new UpdateTrial(Defaults.AgentDataDirectory).AcquireRemovalLease(out _);
         var replacement = new AgentTrustRekey(Defaults.AgentDataDirectory, MachineKeyProtection.Dpapi, MachineKeyProtection.RekeyJournal);
         SetupPayload? payload = replacement.HasPending ? null : SetupPayload.Open(payloadDirectory);
@@ -48,7 +48,7 @@ internal static class SetupCoordinator
             if (replacement.HasPending) replacement.Resume();
             else replacement.Replace(payload!);
             using var store = DirectoryAgentStore.Open(Defaults.AgentDataDirectory, MachineKeyProtection.Dpapi);
-            Console.WriteLine("Lab trust replaced; the PC identity, account mode and machine settings were preserved.");
+            Console.WriteLine(SetupDialog.Text("RekeyDone"));
         }
         finally
         {
@@ -67,17 +67,17 @@ internal static class SetupCoordinator
         if (InstallLayout.Default.ReadCurrent() is { } currentVersion
             && Version.TryParse(InstallLayout.BaseVersionOf(currentVersion), out var installedBase)
             && Version.TryParse(InstallLayout.BaseVersionOf(files.Version), out var usbBase) && usbBase < installedBase)
-            throw new InvalidOperationException("This USB is older than the installed agent. Use the same or a newer USB build for repair.");
+            throw new InvalidOperationException(SetupDialog.Text("UsbOlder"));
         var payload = SetupPayload.Open(payloadDirectory);
         using var authority = payload.Authority;
         var state = new InstallationState(Defaults.AgentDataDirectory);
         var existing = state.Read();
         var legacy = existing is null && (DirectoryAgentStore.Exists(Defaults.AgentDataDirectory) || Directory.Exists(Defaults.AgentInstallDirectory));
-        if (legacy) throw new InvalidOperationException("This is an earlier development installation without installer ownership. Preserve it and use a fresh test snapshot for Setup.");
+        if (legacy) throw new InvalidOperationException(SetupDialog.Text("LegacyInstallation"));
         if (existing is { RemovalReady: true } or { StudentRemovalPending: true } or { StudentRemoved: true })
-            throw new InvalidOperationException("Finish removal before installing or repairing this PC.");
+            throw new InvalidOperationException(SetupDialog.Text("FinishRemovalFirst"));
         if (number < 1 || number > Defaults.MaxStudentPcs || existing?.Number is { } installedNumber && installedNumber != number)
-            throw new InvalidOperationException("The PC number is invalid or differs from this installation.");
+            throw new InvalidOperationException(SetupDialog.Text("NumberInvalid"));
         var desiredName = AgentProvisioning.NameOf(number);
         var hostname = new WindowsHostnameSystem().Read();
         if (hostname.RebootRequired && !string.Equals(hostname.Pending, desiredName, StringComparison.OrdinalIgnoreCase))
@@ -87,27 +87,27 @@ internal static class SetupCoordinator
         {
             var currentSid = new WindowsStudentAccountSystem().FindStudentSid();
             if (existing?.CreatedStudentSid is { } owned ? currentSid != owned : currentSid is not null)
-                throw new InvalidOperationException("The student account is not owned by this installation; choose account creation off for a fresh installation.");
+                throw new InvalidOperationException(SetupDialog.Text("StudentNotOwned"));
         }
         Console.WriteLine(SetupDialog.Text("Changes"));
         if (arguments.DryRun)
         {
             foreach (var name in new[] { "Private ownership journal", "PC name", "Files", "Enrollment", "Firewall", "Power", "Windows Update active hours", "Student account and sign-in", "Service", "Verification" })
                 Console.WriteLine($"[plan] {name}");
-            if (!selectedStudent) Console.WriteLine("[Skipped] All account, password, sign-in and profile steps: account creation is off.");
+            if (!selectedStudent) Console.WriteLine(SetupDialog.Text("PlanAccountOff"));
             return 0;
         }
         SetupVersionUpgrade.VerifyExecutable(files.SourceAgentExecutable, files.Version);
         using var scope = AccountSetupScope.Open();
         existing = state.Read();
         if (new UpdateTrial(Defaults.AgentDataDirectory).Read()?.Phase is UpdateTrialPhase.OnProbation or UpdateTrialPhase.RollbackPending)
-            throw new InvalidOperationException("Finish agent update recovery before USB installation or repair.");
+            throw new InvalidOperationException(SetupDialog.Text("FinishUpdateRecovery"));
         state.Configure(existingInstallation: existing is not null, createStudent);
         state.SelectNumber(number);
         scope.EnsureFreshSettingsJournal();
         files.InstallationId = state.Read()!.InstallationId;
         if (files.Check().Status == SetupStepStatus.Conflict)
-            throw new IOException("The installed files conflict with this USB; existing files were preserved.");
+            throw new IOException(SetupDialog.Text("FilesConflict"));
         var templatePath = state.Read()!.CreateStudentAccount == true
             ? Path.Combine(payloadDirectory, Defaults.ProfileTemplateArchiveFileName) : null;
         if (templatePath is not null && File.Exists(templatePath))
@@ -131,7 +131,7 @@ internal static class SetupCoordinator
             adapters = nicSystem.ListEthernetAdapters();
             wake = nicSystem.SelectWakeAdapter();
             foreach (var item in nicSystem.HardwareInventory())
-                Report(string.Format(SetupDialog.Text("NicInventory"), item.Adapter.Name, item.Adapter.InterfaceId,
+                Report(SetupDialog.Format("NicInventory", item.Adapter.Name, item.Adapter.InterfaceId,
                     item.Adapter.PnpDeviceId, item.Adapter.MacAddress ?? SetupDialog.Text("Unknown"),
                     item.DriverProvider ?? SetupDialog.Text("Unknown"), item.DriverVersion ?? SetupDialog.Text("Unknown")));
         }
@@ -142,8 +142,8 @@ internal static class SetupCoordinator
         }
         if (wake.Adapter is null) readinessWarnings.Add("network.configuration_warning");
         Report(wake.Adapter is { } target
-            ? string.Format(SetupDialog.Text("WakeAdapter"), target.Name, target.MacAddress)
-            : string.Format(SetupDialog.Text("WakeAdapterUnavailable"), wake.Status));
+            ? SetupDialog.Format("WakeAdapter", target.Name, target.MacAddress)
+            : SetupDialog.Format("WakeAdapterUnavailable", wake.Status));
         var otherAntivirus = false;
         try
         {
@@ -151,7 +151,7 @@ internal static class SetupCoordinator
             {
                 otherAntivirus = true;
                 readinessWarnings.Add("antivirus.third_party");
-                var warning = $"[Warning] Antivirus {product.Name}: exclude {Defaults.AgentInstallDirectory} in that product.";
+                var warning = SetupDialog.Format("AntivirusExclude", product.Name, Defaults.AgentInstallDirectory);
                 log.WriteLine(warning);
                 Console.WriteLine(warning);
             }
@@ -159,7 +159,7 @@ internal static class SetupCoordinator
         catch (IOException)
         {
             readinessWarnings.Add("antivirus.inventory_unavailable");
-            var warning = "[Warning] Antivirus inventory is unavailable. Review antivirus exclusions before relying on this installation.";
+            var warning = SetupDialog.Text("AntivirusUnavailable");
             log.WriteLine(warning);
             Console.WriteLine(warning);
         }
@@ -244,7 +244,7 @@ internal static class SetupCoordinator
         {
             if (files.Check().Status != SetupStepStatus.AlreadyDone || CheckEnrollment(payload, number).Status != SetupStepStatus.AlreadyDone
                 || InstallLayout.Default.ReadCurrent() != files.Version || !WindowsSetupService.IsRunning())
-                throw new IOException("Installation verification failed.");
+                throw new IOException(SetupDialog.Text("VerificationFailed"));
             _ = service.Read();
         }));
         steps.Add(new OnceStep("Student activation", () => scope.ActivateStudentAfterSuccessfulSetup(), selectedStudent));
@@ -273,21 +273,21 @@ internal static class SetupCoordinator
         return store.Config.Number == number && store.Config.LabId == payload.Document.LabId
             && store.Authority.RawData.AsSpan().SequenceEqual(payload.Authority.RawData)
             ? new(SetupStepStatus.AlreadyDone)
-            : new(SetupStepStatus.Conflict, "Installed lab identity differs. Use the explicit rekey operation.");
+            : new(SetupStepStatus.Conflict, SetupDialog.Text("EnrollmentDiffers"));
     }
 
     private static void Preflight()
     {
-        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) throw new InvalidOperationException("Windows 10 1809 or later is required.");
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) throw new InvalidOperationException(SetupDialog.Text("WindowsTooOld"));
         using var identity = WindowsIdentity.GetCurrent();
-        if (!new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator)) throw new UnauthorizedAccessException("Run Setup as an administrator.");
+        if (!new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator)) throw new UnauthorizedAccessException(SetupDialog.Text("RunAsAdministrator"));
         var drive = new DriveInfo(Path.GetPathRoot(Defaults.AgentInstallDirectory)!);
-        if (drive.AvailableFreeSpace < Defaults.SetupMinimumFreeBytes) throw new IOException("At least 2 GB of free disk space is required.");
+        if (drive.AvailableFreeSpace < Defaults.SetupMinimumFreeBytes) throw new IOException(SetupDialog.Text("NotEnoughDisk"));
     }
 
     private static void Require(SettingChangeResult? result)
     {
-        if (result == SettingChangeResult.Conflict) throw new InvalidOperationException("A later or interrupted setting change was preserved.");
+        if (result == SettingChangeResult.Conflict) throw new InvalidOperationException(SetupDialog.Text("SettingChangePreserved"));
     }
 
     private sealed class Step(string name, Func<SetupCheck> check, Action apply, bool refresh = false) : ISetupStep

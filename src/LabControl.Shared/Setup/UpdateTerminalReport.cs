@@ -1,3 +1,4 @@
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 
 namespace LabControl.Shared.Setup;
@@ -18,7 +19,7 @@ public sealed class UpdateTerminalReport
         if (!InstallLayout.IsValidVersion(running)) return null;
         Event report;
         if (state is null || state.Phase == UpdateTrialPhase.Stable && state.Version == running)
-            report = new() { Code = StableCode, Severity = Event.Types.Severity.Info, Message = "The running version is stable." };
+            report = new() { Code = StableCode, Severity = Event.Types.Severity.Info, Message = PcText.Get("UpdateStable") };
         else if (state.Phase == UpdateTrialPhase.RolledBack && state.Previous == running && InstallLayout.IsValidVersion(state.Version))
             report = new() { Code = RolledBackCode, Severity = Event.Types.Severity.Warning, Message = state.Version };
         else return null; // Pending recovery is never presented as completed restoration.

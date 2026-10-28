@@ -84,6 +84,8 @@ public partial class MainWindow : Window, IDialogs
 
     public Task<LabControl.Shared.Jobs.ResetMode?> ResetProfileAsync(int pcCount) => _dialogs.ResetProfileAsync(pcCount);
 
+    public Task<LabControl.Shared.Packages.PackageEntry?> AddPackageAsync(AddPackageModel model) => _dialogs.AddPackageAsync(model);
+
     public Task OpenFolderAsync(string path) => _dialogs.OpenFolderAsync(path);
 
     public Task<LabControl.Shared.Setup.AgentBuild?> PushAgentBuildAsync(int pcCount) => _dialogs.PushAgentBuildAsync(pcCount);

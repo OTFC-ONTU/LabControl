@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protocol;
 
@@ -470,6 +471,7 @@ public sealed class PolicyJournal
             UntilUnix = request.UntilSeconds > 0 ? ClassroomPolicy.Add(nowUnix, request.UntilSeconds) : 0,
             HardLimitUnix = ClassroomPolicy.Clamp(request.HardLimitSeconds > 0 ? ClassroomPolicy.Add(nowUnix, request.HardLimitSeconds) : 0, Defaults.LockHardLimit, nowUnix),
             Message = OverlayText.ClampMessage(request.Message),
+            Language = ProductLanguages.Of(request.Language).Code,
         };
 
         if (session.Ended(nowUnix))
@@ -902,6 +904,7 @@ public sealed class PolicyJournal
             AllowedPrograms = Exam.ProgramNames.NormalizeAll(request.AllowedPrograms),
             CollectFolder = request.Collect is { Folder.Length: > 0 } collect ? collect.Folder : null,
             PresetName = request.PresetName ?? string.Empty,
+            Language = ProductLanguages.Of(request.Language).Code,
         };
 
         if (exam.Ended(nowUnix))
@@ -1082,7 +1085,8 @@ public sealed class PolicyJournal
             SinceUnix = nowUnix,
             UntilUnix = 0,
             HardLimitUnix = ClassroomPolicy.Clamp(0, Defaults.LockHardLimit, nowUnix),
-            Message = OverlayText.ClampMessage(OverlayText.TimeUpMessage),
+            Message = OverlayText.ClampMessage(OverlayText.TimeUpMessage(exam.Language ?? string.Empty)),
+            Language = ProductLanguages.Of(exam.Language).Code,
         };
 
         var result = Guard(nameof(IMachineState.ApplyOverlay), () => _machine.ApplyOverlay(session));

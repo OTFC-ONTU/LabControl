@@ -353,7 +353,62 @@ use <code>LabSession.LockLimit</code>/<code>InternetLimit</code>/<code>ExamLimit
 procedures in ROADMAP M6, <em>The portion-6 drills</em>. Tests: 1003 Shared + 308 Console.</li>
 <li><strong>M6 is done (owner decision 2026-10-26)</strong>: accepted in the physical lab on all 14 PCs, the
 findings fixed and retested on <code>1.0.0+cc39651</code>; open check: teacher access in the lab (no second
-teacher device). Next by the roadmap: M7.</li>
+teacher device). Next by the roadmap: M7; its portion 6 is H.264 for the broadcast and full view with a <em>Text / Video</em> choice
+(owner decision 2026-10-27), portion 7 a UI/UX redesign of every screen
+(owner decision 2026-10-26), which also carries the failed-action feedback, and portion 8 the README
+manual written for the redesigned screens (owner decision 2026-10-27: 6 and 7 swapped).</li>
+<li><strong>M7 portion 1 is built (2026-10-26, <code>D-86</code>), on the Mac</strong>: the console in Ukrainian, English and
+Russian — <code>Shared/Localization/ProductLanguages</code> (stored choice, else a supported OS language,
+else English), <code>preferences.json</code> at the data root, <code>ConsoleLanguage</code> applied in <code>Program.Main</code>,
+the selector in <em>Settings</em> and the chooser with <em>Restart now</em> through the quit path, <code>*.uk.resx</code>
+and <code>*.ru.resx</code> beside every product <code>.resx</code>. A new key goes into all three files
+(<code>ResourceTranslationTests</code>); both test projects pin English (the owner's Mac reports <code>ru-UA</code>).
+Owner decisions: language applies on restart, the student sees the console's language
+(portion 2 carries it to the PC), &quot;lab&quot; = лабораторія / лаборатория. Seven portions in ROADMAP
+M7. Tests: 1032 Shared + 316 Console. Next: the owner reads the translations; portion 2.</li>
+<li><strong>M7 portion 2 is done (<code>D-87</code>; accepted 2026-10-27 after the lab on <code>1.0.0+c8e3c9b</code> — exam, lock,
+language switch; Setup's languages not run)</strong>: the console's
+language reaches the PC. <code>Welcome.language</code> sets <code>Shared/Localization/PcLanguage</code> (kept in
+<code>agent.json</code>), in which the PC writes events, job results and refusals (<code>PolicyStrings</code>, the new
+<code>PcStrings</code> via <code>PcText.Get</code>; the helper learns it from <code>ServiceMessage.language</code>). Each lock and
+exam carries its own <code>language</code> (kept in <code>policy.json</code>, passed down as <code>ExamStrip.language</code>): the
+student's words are in the setting console's language and <code>OverlayText</code> never reads the process
+culture. Setup/removal follow the Windows display language; the step trace stays English.
+A test that changes <code>PcLanguage</code> runs in the language collection and restores English.
+Tests: 1050 Shared + 317 Console. Built-in scripts' output stays English (data). Next: portion 3.</li>
+<li><strong>M7 portion 3 is built (2026-10-27, <code>D-88</code>), on the Mac</strong>: the package catalog and the <em>Add package</em>
+wizard. The installer is read, never run (<code>Shared/Packages</code>: <code>CompoundFile</code> + <code>MsiProperties</code>,
+<code>PeVersionInfo</code>, <code>InstallerInspector</code> with the family and its silent arguments; <code>PackageEntry</code>,
+<code>DetectRule</code> — <code>uninstall_name</code> prefix or <code>path</code>), copied hash-checked into
+<code>packages/&lt;id&gt;/&lt;hash prefix&gt;/</code> beside <code>packages/&lt;id&gt;.yaml</code> (YamlDotNet, <code>Console/Services/PackageCatalog</code>);
+a new version replaces the entry of the same program; the <em>Packages</em> tab edits and deletes. Only
+the YAML is in a backup. Tests: 1073 Shared + 327 Console. Next: portion 4 (<code>install_package</code>).</li>
+<li><strong>M7 portion 4 is built (2026-10-27, <code>D-89</code>), on the Mac; not yet run on Windows</strong>: <code>install_package</code>
+with modes <code>install</code> / <code>missing</code> / <code>check</code> and a stable <code>JobResult.outcome</code>; the shared
+<code>PackageInstallRunner</code> over <code>WindowsPackageHost</code> (SYSTEM, no window, limit 15 min by default per
+package) and <code>FakePackageHost</code> (<code>/fail</code>, <code>/reboot</code>, <code>/hang</code>, <code>/nodetect</code>); the console's
+<code>PackageStatusBook</code> (<code>package-status.json</code>) and the <em>Packages</em> tab's <em>Install on N selected PCs</em>,
+<em>Install on all missing</em> (queued for PCs that are off; asks before an untried package) and <em>Check
+PCs</em>. A restart is only reported; an exam refuses. A package may be a <code>.zip</code> with its installer
+and files (<code>run</code>, <code>PackageArchive</code>, <code>D-89</code> addendum). Working in the lab (owner, 2026-10-27); open: the
+broken-package drill and the measured 14-PC IDE install. Tests: 1102 Shared + 335 Console. Next: the lab drills.</li>
+<li><strong>M7 portion 5 has started (2026-10-27)</strong>: the 90-minute lesson passed (owner); the <code>win-x64</code> console
+installer ran on a real Windows PC and the backup imported there with the passphrase (driving the lab
+from it remains); the robustness pass is built (<code>D-90</code>, sixteen fixes; online-only reboot/log off, a
+drifted PC still dials its console). Tests: 1116 Shared + 370 Console.</li>
+<li><strong>M7 portion 6 is built (2026-10-27, <code>D-91</code>) and passed its ARM64 VM drill the same day:</strong> H.264 for the
+broadcast and the full view with a <em>Text / Video</em> choice (owner: <em>Text</em> = today's JPEG, <em>Text</em> first,
+remembered separately in <code>preferences.json</code>, switchable while showing). Frames say their codec
+(<code>VideoFrame.codec = &quot;h264&quot;</code>, Annex B, IDR with SPS/PPS); <code>VideoControl.codec</code>, <code>BroadcastRequest.codecs</code>
+and <code>HelperHello.video_decoders</code>/<code>video_encoders</code> are additive, so every older peer gets JPEG.
+<code>Shared/Video/H264/</code> (VideoToolbox by <code>DllImport</code> on macOS, the in-box Media Foundation MFTs through
+Vortice.MediaFoundation on Windows, none on Linux; <code>LABCONTROL_NO_H264=1</code> turns it off), <code>FrameDecoder</code>,
+the producer's held access unit, the hub's H.264 stream beside the JPEG one. VideoToolbox runs end to
+end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample double-released after
+<code>ProcessOutput</code>; no H.264 encoded for JPEG-only watchers): <em>Video</em> broadcast 24–25 fps, the PC's full view
+26–27 fps; a decoder breaking mid-broadcast falls back to JPEG (<code>broadcast.text_fallback</code>), and <code>win-x64</code> passed
+under x64 emulation. Owner: the VM drill is enough for now; lab checks wait, portion 7 goes ahead. PR
+OTFC-ONTU/LabControl#6; its review (<code>D-91</code> item 12) fixed a macOS encoder leak, a hub race and decoder fallbacks, re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7; the H.264 lab checks on the next visit.</li>
 <li><strong>M6 in the physical lab (2026-10-26, build <code>1.0.0+68d0ae5</code>)</strong> passed sections 0–6 of the checklist.
 Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (<code>D-75</code>
 item 12), ends asked while a PC was off are sent on its return with the same session (<code>D-79</code> item 8),
@@ -367,7 +422,8 @@ operation escape the service loop.</li>
 <li>Physical lab status (2026-09-08 evening): five PCs installed and linked from the
 <code>1.0.0</code> media; the owner declared the baseline established and moved development on
 to M5. Remaining PCs, the vendor Realtek driver and the wake test continue alongside
-(ROADMAP <em>Physical lab</em> row and on-site checklist). Never claim Wake-on-LAN works here.</li>
+(ROADMAP <em>Physical lab</em> row and on-site checklist). Wake-on-LAN works in the lab (owner, 2026-10-27): the Realtek driver
+installed on all 14 through the package catalog, BIOS ErP off / Power On By PCI-E on, no USB repair needed.</li>
 <li><code>1.0.0</code> is the current physical-lab release candidate (owner decision 2026-09-08).
 Do not call it released until the remaining M4 physical acceptance checks pass; the
 later additive M5 portion-5 <code>Welcome.console_access</code> field preserves the frozen
@@ -452,6 +508,8 @@ or the generated HTML stale is not finished.</p>
 <li>UI strings are resources, not hard-coded text. English is the neutral source and
 fallback locale. M7 must ship Ukrainian, English and Russian for every ordinary
 product-facing surface, with an explicit persistent console language choice (<code>D-67</code>).
+Every new or changed key goes into the neutral <code>.resx</code> and its <code>.uk.resx</code> / <code>.ru.resx</code>
+siblings in the same change; <code>ResourceTranslationTests</code> enforces it (<code>D-86</code>).
 Stable protocol identifiers, diagnostic codes and developer logs remain English.</li>
 <li>Prefer simple, well-supported libraries. Record every new NuGet dependency and
 its reason in <code>docs/DECISIONS.md</code>.</li>
@@ -517,7 +575,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-26 15:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-29 00:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

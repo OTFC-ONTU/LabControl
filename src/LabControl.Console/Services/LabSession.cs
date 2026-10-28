@@ -11,12 +11,15 @@ using LabControl.Shared.Identity;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Setup;
 using LabControl.Shared.Lab;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Link;
+using LabControl.Shared.Packages;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Protection;
 using LabControl.Shared.Power;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Video;
+using LabControl.Shared.Video.H264;
 using Microsoft.Extensions.Logging;
 
 namespace LabControl.Console.Services;
@@ -189,12 +192,16 @@ public sealed class LabSession : IAsyncDisposable
         Files = new FileOffers();
         Screens = new ScreenStore(_clock);
         Screens.KeyframeNeeded += screen => RequestKeyframe(screen.AgentId);
+        Screens.VideoBroken += OnFullVideoBroken;
         Events = new EventLog(store.LogsDirectory, _clock);
         _journal = new JobJournal(store.LogsDirectory);
         BatchLogs = new JobBatchLogs(store.LogsDirectory, Jobs, id => Registry.FindByAgentId(id)?.Number ?? 0, _clock);
         Scripts = new ScriptLibrary(store, identity.LabId, seedScripts ?? [], _clock, loggers.CreateLogger<ScriptLibrary>());
         InternetPresets = new InternetPresetLibrary(store, identity.LabId, _clock, loggers.CreateLogger<InternetPresetLibrary>());
         ExamPresets = new ExamPresetLibrary(store, identity.LabId, _clock, InternetPresets, loggers.CreateLogger<ExamPresetLibrary>());
+        Packages = new PackageCatalog(store, instance.InstanceName, _clock, loggers.CreateLogger<PackageCatalog>());
+        PackageStatus = new PackageStatusBook(store, identity.LabId, Jobs, loggers.CreateLogger<PackageStatusBook>());
+        Packages.Changed += DropStaleInstalls;
 
         Registry.Changed += () => SaveLabSoon();
         Registry.Replaced += OnMachineReplaced;
@@ -263,6 +270,12 @@ public sealed class LabSession : IAsyncDisposable
 
     /// <summary>The teacher's named exam presets (M6 portion 4, D-76), beside <c>lab.json</c> and in the backup — never in a lab file.</summary>
     public ExamPresetLibrary ExamPresets { get; }
+
+    /// <summary>The package catalog (M7 portion 3, D-88): <c>packages/</c> beside <c>lab.json</c>, its YAML in the backup, its installers on this computer only.</summary>
+    public PackageCatalog Packages { get; }
+
+    /// <summary>What each PC last said about each package (M7 portion 4, D-89), in <c>package-status.json</c>.</summary>
+    public PackageStatusBook PackageStatus { get; }
 
     public EventLog Events { get; }
 
@@ -906,6 +919,15 @@ public sealed class LabSession : IAsyncDisposable
         return response;
     }
 
+    /// <summary>Every PC of the lab, by number — a copy of the list, safe to read on any thread.</summary>
+    public IReadOnlyList<MachineRecord> Machines()
+    {
+        lock (_gate)
+        {
+            return Registry.Document.Machines.OrderBy(m => m.Number).ToArray();
+        }
+    }
+
     /// <summary>The PCs whose certificates are inside the renewal lead time (D-25), for the banner.</summary>
     public IReadOnlyList<MachineRecord> MachinesNeedingRenewal()
     {
@@ -1026,6 +1048,9 @@ public sealed class LabSession : IAsyncDisposable
             // certificate the agent has just validated, so it can never claim more than the
             // OU does — and the agent refuses jobs from the certificate, not from this field.
             ConsoleAccess = AnnouncedAccess(Instance.Access),
+
+            // M7 (D-87): the PC writes what it sends on this link in the teacher's language.
+            Language = Language.Code,
         };
         welcome.RevokedSerials.AddRange(Registry.Revocations.Serials);
         BeforeWelcome?.Invoke(welcome);
@@ -1045,7 +1070,7 @@ public sealed class LabSession : IAsyncDisposable
         if (!connection.IsOutdated)
         {
             var screen = Screens.Get(hello.AgentId);
-            var wanted = screen.RequestedMode == VideoMode.Full ? VideoSettings.FullControl(quality: screen.RequestedQuality) : VideoSettings.ThumbnailControl();
+            var wanted = screen.RequestedMode == VideoMode.Full ? FullControlFor(screen) : VideoSettings.ThumbnailControl();
             screen.RequestedMode = wanted.Mode;
             connection.RequestedVideo = wanted.Mode;
             connection.TrySend(new ConsoleMessage { VideoControl = wanted });
@@ -1235,6 +1260,15 @@ public sealed class LabSession : IAsyncDisposable
                 foreach (var entry in added)
                 {
                     NoteRevocationOfSelf(entry);
+                }
+
+                // Learned here, so news to the other linked PCs too — and a PC linked with the
+                // very certificate this entry revokes is cut now, not at its next link. A console
+                // restored from a backup older than the revocation accepted it a moment ago
+                // (M7 portion 5): the first honest PC to arrive is what tells it otherwise.
+                if (added.Count > 0)
+                {
+                    Push(added);
                 }
 
                 var missing = Registry.Revocations.Except(offered.Select(e => e.Serial));
@@ -1444,6 +1478,107 @@ public sealed class LabSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// The console's inactivity budget for an <c>install_package</c> job: the PC reports while it
+    /// waits for another install, while it receives and every <see cref="Defaults.PackageInstallHeartbeat"/>
+    /// while the installer runs, and ends a stuck installer itself (D-89).
+    /// </summary>
+    public static TimeSpan PackageJobTimeout =>
+        (Defaults.FileChunkTimeout > Defaults.PackageInstallHeartbeat * 2 ? Defaults.FileChunkTimeout : Defaults.PackageInstallHeartbeat * 2) + Defaults.JobTimeoutGrace;
+
+    /// <summary>
+    /// <c>install_package</c> for <paramref name="entry"/> on <paramref name="agentIds"/> (D-89): the
+    /// installer is offered from the catalog under the hash it was added with, one job per PC in one
+    /// batch, queued for a PC that is off (owner decision 2026-10-27). <see cref="InstallMode.Check"/>
+    /// is for PCs online now only — a check is about the present.
+    /// </summary>
+    public IReadOnlyList<JobRecord> InstallPackage(IEnumerable<string> agentIds, PackageEntry entry, InstallMode mode)
+    {
+        var targets = agentIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (targets.Length == 0) return [];
+        if (mode != InstallMode.Check)
+        {
+            if (Packages.StateOf(entry) != InstallerState.Present)
+            {
+                throw new InvalidOperationException(Localization.Strings.Get("Packages.State." + Packages.StateOf(entry)));
+            }
+
+            Files.OfferKnownFile(Packages.InstallerPath(entry), entry.Sha256);
+        }
+
+        var now = _clock();
+        var batch = Guid.NewGuid().ToString("d");
+        var args = InstallPackageRequest.For(entry, mode).ToArgs();
+        var delivery = mode == InstallMode.Check ? JobDelivery.OnlineOnly : JobDelivery.Queued;
+        var created = targets.Select(target => Jobs.Create(target, Job.Types.Kind.InstallPackage, now, FindLinked(target) is not null,
+            new Dictionary<string, string>(args), PackageJobTimeout, delivery, batch)).ToList();
+        TryWriteBatchLogs(batch, register: true);
+        foreach (var target in targets)
+            if (FindLinked(target) is { } connection) DeliverJobs(connection, resendInFlight: false);
+        return created;
+    }
+
+    /// <summary>
+    /// <i>Install on all missing</i> (D-89): every PC of the lab except those known to hold this
+    /// installer and those already busy with it. A PC known to hold an older version gets a plain
+    /// install (its rule would find the old program and skip); every other PC an install that the
+    /// PC itself skips when its rule finds the program.
+    /// </summary>
+    public IReadOnlyList<JobRecord> InstallPackageOnAllMissing(PackageEntry entry)
+    {
+        var machines = Machines();
+        var upgrade = new List<string>();
+        var missing = new List<string>();
+        foreach (var machine in machines)
+        {
+            var state = PackageStatus.StateOf(entry, machine.AgentId);
+            if (state is PcPackageState.Installed or PcPackageState.RebootRequired or PcPackageState.Busy) continue;
+            var last = PackageStatus.Last(entry.Id, machine.AgentId);
+            var olderVersion = last is not null && PackageOutcomes.MeansInstalled(last.Outcome) && last.Outcome != PackageOutcomes.Present
+                && !string.Equals(last.Sha256, entry.Sha256, StringComparison.OrdinalIgnoreCase);
+            (olderVersion ? upgrade : missing).Add(machine.AgentId);
+        }
+
+        return [.. InstallPackage(upgrade, entry, InstallMode.Install), .. InstallPackage(missing, entry, InstallMode.Missing)];
+    }
+
+    /// <summary>
+    /// An <c>install_package</c> queued for a PC that is off names its installer by hash; once
+    /// the entry is replaced by a new version or deleted, that installer is gone from the catalog
+    /// and the job could only fail — or install last week's version — when the PC returns (M7
+    /// portion 5). Such a job is closed as not delivered with the reason, and the PC is again
+    /// one <i>Install on all missing</i> reaches.
+    /// </summary>
+    private void DropStaleInstalls()
+    {
+        Dictionary<string, string> present;
+        try
+        {
+            present = Packages.List()
+                .Where(item => item.Entry is not null && item.State == InstallerState.Present)
+                .ToDictionary(item => item.Id, item => item.Entry!.Sha256, StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogWarning("package catalog unreadable; queued installs kept: {Message}", ex.Message);
+            return;
+        }
+
+        var dropped = Jobs.DropPending(job => job.Kind == Job.Types.Kind.InstallPackage
+                && job.Args.TryGetValue("package", out var package)
+                && !(present.TryGetValue(package, out var sha256) && string.Equals(sha256, job.Args.GetValueOrDefault("sha256"), StringComparison.OrdinalIgnoreCase)),
+            _clock(), Localization.Strings.Get("Packages.QueuedInstallReplaced"));
+        foreach (var job in dropped)
+        {
+            var number = Registry.FindByAgentId(job.AgentId)?.Number ?? 0;
+            Events.Info("job.not_delivered", $"{string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, number)}: {job.Message}", job.AgentId, number);
+        }
+    }
+
+    /// <summary><i>Check PCs</i>: every linked PC evaluates the entry's rule and says whether the program is there.</summary>
+    public IReadOnlyList<JobRecord> CheckPackage(PackageEntry entry) =>
+        InstallPackage(Linked.Select(c => c.AgentId), entry, InstallMode.Check);
+
+    /// <summary>
     /// <i>Collect files…</i> outside an exam (owner decision 2026-10-23): <paramref name="folder"/>
     /// from every PC in <paramref name="agentIds"/> into a new <c>&lt;name date&gt;</c> folder under
     /// <paramref name="destinationRoot"/>; a PC that is not linked is reported missing.
@@ -1506,7 +1641,21 @@ public sealed class LabSession : IAsyncDisposable
         var manifest = Files.OfferBytes(build.Manifest, $"manifest-{build.Version}");
         var request = new SelfUpdateRequest(build.Version, manifest.Reference, manifest.Sha256, signature);
         _log.LogInformation("pushing agent build {Version} from {Folder} ({Bytes} bytes)", build.Version, build.Folder, build.TotalBytes);
-        return CreateJobs(agentIds, Job.Types.Kind.SelfUpdate, request.ToArgs(), Defaults.SelfUpdateJobTimeout);
+
+        // The latest push wins for a PC that is off (M7 portion 5): two builds queued for it
+        // would both be delivered on its return, the second only to be refused while the first
+        // is on probation (D-83), leaving it on the older build with a failed row.
+        var targets = agentIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var wanted = new HashSet<string>(targets, StringComparer.OrdinalIgnoreCase);
+        var superseded = Jobs.DropPending(job => job.Kind == Job.Types.Kind.SelfUpdate && wanted.Contains(job.AgentId),
+            _clock(), Localization.Strings.Format("Update.QueuedSuperseded", build.Version));
+        foreach (var job in superseded)
+        {
+            var number = Registry.FindByAgentId(job.AgentId)?.Number ?? 0;
+            Events.Info("job.not_delivered", $"{string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, number)}: {job.Message}", job.AgentId, number);
+        }
+
+        return CreateJobs(targets, Job.Types.Kind.SelfUpdate, request.ToArgs(), Defaults.SelfUpdateJobTimeout);
     }
 
     private void DeliverJobs(AgentConnection connection, bool resendInFlight, long bootTimeUnix = 0)
@@ -1797,13 +1946,21 @@ public sealed class LabSession : IAsyncDisposable
     /// for the single-PC view (ARCHITECTURE §8). Remembered per PC, so a PC that relinks
     /// while its full view is open comes back in full.
     /// </summary>
-    public void SetScreenMode(string agentId, VideoMode mode, int? quality = null)
+    public void SetScreenMode(string agentId, VideoMode mode, int? quality = null, bool? video = null)
     {
         var screen = Screens.Get(agentId);
         screen.RequestedMode = mode == VideoMode.Full ? VideoMode.Full : VideoMode.Thumbnail;
         if (quality is { } chosen)
         {
             screen.RequestedQuality = Math.Clamp(chosen, Defaults.VideoQualityAuto, 100);
+        }
+
+        if (video is { } wanted)
+        {
+            // A choice made again (or a window opened again) gives H.264 another chance.
+            screen.RequestedVideo = wanted;
+            screen.VideoBroken = false;
+            screen.FullDecoder.Reset();
         }
 
         var connection = FindLinked(agentId);
@@ -1816,9 +1973,33 @@ public sealed class LabSession : IAsyncDisposable
         connection.TrySend(new ConsoleMessage
         {
             VideoControl = screen.RequestedMode == VideoMode.Full
-                ? VideoSettings.FullControl(quality: screen.RequestedQuality)
+                ? FullControlFor(screen)
                 : VideoSettings.ThumbnailControl(),
         });
+    }
+
+    /// <summary>
+    /// The full-view control for this PC: *Text* is JPEG at the chosen quality, *Video* asks for
+    /// H.264 (D-91) — only when this console can decode it, so a Linux console never asks.
+    /// </summary>
+    private static VideoControl FullControlFor(AgentScreen screen, bool requestKeyframe = true) =>
+        VideoSettings.FullControl(requestKeyframe, screen.RequestedQuality, video: screen.RequestedVideo && !screen.VideoBroken && H264Codecs.CanDecode);
+
+    /// <summary>
+    /// This console could not decode a PC's H.264 three times in a row: the full view goes on in
+    /// JPEG and the teacher is told (review of D-91). The window's status line already says the
+    /// PC is sending Text.
+    /// </summary>
+    private void OnFullVideoBroken(AgentScreen screen)
+    {
+        var number = Registry.Document.Machines.FirstOrDefault(m => string.Equals(m.AgentId, screen.AgentId, StringComparison.OrdinalIgnoreCase))?.Number ?? 0;
+        Events.Warning("video.console_decode_failed",
+            Localization.Strings.Format("Event.VideoDecodeFailed", string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, number), screen.FullDecoder.Problem ?? string.Empty),
+            screen.AgentId, number);
+        if (screen.RequestedMode == VideoMode.Full && FindLinked(screen.AgentId) is { IsOutdated: false } connection)
+        {
+            connection.TrySend(new ConsoleMessage { VideoControl = FullControlFor(screen) });
+        }
     }
 
     /// <summary>
@@ -1863,6 +2044,7 @@ public sealed class LabSession : IAsyncDisposable
             SessionId = Guid.NewGuid().ToString("n"),
             UntilSeconds = duration is { } d && d > TimeSpan.Zero ? (long)Math.Ceiling(d.TotalSeconds) : 0,
             HardLimitSeconds = (long)Math.Ceiling(LockLimit.TotalSeconds),
+            Language = Language.Code,
         };
 
         var (sent, skipped) = SendOverlay(agentIds, overlay, setting: true);
@@ -2309,6 +2491,7 @@ public sealed class LabSession : IAsyncDisposable
             RestrictPrograms = request.RestrictPrograms,
             UntilSeconds = request.Timer is { } timer && timer > TimeSpan.Zero ? (long)Math.Ceiling(timer.TotalSeconds) : 0,
             HardLimitSeconds = (long)Math.Ceiling(ExamLimit.TotalSeconds),
+            Language = Language.Code,
         };
         template.AllowedPrograms.AddRange(LabControl.Shared.Exam.ProgramNames.NormalizeAll(request.AllowedPrograms));
         string? collectFolder = null;
@@ -2379,6 +2562,7 @@ public sealed class LabSession : IAsyncDisposable
             // remaining_seconds is as of sending; the PC re-sends only on change, so age it on
             // this console's clock (VM drill 2026-10-23: an unaged value gave +43 s for +30 s).
             var mode = FromState(state);
+            mode.Language = Language.Code;
             var aged = (long)Math.Floor((_clock() - connection.ExamStateAt).TotalSeconds);
             mode.UntilSeconds = Math.Max(1, state.RemainingSeconds - Math.Max(0, aged)) + extra;
             return mode;
@@ -2555,6 +2739,13 @@ public sealed class LabSession : IAsyncDisposable
     public TimeSpan BroadcastLimit { get; set; } = Defaults.BroadcastHardLimit;
 
     /// <summary>
+    /// The language this console speaks to its PCs (M7, D-86 item 5, D-87): sent in every
+    /// <c>Welcome</c> for what the PC reports, and on every lock and exam for the stock words the
+    /// student sees. The running console language unless a test says otherwise.
+    /// </summary>
+    public ProductLanguage Language { get; set; } = ConsoleLanguage.Running;
+
+    /// <summary>
     /// The hard limit a lock proposes: <see cref="Defaults.LockHardLimit"/> unless a test or the
     /// fail-safe drill wants it sooner (D-79 item 5). The PC clamps whatever it is sent to its
     /// own ceiling, so this can only shorten a lock's life, never lengthen it.
@@ -2604,7 +2795,8 @@ public sealed class LabSession : IAsyncDisposable
     /// when it links; one too old to know the message is skipped. Returns how many PCs were
     /// asked; the tiles follow what each PC reports in <c>OverlayState</c>.
     /// </summary>
-    public int StartBroadcast(IEnumerable<string> agentIds)
+    /// <param name="video">The teacher's *Video* (D-91): H.264 for the PCs that can show it; ignored by a running broadcast, which <see cref="BroadcastHub.SetVideo"/> switches.</param>
+    public int StartBroadcast(IEnumerable<string> agentIds, bool video = false)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
         var ids = agentIds.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -2620,7 +2812,7 @@ public sealed class LabSession : IAsyncDisposable
                         Event.Types.Severity.Error => EventSeverity.Error,
                         Event.Types.Severity.Warning => EventSeverity.Warning,
                         _ => EventSeverity.Info,
-                    }, code, message), BroadcastLimit);
+                    }, code, message), BroadcastLimit, video);
                 started.Expired += OnBroadcastExpired;
                 started.Changed += () => BroadcastChanged?.Invoke();
                 _broadcast = started;
@@ -2765,7 +2957,7 @@ public sealed class LabSession : IAsyncDisposable
             throw new RpcException(new Status(StatusCode.PermissionDenied, "this PC is not one the broadcast is shown to"));
         }
 
-        await hub.ServeAsync(name.Id, outgoing, token).ConfigureAwait(false);
+        await hub.ServeAsync(name.Id, request.Codecs, outgoing, token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -2813,7 +3005,7 @@ public sealed class LabSession : IAsyncDisposable
         }
 
         // The same quality as the standing control, or the PC would see a new control and restart its budget.
-        connection.TrySend(new ConsoleMessage { VideoControl = VideoSettings.FullControl(requestKeyframe: true, Screens.Get(agentId).RequestedQuality) });
+        connection.TrySend(new ConsoleMessage { VideoControl = FullControlFor(Screens.Get(agentId)) });
     }
 
     public Task<FileAck> ReceiveFileAsync(X509Certificate2? peer, IAsyncStreamReader<FileChunk> incoming, CancellationToken token) =>
@@ -3165,14 +3357,16 @@ public sealed class LabSession : IAsyncDisposable
         var revocation = new Revocation();
         revocation.Entries.AddRange(entries);
         var push = new ConsoleMessage { Revocation = revocation };
-        var serials = entries.Select(e => e.Serial).ToHashSet(StringComparer.Ordinal);
+        var serials = entries.Select(e => LabCertificates.NormalizeSerial(e.Serial)).ToHashSet(StringComparer.Ordinal);
 
         foreach (var connection in Linked)
         {
             connection.TrySend(push);
-            if (serials.Contains(connection.CertificateSerial))
+            if (serials.Contains(LabCertificates.NormalizeSerial(connection.CertificateSerial)))
             {
                 connection.Close("this PC's certificate was revoked");
+                Events.Warning("link.revoked", Localization.Strings.Format("Event.RevokedLinkClosed",
+                    string.Format(CultureInfo.InvariantCulture, Defaults.MachineNameFormat, connection.Number)), connection.AgentId, connection.Number);
             }
         }
     }

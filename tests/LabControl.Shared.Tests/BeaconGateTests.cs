@@ -29,6 +29,46 @@ public sealed class BeaconGateTests
         Assert.Equal($"192.168.1.23:{Defaults.ConsolePort}", verdict.Beacon!.Endpoint);
     }
 
+    /// <summary>
+    /// A PC whose clock drifted past the beacon window still finds its console (M7 portion 5):
+    /// the beacon is this lab's — endorsed and signed — and only its time is off. It may make an
+    /// unlinked PC dial; it never moves a linked one.
+    /// </summary>
+    [Theory]
+    [InlineData(-3 * 3600)]
+    [InlineData(-120)]
+    [InlineData(120)]
+    [InlineData(24 * 3600)]
+    public void A_pc_whose_clock_drifted_still_dials_but_is_never_taken_over_by_a_skewed_beacon(int skewSeconds)
+    {
+        var consoleNow = DateTimeOffset.UtcNow;
+        var pcNow = consoleNow.AddSeconds(-skewSeconds);
+        using var lab = TestLab.Create();
+        using var macBook = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), consoleNow);
+        using var deskPc = ConsoleInstance.Mint(lab, "Lab PC", new FileSecretProtector(), consoleNow);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
+
+        var verdict = gate.Consider(macBook.CreateBeacon("192.168.1.23", Defaults.ConsolePort, consoleNow), pcNow);
+        Assert.Equal(BeaconAction.Dial, verdict.Action);
+
+        gate.Linked(macBook.InstanceId, $"192.168.1.23:{Defaults.ConsolePort}", pcNow);
+        var later = consoleNow.AddSeconds(30);
+        var take = deskPc.CreateBeacon("192.168.1.40", Defaults.ConsolePort, later, later);
+        Assert.Equal(BeaconAction.Ignore, gate.Consider(take, pcNow.AddSeconds(30)).Action);
+    }
+
+    [Fact]
+    public void A_skewed_beacon_with_a_bad_signature_is_still_ignored()
+    {
+        var now = DateTimeOffset.UtcNow;
+        using var lab = TestLab.Create();
+        using var other = TestLab.Create();
+        using var foreign = ConsoleInstance.Mint(other, "Elsewhere", new FileSecretProtector(), now);
+        var gate = new BeaconGate(LabTrustTests.PublicOnly(lab.Authority), lab.LabId, new RevocationSet());
+        var beacon = foreign.CreateBeacon("192.168.1.66", Defaults.ConsolePort, now.AddHours(-5));
+        Assert.Equal(BeaconAction.Ignore, gate.Consider(beacon, now).Action);
+    }
+
     [Fact]
     public void A_beacon_flood_costs_one_dial_every_two_seconds()
     {
@@ -303,10 +343,10 @@ public sealed class BeaconGateTests
     }
 
     [Fact]
-    public void A_beacon_just_past_the_skew_limit_is_rejected()
+    public void A_linked_pc_ignores_a_beacon_just_past_the_skew_limit()
     {
-        // Not a matter of taste: past this the two machines cannot see each other at all, in
-        // either direction, which is why the console says so out loud (D-58).
+        // Past this a linked PC treats the beacon as news of nothing — no take-over, in either
+        // direction (D-58); an unlinked PC may still dial it (M7 portion 5, the test above).
         var now = Whole(DateTimeOffset.UtcNow);
         using var lab = TestLab.Create();
         using var console = ConsoleInstance.Mint(lab, "MacBook-2026", new FileSecretProtector(), now);
@@ -317,6 +357,7 @@ public sealed class BeaconGateTests
         var aheadPastIt = console.CreateBeacon("192.168.1.23", Defaults.ConsolePort, now + Defaults.BeaconMaxSkew + TimeSpan.FromSeconds(1));
 
         Assert.Equal(BeaconAction.Dial, gate.Consider(atTheLimit, now).Action);
+        gate.Linked(console.InstanceId, $"192.168.1.23:{Defaults.ConsolePort}", now);
         Assert.Contains("timestamp", gate.Consider(pastIt, now).Reason, StringComparison.Ordinal);
         Assert.Contains("timestamp", gate.Consider(aheadPastIt, now).Reason, StringComparison.Ordinal);
     }

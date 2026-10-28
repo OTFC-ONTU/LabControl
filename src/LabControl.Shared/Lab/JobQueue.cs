@@ -31,8 +31,9 @@ public enum JobDelivery
     Queued = 0,
 
     /// <summary>
-    /// Only meaningful right now. The default for <c>shutdown</c>: a PC that comes back
-    /// tomorrow morning must not be shut down by yesterday's click.
+    /// Only meaningful right now. The default for the power actions — <c>shutdown</c>,
+    /// <c>reboot</c>, <c>logoff</c>: a PC that comes back tomorrow morning, or next week in
+    /// the middle of a lesson, must not be acted on by yesterday's click.
     /// </summary>
     OnlineOnly = 1,
 }
@@ -85,6 +86,9 @@ public sealed class JobRecord
 
     public string ArtifactRef { get; set; } = string.Empty;
 
+    /// <summary>The PC's stable outcome code (<c>JobResult.outcome</c>, D-89); empty for kinds that send none.</summary>
+    public string Outcome { get; set; } = string.Empty;
+
     /// <summary>Captured output lines, as they arrive on <c>JobProgress</c>.</summary>
     public List<string> Output { get; } = [];
 
@@ -134,11 +138,13 @@ public sealed class JobQueue
     public event Action<JobRecord>? Updated;
 
     /// <summary>
-    /// <c>shutdown</c> is the one kind that must not wait for a PC to come back
-    /// (PROTOCOL, <c>Job</c>). Everything else is worth doing late.
+    /// The power actions must not wait for a PC to come back (PROTOCOL, <c>Job</c>): a
+    /// <c>reboot</c> or <c>logoff</c> clicked for a room in which one PC was off would otherwise
+    /// restart it, or sign the student out, the next time it is switched on — a week later,
+    /// mid-lesson (M7 portion 5). Everything else is worth doing late.
     /// </summary>
     public static JobDelivery DefaultDeliveryFor(Job.Types.Kind kind) =>
-        kind == Job.Types.Kind.Shutdown ? JobDelivery.OnlineOnly : JobDelivery.Queued;
+        kind is Job.Types.Kind.Shutdown or Job.Types.Kind.Reboot or Job.Types.Kind.Logoff ? JobDelivery.OnlineOnly : JobDelivery.Queued;
 
     /// <param name="agentOnline">
     /// Whether the PC is linked to this console right now. Decides the fate of an
@@ -263,6 +269,39 @@ public sealed class JobQueue
         return dropped;
     }
 
+    /// <summary>
+    /// Closes jobs still waiting for their PC whose payload no longer exists — an
+    /// <c>install_package</c> queued for a PC that was off, whose installer has since been
+    /// replaced or removed (M7 portion 5). <see cref="JobState.NotDelivered"/> with
+    /// <paramref name="reason"/>, never delivered later.
+    /// </summary>
+    public IReadOnlyList<JobRecord> DropPending(Func<JobRecord, bool> stale, DateTimeOffset now, string reason)
+    {
+        var dropped = new List<JobRecord>();
+
+        lock (_gate)
+        {
+            foreach (var job in _jobs.Values.Where(j => j.State == JobState.Pending).OrderBy(j => j.CreatedAtUnix).ToArray())
+            {
+                if (!stale(job))
+                {
+                    continue;
+                }
+
+                MarkNotDelivered(job, now);
+                job.Message = reason;
+                dropped.Add(job);
+            }
+        }
+
+        foreach (var job in dropped)
+        {
+            Updated?.Invoke(job);
+        }
+
+        return dropped;
+    }
+
     private IEnumerable<JobRecord> PendingFor(string agentId) =>
         _jobs.Values
             .Where(j => j.State == JobState.Pending &&
@@ -320,6 +359,7 @@ public sealed class JobQueue
             job.ExitCode = result.ExitCode;
             job.Message = result.Message;
             job.ArtifactRef = result.ArtifactRef;
+            job.Outcome = result.Outcome;
             job.Percent = result.Ok ? 100 : job.Percent;
             job.CompletedAtUnix = now.ToUnixTimeSeconds();
         }

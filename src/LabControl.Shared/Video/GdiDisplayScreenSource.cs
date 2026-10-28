@@ -17,7 +17,6 @@ public sealed class GdiDisplayScreenSource : ScaledScreenSource
     private const int SmCyScreen = 1;
     private const int Halftone = 4;
     private const uint SrcCopy = 0x00CC0020;
-    private const uint CaptureBlt = 0x40000000;
     private const uint CursorShowing = 0x00000001;
 
     private nint _dib;
@@ -68,7 +67,11 @@ public sealed class GdiDisplayScreenSource : ScaledScreenSource
                 {
                     SetStretchBltMode(memory, Halftone);
                     SetBrushOrgEx(memory, 0, 0, 0);
-                    if (!StretchBlt(memory, 0, 0, target.Width, target.Height, screen, 0, 0, nativeWidth, nativeHeight, SrcCopy | CaptureBlt))
+                    // No CAPTUREBLT (D-72 addendum): with it Windows hides the teacher's cursor for every
+                    // frame, so it flickers on the teacher's own screen. Since Windows 8 the desktop is
+                    // always composed by DWM and a plain copy already includes layered windows; the
+                    // pointer the students see is drawn into the picture by ScaledScreenSource.
+                    if (!StretchBlt(memory, 0, 0, target.Width, target.Height, screen, 0, 0, nativeWidth, nativeHeight, SrcCopy))
                     {
                         throw new ScreenCaptureException("gdi_failed", $"StretchBlt failed: {new Win32Exception(Marshal.GetLastWin32Error()).Message}");
                     }

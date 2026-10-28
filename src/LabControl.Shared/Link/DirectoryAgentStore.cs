@@ -76,7 +76,7 @@ public sealed class DirectoryAgentStore : IAgentStore, IDisposable
         System.IO.Directory.CreateDirectory(directory);
 
         var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        WriteKey(directory, protection, key);
+        WriteKey(Path.Combine(directory, Defaults.AgentKeyFileName), protection, key);
         File.WriteAllBytes(Path.Combine(directory, Defaults.CaCertificateFileName), authority.Export(X509ContentType.Cert));
 
         var store = new DirectoryAgentStore(directory, protection, config, X509CertificateLoader.LoadCertificate(authority.Export(X509ContentType.Cert)), key, null);
@@ -87,20 +87,63 @@ public sealed class DirectoryAgentStore : IAgentStore, IDisposable
     public void SaveConfig() =>
         JsonStore.Save(Path.Combine(_directory, Defaults.AgentConfigFileName), Config, AgentConfigDocument.Migrations, ownerOnly: true);
 
+    /// <summary>
+    /// Installs a certificate and, on renewal, the new key it was issued for. Both files are
+    /// written in full beside their places before either replaces anything, so a disk that fills
+    /// up (or a power cut) leaves the pair this PC had — never a truncated key, or a new key
+    /// beside the old certificate, either of which would keep the agent from opening its store
+    /// at the next start. On failure nothing changes, on disk or in memory, and the error is thrown.
+    /// </summary>
     public void InstallCertificate(ECDsa key, X509Certificate2 certificate)
     {
         var publicOnly = X509CertificateLoader.LoadCertificate(certificate.Export(X509ContentType.Cert));
-
-        if (!ReferenceEquals(key, Key))
+        var newKey = !ReferenceEquals(key, Key);
+        var keyPath = Path.Combine(_directory, Defaults.AgentKeyFileName);
+        var certificatePath = Path.Combine(_directory, Defaults.AgentCertificateFileName);
+        var keyTemporary = keyPath + JsonStore.TemporarySuffix;
+        var certificateTemporary = certificatePath + JsonStore.TemporarySuffix;
+        try
         {
-            WriteKey(_directory, _protection, key);
+            if (newKey)
+            {
+                WriteKey(keyTemporary, _protection, key);
+            }
+
+            File.WriteAllBytes(certificateTemporary, publicOnly.RawData);
+            if (newKey)
+            {
+                File.Move(keyTemporary, keyPath, overwrite: true);
+            }
+
+            File.Move(certificateTemporary, certificatePath, overwrite: true);
+        }
+        catch
+        {
+            TryDelete(keyTemporary);
+            TryDelete(certificateTemporary);
+            publicOnly.Dispose();
+            throw;
+        }
+
+        if (newKey)
+        {
             Key.Dispose();
             Key = key;
         }
 
-        File.WriteAllBytes(Path.Combine(_directory, Defaults.AgentCertificateFileName), publicOnly.RawData);
         Certificate?.Dispose();
         Certificate = publicOnly;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>Wipes the certificate, as <c>Setup.exe --rekey</c> does; the key and the id stay.</summary>
@@ -116,12 +159,11 @@ public sealed class DirectoryAgentStore : IAgentStore, IDisposable
         Certificate = null;
     }
 
-    private static void WriteKey(string directory, KeyProtection protection, ECDsa key)
+    private static void WriteKey(string path, KeyProtection protection, ECDsa key)
     {
         var pkcs8 = key.ExportPkcs8PrivateKey();
         try
         {
-            var path = Path.Combine(directory, Defaults.AgentKeyFileName);
             File.WriteAllBytes(path, protection.Protect(pkcs8));
             if (!OperatingSystem.IsWindows())
             {

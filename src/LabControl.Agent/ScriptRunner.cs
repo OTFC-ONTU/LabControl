@@ -5,6 +5,7 @@ using System.Text;
 using LabControl.Shared;
 using LabControl.Shared.Jobs;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
 
@@ -39,7 +40,7 @@ internal sealed class ScriptRunner
     {
         if (!RunScriptRequest.TryParse(job, out var request, out var error))
         {
-            return Fail(job, $"This job cannot run: {error}.");
+            return Fail(job, PcText.Get("JobCannotRun", error));
         }
 
         // ---- pull and verify
@@ -64,7 +65,7 @@ internal sealed class ScriptRunner
             var session = InteractiveSession.Snapshot();
             if (!session.HasSession || !session.HasUser)
             {
-                return Fail(job, "The script was to run as the logged-on user, but nobody is logged on to this PC right now.");
+                return Fail(job, PcText.Get("NobodyLoggedOnScript"));
             }
 
             sessionId = session.SessionId;
@@ -82,7 +83,7 @@ internal sealed class ScriptRunner
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             TryDelete(directory);
-            return Fail(job, $"Could not write the script to {path}: {ex.Message}");
+            return Fail(job, PcText.Get("ScriptWriteFailed", path, ex.Message));
         }
 
         var (executable, arguments) = CommandLine(request.Shell, path);
@@ -108,7 +109,7 @@ internal sealed class ScriptRunner
                 }
                 catch (Win32Exception ex)
                 {
-                    return Fail(job, $"Could not start the script in session {inSession} as the logged-on user: {ex.Message}");
+                    return Fail(job, PcText.Get("ScriptStartInSessionFailed", inSession, ex.Message));
                 }
 
                 try
@@ -135,7 +136,7 @@ internal sealed class ScriptRunner
                 }
                 catch (Win32Exception ex)
                 {
-                    return Fail(job, $"Could not start {executable}: {ex.Message}");
+                    return Fail(job, PcText.Get("ScriptStartFailed", executable, ex.Message));
                 }
             }
         }
@@ -154,13 +155,13 @@ internal sealed class ScriptRunner
                 JobId = job.Id,
                 Ok = false,
                 ExitCode = -1,
-                Message = $"Killed after {request.Timeout.TotalSeconds:0} s without output ({outcome.Lines} line(s) received, {elapsed} s in total). The script and everything it started were terminated.",
+                Message = PcText.Get("ScriptKilled", request.Timeout.TotalSeconds.ToString("0", CultureInfo.InvariantCulture), outcome.Lines, elapsed),
             };
         }
 
         if (outcome.Cancelled)
         {
-            return Fail(job, "The agent was stopped while the script was running; the script was terminated.");
+            return Fail(job, PcText.Get("ScriptAgentStopped"));
         }
 
         return new JobResult
@@ -168,7 +169,7 @@ internal sealed class ScriptRunner
             JobId = job.Id,
             Ok = outcome.ExitCode == 0,
             ExitCode = outcome.ExitCode,
-            Message = $"exit {outcome.ExitCode} after {elapsed} s, {outcome.Lines} line(s)",
+            Message = PcText.Get("ScriptExited", outcome.ExitCode, elapsed, outcome.Lines),
         };
     }
 

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Title" xml:space="preserve"><value>Установка LabControl</value></data>
+  <data name="Number" xml:space="preserve"><value>Номер ПК</value></data>
+  <data name="CreateStudent" xml:space="preserve"><value>Создать учётную запись студента и включить автоматический вход</value></data>
+  <data name="Changes" xml:space="preserve"><value>Установщик ставит агент класса, задаёт имя этого ПК, настраивает обнаружение в брандмауэре, питание и Wake-on-LAN и добавляет исключение Defender. При создании студента уведомления о конфиденциальности, первом запуске браузера и входе в OneDrive подавляются политикой компьютера, в том числе для других пользователей. Повышение прав администратора запрашивает имя пользователя и пароль, прежде чем плитка администратора будет скрыта; эта политика компьютера действует на всех пользователей. Локальная политика длины и сложности паролей может быть ослаблена, если это нужно для создания студента. Прежние настройки записываются для удаления. Личные учётные записи и файлы сохраняются.</value></data>
+  <data name="Install" xml:space="preserve"><value>Установить / восстановить</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Отмена</value></data>
+  <data name="Reboot" xml:space="preserve"><value>Установка завершена. Перезагрузить сейчас, чтобы применить имя компьютера и настройки питания?</value></data>
+  <data name="RebootCountdown" xml:space="preserve"><value>Установка завершена. Windows перезагрузится через {0} с, чтобы применить имя компьютера и настройки питания. Нажмите «Позже», чтобы продолжить работу и перезагрузить вручную.</value></data>
+  <data name="RebootNow" xml:space="preserve"><value>Перезагрузить</value></data>
+  <data name="RebootLater" xml:space="preserve"><value>Позже</value></data>
+  <data name="UsbNumberNotSaved" xml:space="preserve"><value>Установка завершена, но следующий номер ПК не удалось сохранить на USB-накопитель. На следующем ПК выберите номер вручную.</value></data>
+  <data name="Completed" xml:space="preserve"><value>Установка проверена. LabControl готов; перезагрузите Windows, чтобы применить отложенные настройки.</value></data>
+  <data name="Failed" xml:space="preserve"><value>Установка не завершена. Окно консоли и setup.log в папке данных LabControl указывают шаг с ошибкой. Записанные изменения сохранены, чтобы восстановление или удаление могли повторить попытку.</value></data>
+  <data name="RemoveStudent" xml:space="preserve"><value>Удалить учётную запись студента, созданную этой установкой, вместе со всем профилем? Файлы студента будут удалены безвозвратно.</value></data>
+  <data name="Uninstall" xml:space="preserve"><value>Удалить LabControl с этого компьютера? Личные учётные записи и файлы сохранятся. Записанные настройки будут восстановлены, если их не меняли позже.</value></data>
+  <data name="Unknown" xml:space="preserve"><value>неизвестно</value></data>
+  <data name="NicInventory" xml:space="preserve"><value>[Сеть] {0}; интерфейс {1}; оборудование {2}; MAC {3}; драйвер {4} {5}</value></data>
+  <data name="WakeInventoryUnavailable" xml:space="preserve"><value>[Предупреждение] Windows не удалось прочитать все возможности Ethernet-оборудования. Проверьте шаги «Network» в setup.log и настройки сетевого драйвера.</value></data>
+  <data name="WakeAdapter" xml:space="preserve"><value>[Wake-on-LAN] Физический Ethernet: {0}, MAC {1}. Консоль будет использовать этот адрес после перезапуска агента.</value></data>
+  <data name="WakeAdapterUnavailable" xml:space="preserve"><value>[Предупреждение] Для Wake-on-LAN нет однозначного физического Ethernet-адаптера ({0}). Проверьте Ethernet-подключение и отключите неиспользуемые адаптеры перед восстановлением.</value></data>
+  <data name="WakeNeedsAttention" xml:space="preserve"><value>[Предупреждение] Wake-on-LAN требует внимания: некоторые возможности оборудования настроить не удалось. Проверьте шаги «Network» выше и setup.log. Перезагрузите Windows, включите Wake-on-LAN в BIOS/UEFI, затем проверьте включение после выключения из консоли преподавателя в той же сети.</value></data>
+  <data name="WakeWindowsConfigured" xml:space="preserve"><value>[Wake-on-LAN] Поддерживаемые настройки Windows проверены. Перезагрузите Windows, включите Wake-on-LAN в BIOS/UEFI, затем проверьте включение после выключения из консоли преподавателя в той же сети. Установщик не проверял физическое включение.</value></data>
+  <data name="PushConfigured" xml:space="preserve"><value>[Обновления по сети] Служба агента, правила брандмауэра для обнаружения и восстановление службы настроены. Держите консоль преподавателя запущенной в этой сети; разблокируйте ключ лаборатории и отправьте обновление агента из консоли. Для принятия нужно десять минут непрерывного подключения; если новый агент сбоит, выполняется автоматическое восстановление.</value></data>
+  <data name="UninstallFailed" xml:space="preserve"><value>Удаление не завершено. Прочитайте сообщение в окне консоли и, устранив проблему, повторите из «Установленных приложений». История владения сохранена; ранее подтверждённое удаление студента возобновится при повторе.</value></data>
+  <data name="OperationFailed" xml:space="preserve"><value>Установщику не удалось выполнить эту операцию. Прочитайте сообщение в окне консоли перед повтором. Нерешённая история владения сохранена.</value></data>
+  <data name="StudentRemovalResuming" xml:space="preserve"><value>Возобновляется удаление студента, ранее подтверждённое для этой установки.</value></data>
+  <data name="SignInSidBaselineUnknown" xml:space="preserve"><value>[Предупреждение] Эта установка не записала исходный SID автоматического входа Windows. AutoLogonSID сохранён; его исходное значение нельзя восстановить автоматически. Для остальных записанных настроек входа сохраняется защищённая история восстановления.</value></data>
+  <data name="PendingHostnameChange" xml:space="preserve"><value>Windows ожидает завершения прежней смены имени ПК. Перезагрузите Windows, затем снова запустите установщик.</value></data>
+  <data name="PlanRekey" xml:space="preserve"><value>[план] Остановить службу, заменить только доверие лаборатории, сохранив идентичность этого ПК, и запустить её снова.</value></data>
+  <data name="RekeyNeedsInstallation" xml:space="preserve"><value>Перенос на новый ключ лаборатории возможен только для установки, сделанной этим установщиком.</value></data>
+  <data name="RekeyFinishRemoval" xml:space="preserve"><value>Завершите начатое удаление, прежде чем заменять доверие лаборатории.</value></data>
+  <data name="RekeyNeedsService" xml:space="preserve"><value>Для переноса на новый ключ лаборатории нужна служба агента, установленная этим установщиком.</value></data>
+  <data name="RekeyDone" xml:space="preserve"><value>Доверие лаборатории заменено; идентичность ПК, режим учётной записи и настройки компьютера сохранены.</value></data>
+  <data name="AnotherSetupRunning" xml:space="preserve"><value>На этом ПК уже выполняется другая установка или удаление.</value></data>
+  <data name="UsbOlder" xml:space="preserve"><value>Эта флешка старее установленного агента. Для восстановления используйте ту же или более новую сборку флешки.</value></data>
+  <data name="LegacyInstallation" xml:space="preserve"><value>Это ранняя разработческая установка без записи владения установщика. Сохраните её и запускайте установщик на свежем тестовом снимке.</value></data>
+  <data name="FinishRemovalFirst" xml:space="preserve"><value>Завершите удаление, прежде чем устанавливать или восстанавливать этот ПК.</value></data>
+  <data name="NumberInvalid" xml:space="preserve"><value>Номер ПК неверен или отличается от этой установки.</value></data>
+  <data name="StudentNotOwned" xml:space="preserve"><value>Учётная запись студента создана не этой установкой; для новой установки отключите создание учётной записи.</value></data>
+  <data name="PlanAccountOff" xml:space="preserve"><value>[Пропущено] Все шаги учётной записи, пароля, входа и профиля: создание учётной записи отключено.</value></data>
+  <data name="FinishUpdateRecovery" xml:space="preserve"><value>Дождитесь завершения восстановления после обновления агента, прежде чем устанавливать или восстанавливать с флешки.</value></data>
+  <data name="FilesConflict" xml:space="preserve"><value>Установленные файлы не совпадают с этой флешкой; существующие файлы сохранены.</value></data>
+  <data name="AntivirusExclude" xml:space="preserve"><value>[Предупреждение] Антивирус {0}: добавьте {1} в исключения этой программы.</value></data>
+  <data name="AntivirusUnavailable" xml:space="preserve"><value>[Предупреждение] Список антивирусов недоступен. Проверьте исключения антивируса, прежде чем полагаться на эту установку.</value></data>
+  <data name="VerificationFailed" xml:space="preserve"><value>Проверка установки не пройдена.</value></data>
+  <data name="EnrollmentDiffers" xml:space="preserve"><value>Установленная идентичность лаборатории другая. Перенесите этот ПК командой Setup.exe --rekey.</value></data>
+  <data name="WindowsTooOld" xml:space="preserve"><value>Требуется Windows 10 1809 или новее.</value></data>
+  <data name="RunAsAdministrator" xml:space="preserve"><value>Запустите установщик от имени администратора.</value></data>
+  <data name="NotEnoughDisk" xml:space="preserve"><value>Требуется не менее 2 ГБ свободного места на диске.</value></data>
+  <data name="SettingChangePreserved" xml:space="preserve"><value>Более позднее или прерванное изменение настройки сохранено.</value></data>
+  <data name="RebootNotStarted" xml:space="preserve"><value>Windows не удалось начать перезагрузку.</value></data>
+  <data name="WindowsOperationFailed" xml:space="preserve"><value>Установщик не смог завершить операцию Windows. Существующие учётные записи и незавершённые настройки сохранены; восстановление может повторить попытку.</value></data>
+  <data name="PlanUninstall" xml:space="preserve"><value>[план] Остановить собственную службу; восстановить записанные настройки, не перезаписывая более поздних изменений; сохранить личные учётные записи и профили; удалить собственные файлы LabControl.</value></data>
+  <data name="RemovalHistoryMissing" xml:space="preserve"><value>История владения для удаления отсутствует. Существующие учётные записи и настройки сохранены.</value></data>
+  <data name="InstallDirectoryNotOwned" xml:space="preserve"><value>Не доказано, что папка установки принадлежит этой установке.</value></data>
+  <data name="RemovalRestarted" xml:space="preserve"><value>Ранее разрешённая очистка после удаления запущена снова.</value></data>
+  <data name="RestoreConflict" xml:space="preserve"><value>[Конфликт] {0}: не удалось безопасно восстановить; защищённая история сохранена.</value></data>
+  <data name="AccountChangesRetained" xml:space="preserve"><value>[Пропущено] Изменения учётной записи и входа оставлены, потому что режим управляемой учётной записи отключён.</value></data>
+  <data name="RestorationPending" xml:space="preserve"><value>Некоторые настройки ещё требуют восстановления; история удаления и отдельный деинсталлятор сохранены.</value></data>
+  <data name="RemovalFinishing" xml:space="preserve"><value>Очистка после удаления завершится, когда этот процесс закроется. Для временной очистки потребуется перезагрузка.</value></data>
+  <data name="Removed" xml:space="preserve"><value>LabControl удалён. Перезагрузите компьютер, чтобы удалить защищённый временный файл очистки.</value></data>
+  <data name="CleanupMetadataRemains" xml:space="preserve"><value>Агент и его данные удалены, но служебные данные очистки остались. Перезагрузите компьютер, затем проверьте закрытую папку LabControl Removal, если она осталась.</value></data>
+  <data name="CleanupIncomplete" xml:space="preserve"><value>Очистка после удаления не завершена. Повторите удаление LabControl в «Установленных приложениях»; защищённый файл очистки и незавершённая история сохранены.</value></data>
+</root>

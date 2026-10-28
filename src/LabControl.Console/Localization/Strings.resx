@@ -639,6 +639,9 @@ LabControl uses it only while you show your screen, and sends the picture only t
   <data name="Key.HolderOtherComputer" xml:space="preserve"><value>Another computer: {0} (remembered)</value></data>
   <data name="Move.ScriptName" xml:space="preserve"><value>Move to the lab's new key</value></data>
   <data name="Event.MoveSent" xml:space="preserve"><value>{0}: sent its move to the new key of “{1}”; it rejoins under the new key within a minute.</value></data>
+  <data name="Event.RevokedLinkClosed" xml:space="preserve"><value>{0}: its certificate is revoked, so its link was closed. It is refused from now on.</value></data>
+  <data name="Packages.QueuedInstallReplaced" xml:space="preserve"><value>Not delivered: the package was replaced or removed from the catalog before the PC came back. Install it again from the Packages tab.</value></data>
+  <data name="Update.QueuedSuperseded" xml:space="preserve"><value>Not delivered: agent build {0} was pushed to this PC while it was still off, and replaces this one.</value></data>
   <data name="Move.Action" xml:space="preserve"><value>Lost the passphrase? Move this lab to a new key…</value></data>
   <data name="Move.Title" xml:space="preserve"><value>Move this lab to a new key</value></data>
   <data name="Move.Explain" xml:space="preserve"><value>Use this only when nobody knows the passphrase of “{0}” and the recovery code is lost too.
@@ -762,4 +765,112 @@ java.exe</value></data>
   <data name="Reset.Sent" xml:space="preserve"><value>Profile reset sent to {0} of {1} PC(s); the jobs panel shows each PC's answer.</value></data>
   <data name="Exam.CollectWork" xml:space="preserve"><value>Collect work at the end</value></data>
   <data name="Exam.CollectNote" xml:space="preserve"><value>The folder is created on each student's PC when the exam starts and collected when it ends — when the timer runs out or you end it. PCs not online then are listed as missing.</value></data>
+  <data name="Language.Heading" xml:space="preserve"><value>Language</value></data>
+  <data name="Language.RestartHint" xml:space="preserve"><value>The console switches to {0} the next time it starts.</value></data>
+  <data name="Language.RestartNow" xml:space="preserve"><value>Restart now</value></data>
+  <data name="Language.SaveFailed" xml:space="preserve"><value>The language could not be saved: {0}</value></data>
+  <data name="Tab.Packages" xml:space="preserve"><value>Packages</value></data>
+  <data name="Packages.Add" xml:space="preserve"><value>Add package…</value></data>
+  <data name="Packages.AddTitle" xml:space="preserve"><value>Add package</value></data>
+  <data name="Packages.AddDescription" xml:space="preserve"><value>Choose a program's installer (.exe, .msi, or a .zip with its setup and files) on this computer. LabControl reads it, proposes how to install it without questions and keeps a copy in this lab's catalog, so the original may be deleted afterwards. The PCs need no internet.</value></data>
+  <data name="Packages.Choose" xml:space="preserve"><value>Choose installer…</value></data>
+  <data name="Packages.InstallerFiles" xml:space="preserve"><value>Installers</value></data>
+  <data name="Packages.Reading" xml:space="preserve"><value>Reading the installer…</value></data>
+  <data name="Packages.Copying" xml:space="preserve"><value>Copying the installer into the catalog…</value></data>
+  <data name="Packages.NoInstaller" xml:space="preserve"><value>No installer chosen.</value></data>
+  <data name="Packages.FileFormat" xml:space="preserve"><value>{0} ({1})</value></data>
+  <data name="Packages.DetectedFormat" xml:space="preserve"><value>Recognised: {0}</value></data>
+  <data name="Packages.Family.Unknown" xml:space="preserve"><value>unrecognised installer</value></data>
+  <data name="Packages.Family.Msi" xml:space="preserve"><value>Windows Installer (MSI)</value></data>
+  <data name="Packages.Family.Nsis" xml:space="preserve"><value>NSIS</value></data>
+  <data name="Packages.Family.Inno" xml:space="preserve"><value>Inno Setup</value></data>
+  <data name="Packages.Family.InstallShield" xml:space="preserve"><value>InstallShield</value></data>
+  <data name="Packages.Family.WixBurn" xml:space="preserve"><value>WiX bundle</value></data>
+  <data name="Packages.Hint.Unknown" xml:space="preserve"><value>LabControl does not recognise this installer. Enter its silent arguments from the program's documentation (often /S, /silent or /quiet) and check them on one PC first.</value></data>
+  <data name="Packages.Hint.Msi" xml:space="preserve"><value>A Windows Installer package: it is run with msiexec, and the arguments below are added after it.</value></data>
+  <data name="Packages.Hint.Nsis" xml:space="preserve"><value>An NSIS installer: /S is case-sensitive. Another folder is given last, as /D=C:\path without quotes.</value></data>
+  <data name="Packages.Hint.Inno" xml:space="preserve"><value>An Inno Setup installer. A program that installs only for the current user would be installed for the system account instead — check it on one PC.</value></data>
+  <data name="Packages.Hint.InstallShield" xml:space="preserve"><value>An InstallShield installer: these arguments suit the common MSI-based kind; an InstallScript one needs a recorded answer file.</value></data>
+  <data name="Packages.Hint.WixBurn" xml:space="preserve"><value>A WiX bundle — an installer of several packages: /quiet installs all of them without questions.</value></data>
+  <data name="Packages.ReplacesFormat" xml:space="preserve"><value>This replaces {0} {1} in the catalog: one entry per program, and the old installer is removed from this computer.</value></data>
+  <data name="Packages.Problem.NameMissing" xml:space="preserve"><value>Give the package a name.</value></data>
+  <data name="Packages.Problem.NameTooLong" xml:space="preserve"><value>The name is too long or contains control characters.</value></data>
+  <data name="Packages.Problem.VersionInvalid" xml:space="preserve"><value>The version is too long or contains control characters.</value></data>
+  <data name="Packages.Problem.FileNameInvalid" xml:space="preserve"><value>The installer's file name cannot be used on Windows — rename the file and choose it again.</value></data>
+  <data name="Packages.Problem.HashInvalid" xml:space="preserve"><value>The installer's checksum is missing or damaged.</value></data>
+  <data name="Packages.Problem.SilentInvalid" xml:space="preserve"><value>The silent arguments are too long or span several lines.</value></data>
+  <data name="Packages.Problem.DetectMissing" xml:space="preserve"><value>Say how a PC knows the program is installed.</value></data>
+  <data name="Packages.Problem.DetectPathInvalid" xml:space="preserve"><value>The file must be a full Windows path, such as C:\Program Files\App\app.exe or %ProgramFiles%\App\app.exe.</value></data>
+  <data name="Packages.Problem.MsiFileExpected" xml:space="preserve"><value>A Windows Installer package must keep its .msi extension.</value></data>
+  <data name="Packages.Problem.SilentNeeded" xml:space="preserve"><value>This installer was not recognised: enter its silent arguments, or it would wait for a click on every PC.</value></data>
+  <data name="Packages.ReadFailed" xml:space="preserve"><value>The installer could not be read: {0}</value></data>
+  <data name="Packages.AddFailed" xml:space="preserve"><value>The package was not added: {0}</value></data>
+  <data name="Packages.SourceChanged" xml:space="preserve"><value>The installer changed after it was read — choose it again.</value></data>
+  <data name="Packages.Name" xml:space="preserve"><value>Name</value></data>
+  <data name="Packages.Version" xml:space="preserve"><value>Version</value></data>
+  <data name="Packages.Silent" xml:space="preserve"><value>Silent arguments</value></data>
+  <data name="Packages.SilentPlaceholder" xml:space="preserve"><value>for example /S</value></data>
+  <data name="Packages.DetectHeading" xml:space="preserve"><value>A PC counts the program as installed when:</value></data>
+  <data name="Packages.DetectShort" xml:space="preserve"><value>Installed when</value></data>
+  <data name="Packages.DetectByName" xml:space="preserve"><value>its name in Windows' installed programs starts with</value></data>
+  <data name="Packages.DetectByPath" xml:space="preserve"><value>this file exists</value></data>
+  <data name="Packages.DetectPathPlaceholder" xml:space="preserve"><value>C:\Program Files\…\program.exe</value></data>
+  <data name="Packages.SystemNote" xml:space="preserve"><value>On each PC the installer runs without questions under the system account (SYSTEM).</value></data>
+  <data name="Packages.AddToCatalog" xml:space="preserve"><value>Add to catalog</value></data>
+  <data name="Packages.Unreadable" xml:space="preserve"><value>cannot be read</value></data>
+  <data name="Packages.UnreadableFormat" xml:space="preserve"><value>This catalog file cannot be read: {0}</value></data>
+  <data name="Packages.State.Present" xml:space="preserve"><value>The installer is on this computer.</value></data>
+  <data name="Packages.State.Missing" xml:space="preserve"><value>The installer is not on this computer (the entry came from a backup): add the same installer again.</value></data>
+  <data name="Packages.State.Changed" xml:space="preserve"><value>The installer file on this computer has changed: add the installer again.</value></data>
+  <data name="Packages.Empty" xml:space="preserve"><value>The catalog is empty. Add a program's installer with "Add package…"; LabControl keeps a copy on this computer for installing on the PCs over the lab network.</value></data>
+  <data name="Packages.LastChanged" xml:space="preserve"><value>Catalog last changed on {0}, {1}.</value></data>
+  <data name="Packages.FactKind" xml:space="preserve"><value>Installer type: {0}</value></data>
+  <data name="Packages.FactHash" xml:space="preserve"><value>SHA-256: {0}</value></data>
+  <data name="Packages.FactChanged" xml:space="preserve"><value>Changed on {0}, {1}</value></data>
+  <data name="Packages.Added" xml:space="preserve"><value>Added "{0}" to the catalog.</value></data>
+  <data name="Packages.Saved" xml:space="preserve"><value>Saved "{0}".</value></data>
+  <data name="Packages.Delete" xml:space="preserve"><value>Delete package</value></data>
+  <data name="Packages.DeleteConfirm" xml:space="preserve"><value>Delete "{0}" from the catalog and its installer from this computer? Programs already installed on the PCs stay.</value></data>
+  <data name="Packages.Deleted" xml:space="preserve"><value>Deleted "{0}".</value></data>
+  <data name="Packages.DeleteFailed" xml:space="preserve"><value>Not deleted: {0}</value></data>
+  <data name="Packages.Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Packages.Revert" xml:space="preserve"><value>Revert</value></data>
+  <data name="Packages.SizeKb" xml:space="preserve"><value>{0} KB</value></data>
+  <data name="Packages.SizeMb" xml:space="preserve"><value>{0} MB</value></data>
+  <data name="Packages.SizeGb" xml:space="preserve"><value>{0} GB</value></data>
+  <data name="Packages.Timeout" xml:space="preserve"><value>Time limit, min</value></data>
+  <data name="Packages.Problem.TimeoutInvalid" xml:space="preserve"><value>The time limit must be a whole number of minutes from 1 to 180.</value></data>
+  <data name="Packages.OnThePcs" xml:space="preserve"><value>On the PCs</value></data>
+  <data name="Packages.TestHint" xml:space="preserve"><value>Try a new package on one PC first: select it in the Lab tab, then press Install on selected PCs. The same button installs a new version over an old one.</value></data>
+  <data name="Packages.InstallSelected" xml:space="preserve"><value>Install on {0} selected PC(s)</value></data>
+  <data name="Packages.InstallSelectedNone" xml:space="preserve"><value>Install — select PCs in the Lab tab first</value></data>
+  <data name="Packages.InstallAllMissing" xml:space="preserve"><value>Install on all missing</value></data>
+  <data name="Packages.Check" xml:space="preserve"><value>Check PCs</value></data>
+  <data name="Packages.PcState.Unknown" xml:space="preserve"><value>not known</value></data>
+  <data name="Packages.PcState.Installed" xml:space="preserve"><value>installed</value></data>
+  <data name="Packages.PcState.RebootRequired" xml:space="preserve"><value>installed, restart needed</value></data>
+  <data name="Packages.PcState.Missing" xml:space="preserve"><value>not installed</value></data>
+  <data name="Packages.PcState.Failed" xml:space="preserve"><value>failed</value></data>
+  <data name="Packages.PcState.Busy" xml:space="preserve"><value>in progress…</value></data>
+  <data name="Packages.Summary" xml:space="preserve"><value>Installed: {0} · not installed: {1} · failed: {2} · not known: {3}</value></data>
+  <data name="Packages.Sent" xml:space="preserve"><value>"{0}" sent to {1} PC(s) — progress is in the Jobs tab. A PC that is off gets it when it connects.</value></data>
+  <data name="Packages.NothingMissing" xml:space="preserve"><value>Every PC of the lab already has "{0}".</value></data>
+  <data name="Packages.UntestedTitle" xml:space="preserve"><value>Not tried on a PC yet</value></data>
+  <data name="Packages.UntestedConfirm" xml:space="preserve"><value>"{0}" has not been installed on any PC yet. Try it on one PC first: select it in the Lab tab and press Install on selected PCs. Install on {1} PC(s) anyway?</value></data>
+  <data name="Packages.InstallAnyway" xml:space="preserve"><value>Install anyway</value></data>
+  <data name="Packages.InstallFailed" xml:space="preserve"><value>Not sent: {0}</value></data>
+  <data name="Packages.ArchiveRun" xml:space="preserve"><value>The archive holds these installers; the PC unpacks it and runs the one chosen here:</value></data>
+  <data name="Packages.NoInstallerInArchive" xml:space="preserve"><value>There is no .exe or .msi installer in this archive.</value></data>
+  <data name="Packages.ArchiveFact" xml:space="preserve"><value>{0} ({1}), runs {2} from it</value></data>
+  <data name="Packages.Problem.RunInvalid" xml:space="preserve"><value>Choose which installer inside the archive the PCs run.</value></data>
+  <data name="Store.SaveFailed" xml:space="preserve"><value>Not saved — this computer could not write the file: {0}</value></data>
+  <data name="VideoMode.Label" xml:space="preserve"><value>Picture</value></data>
+  <data name="VideoMode.Text" xml:space="preserve"><value>Text</value></data>
+  <data name="VideoMode.Video" xml:space="preserve"><value>Video</value></data>
+  <data name="VideoMode.Tip" xml:space="preserve"><value>Text: a sharp picture for code and documents. Video: smooth motion for films and animations (H.264).</value></data>
+  <data name="VideoMode.Unavailable" xml:space="preserve"><value>Video needs H.264, which this computer does not have: the picture is sent as Text.</value></data>
+  <data name="Screen.QualityVideo" xml:space="preserve"><value>video (H.264)</value></data>
+  <data name="Screen.VideoNotOnPc" xml:space="preserve"><value>{0} cannot send Video (no H.264 there, or an older version): showing Text.</value></data>
+  <data name="Broadcast.StatusTextPcs" xml:space="preserve"><value> · {0} PC(s) get Text: they cannot show Video</value></data>
+  <data name="Event.VideoDecodeFailed" xml:space="preserve"><value>{0}: this console could not show its full view as Video (H.264), so it continues as Text: {1}</value></data>
 </root>

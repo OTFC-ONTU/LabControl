@@ -32,4 +32,39 @@
   <data name="StudentRemovalResuming" xml:space="preserve"><value>Resuming student removal previously confirmed for this installation.</value></data>
   <data name="SignInSidBaselineUnknown" xml:space="preserve"><value>[Warning] This installation did not record the original Windows automatic sign-in SID. AutoLogonSID is preserved; its original value cannot be restored automatically. Other recorded sign-in settings retain their protected restoration history.</value></data>
   <data name="PendingHostnameChange" xml:space="preserve"><value>Windows is waiting for a previous PC name change. Restart Windows, then run Setup again.</value></data>
+  <data name="PlanRekey" xml:space="preserve"><value>[plan] Stop the service, replace only lab trust while retaining this PC identity, then restart.</value></data>
+  <data name="RekeyNeedsInstallation" xml:space="preserve"><value>Moving to a new lab key requires an installation made by this Setup.</value></data>
+  <data name="RekeyFinishRemoval" xml:space="preserve"><value>Finish the pending removal before replacing the lab trust.</value></data>
+  <data name="RekeyNeedsService" xml:space="preserve"><value>Moving to a new lab key requires the agent service this Setup installed.</value></data>
+  <data name="RekeyDone" xml:space="preserve"><value>Lab trust replaced; the PC identity, account mode and machine settings were preserved.</value></data>
+  <data name="AnotherSetupRunning" xml:space="preserve"><value>Another Setup or removal is already running on this PC.</value></data>
+  <data name="UsbOlder" xml:space="preserve"><value>This USB is older than the installed agent. Use the same or a newer USB build for repair.</value></data>
+  <data name="LegacyInstallation" xml:space="preserve"><value>This is an earlier development installation without installer ownership. Preserve it and use a fresh test snapshot for Setup.</value></data>
+  <data name="FinishRemovalFirst" xml:space="preserve"><value>Finish removal before installing or repairing this PC.</value></data>
+  <data name="NumberInvalid" xml:space="preserve"><value>The PC number is invalid or differs from this installation.</value></data>
+  <data name="StudentNotOwned" xml:space="preserve"><value>The student account was not created by this installation; turn account creation off for a fresh installation.</value></data>
+  <data name="PlanAccountOff" xml:space="preserve"><value>[Skipped] All account, password, sign-in and profile steps: account creation is off.</value></data>
+  <data name="FinishUpdateRecovery" xml:space="preserve"><value>Finish the agent update recovery before installing or repairing from the USB.</value></data>
+  <data name="FilesConflict" xml:space="preserve"><value>The installed files conflict with this USB; the existing files were preserved.</value></data>
+  <data name="AntivirusExclude" xml:space="preserve"><value>[Warning] Antivirus {0}: exclude {1} in that product.</value></data>
+  <data name="AntivirusUnavailable" xml:space="preserve"><value>[Warning] The antivirus list is unavailable. Review the antivirus exclusions before relying on this installation.</value></data>
+  <data name="VerificationFailed" xml:space="preserve"><value>Installation verification failed.</value></data>
+  <data name="EnrollmentDiffers" xml:space="preserve"><value>The installed lab identity differs. Move this PC with Setup.exe --rekey.</value></data>
+  <data name="WindowsTooOld" xml:space="preserve"><value>Windows 10 1809 or later is required.</value></data>
+  <data name="RunAsAdministrator" xml:space="preserve"><value>Run Setup as an administrator.</value></data>
+  <data name="NotEnoughDisk" xml:space="preserve"><value>At least 2 GB of free disk space is required.</value></data>
+  <data name="SettingChangePreserved" xml:space="preserve"><value>A later or interrupted setting change was preserved.</value></data>
+  <data name="RebootNotStarted" xml:space="preserve"><value>Windows could not start the reboot.</value></data>
+  <data name="WindowsOperationFailed" xml:space="preserve"><value>Setup could not complete a Windows operation. Existing accounts and unresolved settings were preserved; repair can retry.</value></data>
+  <data name="PlanUninstall" xml:space="preserve"><value>[plan] Stop the owned service; restore recorded settings without overwriting later edits; keep personal accounts and profiles; remove owned LabControl files.</value></data>
+  <data name="RemovalHistoryMissing" xml:space="preserve"><value>Removal ownership history is missing. Existing accounts and settings were preserved.</value></data>
+  <data name="InstallDirectoryNotOwned" xml:space="preserve"><value>The installed directory is not proven to belong to this installation.</value></data>
+  <data name="RemovalRestarted" xml:space="preserve"><value>Previously authorized removal cleanup has been restarted.</value></data>
+  <data name="RestoreConflict" xml:space="preserve"><value>[Conflict] {0}: could not safely restore; the protected history was kept.</value></data>
+  <data name="AccountChangesRetained" xml:space="preserve"><value>[Skipped] Account and sign-in changes retained because managed-account mode is off.</value></data>
+  <data name="RestorationPending" xml:space="preserve"><value>Some settings still require restoration; the removal history and the standalone uninstaller were retained.</value></data>
+  <data name="RemovalFinishing" xml:space="preserve"><value>Removal cleanup will finish after this process closes. A reboot will be required for the temporary cleanup.</value></data>
+  <data name="Removed" xml:space="preserve"><value>LabControl was removed. Reboot to remove the protected temporary cleanup executable.</value></data>
+  <data name="CleanupMetadataRemains" xml:space="preserve"><value>The agent and its data were removed, but cleanup metadata remains. Reboot, then review the private LabControl Removal folder if it remains.</value></data>
+  <data name="CleanupIncomplete" xml:space="preserve"><value>Removal cleanup is incomplete. Retry LabControl in Installed apps; its protected cleanup executable and unresolved history were retained.</value></data>
 </root>

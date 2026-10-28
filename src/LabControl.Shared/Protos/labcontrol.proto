@@ -160,6 +160,12 @@ message Welcome {
     TEACHER                    = 2;
   }
   ConsoleAccess console_access = 6;
+
+  // M7 portion 2 (D-87): the console's interface language -- "uk", "en" or "ru". The PC writes
+  // the words it sends on this link (event messages, job results, refusals) in it, and keeps it
+  // for the words it sends before the next Welcome. Empty or unknown = English. Agents that do
+  // not know the field ignore it and keep writing English.
+  string language = 7;
 }
 
 message Heartbeat { int64 sent_at_unix = 1; }
@@ -248,6 +254,7 @@ message JobResult {
   int32  exit_code    = 3;
   string message      = 4;
   string artifact_ref = 5;  // set when the job produced an upload
+  string outcome      = 6;  // M7 portion 4 (D-89): a stable code for install_package, e.g. "package.installed"
 }
 
 // ---------------------------------------------------------------------------
@@ -270,10 +277,10 @@ message VideoFrame {
   int32     height     = 5;
   VideoMode mode       = 6;
   repeated Rect dirty  = 7;
-  bytes     jpeg       = 8;
-  bool      keyframe   = 9;
-  string    codec      = 10;  // reserved: "jpeg" today, "h264" is an M6 option
-  int32     quality    = 11;  // the JPEG quality this frame was encoded at (D-37: auto mode varies it)
+  bytes     jpeg       = 8;   // the encoded picture: a JPEG, or for codec "h264" one access unit in Annex B (D-91)
+  bool      keyframe   = 9;   // for "h264": an IDR with SPS and PPS in front
+  string    codec      = 10;  // "jpeg" (empty = "jpeg", from older builds) or "h264" (M7 portion 6, D-91); decode by this, never by what was asked
+  int32     quality    = 11;  // the JPEG quality this frame was encoded at (D-37: auto mode varies it); 0 for "h264"
 }
 
 message VideoAck { uint64 last_seq = 1; }
@@ -287,6 +294,9 @@ message VideoAck { uint64 last_seq = 1; }
 // survives a restart.
 message BroadcastRequest {
   string session_id = 1;  // from Overlay.session_id of the BROADCAST_START
+  // M7 portion 6 (D-91): the codecs this PC can show besides "jpeg" -- "h264" when its session
+  // helper created an H.264 decoder. Empty (and from older agents) = JPEG only.
+  repeated string codecs = 2;
 }
 
 message VideoControl {
@@ -296,6 +306,9 @@ message VideoControl {
   int32     quality              = 4;
   bool      request_keyframe     = 5;
   int32     max_bits_per_second  = 6;
+  // M7 portion 6 (D-91): the codec the console asks for in FULL mode -- "h264" for the teacher's
+  // *Video*, empty for JPEG. A PC that cannot encode it sends JPEG; older agents ignore the field.
+  string    codec                = 7;
 }
 
 message Input {
@@ -332,6 +345,7 @@ message Overlay {
   string session_id         = 3;  // M6: one per lock, so a re-sent LOCK is the same lock
   int64  until_seconds      = 4;  // M6: how long from arrival, a duration -- the agent stamps it on ITS clock (no NTP in the lab); 0 = until lifted; negative = refused
   int64  hard_limit_seconds = 5;  // M6: a proposed duration; the agent clamps it to LockHardLimit on its own clock and reports what it holds; <= 0 = the ceiling
+  string language           = 6;  // M7 (D-87): LOCK only -- the language of the stock words on the lock screen ("uk", "en", "ru"), the setting console's; kept with the lock and passed down the pipe; empty or unknown = English
 }
 
 // Agent -> console (and helper -> service): what the PC is actually showing, sent on every
@@ -377,6 +391,7 @@ message ExamMode {
   int64  hard_limit_seconds         = 11; // a proposed duration; the agent clamps it to ExamHardLimit on its own clock; <= 0 = the ceiling
   bool   restrict_programs          = 12; // the allowed-programs switch; off = anything runs, whatever allowed_programs says
   string preset_name                = 13; // for the tile badge
+  string language                   = 14; // M7 (D-87): the language of the strip's stock words, its notices and the "time is up" lock ("uk", "en", "ru"), the setting console's; empty or unknown = English
 }
 
 // Agent -> console: the exam the PC enforces now, sent on every change, after every Welcome,
@@ -558,6 +573,7 @@ message ServiceMessage {
     VideoFrame   broadcast_frame = 5;  // M6 portion 2: the teacher's screen, as PullBroadcast delivered it (D-71)
     ExamStrip    exam_strip    = 6;  // M6 portion 4: the strip at the top of the student's screen; re-asserted to every fresh helper
     ClosePrograms close_programs = 7;  // M6 portion 4: ask these windows to close, before the service ends what is left (D-75)
+    string       language      = 8;  // M7 (D-87): the language the helper writes its events in -- the PC's (Welcome.language); sent on connect and after every Welcome
   }
 }
 
@@ -569,6 +585,7 @@ message ExamStrip {
   int64  until_seconds = 3;  // the countdown, a duration stamped on arrival; 0 = no timer
   string notice        = 4;  // a passing line -- "notepad.exe is not allowed during the exam" -- shown for ExamNoticeDuration; empty = none
   string session_id    = 5;
+  string language      = 6;  // M7 (D-87): the exam's language, for the strip's stock words; empty or unknown = English
 }
 
 // Service -> helper (M6 portion 4): post WM_CLOSE to the top-level windows of these processes,
@@ -593,6 +610,9 @@ message HelperHello {
   uint32 session_id = 1;  // the session the helper found itself in
   uint32 process_id = 2;
   string version    = 3;
+  // M7 portion 6 (D-91): codecs besides "jpeg" the helper could create at start -- "h264".
+  repeated string video_decoders = 4;  // for the broadcast; the service names them in BroadcastRequest.codecs
+  repeated string video_encoders = 5;  // for the full view
 }
 
 // What only a process inside the session can see. In M2 it is the whole point of the
@@ -602,4 +622,8 @@ message HelperStatus {
   int32  screen_width   = 2;  // the primary display, in pixels
   int32  screen_height  = 3;
   int64  uptime_ms      = 4;  // how long this helper instance has been running
+  // M7 portion 6 (D-91 item 11): what the helper decodes besides "jpeg" right now. "h264" goes
+  // away when its decoder broke during a broadcast; the service then dials the broadcast again
+  // without it. Helper and service are always one build, so the service takes it as it comes.
+  repeated string video_decoders = 5;
 }

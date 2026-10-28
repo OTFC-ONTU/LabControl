@@ -76,6 +76,12 @@ public interface IMachineState
     /// </summary>
     ValueTask BroadcastFrameAsync(VideoFrame frame, CancellationToken token) => ValueTask.CompletedTask;
 
+    /// <summary>
+    /// The codecs besides JPEG whatever shows the broadcast can decode — <c>BroadcastRequest.codecs</c>
+    /// (M7 portion 6, D-91): <c>"h264"</c> when it can, nothing for JPEG only. Read at every dial.
+    /// </summary>
+    IReadOnlyList<string> BroadcastCodecs => [];
+
     /// <summary>Give the screen back after a broadcast; a held lock stays.</summary>
     MachineResult StopBroadcast() => MachineResult.Done;
 

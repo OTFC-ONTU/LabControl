@@ -1,0 +1,876 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="App.Title" xml:space="preserve"><value>LabControl</value></data>
+  <data name="MainWindow.Title" xml:space="preserve"><value>LabControl</value></data>
+  <data name="MainWindow.Heading" xml:space="preserve"><value>LabControl</value></data>
+  <data name="MainWindow.Body" xml:space="preserve"><value></value></data>
+  <data name="MainWindow.Status" xml:space="preserve"><value></value></data>
+  <data name="Main.Title" xml:space="preserve"><value>{0} — {1} · LabControl</value></data>
+  <data name="Main.Status" xml:space="preserve"><value>У мережі {0} з {1} ПК · ця консоль: {2} · порт {3} · екрани {4:0} кбіт/с</value></data>
+  <data name="Main.SelectedFormat" xml:space="preserve"><value>Вибрано: {0}</value></data>
+  <data name="Tab.Lab" xml:space="preserve"><value>Лабораторія</value></data>
+  <data name="Tab.Scripts" xml:space="preserve"><value>Скрипти</value></data>
+  <data name="Tab.Jobs" xml:space="preserve"><value>Завдання</value></data>
+  <data name="Tab.Events" xml:space="preserve"><value>Події</value></data>
+  <data name="Tab.Settings" xml:space="preserve"><value>Налаштування</value></data>
+  <data name="Common.Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Common.Cancel" xml:space="preserve"><value>Скасувати</value></data>
+  <data name="Common.Back" xml:space="preserve"><value>Назад</value></data>
+  <data name="Common.Continue" xml:space="preserve"><value>Продовжити</value></data>
+  <data name="Common.Done" xml:space="preserve"><value>Готово</value></data>
+  <data name="Common.Quit" xml:space="preserve"><value>Вийти</value></data>
+  <data name="Common.Bullet" xml:space="preserve"><value>• </value></data>
+  <data name="App.AlreadyRunning" xml:space="preserve"><value>Інша консоль LabControl уже використовує {0}. Спершу закрийте її, а потім запустіть цю знову. ({1})</value></data>
+  <data name="App.NoLabSaved" xml:space="preserve"><value>У {0} не збережено жодної лабораторії.</value></data>
+  <data name="Bootstrap.LabNotSaved" xml:space="preserve"><value>Лабораторію {0} не збережено на цьому комп'ютері.</value></data>
+  <data name="Bootstrap.InstanceMissing" xml:space="preserve"><value>У папці лабораторії немає '{0}'; імпортуйте лабораторію з резервної копії, щоб створити новий екземпляр консолі.</value></data>
+  <data name="Bootstrap.KeyInstanceMismatch" xml:space="preserve"><value>'{0}' належить лабораторії {1}, а '{2}' — лабораторії {3}.</value></data>
+  <data name="Bootstrap.WrongRecoveryCode" xml:space="preserve"><value>Код відновлення не відкриває цю резервну копію.</value></data>
+  <data name="Bootstrap.WrongPassphrase" xml:space="preserve"><value>Парольна фраза не відкриває цю резервну копію.</value></data>
+  <data name="Bootstrap.LabAlreadySaved" xml:space="preserve"><value>Лабораторію «{0}» уже збережено на цьому комп'ютері. Заміна збереженої лабораторії з резервної копії поки не підтримується; спершу видаліть її.</value></data>
+  <data name="Bootstrap.LabDirectoryOccupied" xml:space="preserve"><value>Папка {0} уже містить файли лабораторії «{1}», але цієї лабораторії немає в {2}. Перемістіть цю папку в інше місце, а потім знову імпортуйте резервну копію.</value></data>
+  <data name="Bootstrap.KeyLocked" xml:space="preserve"><value>Ключ лабораторії заблоковано; розблокуйте його, щоб експортувати резервну копію.</value></data>
+  <data name="Bootstrap.BackupWriteFailed" xml:space="preserve"><value>Не вдалося записати резервну копію: {0}</value></data>
+  <data name="Migration.KeyNamesNoLab" xml:space="preserve"><value>'{0}' не вказує жодної лабораторії; папку даних неможливо перенести.</value></data>
+  <data name="Migration.InstanceWithoutKey" xml:space="preserve"><value>'{0}' є в {1}, а '{2}' — немає. Це пошкоджена інсталяція попередньої версії, а не лабораторія, яку може відкрити цей комп'ютер: відновіть '{2}' з копії тієї папки або перемістіть залишки файлів і імпортуйте лабораторію з резервної копії.</value></data>
+  <data name="Migration.NotEnoughSpace" xml:space="preserve"><value>Щоб перенести лабораторію в окрему папку, потрібно {0} МБ вільного місця в {1}, але доступно лише {2} МБ. Звільніть місце й знову запустіть консоль.</value></data>
+  <data name="Action.Wake" xml:space="preserve"><value>Увімкнути</value></data>
+  <data name="Action.Shutdown" xml:space="preserve"><value>Вимкнути</value></data>
+  <data name="Action.Reboot" xml:space="preserve"><value>Перезавантажити</value></data>
+  <data name="Action.Logoff" xml:space="preserve"><value>Вийти із системи</value></data>
+  <data name="Action.PushBuild" xml:space="preserve"><value>Надіслати збірку агента…</value></data>
+  <data name="Action.OpenScreen" xml:space="preserve"><value>Відкрити екран</value></data>
+  <data name="Action.SelectAll" xml:space="preserve"><value>Вибрати всі</value></data>
+  <data name="Action.ClearSelection" xml:space="preserve"><value>Зняти вибір</value></data>
+  <data name="Action.EnrolPcs" xml:space="preserve"><value>Зареєструвати ПК…</value></data>
+  <data name="Lab.SelectionHint" xml:space="preserve"><value>Клацніть ПК, щоб вибрати його. Утримуйте ⌘ (Ctrl у Windows) і клацайте, щоб додавати або прибирати ПК по одному, або скористайтеся «Вибрати всі». Перетягуйте плитки, щоб розставити їх, як у кімнаті. Двічі клацніть ПК, щоб побачити його екран у повному розмірі.</value></data>
+  <data name="Tile.NoPicture" xml:space="preserve"><value>ще немає зображення</value></data>
+  <data name="Tile.PictureStalled" xml:space="preserve"><value>зображення зависло</value></data>
+  <data name="Screen.Title" xml:space="preserve"><value>{0} — екран</value></data>
+  <data name="Screen.Waiting" xml:space="preserve"><value>Очікування першого повного зображення від {0}…</value></data>
+  <data name="Screen.Offline" xml:space="preserve"><value>{0} не в мережі; це останнє зображення, яке він надіслав.</value></data>
+  <data name="Screen.Stats" xml:space="preserve"><value>{0}×{1} · {2:0.#} кадр/с · {3:0} кбіт/с · {4}</value></data>
+  <data name="Screen.QualityLabel" xml:space="preserve"><value>Якість</value></data>
+  <data name="Screen.Quality.Auto" xml:space="preserve"><value>Авто</value></data>
+  <data name="Screen.Quality.High" xml:space="preserve"><value>Висока</value></data>
+  <data name="Screen.Quality.Medium" xml:space="preserve"><value>Середня</value></data>
+  <data name="Screen.Quality.Low" xml:space="preserve"><value>Низька</value></data>
+  <data name="Screen.QualityNow" xml:space="preserve"><value>q{0}</value></data>
+  <data name="Screen.QualityNowAuto" xml:space="preserve"><value>q{0} авто</value></data>
+  <data name="Screen.QualityUnknown" xml:space="preserve"><value>якість —</value></data>
+  <data name="Screen.Control" xml:space="preserve"><value>Керування</value></data>
+  <data name="Screen.ControlHint" xml:space="preserve"><value>Поки керування ввімкнене, ваші миша й клавіатура діють на {0}. ⌘ працює як Ctrl.</value></data>
+  <data name="Screen.ControlHintWindows" xml:space="preserve"><value>Поки керування ввімкнене, ваші миша й клавіатура діють на {0}.</value></data>
+  <data name="Screen.CtrlAltDel" xml:space="preserve"><value>Ctrl+Alt+Del</value></data>
+  <data name="Screen.WindowsKey" xml:space="preserve"><value>Win</value></data>
+  <data name="Screen.CannotControl" xml:space="preserve"><value>Зараз неможливо керувати {0}: {1}</value></data>
+  <data name="Screen.NoHelper" xml:space="preserve"><value>помічник сеансу там не запущений</value></data>
+  <data name="Screen.NoSession" xml:space="preserve"><value>ніхто не ввійшов у систему, і екрана входу немає</value></data>
+  <data name="Screen.OutdatedAgent" xml:space="preserve"><value>його агент застарів — оновіть його</value></data>
+  <data name="Screen.InputProblem" xml:space="preserve"><value>{0}: ваше введення не доходить до робочого столу ({1})</value></data>
+  <data name="Screen.CaptureProblem" xml:space="preserve"><value>{0} не може захопити свій екран ({1})</value></data>
+  <data name="Tile.NoSession" xml:space="preserve"><value>немає сеансу користувача</value></data>
+  <data name="Tile.CaptureProblem" xml:space="preserve"><value>не вдається захопити: {0}</value></data>
+  <data name="Capture.no_desktop" xml:space="preserve"><value>немає робочого столу</value></data>
+  <data name="Capture.access_lost" xml:space="preserve"><value>втрачено доступ до робочого столу</value></data>
+  <data name="Capture.no_duplication" xml:space="preserve"><value>дублювання недоступне</value></data>
+  <data name="Capture.gdi_failed" xml:space="preserve"><value>помилка захоплення GDI</value></data>
+  <data name="Capture.open_failed" xml:space="preserve"><value>не вдалося відкрити екран</value></data>
+  <data name="Capture.failed" xml:space="preserve"><value>захоплення зупинилося</value></data>
+  <data name="Capture.permission" xml:space="preserve"><value>macOS не надала LabControl дозвіл на запис екрана</value></data>
+  <data name="Capture.no_display" xml:space="preserve"><value>немає дисплея для захоплення</value></data>
+  <data name="Capture.unsupported" xml:space="preserve"><value>захоплення екрана недоступне в цій системі</value></data>
+  <data name="Capture.capture_failed" xml:space="preserve"><value>екран не дав зображення</value></data>
+  <data name="Input.no_desktop" xml:space="preserve"><value>немає робочого столу для введення</value></data>
+  <data name="Input.blocked" xml:space="preserve"><value>Windows відхилила введення</value></data>
+  <data name="Input.failed" xml:space="preserve"><value>не вдалося передати введення</value></data>
+  <data name="Lab.Empty" xml:space="preserve"><value>Ще немає жодного ПК. Запишіть файли для USB у «Налаштуваннях», запустіть інсталятор (або FakeAgent) на ПК, потім натисніть «Зареєструвати ПК» і один раз введіть парольну фразу — ПК зареєструються самі й з'являться тут.</value></data>
+  <data name="Tile.Online" xml:space="preserve"><value>у мережі</value></data>
+  <data name="Tile.Offline" xml:space="preserve"><value>не в мережі</value></data>
+  <data name="Tile.Waking" xml:space="preserve"><value>вмикається…</value></data>
+  <data name="Tile.Outdated" xml:space="preserve"><value>у мережі — агент застарів, оновіть його</value></data>
+  <data name="Tile.HeldBy" xml:space="preserve"><value>керує {0}</value></data>
+  <data name="Tile.Now" xml:space="preserve"><value>зараз</value></data>
+  <data name="Tile.Never" xml:space="preserve"><value>ніколи</value></data>
+  <data name="Tile.NotSeenSince" xml:space="preserve"><value>не з'являвся з {0}</value></data>
+  <data name="Tile.NotSeenYet" xml:space="preserve"><value>ще не з'являвся</value></data>
+  <data name="Tile.RenewalDue" xml:space="preserve"><value>сертифікат потрібно поновити</value></data>
+  <data name="Tile.UserLocked" xml:space="preserve"><value>{0} (заблоковано)</value></data>
+  <data name="Tile.NobodyLoggedOn" xml:space="preserve"><value>ніхто не ввійшов</value></data>
+  <data name="Tile.HelperDown" xml:space="preserve"><value>помічник сеансу не запущений</value></data>
+  <data name="Tile.AgentVersionFormat" xml:space="preserve"><value>агент {0}</value></data>
+  <data name="Tile.SerialFormat" xml:space="preserve"><value>сертифікат {0}</value></data>
+  <data name="Tile.LastSeenFormat" xml:space="preserve"><value>востаннє в мережі {0}</value></data>
+  <data name="Machine.Remove" xml:space="preserve"><value>Видалити з лабораторії</value></data>
+  <data name="Machine.RemoveConfirm" xml:space="preserve"><value>Видалити {0} з лабораторії? Одночасно анулюється його сертифікат, тож сам він повернутися не зможе. Перевстановлений ПК знову реєструється з кодом із поточного USB-накопичувача.</value></data>
+  <data name="Machine.RemoveManyTitle" xml:space="preserve"><value>Видалити ПК: {0}</value></data>
+  <data name="Machine.RemoveManyConfirm" xml:space="preserve"><value>Видалити з лабораторії {0} ПК ({1})? Одночасно анулюються їхні сертифікати, тож самі вони повернутися не зможуть. Перевстановлені ПК знову реєструються з кодами з поточного USB-накопичувача.</value></data>
+  <data name="Action.RemoveSelected" xml:space="preserve"><value>Видалити з лабораторії…</value></data>
+  <data name="Machine.Revoke" xml:space="preserve"><value>Анулювати сертифікат…</value></data>
+  <data name="Revoke.Action" xml:space="preserve"><value>Анулювати</value></data>
+  <data name="Revoke.MachineConfirm" xml:space="preserve"><value>Анулювати сертифікат {0}? Відтепер кожна консоль цієї лабораторії відхилятиме цей ПК, і щоб повернутися, йому знадобиться Setup.exe --rekey.</value></data>
+  <data name="Revoke.RemovedReason" xml:space="preserve"><value>викладач видалив {0} з лабораторії</value></data>
+  <data name="Revoke.MachineReason" xml:space="preserve"><value>викладач анулював {0}</value></data>
+  <data name="Revoke.InstanceConfirm" xml:space="preserve"><value>Анулювати консоль «{0}»? Вона перестане працювати, доки хтось знову не імпортує на неї резервну копію. Робіть це лише для вкраденого чи втраченого комп'ютера — консоль колеги, яка просто існує, анулювати не потрібно.</value></data>
+  <data name="Revoke.InstanceReason" xml:space="preserve"><value>консоль {0} анульовано</value></data>
+  <data name="Unlock.Title" xml:space="preserve"><value>Розблокувати ключ лабораторії</value></data>
+  <data name="Unlock.Heading" xml:space="preserve"><value>Розблокувати ключ лабораторії</value></data>
+  <data name="Unlock.Action" xml:space="preserve"><value>Розблокувати</value></data>
+  <data name="Unlock.Passphrase" xml:space="preserve"><value>Парольна фраза</value></data>
+  <data name="Unlock.RecoveryCode" xml:space="preserve"><value>Код відновлення</value></data>
+  <data name="Unlock.UseRecoveryCode" xml:space="preserve"><value>Використати код відновлення</value></data>
+  <data name="Unlock.NeedPassphrase" xml:space="preserve"><value>Введіть парольну фразу.</value></data>
+  <data name="Unlock.Wrong" xml:space="preserve"><value>Це не відкриває ключ лабораторії. Спробуйте ще раз або скористайтеся кодом відновлення.</value></data>
+  <data name="Unlock.ReasonEnrol" xml:space="preserve"><value>Для реєстрації ПК і поновлення їхніх сертифікатів потрібен ключ лабораторії. Він залишається розблокованим 15 хвилин після останнього використання або доки ви його не заблокуєте.</value></data>
+  <data name="Unlock.ReasonRenewal" xml:space="preserve"><value>Деяким ПК потрібно поновити сертифікати. Розблокуйте ключ лабораторії, і вони поновляться самі протягом хвилини.</value></data>
+  <data name="Unlock.ReasonSettings" xml:space="preserve"><value>Цей параметр змінює ключ лабораторії.</value></data>
+  <data name="Unlock.ReasonHolders" xml:space="preserve"><value>Щоб додати або видалити власника ключа, потрібен ключ лабораторії.</value></data>
+  <data name="Unlock.ReasonRecovery" xml:space="preserve"><value>Щоб надрукувати новий код відновлення, потрібен ключ лабораторії.</value></data>
+  <data name="Unlock.ReasonBackup" xml:space="preserve"><value>Для експорту резервної копії потрібен ключ лабораторії.</value></data>
+  <data name="Unlock.ReasonRemove" xml:space="preserve"><value>Видалення ПК анулює його сертифікат, а для цього потрібен ключ лабораторії.</value></data>
+  <data name="Unlock.ReasonRevoke" xml:space="preserve"><value>Щоб анулювати сертифікат, потрібен ключ лабораторії.</value></data>
+  <data name="Unlock.ReasonResume" xml:space="preserve"><value>Налаштування на цьому комп'ютері не завершено: досі бракує коду відновлення або резервної копії. Розблокуйте ключ лабораторії, щоб завершити зараз.</value></data>
+  <data name="Unlock.ReasonRemint" xml:space="preserve"><value>Власний сертифікат цієї консолі скоро спливає. Розблокуйте ключ лабораторії один раз, щоб поновити його; скасуйте, щоб поки залишити поточний.</value></data>
+  <data name="Key.Locked" xml:space="preserve"><value>Ключ лабораторії заблоковано</value></data>
+  <data name="Key.UnlockedUntil" xml:space="preserve"><value>Ключ лабораторії розблоковано — заблокується сам о {0}</value></data>
+  <data name="Key.Lock" xml:space="preserve"><value>Заблокувати</value></data>
+  <data name="Key.Unlocked" xml:space="preserve"><value>Ключ лабораторії розблоковано.</value></data>
+  <data name="Key.UnlockHint" xml:space="preserve"><value>Парольна фраза потрібна лише для реєстрації ПК, поновлення й анулювання сертифікатів, додавання власників і експорту резервних копій. У щоденній роботі вона не запитується.</value></data>
+  <data name="Key.AddHolder" xml:space="preserve"><value>Додати власника ключа…</value></data>
+  <data name="Key.AddHolderHint" xml:space="preserve"><value>Колега, який може відкрити лабораторію власною парольною фразою, — щоб іспит не зірвався через хворобу одного викладача.</value></data>
+  <data name="Key.HolderName" xml:space="preserve"><value>Ім'я</value></data>
+  <data name="Key.HolderPassphrase" xml:space="preserve"><value>Його парольна фраза</value></data>
+  <data name="Key.HolderPassphraseAgain" xml:space="preserve"><value>Його парольна фраза ще раз</value></data>
+  <data name="Key.HolderAdded" xml:space="preserve"><value>Власника ключа «{0}» додано.</value></data>
+  <data name="Key.RemoveHolder" xml:space="preserve"><value>Видалити</value></data>
+  <data name="Key.RemoveHolderConfirm" xml:space="preserve"><value>Видалити «{0}» з власників ключа? Його парольна фраза більше не відкриватиме цю лабораторію. Після цього експортуйте нову резервну копію.</value></data>
+  <data name="Key.HolderRemoved" xml:space="preserve"><value>Власника ключа «{0}» видалено.</value></data>
+  <data name="Key.SinceFormat" xml:space="preserve"><value>з {0}</value></data>
+  <data name="Key.HoldersHint" xml:space="preserve"><value>Усі власники рівноправні. Останнього видалити не можна.</value></data>
+  <data name="Key.Reprint" xml:space="preserve"><value>Надрукувати новий код відновлення…</value></data>
+  <data name="Key.ReprintConfirm" xml:space="preserve"><value>Надрукувати новий код відновлення? Старий перестане діяти, щойно ключ буде збережено. Після цього експортуйте нову резервну копію.</value></data>
+  <data name="Key.RecoveryReprinted" xml:space="preserve"><value>Надруковано новий код відновлення; старий недійсний.</value></data>
+  <data name="Settings.Lab" xml:space="preserve"><value>Лабораторія</value></data>
+  <data name="Settings.LabName" xml:space="preserve"><value>Лабораторія</value></data>
+  <data name="Settings.LabId" xml:space="preserve"><value>Ідентифікатор лабораторії</value></data>
+  <data name="Settings.ThisMachine" xml:space="preserve"><value>Ця консоль</value></data>
+  <data name="Settings.InstanceId" xml:space="preserve"><value>Ідентифікатор екземпляра</value></data>
+  <data name="Settings.InstanceCertificate" xml:space="preserve"><value>Сертифікат</value></data>
+  <data name="Settings.Endpoint" xml:space="preserve"><value>Прослуховує</value></data>
+  <data name="Settings.EndpointHint" xml:space="preserve"><value>Адреса й порт задаються в командному рядку (--bind, --port); маяк повідомляє ПК, куди підключатися, тож вони самі підхоплюють зміни.</value></data>
+  <data name="Settings.DataDirectory" xml:space="preserve"><value>Папка даних</value></data>
+  <data name="Settings.LabKey" xml:space="preserve"><value>Ключ лабораторії</value></data>
+  <data name="Settings.Holders" xml:space="preserve"><value>Власники ключа</value></data>
+  <data name="Settings.RecoveryCode" xml:space="preserve"><value>Код відновлення</value></data>
+  <data name="Settings.Backup" xml:space="preserve"><value>Резервна копія</value></data>
+  <data name="Settings.TeacherMachines" xml:space="preserve"><value>Інші комп'ютери викладачів</value></data>
+  <data name="Settings.TeacherMachinesHint" xml:space="preserve"><value>Консолі цієї лабораторії, помічені за маяком або повідомлені ПК. Анулюйте консоль лише тоді, коли комп'ютер вкрадено чи втрачено.</value></data>
+  <data name="Settings.NoOtherMachines" xml:space="preserve"><value>Поки жодної.</value></data>
+  <data name="Settings.LiveNow" xml:space="preserve"><value>· зараз працює</value></data>
+  <data name="Settings.Revoked" xml:space="preserve"><value>· анульовано</value></data>
+  <data name="Settings.Enrolment" xml:space="preserve"><value>Реєстрація</value></data>
+  <data name="Settings.VersionFormat" xml:space="preserve"><value>Консоль LabControl {0}</value></data>
+  <data name="Backup.Export" xml:space="preserve"><value>Експортувати резервну копію…</value></data>
+  <data name="Backup.FileType" xml:space="preserve"><value>Резервна копія LabControl</value></data>
+  <data name="Backup.Current" xml:space="preserve"><value>Резервну копію збережено {0} у {1}.</value></data>
+  <data name="Backup.Stale" xml:space="preserve"><value>Після останньої резервної копії лабораторія змінилася: власник ключа, код відновлення або записаний USB-накопичувач. Експортуйте нову резервну копію, інакше консоль на заміну про це не знатиме.</value></data>
+  <data name="Backup.Missing" xml:space="preserve"><value>З цієї консолі ще не експортовано жодної резервної копії.</value></data>
+  <data name="Backup.Exported" xml:space="preserve"><value>Резервну копію експортовано в {0}.</value></data>
+  <data name="Backup.Hint" xml:space="preserve"><value>Резервна копія — це єдиний файл, який переносить лабораторію на інший комп'ютер. Вона відкривається парольною фразою будь-якого власника або кодом відновлення, а без них марна.</value></data>
+  <data name="Banner.OtherConsole" xml:space="preserve"><value>Консоль {0} теж працює з цією лабораторією й керує щонайменше {1} з {2} ПК ({3}).</value></data>
+  <data name="Banner.OtherConsoleUnknown" xml:space="preserve"><value>Консоль {0} теж працює з цією лабораторією. Ця консоль не знає, якими ПК та керує.</value></data>
+  <data name="Banner.TookOver" xml:space="preserve"><value>Консоль {0} перехопила лабораторію о {1} і керує щонайменше {2} з {3} ПК ({4}).</value></data>
+  <data name="Banner.TookOverUnknown" xml:space="preserve"><value>Консоль {0} перехопила лабораторію о {1}. Жоден ПК ще не перейшов від цієї консолі до неї.</value></data>
+  <data name="Banner.TakeOver" xml:space="preserve"><value>Перехопити лабораторію</value></data>
+  <data name="Banner.Renewal" xml:space="preserve"><value>Сертифікатів, які потрібно поновити: {0} — розблокуйте ключ лабораторії, і ПК поновлять їх самі.</value></data>
+  <data name="Banner.UnlockKey" xml:space="preserve"><value>Розблокувати ключ лабораторії…</value></data>
+  <data name="Banner.BackupMissing" xml:space="preserve"><value>Резервної копії ще немає. Без неї втрата цього комп'ютера означає перевстановлення кожного ПК.</value></data>
+  <data name="Banner.BackupStale" xml:space="preserve"><value>Після останньої резервної копії змінилися ключ лабораторії або коди реєстрації. Експортуйте нову.</value></data>
+  <data name="Banner.ExportBackup" xml:space="preserve"><value>Експортувати резервну копію…</value></data>
+  <data name="Network.Blocked" xml:space="preserve"><value>Доступ до локальної мережі ще не дозволено — Windows не пропускає студентські ПК до цієї консолі.</value></data>
+  <data name="Network.Allow" xml:space="preserve"><value>Дозволити…</value></data>
+  <data name="Network.Recheck" xml:space="preserve"><value>Перевірити знову</value></data>
+  <data name="Network.Denied" xml:space="preserve"><value>Доступ до локальної мережі досі заблоковано. Виконайте ці два рядки в командному рядку від імені адміністратора, а потім перевірте знову: {0}</value></data>
+  <data name="Network.Failed" xml:space="preserve"><value>Не вдалося налаштувати доступ до локальної мережі на цьому комп'ютері. Виконайте ці два рядки в командному рядку від імені адміністратора, а потім перевірте знову: {0}</value></data>
+  <data name="Enroll.UnusedFormat" xml:space="preserve"><value>Невикористаних кодів реєстрації: {0}.</value></data>
+  <data name="Enroll.PcCount" xml:space="preserve"><value>ПК на цьому накопичувачі:</value></data>
+  <data name="Enroll.WritePayload" xml:space="preserve"><value>Записати файли для USB…</value></data>
+  <data name="Enroll.PayloadWritten" xml:space="preserve"><value>Файли для USB записано в {0}. Вкажіть цю папку в FakeAgent --payload (або для інсталятора).</value></data>
+  <data name="Enroll.HintFormat" xml:space="preserve"><value>Записує ca.crt і setup.json з {0} одноразовими кодами ({1} ПК + {2} запасних) у папку LabControl. Накопичувач не містить жодних секретів.</value></data>
+  <data name="Enroll.VoidEarlier" xml:space="preserve"><value>Анулювати невикористані коди попередніх накопичувачів ({0}) — цей накопичувач їх замінює</value></data>
+  <data name="Enroll.VoidHintOn" xml:space="preserve"><value>Невикористані коди, записані раніше ({0}), перестануть діяти. Зніміть позначку, якщо ПК уже встановлено з попереднього накопичувача, але вони ще не зареєструвалися, — інакше їх доведеться перевстановлювати.</value></data>
+  <data name="Enroll.VoidHintOff" xml:space="preserve"><value>Невикористані коди, записані раніше ({0}), залишаються дійсними: ПК, встановлені з попереднього накопичувача, ще можуть зареєструватися. Анулювати їх можна пізніше, записавши інший накопичувач із цією позначкою.</value></data>
+  <data name="Code.UsedBy" xml:space="preserve"><value>використав {0}</value></data>
+  <data name="Enroll.ShowHistory" xml:space="preserve"><value>Показати використані й анульовані коди ({0})</value></data>
+  <data name="Code.Voided" xml:space="preserve"><value>анульовано {0} — замінено новішим накопичувачем</value></data>
+  <data name="Code.UsedByRemoved" xml:space="preserve"><value>використав {0} — згодом видалений з лабораторії</value></data>
+  <data name="Code.Unused" xml:space="preserve"><value>не використано</value></data>
+  <data name="Scripts.New" xml:space="preserve"><value>Новий скрипт</value></data>
+  <data name="Scripts.Delete" xml:space="preserve"><value>Видалити</value></data>
+  <data name="Scripts.DeleteConfirm" xml:space="preserve"><value>Видалити скрипт «{0}» з бібліотеки? Цю дію не можна скасувати.</value></data>
+  <data name="Scripts.Name" xml:space="preserve"><value>Назва</value></data>
+  <data name="Scripts.Description" xml:space="preserve"><value>Що він робить</value></data>
+  <data name="Scripts.Shell" xml:space="preserve"><value>Оболонка</value></data>
+  <data name="Scripts.ShellPowerShell" xml:space="preserve"><value>PowerShell</value></data>
+  <data name="Scripts.ShellCmd" xml:space="preserve"><value>cmd</value></data>
+  <data name="Scripts.RunAs" xml:space="preserve"><value>Виконувати як</value></data>
+  <data name="Scripts.RunAsSystem" xml:space="preserve"><value>SYSTEM (без робочого столу)</value></data>
+  <data name="Scripts.RunAsUser" xml:space="preserve"><value>сеанс студента</value></data>
+  <data name="Scripts.Timeout" xml:space="preserve"><value>Зупинити через</value></data>
+  <data name="Scripts.Seconds" xml:space="preserve"><value>с без виводу</value></data>
+  <data name="Scripts.TimeoutFormat" xml:space="preserve"><value>{0} с</value></data>
+  <data name="Scripts.Text" xml:space="preserve"><value>Скрипт</value></data>
+  <data name="Scripts.Save" xml:space="preserve"><value>Зберегти</value></data>
+  <data name="Scripts.Revert" xml:space="preserve"><value>Скасувати зміни</value></data>
+  <data name="Scripts.RunNone" xml:space="preserve"><value>Виконати — спершу виберіть ПК на вкладці «Лабораторія»</value></data>
+  <data name="Scripts.RunFormat" xml:space="preserve"><value>Виконати на вибраних ПК ({0})</value></data>
+  <data name="Scripts.Saved" xml:space="preserve"><value>«{0}» збережено.</value></data>
+  <data name="Scripts.Ran" xml:space="preserve"><value>«{0}» надіслано на {1} ПК — див. вкладку «Завдання».</value></data>
+  <data name="Scripts.RanUnsaved" xml:space="preserve"><value>«{0}» надіслано на {1} ПК у поточному вигляді (не збережено) — див. вкладку «Завдання».</value></data>
+  <data name="Scripts.NeedName" xml:space="preserve"><value>Дайте скрипту назву.</value></data>
+  <data name="Scripts.NeedTimeout" xml:space="preserve"><value>Тайм-аут має бути цілим числом секунд, більшим за нуль.</value></data>
+  <data name="Scripts.NeedText" xml:space="preserve"><value>Скрипт порожній.</value></data>
+  <data name="Scripts.NewTemplate" xml:space="preserve"><value># Що робить цей скрипт, одним рядком.
+Write-Output "hello from $env:COMPUTERNAME"
+exit 0
+</value></data>
+  <data name="Jobs.Time" xml:space="preserve"><value>Час</value></data>
+  <data name="Jobs.Pc" xml:space="preserve"><value>ПК</value></data>
+  <data name="Jobs.Kind" xml:space="preserve"><value>Завдання</value></data>
+  <data name="Jobs.State" xml:space="preserve"><value>Стан</value></data>
+  <data name="Jobs.Message" xml:space="preserve"><value>Результат</value></data>
+  <data name="Jobs.Output" xml:space="preserve"><value>Вивід вибраного завдання</value></data>
+  <data name="Jobs.ExportBatch" xml:space="preserve"><value>Експортувати журнали пакета…</value></data>
+  <data name="Jobs.ExportBatchHint" xml:space="preserve"><value>Зберегти ZIP-архів з усіма ПК пакета, до якого належить вибране завдання. Незавершені завдання теж увійдуть із поточним станом.</value></data>
+  <data name="Jobs.BatchExported" xml:space="preserve"><value>Журнали пакета збережено в {0}</value></data>
+  <data name="Jobs.BatchExportFailed" xml:space="preserve"><value>Не вдалося експортувати журнали пакета: {0}</value></data>
+  <data name="Job.Shutdown" xml:space="preserve"><value>Вимкнення</value></data>
+  <data name="Job.Reboot" xml:space="preserve"><value>Перезавантаження</value></data>
+  <data name="Job.Logoff" xml:space="preserve"><value>Вихід із системи</value></data>
+  <data name="Job.RunScript" xml:space="preserve"><value>Виконання скрипту</value></data>
+  <data name="Job.InstallPackage" xml:space="preserve"><value>Встановлення пакета</value></data>
+  <data name="Job.ResetProfile" xml:space="preserve"><value>Скидання профілю</value></data>
+  <data name="Job.SendFile" xml:space="preserve"><value>Надсилання файлу</value></data>
+  <data name="Job.CollectFiles" xml:space="preserve"><value>Збирання файлів</value></data>
+  <data name="Job.SetConfig" xml:space="preserve"><value>Зміна конфігурації</value></data>
+  <data name="Job.SelfUpdate" xml:space="preserve"><value>Оновлення агента</value></data>
+  <data name="Job.Rekey" xml:space="preserve"><value>Зміна ключа</value></data>
+  <data name="Job.KindUnspecified" xml:space="preserve"><value>Завдання</value></data>
+  <data name="JobState.Pending" xml:space="preserve"><value>очікує</value></data>
+  <data name="JobState.Delivered" xml:space="preserve"><value>доставлено</value></data>
+  <data name="JobState.Running" xml:space="preserve"><value>виконується</value></data>
+  <data name="JobState.Succeeded" xml:space="preserve"><value>готово</value></data>
+  <data name="JobState.Failed" xml:space="preserve"><value>помилка</value></data>
+  <data name="JobState.NotDelivered" xml:space="preserve"><value>не доставлено</value></data>
+  <data name="JobState.TimedOut" xml:space="preserve"><value>час вичерпано</value></data>
+  <data name="Events.Time" xml:space="preserve"><value>Час</value></data>
+  <data name="Events.Severity" xml:space="preserve"><value>Рівень</value></data>
+  <data name="Events.Pc" xml:space="preserve"><value>ПК</value></data>
+  <data name="Events.Message" xml:space="preserve"><value>Подія</value></data>
+  <data name="Severity.Info" xml:space="preserve"><value>інформація</value></data>
+  <data name="Severity.Warning" xml:space="preserve"><value>попередження</value></data>
+  <data name="Severity.Error" xml:space="preserve"><value>помилка</value></data>
+  <data name="Push.Heading" xml:space="preserve"><value>Надіслати збірку агента на {0} ПК</value></data>
+  <data name="Push.Hint" xml:space="preserve"><value>Дія для розробки: надсилає опубліковані agent.exe і session.exe на вибрані ПК. Кожен ПК встановлює їх поруч у app\&lt;version&gt;, перемикає на них свою службу й перезапускається; нова версія повідомляє, коли запуститься. До M4 немає ні підпису, ні випробувального періоду, ні відкату — спершу надішліть на один ПК.</value></data>
+  <data name="Push.Folder" xml:space="preserve"><value>Папка збірки (agent.exe + session.exe або папка artifacts\&lt;rid&gt; з publish-all.sh)</value></data>
+  <data name="Push.Browse" xml:space="preserve"><value>Огляд…</value></data>
+  <data name="Push.PickFolder" xml:space="preserve"><value>Виберіть папку з опублікованою збіркою агента</value></data>
+  <data name="Push.Version" xml:space="preserve"><value>Номер версії, з яким зроблено збірку (перевіряється за agent.exe --version на ПК)</value></data>
+  <data name="Push.NothingYet" xml:space="preserve"><value>Виберіть папку, щоб побачити, що буде надіслано.</value></data>
+  <data name="Push.Send" xml:space="preserve"><value>Надіслати</value></data>
+  <data name="Setup.Title" xml:space="preserve"><value>LabControl — перший запуск</value></data>
+  <data name="Setup.Welcome" xml:space="preserve"><value>Ласкаво просимо до LabControl</value></data>
+  <data name="Setup.WelcomeBody" xml:space="preserve"><value>На цьому комп'ютері ще немає лабораторії. Створіть нову або імпортуйте наявну лабораторію з її резервної копії, щоб цей комп'ютер став ще однією її консоллю.</value></data>
+  <data name="Setup.CreateLab" xml:space="preserve"><value>Створити нову лабораторію</value></data>
+  <data name="Setup.CreateLabHint" xml:space="preserve"><value>Перше використання LabControl для кімнати. Створює ключ лабораторії й цю консоль.</value></data>
+  <data name="Setup.ImportLab" xml:space="preserve"><value>Імпортувати лабораторію з резервної копії…</value></data>
+  <data name="Setup.ImportLabHint" xml:space="preserve"><value>Другий комп'ютер викладача або заміна того, що вийшов з ладу. На студентських ПК нічого не змінюється.</value></data>
+  <data name="Setup.CreateBody" xml:space="preserve"><value>Ключ лабораторії — це ідентичність кімнати. Виберіть парольну фразу, яку ви запам'ятаєте; далі буде показано код відновлення на випадок, якщо забудете.</value></data>
+  <data name="Setup.LabName" xml:space="preserve"><value>Назва лабораторії</value></data>
+  <data name="Setup.LabNameExample" xml:space="preserve"><value>напр. Аудиторія 214</value></data>
+  <data name="Setup.HolderName" xml:space="preserve"><value>Ваше ім'я (перший власник ключа)</value></data>
+  <data name="Setup.Passphrase" xml:space="preserve"><value>Парольна фраза</value></data>
+  <data name="Setup.PassphraseAgain" xml:space="preserve"><value>Парольна фраза ще раз</value></data>
+  <data name="Setup.PassphraseHint" xml:space="preserve"><value>Щонайменше 8 символів. Потрібна лише для реєстрації ПК, поновлень, анулювань і резервних копій — ніколи для щоденної роботи.</value></data>
+  <data name="Setup.InstanceName" xml:space="preserve"><value>Назва цієї консолі</value></data>
+  <data name="Setup.InstanceNameHint" xml:space="preserve"><value>Як цей комп'ютер бачать інші консолі й журнали, напр. MacBook або ПК у лабораторії.</value></data>
+  <data name="Setup.CreateAction" xml:space="preserve"><value>Створити лабораторію</value></data>
+  <data name="Setup.NeedLabName" xml:space="preserve"><value>Дайте лабораторії назву.</value></data>
+  <data name="Setup.NeedHolderName" xml:space="preserve"><value>Вкажіть ім'я власника ключа.</value></data>
+  <data name="Setup.PassphraseTooShort" xml:space="preserve"><value>Парольна фраза має містити щонайменше 8 символів.</value></data>
+  <data name="Setup.PassphraseMismatch" xml:space="preserve"><value>Парольні фрази не збігаються.</value></data>
+  <data name="Setup.NeedInstanceName" xml:space="preserve"><value>Дайте цій консолі назву.</value></data>
+  <data name="Setup.RecoveryHeading" xml:space="preserve"><value>Запишіть код відновлення</value></data>
+  <data name="Setup.RecoveryBody" xml:space="preserve"><value>Цей код відкриває лабораторію, якщо всі парольні фрази забуто. Його показують лише один раз. Запишіть його на папері й зберігайте подалі від цього комп'ютера — у гаманці, сейфі, шухляді вдома.</value></data>
+  <data name="Setup.AcknowledgeRecovery" xml:space="preserve"><value>Я записав(-ла) код відновлення</value></data>
+  <data name="Setup.AcknowledgeFirst" xml:space="preserve"><value>Спершу підтвердьте, що записали код.</value></data>
+  <data name="Setup.BackupHeading" xml:space="preserve"><value>Експортуйте резервну копію</value></data>
+  <data name="Setup.BackupBody" xml:space="preserve"><value>Резервна копія переносить лабораторію на інший комп'ютер. Збережіть її там, де вона переживе цей комп'ютер, — на USB-накопичувачі, у хмарній папці. Без неї майстер не завершиться.</value></data>
+  <data name="Setup.ResumeNote" xml:space="preserve"><value>Минулого разу налаштування закрили до завершення. Лабораторія вже існує; залишилися лише кроки нижче, після них одразу відкриється консоль.</value></data>
+  <data name="Setup.DoneHeading" xml:space="preserve"><value>Лабораторія готова</value></data>
+  <data name="Setup.DoneBody" xml:space="preserve"><value>Далі: «Налаштування» → «Записати файли для USB», встановіть з ними ПК, потім натисніть «Зареєструвати ПК».</value></data>
+  <data name="Setup.OpenConsole" xml:space="preserve"><value>Відкрити консоль</value></data>
+  <data name="Setup.ImportBody" xml:space="preserve"><value>Виберіть файл резервної копії, відкрийте його парольною фразою власника або кодом відновлення й назвіть цю консоль. ПК знайдуть її самі.</value></data>
+  <data name="Setup.PickBackup" xml:space="preserve"><value>Вибрати файл резервної копії…</value></data>
+  <data name="Setup.BackupSummary" xml:space="preserve"><value>Лабораторія «{0}», експортовано {1}, експортував {2}. Власники ключа: {3}.</value></data>
+  <data name="Setup.NeedBackupFile" xml:space="preserve"><value>Спершу виберіть файл резервної копії.</value></data>
+  <data name="Setup.BadRecoveryCode" xml:space="preserve"><value>Це не код відновлення (літери й цифри, дефіси необов'язкові).</value></data>
+  <data name="Setup.ImportAction" xml:space="preserve"><value>Імпортувати лабораторію</value></data>
+  <data name="Scripts.AddBuiltIns" xml:space="preserve"><value>Додати відсутні вбудовані скрипти</value></data>
+  <data name="Scripts.BuiltInsAdded" xml:space="preserve"><value>Додано вбудованих скриптів: {0}. Наявні скрипти збережено.</value></data>
+  <data name="Scripts.Diagnostic" xml:space="preserve"><value>Рядок {0}, стовпець {1}: {2}</value></data>
+  <data name="Scripts.CmdValidation" xml:space="preserve"><value>cmd: лише базові перевірки. Повний синтаксис і наявність команд перевіряє Windows під час виконання.</value></data>
+  <data name="Scripts.ValidPowerShell" xml:space="preserve"><value>Синтаксичних помилок немає (аналізатор PowerShell). Команди, шляхи й повну сумісність із Windows PowerShell 5.1 треба перевірити на ПК.</value></data>
+  <data name="Scripts.FixErrors" xml:space="preserve"><value>Перед запуском виправте помилки в редакторі скриптів.</value></data>
+  <data name="Scripts.QuickHint" xml:space="preserve"><value>Виконує незбережену чернетку. Перегляньте або змініть її у «Скриптах».</value></data>
+  <data name="Scripts.InvalidNul" xml:space="preserve"><value>Символ NUL неприпустимий у пакетному файлі.</value></data>
+  <data name="Scripts.RequiresPowerShell7" xml:space="preserve"><value>Цей оператор потребує PowerShell 7; на студентських ПК — Windows PowerShell 5.1.</value></data>
+  <data name="Action.SendFiles" xml:space="preserve"><value>Надіслати файли…</value></data>
+  <data name="Files.None" xml:space="preserve"><value>Файли не вибрано.</value></data>
+  <data name="Files.Choose" xml:space="preserve"><value>Вибрати файли…</value></data>
+  <data name="Files.Open" xml:space="preserve"><value>Відкрити після доставки</value></data>
+  <data name="Files.Send" xml:space="preserve"><value>Надіслати</value></data>
+  <data name="Files.LocalOnly" xml:space="preserve"><value>Виберіть файли, що зберігаються на цьому комп'ютері.</value></data>
+  <data name="Files.Selected" xml:space="preserve"><value>Вибрано файлів: {0}.</value></data>
+  <data name="Files.Targets" xml:space="preserve"><value>Надіслати матеріали на вибрані ПК ({0})</value></data>
+  <data name="Files.Description" xml:space="preserve"><value>Файли потрапляють у папку Materials на робочому столі студента. Файл із такою самою назвою замінюється після перевірки. ПК, що не в мережі, отримають завдання, коли знову під'єднаються, якщо ця консоль залишається відкритою. Не переміщуйте й не змінюйте вихідні файли, доки доставку не завершено.</value></data>
+  <data name="Files.Availability" xml:space="preserve"><value>Для доставки у Windows потрібен перевірений керований обліковий запис студента, створений інсталятором. Особисті облікові записи зберігаються. Щоб відкрити файл, студент має ввійти в цей обліковий запис.</value></data>
+  <data name="Files.OpenHint" xml:space="preserve"><value>Відкриватися можуть лише підтримувані документи й зображення. Програми, скрипти й ярлики доставляються без запуску. У FakeAgent відкриття лише імітується.</value></data>
+  <data name="Files.Queued" xml:space="preserve"><value>У черзі завдань доставки файлів: {0}. Результат для кожного ПК див. у «Завданнях».</value></data>
+  <data name="Files.Failed" xml:space="preserve"><value>Не вдалося поставити матеріали в чергу: {0}</value></data>
+  <data name="Unlock.ReasonUpdate" xml:space="preserve"><value>Розблокуйте ключ лабораторії, щоб підписати це оновлення агента.</value></data>
+  <data name="Enroll.BuildUsb" xml:space="preserve"><value>Створити інсталятор на USB…</value></data>
+  <data name="Enroll.BuildFolder" xml:space="preserve"><value>Виберіть папку з опублікованою збіркою для Windows</value></data>
+  <data name="Enroll.InstallerWritten" xml:space="preserve"><value>Інсталятор на USB готовий у {0}. Запустіть Setup.exe на кожному ПК з Windows.</value></data>
+  <data name="Tile.UpdateStable" xml:space="preserve"><value>Оновлення стабільне</value></data>
+  <data name="Tile.UpdateProbation" xml:space="preserve"><value>Оновлення на випробувальному періоді</value></data>
+  <data name="Tile.UpdateRolledBack" xml:space="preserve"><value>Відкочено {0}</value></data>
+  <data name="Readiness.antivirus.third_party" xml:space="preserve"><value>Виявлено інший антивірус. Якщо команди чи оновлення не виконуються, перевірте його дозволи для LabControl.</value></data>
+  <data name="Readiness.antivirus.inventory_unavailable" xml:space="preserve"><value>Інсталятор не зміг перевірити встановлений антивірус. Якщо команди чи оновлення не виконуються, перевірте налаштування захисту.</value></data>
+  <data name="Readiness.network.wol_unverified" xml:space="preserve"><value>На цьому ПК ще треба перевірити вимкнення й увімкнення через Wake-on-LAN; потрібна підтримка мікропрограми й дротової мережі.</value></data>
+  <data name="Readiness.network.configuration_warning" xml:space="preserve"><value>Мережевий драйвер цього ПК не надає параметрів Wake-on-LAN, тому інсталятор їх не змінював. Для Wake-on-LAN потрібні драйвер від виробника мережевої карти й відновлення з USB; усе інше працює.</value></data>
+  <data name="Readiness.report.unavailable" xml:space="preserve"><value>Не вдалося прочитати звіт про готовність інсталяції. Запустіть відновлення з USB, щоб перевірити цей ПК.</value></data>
+  <data name="Readiness.NoWarnings" xml:space="preserve"><value>Інсталятор не повідомляє про попередження. Це не перевірка мережі чи Wake-on-LAN.</value></data>
+  <data name="Readiness.InvalidReport" xml:space="preserve"><value>ПК надіслав нечитабельний звіт про готовність інсталяції. Попередні попередження збережено.</value></data>
+  <data name="Update.RollbackReported" xml:space="preserve"><value>Відновлено попередню версію агента.</value></data>
+  <data name="Event.TakenOver" xml:space="preserve"><value>відійшов від цієї консолі, бо лабораторію перехопила консоль {0}.</value></data>
+  <data name="Chooser.Title" xml:space="preserve"><value>Мої лабораторії · LabControl</value></data>
+  <data name="Chooser.Heading" xml:space="preserve"><value>Мої лабораторії</value></data>
+  <data name="Chooser.Hint" xml:space="preserve"><value>Відкрийте лабораторію, щоб керувати її кімнатою. Одночасно відкрита лише одна лабораторія; інші зберігають свої налаштування й ні до чого не підключаються, доки ви їх не відкриєте.</value></data>
+  <data name="Chooser.Empty" xml:space="preserve"><value>На цьому комп'ютері ще не збережено жодної лабораторії. Створіть її або додайте файл резервної копії.</value></data>
+  <data name="Chooser.DropHint" xml:space="preserve"><value>Перетягніть сюди файли резервних копій, щоб додати лабораторії. Додавання ніколи не відкриває лабораторію.</value></data>
+  <data name="Chooser.Open" xml:space="preserve"><value>Відкрити</value></data>
+  <data name="Chooser.AddLabs" xml:space="preserve"><value>Додати лабораторії…</value></data>
+  <data name="Chooser.AddLabsTitle" xml:space="preserve"><value>Додати лабораторії</value></data>
+  <data name="Chooser.Create" xml:space="preserve"><value>Створити лабораторію…</value></data>
+  <data name="Chooser.Remove" xml:space="preserve"><value>Видалити з цього пристрою</value></data>
+  <data name="Chooser.Opening" xml:space="preserve"><value>Відкриття {0}…</value></data>
+  <data name="Chooser.Leaving" xml:space="preserve"><value>Вихід із {0}…</value></data>
+  <data name="Chooser.OpenFailed" xml:space="preserve"><value>Не вдалося відкрити {0}: {1} Спробуйте ще раз або відкрийте іншу лабораторію.</value></data>
+  <data name="Chooser.PcCount" xml:space="preserve"><value>ПК: {0}</value></data>
+  <data name="Chooser.PcCountOne" xml:space="preserve"><value>1 ПК</value></data>
+  <data name="Chooser.NoPcs" xml:space="preserve"><value>ще немає ПК</value></data>
+  <data name="Chooser.LastUsed" xml:space="preserve"><value>востаннє відкрито {0}</value></data>
+  <data name="Chooser.NeverUsed" xml:space="preserve"><value>тут ще не відкривалася</value></data>
+  <data name="Chooser.Status.Ready" xml:space="preserve"><value>Готова</value></data>
+  <data name="Chooser.Status.NeedsAuthorization" xml:space="preserve"><value>Потрібна авторизація</value></data>
+  <data name="Chooser.Status.RequestPending" xml:space="preserve"><value>Запит очікує</value></data>
+  <data name="Chooser.Status.Expires" xml:space="preserve"><value>Доступ спливає {0}</value></data>
+  <data name="Chooser.Status.Expired" xml:space="preserve"><value>Термін минув</value></data>
+  <data name="Chooser.Status.Revoked" xml:space="preserve"><value>Відкликано</value></data>
+  <data name="Chooser.Status.Active" xml:space="preserve"><value>Активна</value></data>
+  <data name="Chooser.RemoveTitle" xml:space="preserve"><value>Видалити {0} з цього пристрою?</value></data>
+  <data name="Chooser.RemoveConfirm" xml:space="preserve"><value>Файли лабораторії на цьому комп'ютері буде видалено: список і розташування ПК, скрипти, журнали й власний сертифікат цього пристрою для неї. У класі нічого не зміниться — жоден студентський ПК не буде змінено чи видалено з нього програму, саму лабораторію не буде видалено, і нічий доступ не буде відкликано. Пізніше лабораторію можна знову додати з резервної копії або файлу лабораторії.</value></data>
+  <data name="Chooser.RemoveKeyTitle" xml:space="preserve"><value>Видалити також ключ лабораторії {0}?</value></data>
+  <data name="Chooser.RemoveKeyConfirm" xml:space="preserve"><value>Цей пристрій зберігає ключ лабораторії {0} ({1}). {2} Без резервної копії, яку можна відкрити, ніхто більше ніколи не зможе реєструвати ПК, поновлювати їхні сертифікати чи авторизувати викладачів для цієї лабораторії. Видалити ключ з цього пристрою?</value></data>
+  <data name="Chooser.LastBackup" xml:space="preserve"><value>Останню резервну копію експортовано {0} у {1}.</value></data>
+  <data name="Chooser.NoBackup" xml:space="preserve"><value>З цього пристрою ще жодного разу не експортували резервну копію.</value></data>
+  <data name="Chooser.RemoveKey" xml:space="preserve"><value>Видалити й ключ</value></data>
+  <data name="Chooser.RemoveFailed" xml:space="preserve"><value>Не вдалося видалити {0}: {1}</value></data>
+  <data name="Chooser.Retry" xml:space="preserve"><value>Повторити</value></data>
+  <data name="Access.Administrator" xml:space="preserve"><value>Адміністратор</value></data>
+  <data name="Access.Teacher" xml:space="preserve"><value>Викладач</value></data>
+  <data name="Import.AllDocuments" xml:space="preserve"><value>Файли лабораторій і резервні копії</value></data>
+  <data name="Import.ResultsTitle" xml:space="preserve"><value>Додати лабораторії</value></data>
+  <data name="Import.ResultsHeading" xml:space="preserve"><value>Додано файлів: {0} з {1}</value></data>
+  <data name="Import.NothingOpened" xml:space="preserve"><value>Нічого не відкрито. Виберіть лабораторію в списку й натисніть «Відкрити».</value></data>
+  <data name="Import.Unsupported" xml:space="preserve"><value>Цей файл консоль додати не може ({0}). Підтримуються файли лабораторій (.lclab), резервні копії (.lcbak), дозволи для пристроїв (.lcgrant) і запити пристроїв (.lcreq).</value></data>
+  <data name="Import.UnlockReason" xml:space="preserve"><value>Резервна копія лабораторії «{0}», експортовано {1}, експортував {2}. Введіть парольну фразу власника або код відновлення, щоб додати її на цей пристрій.</value></data>
+  <data name="Import.Cancelled" xml:space="preserve"><value>Пропущено: парольну фразу не введено.</value></data>
+  <data name="Import.Added" xml:space="preserve"><value>Додано «{0}», ПК: {1}.</value></data>
+  <data name="Import.MarkAdded" xml:space="preserve"><value>✓</value></data>
+  <data name="Import.MarkFailed" xml:space="preserve"><value>✗</value></data>
+  <data name="Main.Disconnect" xml:space="preserve"><value>⟵ Від'єднатися</value></data>
+  <data name="Main.LabChip" xml:space="preserve"><value>{0} · {1}</value></data>
+  <data name="Main.LabChipConnecting" xml:space="preserve"><value>{0} · {1} · Підключення…</value></data>
+  <data name="Departure.Title" xml:space="preserve"><value>Залишити {0}?</value></data>
+  <data name="Departure.Body" xml:space="preserve"><value>Ця консоль відпускає всі ПК у {0}. Зараз ще триває:</value></data>
+  <data name="Departure.Jobs.ContinuesOnPc" xml:space="preserve"><value>{0} × {1}: продовжується на ПК; результат буде показано, коли ви повернетеся.</value></data>
+  <data name="Departure.Jobs.Completes" xml:space="preserve"><value>{0} × {1}: ПК завершить це самостійно.</value></data>
+  <data name="Departure.Jobs.CannotAbort" xml:space="preserve"><value>{0} × {1}: звідси не можна перервати; виходити безпечно.</value></data>
+  <data name="Departure.Queued" xml:space="preserve"><value>Завдання, що чекають на ПК не в мережі ({0}), не буде доставлено.</value></data>
+  <data name="Departure.Uploads" xml:space="preserve"><value>Передавання, що тривають ({0}), завершаться помилкою.</value></data>
+  <data name="Departure.Probation" xml:space="preserve"><value>{0}: випробовують нову версію агента; повідомлять, коли ви повернетеся.</value></data>
+  <data name="Departure.Wakes" xml:space="preserve"><value>{0}: за увімкненням через Wake-on-LAN більше не стежать.</value></data>
+  <data name="Departure.Jobs.NotCollected" xml:space="preserve"><value>{0} × {1}: роботи не зібрано; зберіть їх знову через «Зібрати файли…», коли повернетеся.</value></data>
+  <data name="Departure.Broadcast" xml:space="preserve"><value>{0}: ваш екран там більше не показуватиметься.</value></data>
+  <data name="Departure.Locks" xml:space="preserve"><value>{0}: екран залишається заблокованим, доки консоль цієї лабораторії його не розблокує, — найпізніше {1}.</value></data>
+  <data name="Departure.Internet" xml:space="preserve"><value>{0}: обмеження інтернету діє, доки консоль цієї лабораторії його не зніме, — найпізніше {1}.</value></data>
+  <data name="Departure.Exams" xml:space="preserve"><value>{0}: іспит триває й завершиться сам — найпізніше {1}.</value></data>
+  <data name="Departure.ExamWork" xml:space="preserve"><value>{0}: роботи з іспиту не буде зібрано після його завершення; вони залишаться в папці іспиту на ПК. Зберіть їх через «Зібрати файли…», коли повернетеся.</value></data>
+  <data name="Departure.EndPolicies" xml:space="preserve"><value>Розблокувати, відкрити інтернет і вийти</value></data>
+  <data name="Departure.EndingTitle" xml:space="preserve"><value>Розблокування й відкриття інтернету</value></data>
+  <data name="Departure.Ending" xml:space="preserve"><value>Очікування підтвердження від ПК… Іспит не завершується.</value></data>
+  <data name="Event.DeparturePoliciesHeld" xml:space="preserve"><value>{0} не підтвердили розблокування чи відкриття інтернету до виходу консолі; кожен зберігає обмеження до власного ліміту.</value></data>
+  <data name="Event.NoClassroomControl" xml:space="preserve"><value>{0} використовує протокол версії {1}: блокування, трансляція, керування інтернетом та іспити потребують версії {2}. Надішліть на нього поточну збірку агента.</value></data>
+  <data name="Internet.ExamWins" xml:space="preserve"><value>{0}: там інтернетом керує іспит. До його завершення діє налаштування іспиту; вибране тут набуде чинності після іспиту.</value></data>
+  <data name="Event.EndOnReturn" xml:space="preserve"><value>{0} повернувся з тим, що ви завершили, поки він був вимкнений; це завершено зараз.</value></data>
+  <data name="Departure.Leave" xml:space="preserve"><value>Усе одно вийти</value></data>
+  <data name="Departure.Stay" xml:space="preserve"><value>Залишитися</value></data>
+  <data name="Departure.Wait" xml:space="preserve"><value>Дочекатися завдань ({0})</value></data>
+  <data name="Departure.WaitTitle" xml:space="preserve"><value>Очікування завдань</value></data>
+  <data name="Departure.Waiting" xml:space="preserve"><value>Очікування завершення завдань ({0})…</value></data>
+  <data name="Departure.Reason" xml:space="preserve"><value>консоль вийшла з цієї лабораторії</value></data>
+  <data name="App.SetupNotFinished" xml:space="preserve"><value>Налаштування цієї лабораторії не завершено; вона знову закрита, доки його не буде завершено.</value></data>
+  <data name="Access.EnrolNeedsAdministrator" xml:space="preserve"><value>Ця консоль має доступ викладача й не може реєструвати ПК. Реєструйте з консолі адміністратора — тієї, що зберігає ключ лабораторії.</value></data>
+  <data name="Access.RenewNeedsAdministrator" xml:space="preserve"><value>Ця консоль має доступ викладача й не може поновлювати сертифікати; ПК запитає знову в наступної консолі адміністратора.</value></data>
+  <data name="Access.AdministratorNeeded" xml:space="preserve"><value>Потрібен доступ адміністратора: ця дія потребує ключа лабораторії, якого немає на цьому пристрої.</value></data>
+  <data name="Access.OpenNeedsAuthorization" xml:space="preserve"><value>Цей пристрій ще не авторизовано для лабораторії. Натисніть «Авторизувати…», щоб записати файл запиту, і передайте його адміністраторові; потім додайте файл дозволу, який отримаєте у відповідь.</value></data>
+  <data name="Access.OpenRequestPending" xml:space="preserve"><value>Запит для цієї лабораторії очікує дозволу адміністратора. Додайте файл дозволу, коли отримаєте його («Авторизувати…» запише той самий запит знову, якщо його втрачено).</value></data>
+  <data name="Access.OpenRevoked" xml:space="preserve"><value>Адміністратор відкликав доступ цього пристрою до лабораторії. Натисніть «Авторизувати…», щоб запитати знову з новою ідентичністю.</value></data>
+  <data name="Access.OpenExpired" xml:space="preserve"><value>Термін доступу цього пристрою до лабораторії минув. Натисніть «Авторизувати…», щоб записати запит на поновлення для адміністратора.</value></data>
+  <data name="Access.RequestOnAdministrator" xml:space="preserve"><value>Цей пристрій зберігає ключ лабораторії; запит пристрою йому не потрібен.</value></data>
+  <data name="Access.TeacherHint" xml:space="preserve"><value>Доступ викладача: реєстрація, оновлення агентів, анулювання й резервні копії виконуються на консолі адміністратора.</value></data>
+  <data name="Access.TeacherStatus" xml:space="preserve"><value>Доступ викладача — на цьому пристрої немає ключа лабораторії</value></data>
+  <data name="Access.Unknown" xml:space="preserve"><value>Невідомий доступ</value></data>
+  <data name="Bootstrap.AccessMissing" xml:space="preserve"><value>У цієї лабораторії немає ні '{0}', ні '{1}'; додайте її знову з файлу лабораторії або резервної копії.</value></data>
+  <data name="Import.DifferentAuthority" xml:space="preserve"><value>«{0}» уже збережено тут з іншим ключем лабораторії; той самий ідентифікатор лабораторії з іншим ключем не приймається.</value></data>
+  <data name="Import.LabFileAdded" xml:space="preserve"><value>Додано «{0}», ПК: {1}. Щоб відкрити лабораторію, цьому пристрою потрібна авторизація адміністратора.</value></data>
+  <data name="Import.LabFileRefreshed" xml:space="preserve"><value>«{0}» оновлено: ПК додано — {1}, оновлено — {2}, нових анулювань — {3}.</value></data>
+  <data name="Import.LabFileOlder" xml:space="preserve"><value>«{0}»: старіший знімок; ПК додано — {1}, нових анулювань — {2}, нічого не відкочено.</value></data>
+  <data name="Import.GrantForUnknownLab" xml:space="preserve"><value>Цей дозвіл для «{0}» — лабораторії, не збереженої на цьому пристрої; спершу додайте її файл лабораторії.</value></data>
+  <data name="Import.GrantOnAdministrator" xml:space="preserve"><value>«{0}» зберігається тут разом із ключем лабораторії; дозвіл для пристрою не потрібен.</value></data>
+  <data name="Import.GrantAccepted" xml:space="preserve"><value>«{0}»: цей пристрій авторизовано до {1}.</value></data>
+  <data name="Import.GrantRenewed" xml:space="preserve"><value>«{0}»: доступ цього пристрою поновлено до {1}.</value></data>
+  <data name="Import.GrantSnapshotFailed" xml:space="preserve"><value>Не вдалося застосувати знімок лабораторії з дозволу ({0}); пізніше імпортуйте файл лабораторії, щоб оновити список ПК.</value></data>
+  <data name="Import.RequestForOtherLab" xml:space="preserve"><value>Цей запит стосується «{0}», а не лабораторії, для якої видається дозвіл.</value></data>
+  <data name="Import.Upgraded" xml:space="preserve"><value>«{0}» тепер має доступ адміністратора на цьому пристрої; імпортовані коди реєстрації неактивні, доки їх не активують у «Налаштуваннях».</value></data>
+  <data name="Import.RequestNoAdministrator" xml:space="preserve"><value>Запит для «{0}» можна схвалити лише на пристрої, що зберігає ключ цієї лабораторії.</value></data>
+  <data name="Import.UnlockForRequest" xml:space="preserve"><value>Схвалити запит пристрою для «{0}» ({1}): введіть парольну фразу власника або код відновлення.</value></data>
+  <data name="Import.RequestApproved" xml:space="preserve"><value>{0} авторизовано для «{1}»; дозвіл записано в {2}.</value></data>
+  <data name="LabFile.FileType" xml:space="preserve"><value>Файл лабораторії LabControl</value></data>
+  <data name="Grant.FileType" xml:space="preserve"><value>Дозвіл для пристрою LabControl</value></data>
+  <data name="Request.FileType" xml:space="preserve"><value>Запит пристрою LabControl</value></data>
+  <data name="LabFile.Export" xml:space="preserve"><value>Експортувати файл лабораторії…</value></data>
+  <data name="LabFile.Exported" xml:space="preserve"><value>Файл лабораторії експортовано в {0}. Передайте його викладачам; він не містить ні ключа, ні кодів реєстрації.</value></data>
+  <data name="LabFile.Hint" xml:space="preserve"><value>Файл лабораторії дає змогу пристрою іншого викладача додати цю кімнату до списку й запитати доступ; дозвіл — відповідь на цей запит. Жоден із них не містить ключа лабораторії.</value></data>
+  <data name="Device.AuthorizedOn" xml:space="preserve"><value>авторизовано {0}</value></data>
+  <data name="Device.WithdrawnOn" xml:space="preserve"><value>відкликано {0}</value></data>
+  <data name="Device.ThisMachine" xml:space="preserve"><value>(цей комп'ютер)</value></data>
+  <data name="Device.DeliveryNoPcs" xml:space="preserve"><value>Відкликання записано; у списку ще немає ПК.</value></data>
+  <data name="Device.DeliveredAll" xml:space="preserve"><value>Відкликання доставлено на всі ПК ({0}).</value></data>
+  <data name="Device.DeliveryPending" xml:space="preserve"><value>Відкликання доставлено на {0} з {1} ПК; очікується на {2}.</value></data>
+  <data name="Device.PendingNeverSeen" xml:space="preserve"><value>{0} (ще не підключався тут)</value></data>
+  <data name="Device.PendingOffline" xml:space="preserve"><value>{0} (не в мережі з {1})</value></data>
+  <data name="Device.DeliveredCount" xml:space="preserve"><value>Відкликання доставлено на {0} з {1} ПК.</value></data>
+  <data name="Device.DeliveryCannotHold" xml:space="preserve"><value>На {0} працює агент, старіший за M5, який не може зберегти відкликання пристрою: надішліть на них поточну збірку агента.</value></data>
+  <data name="Device.AuthorizeTitle" xml:space="preserve"><value>Авторизувати запити пристроїв</value></data>
+  <data name="Access.RequestWrittenFor" xml:space="preserve"><value>Запит для «{0}» записано в {1}.</value></data>
+  <data name="Chooser.AuthorizeAll" xml:space="preserve"><value>Авторизувати всі ({0})…</value></data>
+  <data name="Chooser.AuthorizeAllTitle" xml:space="preserve"><value>Виберіть папку для запитів пристрою</value></data>
+  <data name="Chooser.AuthorizeAllNone" xml:space="preserve"><value>Жодна збережена лабораторія не потребує авторизації чи поновлення на цьому пристрої.</value></data>
+  <data name="Chooser.AuthorizeAllWritten" xml:space="preserve"><value>Запитів пристрою записано: {0}, у {1}. Передайте папку адміністраторові; дозволи імпортуйте через «Додати лабораторії».</value></data>
+  <data name="Device.AuthorizeRequests" xml:space="preserve"><value>Авторизувати запити…</value></data>
+  <data name="Device.Authorized" xml:space="preserve"><value>Авторизовано пристроїв: {0}; поверніть кожен файл дозволу на його пристрій.</value></data>
+  <data name="Device.WithdrawConfirm" xml:space="preserve"><value>Відкликати доступ {0}? ПК, які про це дізнаються, відтоді відхилятимуть цей пристрій, і поновлений сертифікат теж буде відхилено. Цю дію не можна скасувати: пристрою знадобиться нове схвалення.</value></data>
+  <data name="Device.Withdraw" xml:space="preserve"><value>Відкликати доступ…</value></data>
+  <data name="Device.WithdrawReason" xml:space="preserve"><value>адміністратор відкликав доступ {0}</value></data>
+  <data name="Settings.Access" xml:space="preserve"><value>Доступ</value></data>
+  <data name="Settings.TeacherDevices" xml:space="preserve"><value>Пристрої викладачів</value></data>
+  <data name="Settings.TeacherDevicesHint" xml:space="preserve"><value>Усі консолі, що обслуговують цю лабораторію: комп'ютери адміністраторів із ключем і пристрої викладачів, авторизовані дозволом.</value></data>
+  <data name="Settings.NoDevices" xml:space="preserve"><value>Пристроїв поки немає.</value></data>
+  <data name="Unlock.ReasonAuthorize" xml:space="preserve"><value>Авторизація пристрою викладача підписує його сертифікат ключем лабораторії.</value></data>
+  <data name="Unlock.ReasonLabFile" xml:space="preserve"><value>Експорт файлу лабораторії підписує його ключем лабораторії.</value></data>
+  <data name="Unlock.ReasonRenewDevice" xml:space="preserve"><value>Щоб поновити сертифікат цього пристрою для «{0}» як адміністратор, потрібен ключ лабораторії.</value></data>
+  <data name="Code.Dormant" xml:space="preserve"><value>неактивний — з імпортованої резервної копії</value></data>
+  <data name="Enroll.DormantHint" xml:space="preserve"><value>Кодів, що надійшли з імпортованої резервної копії й тут неактивні: {0} ({1}).</value></data>
+  <data name="Enroll.ActivateConfirm" xml:space="preserve"><value>Використовувати неактивні коди ({0}) на цій консолі? Якщо інша консоль адміністратора теж їх використає, код може зареєструвати два ПК; для певності запишіть новий накопичувач.</value></data>
+  <data name="Enroll.Activate" xml:space="preserve"><value>Використати коди з імпортованої резервної копії</value></data>
+  <data name="Enroll.Activated" xml:space="preserve"><value>Активовано кодів: {0}.</value></data>
+  <data name="Chooser.Authorize" xml:space="preserve"><value>Авторизувати…</value></data>
+  <data name="Chooser.AuthorizeRequests" xml:space="preserve"><value>Авторизувати запити…</value></data>
+  <data name="Chooser.RequestRenewal" xml:space="preserve"><value>Запитати поновлення…</value></data>
+  <data name="Chooser.RequestTitle" xml:space="preserve"><value>Зберегти запит пристрою</value></data>
+  <data name="Chooser.RequestWritten" xml:space="preserve"><value>Запит записано в {0}. Передайте його адміністраторові й додайте файл дозволу, який отримаєте у відповідь.</value></data>
+  <data name="Chooser.RequestFailed" xml:space="preserve"><value>Не вдалося записати запит для {0}: {1}</value></data>
+  <data name="Chooser.OpenRefused" xml:space="preserve"><value>Не вдається відкрити {0}: {1}</value></data>
+  <data name="Chooser.RenewCertificate" xml:space="preserve"><value>Поновити сертифікат цього пристрою…</value></data>
+  <data name="Chooser.Renewed" xml:space="preserve"><value>{0}: цей пристрій тепер працює із сертифікатом адміністратора.</value></data>
+  <data name="Chooser.RenewFailed" xml:space="preserve"><value>Не вдалося поновити сертифікат для {0}: {1}</value></data>
+  <data name="Chooser.Status.RenewalDue" xml:space="preserve"><value>Доступ спливає {0} — запитайте поновлення</value></data>
+  <data name="Action.LockScreens" xml:space="preserve"><value>Заблокувати екрани…</value></data>
+  <data name="Action.UnlockScreens" xml:space="preserve"><value>Розблокувати</value></data>
+  <data name="Action.LockAll" xml:space="preserve"><value>Заблокувати всі…</value></data>
+  <data name="Action.UnlockAll" xml:space="preserve"><value>Розблокувати всі</value></data>
+  <data name="Tile.LockedBadge" xml:space="preserve"><value>ЗАБЛОКОВАНО</value></data>
+  <data name="Tile.BroadcastBadge" xml:space="preserve"><value>ТРАНСЛЯЦІЯ</value></data>
+  <data name="Tile.BroadcastTip" xml:space="preserve"><value>Показує екран цієї консолі; клавіатуру й мишу студента заблоковано.</value></data>
+  <data name="Action.ShowScreen" xml:space="preserve"><value>Показати мій екран</value></data>
+  <data name="Action.ShowScreenToAll" xml:space="preserve"><value>Показати мій екран усім</value></data>
+  <data name="Action.StopShowingScreen" xml:space="preserve"><value>Припинити показ</value></data>
+  <data name="Broadcast.Title" xml:space="preserve"><value>Показати мій екран</value></data>
+  <data name="Broadcast.Sent" xml:space="preserve"><value>Показ цього екрана: запит надіслано на {0} з {1} ПК; інші приєднаються, коли з'являться в мережі.</value></data>
+  <data name="Broadcast.Status" xml:space="preserve"><value>Показ цього екрана на {0} ПК · {1} кадр/с · {2:0.0} Мбіт/с на кожен · завершиться сам через {3} хв</value></data>
+  <data name="Broadcast.StatusProblem" xml:space="preserve"><value>Показ цього екрана — але його неможливо захопити: {0}</value></data>
+  <data name="Broadcast.Unsupported" xml:space="preserve"><value>У цій системі консоль поки не може показувати свій екран. Показ екрана працює в macOS і Windows.</value></data>
+  <data name="Broadcast.PermissionExplain" xml:space="preserve"><value>Щоб показати ваш екран студентам, macOS має дозволити LabControl записувати екран.
+
+Натисніть «Запитати macOS», а потім увімкніть LabControl у «Системних параметрах» → «Приватність і безпека» → «Запис екрана й системного аудіо». Після цього закрийте й знову запустіть LabControl — macOS застосовує дозвіл лише після перезапуску.
+
+LabControl використовує його лише під час показу вашого екрана й надсилає зображення лише на ПК лабораторії.</value></data>
+  <data name="Broadcast.PermissionAsk" xml:space="preserve"><value>Запитати macOS</value></data>
+  <data name="Broadcast.PermissionGranted" xml:space="preserve"><value>macOS дозволяє LabControl записувати екран. Знову натисніть «Показати мій екран».</value></data>
+  <data name="Broadcast.PermissionRestart" xml:space="preserve"><value>Увімкніть LabControl у «Системних параметрах» → «Приватність і безпека» → «Запис екрана й системного аудіо», потім закрийте й знову запустіть LabControl.</value></data>
+  <data name="Tile.LockedBy" xml:space="preserve"><value>заблокувала {0}</value></data>
+  <data name="Tile.LockedByWeak" xml:space="preserve"><value>заблокувала {0} — введення заблоковано не повністю: {1}</value></data>
+  <data name="Tile.LockProblemFormat" xml:space="preserve"><value>блокування: {0}</value></data>
+  <data name="Lock.ByThisConsole" xml:space="preserve"><value>ця консоль</value></data>
+  <data name="Lock.ByUnknown" xml:space="preserve"><value>інша консоль</value></data>
+  <data name="Lock.InputNotBlocked" xml:space="preserve"><value>перехоплювачі введення помічника не встановлено</value></data>
+  <data name="Overlay.helper_down" xml:space="preserve"><value>на ПК не підключено помічника сеансу</value></data>
+  <data name="Overlay.no_session" xml:space="preserve"><value>на ПК ніхто не ввійшов у систему</value></data>
+  <data name="Overlay.not_shown_yet" xml:space="preserve"><value>ПК ще не показав блокування</value></data>
+  <data name="Overlay.window_failed" xml:space="preserve"><value>не вдалося показати екран блокування на ПК</value></data>
+  <data name="Overlay.hook_refused" xml:space="preserve"><value>не вдалося встановити перехоплювачі введення</value></data>
+  <data name="Overlay.blockinput_fallback" xml:space="preserve"><value>натомість використовується BlockInput, який блокує й віддалене керування</value></data>
+  <data name="Overlay.input_open" xml:space="preserve"><value>введення студента НЕ заблоковано</value></data>
+  <data name="Lock.Title" xml:space="preserve"><value>Заблокувати екрани</value></data>
+  <data name="Lock.Targets" xml:space="preserve"><value>Заблокувати екрани на {0} ПК</value></data>
+  <data name="Lock.MessageLabel" xml:space="preserve"><value>Повідомлення на екранах студентів</value></data>
+  <data name="Lock.MessagePlaceholder" xml:space="preserve"><value>Будь ласка, подивіться на викладача.</value></data>
+  <data name="Lock.UntilLifted" xml:space="preserve"><value>Доки я не розблокую</value></data>
+  <data name="Lock.ForMinutes" xml:space="preserve"><value>На стільки хвилин:</value></data>
+  <data name="Lock.Ceiling" xml:space="preserve"><value>Блокування ніколи не триває довше {0} хвилин: кожен ПК сам знімає його після цього ліміту, навіть якщо цієї консолі вже немає.</value></data>
+  <data name="Lock.SecureAttention" xml:space="preserve"><value>Клавіатуру, мишу, Alt+Tab і клавішу Windows заблоковано. Ctrl+Alt+Del не блокується — Windows цього не дозволяє, — і екран блокування про це повідомляє.</value></data>
+  <data name="Lock.Offline" xml:space="preserve"><value>ПК, що не в мережі або застарілий і не підтримує блокування, пропускається; блокування для нього не ставиться в чергу.</value></data>
+  <data name="Lock.Action" xml:space="preserve"><value>Заблокувати</value></data>
+  <data name="Lock.Sent" xml:space="preserve"><value>Блокування надіслано на {0} з {1} ПК; кожна плитка показує, що повідомляє ПК.</value></data>
+  <data name="Lock.UnlockSent" xml:space="preserve"><value>Розблокування надіслано на {0} з {1} ПК.</value></data>
+  <data name="Event.LockSent" xml:space="preserve"><value>Блокування надіслано на {0} ПК, пропущено {1} (не в мережі або застарілі): «{2}».</value></data>
+  <data name="Event.UnlockSent" xml:space="preserve"><value>Розблокування надіслано на {0} ПК, пропущено {1} (не в мережі або застарілі).</value></data>
+  <data name="Event.OverlayRefused" xml:space="preserve"><value>{0}: запит на блокування не застосовано — {1}</value></data>
+  <data name="Event.Locked" xml:space="preserve"><value>{0}: екран заблокувала {1}.</value></data>
+  <data name="Event.Unlocked" xml:space="preserve"><value>{0}: екран розблоковано.</value></data>
+  <data name="Event.BroadcastStarted" xml:space="preserve"><value>Показ цього екрана: надіслано на {0} ПК, поки пропущено {1} (не в мережі або застарілі; ПК, що не в мережі, приєднається після підключення).</value></data>
+  <data name="Event.BroadcastAdded" xml:space="preserve"><value>Додано до трансляції екрана: {0} ПК, поки пропущено {1} (не в мережі або застарілі).</value></data>
+  <data name="Event.BroadcastStopped" xml:space="preserve"><value>Показ цього екрана припинено.</value></data>
+  <data name="Event.BroadcastExpired" xml:space="preserve"><value>Трансляція екрана завершилася після ліміту в {0} хв; запустіть її знову, щоб продовжити.</value></data>
+  <data name="Event.BroadcastDeparture" xml:space="preserve"><value>Трансляція екрана завершилася, бо консоль вийшла з лабораторії.</value></data>
+  <data name="Action.Internet" xml:space="preserve"><value>Інтернет…</value></data>
+  <data name="Action.InternetForAll" xml:space="preserve"><value>Інтернет для всіх…</value></data>
+  <data name="Event.InternetBlockSent" xml:space="preserve"><value>«Без інтернету» надіслано на {0} ПК, пропущено {1} (не в мережі або застарілі).</value></data>
+  <data name="Event.InternetWhitelistSent" xml:space="preserve"><value>«Лише ці сайти» ({2}) надіслано на {0} ПК, пропущено {1} (не в мережі або застарілі).</value></data>
+  <data name="Event.InternetLiftSent" xml:space="preserve"><value>Інтернет відкрито на {0} ПК, пропущено {1} (не в мережі або застарілі).</value></data>
+  <data name="Event.InternetAllowSent" xml:space="preserve"><value>{0} дозволено на {1} ПК, пропущено {2}.</value></data>
+  <data name="Event.InternetRefused" xml:space="preserve"><value>{0}: запит щодо інтернету не застосовано — {1}</value></data>
+  <data name="Event.InternetOpened" xml:space="preserve"><value>{0}: інтернет знову відкрито.</value></data>
+  <data name="Event.InternetBlocked" xml:space="preserve"><value>{0}: інтернет заблокувала {1}.</value></data>
+  <data name="Event.InternetWhitelisted" xml:space="preserve"><value>{0}: інтернет обмежила дозволеними сайтами {1}.</value></data>
+  <data name="Tile.InternetBlockedBadge" xml:space="preserve"><value>БЕЗ ІНТЕРНЕТУ</value></data>
+  <data name="Tile.InternetWhitelistBadge" xml:space="preserve"><value>ЛИШЕ САЙТИ</value></data>
+  <data name="Tile.InternetWhitelistBadgeNamed" xml:space="preserve"><value>САЙТИ: {0}</value></data>
+  <data name="Tile.InternetBlockedBy" xml:space="preserve"><value>інтернет заблокувала {0}, залишилося {1} хв</value></data>
+  <data name="Tile.InternetWhitelistBy" xml:space="preserve"><value>дозволених шаблонів сайтів: {0}, встановила {1}, залишилося {2} хв</value></data>
+  <data name="Tile.InternetRefused" xml:space="preserve"><value>Нещодавно відхилених імен: {0} — див. «Інтернет…»</value></data>
+  <data name="Tile.InternetProblemFormat" xml:space="preserve"><value>інтернет: {0}</value></data>
+  <data name="Internet.restore_unconfirmed" xml:space="preserve"><value>останнє відновлення не підтверджено; ПК відкритий наскільки можливо, але це не доведено</value></data>
+  <data name="Internet.firewall_off" xml:space="preserve"><value>Брандмауер Windows вимкнено для мережевого профілю, що використовується; обмеження неможливо застосувати</value></data>
+  <data name="Internet.resolver_down" xml:space="preserve"><value>DNS-фільтр дозволених сайтів не працює, тому жоден сайт не відкривається</value></data>
+  <data name="Internet.no_upstream" xml:space="preserve"><value>ПК не має DNS-сервера, тому жоден дозволений сайт не відкривається</value></data>
+  <data name="Internet.exam_wins" xml:space="preserve"><value>діє обмеження інтернету від іспиту; це обмеження чекає під ним</value></data>
+  <data name="Internet.Title" xml:space="preserve"><value>Інтернет</value></data>
+  <data name="Internet.Targets" xml:space="preserve"><value>Інтернет для {0} ПК</value></data>
+  <data name="Internet.ModeOpen" xml:space="preserve"><value>Відкритий — ПК як були (знімає обмеження)</value></data>
+  <data name="Internet.ModeWhitelist" xml:space="preserve"><value>Лише ці сайти:</value></data>
+  <data name="Internet.ModeBlocked" xml:space="preserve"><value>Без інтернету</value></data>
+  <data name="Internet.BlockedKeepsLab" xml:space="preserve"><value>У будь-якому режимі власна мережа лабораторії працює: ця консоль, надсилання файлів і встановлення пакетів, спільні папки, принтер.</value></data>
+  <data name="Internet.HostsPlaceholder" xml:space="preserve"><value>один сайт у рядку: *.jetbrains.com, docs.oracle.com</value></data>
+  <data name="Internet.HostsOnly" xml:space="preserve"><value>Лише назви сайтів: правило не може дозволити одну сторінку сайту й заборонити іншу. «*.jetbrains.com» дозволяє й сам jetbrains.com.</value></data>
+  <data name="Internet.PresetNamePlaceholder" xml:space="preserve"><value>назва шаблону</value></data>
+  <data name="Internet.SavePreset" xml:space="preserve"><value>Зберегти як шаблон</value></data>
+  <data name="Internet.DeletePreset" xml:space="preserve"><value>Видалити шаблон</value></data>
+  <data name="Internet.UnsavedList" xml:space="preserve"><value>(незбережений список)</value></data>
+  <data name="Internet.ForLesson" xml:space="preserve"><value>На це заняття ({0} хв)</value></data>
+  <data name="Internet.UntilLifted" xml:space="preserve"><value>Доки я знову не відкрию</value></data>
+  <data name="Internet.Ceiling" xml:space="preserve"><value>Кожен ПК сам відкриває інтернет найпізніше через {0} год, навіть якщо цю консоль закрито.</value></data>
+  <data name="Internet.RefusedHeading" xml:space="preserve"><value>Імена, нещодавно відхилені списком дозволених сайтів (сайту може знадобитися одне з них, щоб завантажитися):</value></data>
+  <data name="Internet.NothingRefused" xml:space="preserve"><value>Нещодавно нічого не відхилено.</value></data>
+  <data name="Internet.RefusedRow" xml:space="preserve"><value>{0} — {1} ПК</value></data>
+  <data name="Internet.Allow" xml:space="preserve"><value>Дозволити</value></data>
+  <data name="Internet.Apply" xml:space="preserve"><value>Застосувати</value></data>
+  <data name="Internet.Offline" xml:space="preserve"><value>ПК, що не в мережі або застарілий і не підтримує керування інтернетом, пропускається; обмеження для нього не ставиться в чергу.</value></data>
+  <data name="Internet.NoHosts" xml:space="preserve"><value>Додайте хоча б один сайт або виберіть «Без інтернету».</value></data>
+  <data name="Internet.HostProblemFormat" xml:space="preserve"><value>«{0}»: {1}</value></data>
+  <data name="Internet.Host.empty" xml:space="preserve"><value>порожньо</value></data>
+  <data name="Internet.Host.invalid" xml:space="preserve"><value>неправильна назва сайту</value></data>
+  <data name="Internet.Host.ip_literal" xml:space="preserve"><value>це адреса, а не назва сайту — вкажіть назву сайту</value></data>
+  <data name="Internet.Host.wildcard_too_broad" xml:space="preserve"><value>надто широко — вкажіть принаймні сайт, як-от *.example.com</value></data>
+  <data name="Internet.Host.wildcard_misplaced" xml:space="preserve"><value>«*.» може стояти лише на початку назви, як-от *.example.com</value></data>
+  <data name="Internet.Host.single_label" xml:space="preserve"><value>одне слово — це не сайт в інтернеті</value></data>
+  <data name="Internet.Sent" xml:space="preserve"><value>Обмеження інтернету надіслано на {0} з {1} ПК; кожна плитка показує, що повідомляє ПК.</value></data>
+  <data name="Internet.LiftSent" xml:space="preserve"><value>Інтернет відкрито на {0} з {1} ПК.</value></data>
+  <data name="Internet.Preset.name_empty" xml:space="preserve"><value>Дайте шаблону назву.</value></data>
+  <data name="Internet.Preset.name_taken" xml:space="preserve"><value>Шаблон із такою назвою вже є.</value></data>
+  <data name="Unlock.Remember" xml:space="preserve"><value>Запам'ятати на цьому комп'ютері — наступного разу без парольної фрази</value></data>
+  <data name="Unlock.ReasonRemember" xml:space="preserve"><value>Відкрийте ключ лабораторії один раз, щоб запам'ятати його на цьому комп'ютері.</value></data>
+  <data name="Key.Remembered" xml:space="preserve"><value>Ключ лабораторії: запам'ятовано на цьому комп'ютері — відкривається сам, коли потрібно.</value></data>
+  <data name="Key.Remember" xml:space="preserve"><value>Запам'ятати на цьому комп'ютері</value></data>
+  <data name="Key.Forget" xml:space="preserve"><value>Забути на цьому комп'ютері</value></data>
+  <data name="Key.RememberHint" xml:space="preserve"><value>Запам'ятований ключ відкривається на цьому комп'ютері без парольної фрази; парольна фраза й код відновлення все одно потрібні для резервної копії та на будь-якому іншому комп'ютері. Однаково зберігайте їх.</value></data>
+  <data name="Key.RememberFailed" xml:space="preserve"><value>Не вдалося запам'ятати ключ на цьому комп'ютері; парольна фраза працює й далі.</value></data>
+  <data name="Key.RememberedEvent" xml:space="preserve"><value>Ключ лабораторії запам'ятовано на цьому комп'ютері.</value></data>
+  <data name="Key.ForgottenEvent" xml:space="preserve"><value>Ключ лабораторії більше не запам'ятовано на цьому комп'ютері.</value></data>
+  <data name="Key.ForgetConfirm" xml:space="preserve"><value>Забути ключ лабораторії на цьому комп'ютері? Тут знову знадобиться парольна фраза або код відновлення — переконайтеся, що у вас є одне з них.</value></data>
+  <data name="Key.HolderThisComputer" xml:space="preserve"><value>Цей комп'ютер (запам'ятовано)</value></data>
+  <data name="Key.HolderOtherComputer" xml:space="preserve"><value>Інший комп'ютер: {0} (запам'ятовано)</value></data>
+  <data name="Move.ScriptName" xml:space="preserve"><value>Перенесення на новий ключ лабораторії</value></data>
+  <data name="Event.MoveSent" xml:space="preserve"><value>{0}: надіслано перенесення на новий ключ «{1}»; ПК повернеться з новим ключем протягом хвилини.</value></data>
+  <data name="Event.RevokedLinkClosed" xml:space="preserve"><value>{0}: його сертифікат відкликано, тому з’єднання закрито. Відтепер ПК буде відмовлено.</value></data>
+  <data name="Packages.QueuedInstallReplaced" xml:space="preserve"><value>Не доставлено: пакет замінили або видалили з каталогу, перш ніж ПК повернувся. Встановіть його знову на вкладці «Пакети».</value></data>
+  <data name="Update.QueuedSuperseded" xml:space="preserve"><value>Не доставлено: поки ПК був вимкнений, на нього надіслано збірку агента {0}, яка замінює цю.</value></data>
+  <data name="Move.Action" xml:space="preserve"><value>Забули парольну фразу? Перенести лабораторію на новий ключ…</value></data>
+  <data name="Move.Title" xml:space="preserve"><value>Перенести лабораторію на новий ключ</value></data>
+  <data name="Move.Explain" xml:space="preserve"><value>Використовуйте це, лише якщо ніхто не знає парольної фрази «{0}», а код відновлення теж втрачено.
+
+Буде створено новий ключ лабораторії з новою парольною фразою й новим кодом відновлення, і його буде запам'ятовано на цьому комп'ютері. Кожен увімкнений зараз ПК буде перенесено на нього через мережу протягом хвилини — без USB-накопичувача, без підходу до ПК; він зберігає свій номер, обліковий запис студента й налаштування. Вимкнені ПК буде перенесено, коли вони наступного разу підключаться до цієї лабораторії, яка залишається в «Моїх лабораторіях», доки вони не перейдуть.
+
+Після цього пристроям інших викладачів знадобиться новий файл лабораторії, а старі резервні копії більше не відкривають цю лабораторію.</value></data>
+  <data name="Move.NewKeyHeading" xml:space="preserve"><value>Новий ключ лабораторії</value></data>
+  <data name="Move.NewKeyHint" xml:space="preserve"><value>Ваше ім'я та парольна фраза для нового ключа. Цього разу збережіть парольну фразу ще й у надійному місці — і запишіть код відновлення, який буде показано далі.</value></data>
+  <data name="Move.CreateFailed" xml:space="preserve"><value>Не вдалося створити новий ключ лабораторії: {0}</value></data>
+  <data name="Move.Sending" xml:space="preserve"><value>Надсилання перенесення на {0} ПК…</value></data>
+  <data name="Move.Summary" xml:space="preserve"><value>ПК, що переходять на новий ключ і повернуться протягом хвилини: {0}; не вдалося перенести таким способом: {1} (встановлені без інсталятора — використайте Setup.exe --rekey з USB-накопичувача); не відповіли: {2}; вимкнені й перейдуть, коли підключаться до цієї лабораторії: {3}. Нова лабораторія — «{4}».</value></data>
+  <data name="Move.SwitchQuestion" xml:space="preserve"><value>Перейти до нової лабораторії зараз? Перенесені ПК зареєструються там, коли повернуться.</value></data>
+  <data name="Move.Switch" xml:space="preserve"><value>Перейти зараз</value></data>
+  <data name="Event.LabMoved" xml:space="preserve"><value>«{0}» переноситься на новий ключ лабораторії; її ПК отримують команду перенесення.</value></data>
+  <data name="Chooser.Status.MovedToNewKey" xml:space="preserve"><value>старий ключ — ПК, що підключаються сюди, переносяться на новий ключ</value></data>
+  <data name="Internet.dns_not_held" xml:space="preserve"><value>мережевий адаптер постійно повертає свої налаштування DNS, тому дозволені сайти там можуть не відкриватися</value></data>
+  <data name="Action.Exam" xml:space="preserve"><value>Іспит…</value></data>
+  <data name="Action.ExamForAll" xml:space="preserve"><value>Іспит для всіх…</value></data>
+  <data name="Action.ExtendExam" xml:space="preserve"><value>Продовжити іспит…</value></data>
+  <data name="Action.EndExam" xml:space="preserve"><value>Завершити іспит</value></data>
+  <data name="Event.ExamStartSent" xml:space="preserve"><value>Іспит ({2}) надіслано на {0} ПК, пропущено {1} (не в мережі або застарілі).</value></data>
+  <data name="Event.ExamExtendSent" xml:space="preserve"><value>Іспит продовжено на {0} хв на {1} ПК, пропущено {2}.</value></data>
+  <data name="Event.ExamEndSent" xml:space="preserve"><value>Завершення іспиту надіслано на {0} ПК, пропущено {1}.</value></data>
+  <data name="Event.ExamLateJoin" xml:space="preserve"><value>{0} підключився під час іспиту лабораторії й отримав його з часом, що залишився.</value></data>
+  <data name="Event.ExamRefused" xml:space="preserve"><value>{0}: запит щодо іспиту не застосовано — {1}</value></data>
+  <data name="Event.ExamStarted" xml:space="preserve"><value>{0}: іспит розпочала {1}.</value></data>
+  <data name="Event.ExamEnded" xml:space="preserve"><value>{0}: іспит завершено.</value></data>
+  <data name="Tile.ExamBadge" xml:space="preserve"><value>ІСПИТ</value></data>
+  <data name="Tile.ExamBadgeTimed" xml:space="preserve"><value>ІСПИТ {0}</value></data>
+  <data name="Tile.ExamBy" xml:space="preserve"><value>іспит встановила {0}</value></data>
+  <data name="Tile.ExamPrograms" xml:space="preserve"><value>лише ці програми: {0}</value></data>
+  <data name="Tile.ExamProgramsNotWatched" xml:space="preserve"><value>лише ці програми ({0}) — але ПК зараз не стежить за своїми програмами</value></data>
+  <data name="Tile.ExamAnyProgram" xml:space="preserve"><value>дозволено будь-які програми</value></data>
+  <data name="Tile.ExamClosed" xml:space="preserve"><value>нещодавно закрито: {0}</value></data>
+  <data name="Tile.ExamProblemFormat" xml:space="preserve"><value>іспит: {0}</value></data>
+  <data name="Exam.Reason.no_user" xml:space="preserve"><value>ніхто не ввійшов у систему, тож немає екрана для смуги іспиту й програм, за якими стежити</value></data>
+  <data name="Exam.Reason.whitelist_suspended" xml:space="preserve"><value>список програм призупинено, поки ПК вимикається, перезавантажується чи виходить із системи</value></data>
+  <data name="Exam.Reason.watch_failed" xml:space="preserve"><value>ПК не може прочитати список своїх програм, тому список дозволених не застосовується</value></data>
+  <data name="Exam.Reason.end_refused" xml:space="preserve"><value>недозволена програма не закрилася</value></data>
+  <data name="Exam.Reason.strip_not_shown" xml:space="preserve"><value>смуги іспиту ще немає на екрані студента (помічник сеансу не підключений)</value></data>
+  <data name="Exam.Title" xml:space="preserve"><value>Іспит</value></data>
+  <data name="Exam.Targets" xml:space="preserve"><value>Іспит на {0} ПК</value></data>
+  <data name="Exam.TargetsAll" xml:space="preserve"><value>Іспит для всієї лабораторії ({0} ПК)</value></data>
+  <data name="Exam.Unsaved" xml:space="preserve"><value>(не збережений шаблон)</value></data>
+  <data name="Exam.MessageLabel" xml:space="preserve"><value>Рядок угорі екранів студентів (необов'язково)</value></data>
+  <data name="Exam.MessagePlaceholder" xml:space="preserve"><value>Контрольна 3: масиви. Успіхів!</value></data>
+  <data name="Exam.NoTimer" xml:space="preserve"><value>Без таймера — іспит триває, доки я його не завершу</value></data>
+  <data name="Exam.TimerMinutes" xml:space="preserve"><value>Таймер, хвилин:</value></data>
+  <data name="Exam.TimeUp" xml:space="preserve"><value>Коли час таймера мине, кожен ПК завершить іспит і заблокує екран написом «Час вичерпано», доки ви його не розблокуєте.</value></data>
+  <data name="Exam.RestrictPrograms" xml:space="preserve"><value>Дозволено запускати лише ці програми (по одній у рядку):</value></data>
+  <data name="Exam.ProgramsPlaceholder" xml:space="preserve"><value>idea64.exe
+java.exe</value></data>
+  <data name="Exam.SweepWarning" xml:space="preserve"><value>Попередьте аудиторію: відкриті зараз програми, яких немає в списку, отримають запит закритися й будуть закриті через {0} с — незбережену роботу в них буде втрачено. Програму не зі списку, запущену під час іспиту, буде закрито одразу. Власні програми Windows і робочий стіл ніколи не закриваються.</value></data>
+  <data name="Exam.RenameHole" xml:space="preserve"><value>Програми розпізнаються за назвою виконуваного файлу: перейменована програма пройде, а все, що запускає дозволена програма, теж дозволено — зокрема браузер, відкритий із термінала IDE.</value></data>
+  <data name="Exam.InternetLabel" xml:space="preserve"><value>Інтернет під час іспиту:</value></data>
+  <data name="Exam.InternetUntouched" xml:space="preserve"><value>Залишити як є</value></data>
+  <data name="Exam.InternetWhitelist" xml:space="preserve"><value>Лише сайти шаблону:</value></data>
+  <data name="Exam.NoInternetPreset" xml:space="preserve"><value>Виберіть шаблон інтернету з принаймні одним сайтом або інше налаштування інтернету.</value></data>
+  <data name="Exam.Ceiling" xml:space="preserve"><value>Кожен ПК сам завершує іспит найпізніше через {0} год, навіть якщо цю консоль закрито. Окреме обмеження інтернету, встановлене до іспиту, повертається після його завершення.</value></data>
+  <data name="Exam.LateJoin" xml:space="preserve"><value>ПК лабораторії, що з'явиться в мережі до кінця іспиту, приєднається до нього з часом, що залишився (поки цю консоль не закрито).</value></data>
+  <data name="Exam.Offline" xml:space="preserve"><value>ПК, що не в мережі або застарілий і не підтримує іспити, пропускається; іспит для нього не ставиться в чергу.</value></data>
+  <data name="Exam.Start" xml:space="preserve"><value>Почати іспит</value></data>
+  <data name="Exam.ProgramProblem" xml:space="preserve"><value>«{0}» — не назва програми</value></data>
+  <data name="Exam.TooManyPrograms" xml:space="preserve"><value>Щонайбільше {0} програм.</value></data>
+  <data name="Exam.ExtendTitle" xml:space="preserve"><value>Продовжити іспит</value></data>
+  <data name="Exam.ExtendTargets" xml:space="preserve"><value>Продовжити іспит на {0} ПК</value></data>
+  <data name="Exam.ExtendNote" xml:space="preserve"><value>Додається до часу, що залишився на кожному ПК. Іспит без таймера не змінюється.</value></data>
+  <data name="Exam.ExtendBy" xml:space="preserve"><value>+{0} хв</value></data>
+  <data name="Exam.Sent" xml:space="preserve"><value>Іспит надіслано на {0} з {1} ПК; кожна плитка показує, що повідомляє ПК.</value></data>
+  <data name="Exam.ExtendSent" xml:space="preserve"><value>Продовження надіслано на {0} з {1} ПК.</value></data>
+  <data name="Exam.EndSent" xml:space="preserve"><value>Завершення іспиту надіслано на {0} з {1} ПК.</value></data>
+  <data name="Exam.NoBrowser" xml:space="preserve"><value>У списку дозволених програм немає браузера, тож дозволені сайти неможливо відкрити: браузер закриється щойно запуститься. Додайте msedge.exe (або chrome.exe, firefox.exe).</value></data>
+  <data name="Collect.FolderInvalid" xml:space="preserve"><value>Вкажіть папку в профілі студента, як-от Desktop\Exam або Documents\Java\Lab3, — не диск і не шлях, що виходить за межі профілю.</value></data>
+  <data name="Collect.GrantRefusedSize" xml:space="preserve"><value>Зібрані роботи більші, ніж дозволено для збирання.</value></data>
+  <data name="Collect.GrantRefusedJob" xml:space="preserve"><value>Ця консоль не збирає роботи з цього ПК у межах цього завдання.</value></data>
+  <data name="Collect.GrantRefusedDisk" xml:space="preserve"><value>Цей комп'ютер не зміг зберегти зібрані роботи: {0}</value></data>
+  <data name="Collect.Missing" xml:space="preserve"><value>ПК не був у мережі, коли збирали роботи.</value></data>
+  <data name="Collect.NoUpload" xml:space="preserve"><value>ПК повідомив, що надіслав роботи, але нічого повного не надійшло.</value></data>
+  <data name="Collect.UnpackFailed" xml:space="preserve"><value>Не вдалося розпакувати зібрані роботи: {0}</value></data>
+  <data name="Collect.ReportTitle" xml:space="preserve"><value>{0} — папка {1} — {2}</value></data>
+  <data name="Collect.State.Waiting" xml:space="preserve"><value>очікує завершення</value></data>
+  <data name="Collect.State.Collecting" xml:space="preserve"><value>збирання</value></data>
+  <data name="Collect.State.Collected" xml:space="preserve"><value>зібрано</value></data>
+  <data name="Collect.State.Empty" xml:space="preserve"><value>нічого збирати</value></data>
+  <data name="Collect.State.Missing" xml:space="preserve"><value>ВІДСУТНІЙ (не в мережі)</value></data>
+  <data name="Collect.State.Failed" xml:space="preserve"><value>ПОМИЛКА</value></data>
+  <data name="Collect.Files" xml:space="preserve"><value>файлів: {0}</value></data>
+  <data name="Collect.DefaultName" xml:space="preserve"><value>Зібрано</value></data>
+  <data name="Collect.ExamName" xml:space="preserve"><value>Іспит</value></data>
+  <data name="Event.CollectFailed" xml:space="preserve"><value>{0}: не вдалося зібрати роботи: {1}</value></data>
+  <data name="Event.CollectDone" xml:space="preserve"><value>{0}: роботи зібрано з {1} з {2} ПК. Не зібрано: {3}. Збережено в {4}.</value></data>
+  <data name="Event.CollectDoneAll" xml:space="preserve"><value>{0}: роботи зібрано з усіх ПК ({1}). Збережено в {2}.</value></data>
+  <data name="Event.CollectReportFailed" xml:space="preserve"><value>Не вдалося записати звіт про збирання в {0}: {1}</value></data>
+  <data name="Action.CollectFiles" xml:space="preserve"><value>Зібрати файли…</value></data>
+  <data name="Action.ResetProfile" xml:space="preserve"><value>Скинути профіль…</value></data>
+  <data name="Collect.Title" xml:space="preserve"><value>Зібрати файли</value></data>
+  <data name="Collect.Targets" xml:space="preserve"><value>Зібрати папку з {0} ПК</value></data>
+  <data name="Collect.NameLabel" xml:space="preserve"><value>Назва цього збирання (папка, у яку його збережено, з датою й часом):</value></data>
+  <data name="Collect.NameMissing" xml:space="preserve"><value>Дайте збиранню назву.</value></data>
+  <data name="Collect.FolderLabel" xml:space="preserve"><value>Папка на кожному студентському ПК, у профілі студента:</value></data>
+  <data name="Collect.FolderHint" xml:space="preserve"><value>Наприклад, Desktop\Exam або Documents\Java\Lab3. Desktop, Documents і Downloads — це власні папки студента («Робочий стіл», «Документи», «Завантаження»), хоч би де Windows їх зберігала.</value></data>
+  <data name="Collect.DestinationLabel" xml:space="preserve"><value>Зберегти на цьому комп'ютері в:</value></data>
+  <data name="Collect.DestinationMissing" xml:space="preserve"><value>Виберіть папку на цьому комп'ютері для збереження зібраних робіт.</value></data>
+  <data name="Collect.Browse" xml:space="preserve"><value>Огляд…</value></data>
+  <data name="Collect.OfflineNote" xml:space="preserve"><value>ПК, що зараз не в мережі, позначаються у report.txt як відсутні; пізніше їх не запитують знову. Роботи кожного ПК потрапляють в окрему папку (PC-07).</value></data>
+  <data name="Collect.Caps" xml:space="preserve"><value>Щонайбільше {0} МБ і {1} файлів з одного ПК; більшу папку буде відхилено із зазначенням її розміру. Файли, відкриті в програмі, пропускаються й перелічуються; посилання ніколи не відстежуються.</value></data>
+  <data name="Collect.Start" xml:space="preserve"><value>Зібрати</value></data>
+  <data name="Collect.Started" xml:space="preserve"><value>Збирання з {0} ПК у {1}.</value></data>
+  <data name="Collect.OpenFolder" xml:space="preserve"><value>Відкрити папку</value></data>
+  <data name="Collect.Failed" xml:space="preserve"><value>Не вдалося почати збирання: {0}</value></data>
+  <data name="Reset.Title" xml:space="preserve"><value>Скинути профіль</value></data>
+  <data name="Reset.Targets" xml:space="preserve"><value>Скинути профіль студента на {0} ПК</value></data>
+  <data name="Reset.Light" xml:space="preserve"><value>Легке: очистити «Робочий стіл», «Документи» й «Завантаження»</value></data>
+  <data name="Reset.LightNote" xml:space="preserve"><value>Усе в цих трьох папках буде видалено, зокрема Materials. Встановлені програми й налаштування залишаються, і студент не виходить із системи. Файли, відкриті в програмі, залишаються, і про них повідомляється.</value></data>
+  <data name="Reset.Full" xml:space="preserve"><value>Повне: видалити весь профіль і перезавантажити</value></data>
+  <data name="Reset.FullNote" xml:space="preserve"><value>Студент виходить із системи, профіль видаляється, і ПК перезавантажується; автоматичний вхід створює новий чистий профіль. Усе, що зберіг студент, і всі змінені ним налаштування буде втрачено.</value></data>
+  <data name="Reset.Warning" xml:space="preserve"><value>Цю дію не можна скасувати. ПК, на якому триває іспит, відмовить (спершу завершіть іспит), так само як і ПК, встановлений без облікового запису студента LabControl. ПК, що не в мережі, пропускаються.</value></data>
+  <data name="Reset.ConfirmLight" xml:space="preserve"><value>Очистити три папки</value></data>
+  <data name="Reset.ConfirmFull" xml:space="preserve"><value>Видалити профілі й перезавантажити</value></data>
+  <data name="Reset.Sent" xml:space="preserve"><value>Скидання профілю надіслано на {0} з {1} ПК; панель завдань показує відповідь кожного ПК.</value></data>
+  <data name="Exam.CollectWork" xml:space="preserve"><value>Зібрати роботи наприкінці</value></data>
+  <data name="Exam.CollectNote" xml:space="preserve"><value>Папку буде створено на ПК кожного студента на початку іспиту й зібрано після його завершення — коли мине час таймера або ви його завершите. ПК, що тоді не в мережі, позначаються як відсутні.</value></data>
+  <data name="Language.Heading" xml:space="preserve"><value>Мова</value></data>
+  <data name="Language.RestartHint" xml:space="preserve"><value>Консоль перейде на мову «{0}» під час наступного запуску.</value></data>
+  <data name="Language.RestartNow" xml:space="preserve"><value>Перезапустити зараз</value></data>
+  <data name="Language.SaveFailed" xml:space="preserve"><value>Не вдалося зберегти мову: {0}</value></data>
+  <data name="Tab.Packages" xml:space="preserve"><value>Пакети</value></data>
+  <data name="Packages.Add" xml:space="preserve"><value>Додати пакет…</value></data>
+  <data name="Packages.AddTitle" xml:space="preserve"><value>Додати пакет</value></data>
+  <data name="Packages.AddDescription" xml:space="preserve"><value>Виберіть інсталятор програми (.exe, .msi або .zip з інсталятором і його файлами) на цьому комп'ютері. LabControl прочитає його, запропонує, як установлювати без запитань, і збереже копію в каталозі цієї лабораторії, тож оригінал потім можна видалити. Інтернет на ПК не потрібен.</value></data>
+  <data name="Packages.Choose" xml:space="preserve"><value>Вибрати інсталятор…</value></data>
+  <data name="Packages.InstallerFiles" xml:space="preserve"><value>Інсталятори</value></data>
+  <data name="Packages.Reading" xml:space="preserve"><value>Читаю інсталятор…</value></data>
+  <data name="Packages.Copying" xml:space="preserve"><value>Копіюю інсталятор у каталог…</value></data>
+  <data name="Packages.NoInstaller" xml:space="preserve"><value>Інсталятор не вибрано.</value></data>
+  <data name="Packages.FileFormat" xml:space="preserve"><value>{0} ({1})</value></data>
+  <data name="Packages.DetectedFormat" xml:space="preserve"><value>Розпізнано: {0}</value></data>
+  <data name="Packages.Family.Unknown" xml:space="preserve"><value>нерозпізнаний інсталятор</value></data>
+  <data name="Packages.Family.Msi" xml:space="preserve"><value>Windows Installer (MSI)</value></data>
+  <data name="Packages.Family.Nsis" xml:space="preserve"><value>NSIS</value></data>
+  <data name="Packages.Family.Inno" xml:space="preserve"><value>Inno Setup</value></data>
+  <data name="Packages.Family.InstallShield" xml:space="preserve"><value>InstallShield</value></data>
+  <data name="Packages.Family.WixBurn" xml:space="preserve"><value>пакет WiX (bundle)</value></data>
+  <data name="Packages.Hint.Unknown" xml:space="preserve"><value>LabControl не розпізнає цей інсталятор. Введіть аргументи тихого встановлення з документації програми (часто /S, /silent або /quiet) і спершу перевірте їх на одному ПК.</value></data>
+  <data name="Packages.Hint.Msi" xml:space="preserve"><value>Пакет Windows Installer: його запускає msiexec, а аргументи нижче додаються після нього.</value></data>
+  <data name="Packages.Hint.Nsis" xml:space="preserve"><value>Інсталятор NSIS: /S чутливий до регістру. Іншу теку вказують останньою, як /D=C:\шлях без лапок.</value></data>
+  <data name="Packages.Hint.Inno" xml:space="preserve"><value>Інсталятор Inno Setup. Програма, що встановлюється лише для поточного користувача, встановиться для системного облікового запису — перевірте на одному ПК.</value></data>
+  <data name="Packages.Hint.InstallShield" xml:space="preserve"><value>Інсталятор InstallShield: ці аргументи підходять для поширеного типу на основі MSI; для InstallScript потрібен записаний файл відповідей.</value></data>
+  <data name="Packages.Hint.WixBurn" xml:space="preserve"><value>Пакет WiX — інсталятор кількох пакетів: /quiet встановлює їх усі без запитань.</value></data>
+  <data name="Packages.ReplacesFormat" xml:space="preserve"><value>Це замінить {0} {1} у каталозі: один запис на програму, старий інсталятор буде видалено з цього комп'ютера.</value></data>
+  <data name="Packages.Problem.NameMissing" xml:space="preserve"><value>Дайте пакету назву.</value></data>
+  <data name="Packages.Problem.NameTooLong" xml:space="preserve"><value>Назва задовга або містить керівні символи.</value></data>
+  <data name="Packages.Problem.VersionInvalid" xml:space="preserve"><value>Версія задовга або містить керівні символи.</value></data>
+  <data name="Packages.Problem.FileNameInvalid" xml:space="preserve"><value>Ім'я файлу інсталятора не підходить для Windows — перейменуйте файл і виберіть його знову.</value></data>
+  <data name="Packages.Problem.HashInvalid" xml:space="preserve"><value>Контрольна сума інсталятора відсутня або пошкоджена.</value></data>
+  <data name="Packages.Problem.SilentInvalid" xml:space="preserve"><value>Аргументи тихого встановлення задовгі або займають кілька рядків.</value></data>
+  <data name="Packages.Problem.DetectMissing" xml:space="preserve"><value>Вкажіть, як ПК дізнається, що програму встановлено.</value></data>
+  <data name="Packages.Problem.DetectPathInvalid" xml:space="preserve"><value>Файл має бути повним шляхом Windows, наприклад C:\Program Files\App\app.exe або %ProgramFiles%\App\app.exe.</value></data>
+  <data name="Packages.Problem.MsiFileExpected" xml:space="preserve"><value>Пакет Windows Installer має зберегти розширення .msi.</value></data>
+  <data name="Packages.Problem.SilentNeeded" xml:space="preserve"><value>Цей інсталятор не розпізнано: введіть аргументи тихого встановлення, інакше він чекатиме натискання на кожному ПК.</value></data>
+  <data name="Packages.ReadFailed" xml:space="preserve"><value>Не вдалося прочитати інсталятор: {0}</value></data>
+  <data name="Packages.AddFailed" xml:space="preserve"><value>Пакет не додано: {0}</value></data>
+  <data name="Packages.SourceChanged" xml:space="preserve"><value>Інсталятор змінився після читання — виберіть його знову.</value></data>
+  <data name="Packages.Name" xml:space="preserve"><value>Назва</value></data>
+  <data name="Packages.Version" xml:space="preserve"><value>Версія</value></data>
+  <data name="Packages.Silent" xml:space="preserve"><value>Аргументи тихого встановлення</value></data>
+  <data name="Packages.SilentPlaceholder" xml:space="preserve"><value>наприклад /S</value></data>
+  <data name="Packages.DetectHeading" xml:space="preserve"><value>ПК вважає програму встановленою, коли:</value></data>
+  <data name="Packages.DetectShort" xml:space="preserve"><value>Встановлено, коли</value></data>
+  <data name="Packages.DetectByName" xml:space="preserve"><value>назва у встановлених програмах Windows починається з</value></data>
+  <data name="Packages.DetectByPath" xml:space="preserve"><value>існує цей файл</value></data>
+  <data name="Packages.DetectPathPlaceholder" xml:space="preserve"><value>C:\Program Files\…\program.exe</value></data>
+  <data name="Packages.SystemNote" xml:space="preserve"><value>На кожному ПК інсталятор запускається без запитань від імені системи (SYSTEM).</value></data>
+  <data name="Packages.AddToCatalog" xml:space="preserve"><value>Додати до каталогу</value></data>
+  <data name="Packages.Unreadable" xml:space="preserve"><value>не читається</value></data>
+  <data name="Packages.UnreadableFormat" xml:space="preserve"><value>Цей файл каталогу не читається: {0}</value></data>
+  <data name="Packages.State.Present" xml:space="preserve"><value>Інсталятор є на цьому комп'ютері.</value></data>
+  <data name="Packages.State.Missing" xml:space="preserve"><value>Інсталятора немає на цьому комп'ютері (запис прийшов із резервної копії): додайте той самий інсталятор ще раз.</value></data>
+  <data name="Packages.State.Changed" xml:space="preserve"><value>Файл інсталятора на цьому комп'ютері змінився: додайте інсталятор ще раз.</value></data>
+  <data name="Packages.Empty" xml:space="preserve"><value>Каталог порожній. Додайте інсталятор програми кнопкою «Додати пакет…»; LabControl зберігає копію на цьому комп'ютері, щоб установлювати на ПК через мережу лабораторії.</value></data>
+  <data name="Packages.LastChanged" xml:space="preserve"><value>Каталог востаннє змінено на {0}, {1}.</value></data>
+  <data name="Packages.FactKind" xml:space="preserve"><value>Тип інсталятора: {0}</value></data>
+  <data name="Packages.FactHash" xml:space="preserve"><value>SHA-256: {0}</value></data>
+  <data name="Packages.FactChanged" xml:space="preserve"><value>Змінено на {0}, {1}</value></data>
+  <data name="Packages.Added" xml:space="preserve"><value>«{0}» додано до каталогу.</value></data>
+  <data name="Packages.Saved" xml:space="preserve"><value>«{0}» збережено.</value></data>
+  <data name="Packages.Delete" xml:space="preserve"><value>Видалити пакет</value></data>
+  <data name="Packages.DeleteConfirm" xml:space="preserve"><value>Видалити «{0}» з каталогу, а його інсталятор — з цього комп'ютера? Програми, вже встановлені на ПК, залишаться.</value></data>
+  <data name="Packages.Deleted" xml:space="preserve"><value>«{0}» видалено.</value></data>
+  <data name="Packages.DeleteFailed" xml:space="preserve"><value>Не видалено: {0}</value></data>
+  <data name="Packages.Save" xml:space="preserve"><value>Зберегти</value></data>
+  <data name="Packages.Revert" xml:space="preserve"><value>Скасувати зміни</value></data>
+  <data name="Packages.SizeKb" xml:space="preserve"><value>{0} КБ</value></data>
+  <data name="Packages.SizeMb" xml:space="preserve"><value>{0} МБ</value></data>
+  <data name="Packages.SizeGb" xml:space="preserve"><value>{0} ГБ</value></data>
+  <data name="Packages.Timeout" xml:space="preserve"><value>Ліміт часу, хв</value></data>
+  <data name="Packages.Problem.TimeoutInvalid" xml:space="preserve"><value>Ліміт часу має бути цілим числом хвилин від 1 до 180.</value></data>
+  <data name="Packages.OnThePcs" xml:space="preserve"><value>На ПК</value></data>
+  <data name="Packages.TestHint" xml:space="preserve"><value>Спершу спробуйте новий пакет на одному ПК: виберіть його на вкладці «Лабораторія» і натисніть «Встановити на вибраних ПК». Ця ж кнопка встановлює нову версію поверх старої.</value></data>
+  <data name="Packages.InstallSelected" xml:space="preserve"><value>Встановити на вибраних ПК ({0})</value></data>
+  <data name="Packages.InstallSelectedNone" xml:space="preserve"><value>Встановити — спершу виберіть ПК на вкладці «Лабораторія»</value></data>
+  <data name="Packages.InstallAllMissing" xml:space="preserve"><value>Встановити на всі, де немає</value></data>
+  <data name="Packages.Check" xml:space="preserve"><value>Перевірити ПК</value></data>
+  <data name="Packages.PcState.Unknown" xml:space="preserve"><value>невідомо</value></data>
+  <data name="Packages.PcState.Installed" xml:space="preserve"><value>встановлено</value></data>
+  <data name="Packages.PcState.RebootRequired" xml:space="preserve"><value>встановлено, потрібне перезавантаження</value></data>
+  <data name="Packages.PcState.Missing" xml:space="preserve"><value>не встановлено</value></data>
+  <data name="Packages.PcState.Failed" xml:space="preserve"><value>помилка</value></data>
+  <data name="Packages.PcState.Busy" xml:space="preserve"><value>триває…</value></data>
+  <data name="Packages.Summary" xml:space="preserve"><value>Встановлено: {0} · не встановлено: {1} · помилки: {2} · невідомо: {3}</value></data>
+  <data name="Packages.Sent" xml:space="preserve"><value>«{0}» надіслано на {1} ПК — хід виконання на вкладці «Завдання». Вимкнений ПК отримає його, коли під'єднається.</value></data>
+  <data name="Packages.NothingMissing" xml:space="preserve"><value>На всіх ПК лабораторії «{0}» уже є.</value></data>
+  <data name="Packages.UntestedTitle" xml:space="preserve"><value>Ще не перевірено на ПК</value></data>
+  <data name="Packages.UntestedConfirm" xml:space="preserve"><value>«{0}» ще не встановлювали на жоден ПК. Спершу спробуйте на одному: виберіть його на вкладці «Лабораторія» і натисніть «Встановити на вибраних ПК». Все одно встановити на {1} ПК?</value></data>
+  <data name="Packages.InstallAnyway" xml:space="preserve"><value>Все одно встановити</value></data>
+  <data name="Packages.InstallFailed" xml:space="preserve"><value>Не надіслано: {0}</value></data>
+  <data name="Packages.ArchiveRun" xml:space="preserve"><value>В архіві є такі інсталятори; ПК розпаковує архів і запускає вибраний тут:</value></data>
+  <data name="Packages.NoInstallerInArchive" xml:space="preserve"><value>У цьому архіві немає інсталятора .exe чи .msi.</value></data>
+  <data name="Packages.ArchiveFact" xml:space="preserve"><value>{0} ({1}), запускається {2} з нього</value></data>
+  <data name="Packages.Problem.RunInvalid" xml:space="preserve"><value>Виберіть, який інсталятор з архіву запускатимуть ПК.</value></data>
+  <data name="Store.SaveFailed" xml:space="preserve"><value>Не збережено — цей комп'ютер не зміг записати файл: {0}</value></data>
+  <data name="VideoMode.Label" xml:space="preserve"><value>Зображення</value></data>
+  <data name="VideoMode.Text" xml:space="preserve"><value>Текст</value></data>
+  <data name="VideoMode.Video" xml:space="preserve"><value>Відео</value></data>
+  <data name="VideoMode.Tip" xml:space="preserve"><value>Текст: чітке зображення для коду й документів. Відео: плавний рух для фільмів і анімацій (H.264).</value></data>
+  <data name="VideoMode.Unavailable" xml:space="preserve"><value>Відео потребує H.264, якого на цьому комп’ютері немає: зображення надсилається як Текст.</value></data>
+  <data name="Screen.QualityVideo" xml:space="preserve"><value>відео (H.264)</value></data>
+  <data name="Screen.VideoNotOnPc" xml:space="preserve"><value>{0} не може надсилати Відео (немає H.264 або старіша версія): показано Текст.</value></data>
+  <data name="Broadcast.StatusTextPcs" xml:space="preserve"><value> · {0} ПК отримують Текст: вони не можуть показати Відео</value></data>
+  <data name="Event.VideoDecodeFailed" xml:space="preserve"><value>{0}: ця консоль не змогла показати його повний екран як Відео (H.264), тому він триває як Текст: {1}</value></data>
+</root>

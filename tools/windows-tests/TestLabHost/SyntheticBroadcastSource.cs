@@ -25,6 +25,9 @@ internal sealed class SyntheticBroadcastSource : IScreenSource
     /// <summary>Set by <c>broadcast-freeze</c>: every capture fails, as a console whose own screen locked or slept.</summary>
     public static volatile bool Frozen;
 
+    /// <summary>Frames the source draws per second; 10 unless <c>--synthetic-fps</c> asks for more (the M7 H.264 rate check, D-91).</summary>
+    public static int FramesPerSecond { get; set; } = 10;
+
     public IScreenFrame? Acquire(TimeSpan timeout)
     {
         if (Frozen)
@@ -33,7 +36,7 @@ internal sealed class SyntheticBroadcastSource : IScreenSource
             throw new ScreenCaptureException("capture_failed", "the fixture froze the teacher's screen");
         }
 
-        var wait = TimeSpan.FromMilliseconds(100) - (DateTime.UtcNow - _last);
+        var wait = TimeSpan.FromMilliseconds(1000.0 / FramesPerSecond) - (DateTime.UtcNow - _last);
         if (wait > TimeSpan.Zero) Thread.Sleep(wait < timeout ? wait : timeout);
         _last = DateTime.UtcNow;
         _frames++;

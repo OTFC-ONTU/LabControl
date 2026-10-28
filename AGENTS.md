@@ -213,7 +213,62 @@ the documents relevant to the task:
   procedures in ROADMAP M6, *The portion-6 drills*. Tests: 1003 Shared + 308 Console.
 - **M6 is done (owner decision 2026-10-26)**: accepted in the physical lab on all 14 PCs, the
   findings fixed and retested on `1.0.0+cc39651`; open check: teacher access in the lab (no second
-  teacher device). Next by the roadmap: M7.
+  teacher device). Next by the roadmap: M7; its portion 6 is H.264 for the broadcast and full view with a *Text / Video* choice
+  (owner decision 2026-10-27), portion 7 a UI/UX redesign of every screen
+  (owner decision 2026-10-26), which also carries the failed-action feedback, and portion 8 the README
+  manual written for the redesigned screens (owner decision 2026-10-27: 6 and 7 swapped).
+- **M7 portion 1 is built (2026-10-26, `D-86`), on the Mac**: the console in Ukrainian, English and
+  Russian — `Shared/Localization/ProductLanguages` (stored choice, else a supported OS language,
+  else English), `preferences.json` at the data root, `ConsoleLanguage` applied in `Program.Main`,
+  the selector in *Settings* and the chooser with *Restart now* through the quit path, `*.uk.resx`
+  and `*.ru.resx` beside every product `.resx`. A new key goes into all three files
+  (`ResourceTranslationTests`); both test projects pin English (the owner's Mac reports `ru-UA`).
+  Owner decisions: language applies on restart, the student sees the console's language
+  (portion 2 carries it to the PC), "lab" = лабораторія / лаборатория. Seven portions in ROADMAP
+  M7. Tests: 1032 Shared + 316 Console. Next: the owner reads the translations; portion 2.
+- **M7 portion 2 is done (`D-87`; accepted 2026-10-27 after the lab on `1.0.0+c8e3c9b` — exam, lock,
+  language switch; Setup's languages not run)**: the console's
+  language reaches the PC. `Welcome.language` sets `Shared/Localization/PcLanguage` (kept in
+  `agent.json`), in which the PC writes events, job results and refusals (`PolicyStrings`, the new
+  `PcStrings` via `PcText.Get`; the helper learns it from `ServiceMessage.language`). Each lock and
+  exam carries its own `language` (kept in `policy.json`, passed down as `ExamStrip.language`): the
+  student's words are in the setting console's language and `OverlayText` never reads the process
+  culture. Setup/removal follow the Windows display language; the step trace stays English.
+  A test that changes `PcLanguage` runs in the language collection and restores English.
+  Tests: 1050 Shared + 317 Console. Built-in scripts' output stays English (data). Next: portion 3.
+- **M7 portion 3 is built (2026-10-27, `D-88`), on the Mac**: the package catalog and the *Add package*
+  wizard. The installer is read, never run (`Shared/Packages`: `CompoundFile` + `MsiProperties`,
+  `PeVersionInfo`, `InstallerInspector` with the family and its silent arguments; `PackageEntry`,
+  `DetectRule` — `uninstall_name` prefix or `path`), copied hash-checked into
+  `packages/<id>/<hash prefix>/` beside `packages/<id>.yaml` (YamlDotNet, `Console/Services/PackageCatalog`);
+  a new version replaces the entry of the same program; the *Packages* tab edits and deletes. Only
+  the YAML is in a backup. Tests: 1073 Shared + 327 Console. Next: portion 4 (`install_package`).
+- **M7 portion 4 is built (2026-10-27, `D-89`), on the Mac; not yet run on Windows**: `install_package`
+  with modes `install` / `missing` / `check` and a stable `JobResult.outcome`; the shared
+  `PackageInstallRunner` over `WindowsPackageHost` (SYSTEM, no window, limit 15 min by default per
+  package) and `FakePackageHost` (`/fail`, `/reboot`, `/hang`, `/nodetect`); the console's
+  `PackageStatusBook` (`package-status.json`) and the *Packages* tab's *Install on N selected PCs*,
+  *Install on all missing* (queued for PCs that are off; asks before an untried package) and *Check
+  PCs*. A restart is only reported; an exam refuses. A package may be a `.zip` with its installer
+  and files (`run`, `PackageArchive`, `D-89` addendum). Working in the lab (owner, 2026-10-27); open: the
+  broken-package drill and the measured 14-PC IDE install. Tests: 1102 Shared + 335 Console. Next: the lab drills.
+- **M7 portion 5 has started (2026-10-27)**: the 90-minute lesson passed (owner); the `win-x64` console
+  installer ran on a real Windows PC and the backup imported there with the passphrase (driving the lab
+  from it remains); the robustness pass is built (`D-90`, sixteen fixes; online-only reboot/log off, a
+  drifted PC still dials its console). Tests: 1116 Shared + 370 Console.
+- **M7 portion 6 is built (2026-10-27, `D-91`) and passed its ARM64 VM drill the same day:** H.264 for the
+  broadcast and the full view with a *Text / Video* choice (owner: *Text* = today's JPEG, *Text* first,
+  remembered separately in `preferences.json`, switchable while showing). Frames say their codec
+  (`VideoFrame.codec = "h264"`, Annex B, IDR with SPS/PPS); `VideoControl.codec`, `BroadcastRequest.codecs`
+  and `HelperHello.video_decoders`/`video_encoders` are additive, so every older peer gets JPEG.
+  `Shared/Video/H264/` (VideoToolbox by `DllImport` on macOS, the in-box Media Foundation MFTs through
+  Vortice.MediaFoundation on Windows, none on Linux; `LABCONTROL_NO_H264=1` turns it off), `FrameDecoder`,
+  the producer's held access unit, the hub's H.264 stream beside the JPEG one. VideoToolbox runs end to
+  end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample double-released after
+  `ProcessOutput`; no H.264 encoded for JPEG-only watchers): *Video* broadcast 24–25 fps, the PC's full view
+  26–27 fps; a decoder breaking mid-broadcast falls back to JPEG (`broadcast.text_fallback`), and `win-x64` passed
+  under x64 emulation. Owner: the VM drill is enough for now; lab checks wait, portion 7 goes ahead. PR
+  OTFC-ONTU/LabControl#6; its review (`D-91` item 12) fixed a macOS encoder leak, a hub race and decoder fallbacks, re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7; the H.264 lab checks on the next visit.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),
@@ -227,7 +282,8 @@ the documents relevant to the task:
 - Physical lab status (2026-09-08 evening): five PCs installed and linked from the
   `1.0.0` media; the owner declared the baseline established and moved development on
   to M5. Remaining PCs, the vendor Realtek driver and the wake test continue alongside
-  (ROADMAP *Physical lab* row and on-site checklist). Never claim Wake-on-LAN works here.
+  (ROADMAP *Physical lab* row and on-site checklist). Wake-on-LAN works in the lab (owner, 2026-10-27): the Realtek driver
+  installed on all 14 through the package catalog, BIOS ErP off / Power On By PCI-E on, no USB repair needed.
 - `1.0.0` is the current physical-lab release candidate (owner decision 2026-09-08).
   Do not call it released until the remaining M4 physical acceptance checks pass; the
   later additive M5 portion-5 `Welcome.console_access` field preserves the frozen
@@ -314,6 +370,8 @@ or the generated HTML stale is not finished.
 - UI strings are resources, not hard-coded text. English is the neutral source and
   fallback locale. M7 must ship Ukrainian, English and Russian for every ordinary
   product-facing surface, with an explicit persistent console language choice (`D-67`).
+  Every new or changed key goes into the neutral `.resx` and its `.uk.resx` / `.ru.resx`
+  siblings in the same change; `ResourceTranslationTests` enforces it (`D-86`).
   Stable protocol identifiers, diagnostic codes and developer logs remain English.
 - Prefer simple, well-supported libraries. Record every new NuGet dependency and
   its reason in `docs/DECISIONS.md`.

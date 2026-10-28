@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:LabControl.Console.Localization"
+             xmlns:vm="clr-namespace:LabControl.Console.ViewModels"
+             xmlns:lang="clr-namespace:LabControl.Shared.Localization;assembly=LabControl.Shared"
+             x:Class="LabControl.Console.Views.LanguageSelector"
+             x:DataType="vm:LanguageChoiceViewModel">
+
+  <!-- The language selector (M7, D-86): each language under its own name, so a teacher who
+       cannot read the current interface still finds theirs. The switch happens on restart. -->
+  <StackPanel Spacing="6">
+    <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding Selected}" MinWidth="180">
+      <ComboBox.ItemTemplate>
+        <DataTemplate x:DataType="lang:ProductLanguage">
+          <TextBlock Text="{Binding NativeName}" />
+        </DataTemplate>
+      </ComboBox.ItemTemplate>
+    </ComboBox>
+    <!-- Stacked under the list, never beside it: a wide hint pushed the chooser's heading out
+         of sight when the language changed (2026-10-27). -->
+    <StackPanel Spacing="6" MaxWidth="280" HorizontalAlignment="Left" IsVisible="{Binding NeedsRestart}">
+      <TextBlock Text="{Binding Selected.NativeName, StringFormat={loc:Localize Language.RestartHint}}" TextWrapping="Wrap" />
+      <Button Content="{loc:Localize Language.RestartNow}" Command="{Binding RestartCommand}" />
+    </StackPanel>
+    <TextBlock Text="{Binding Problem}" Foreground="IndianRed" TextWrapping="Wrap"
+               IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+  </StackPanel>
+
+</UserControl>

@@ -13,13 +13,6 @@ public static class LabCertificates
 {
     private static readonly HashAlgorithmName Hash = HashAlgorithmName.SHA256;
 
-    /// <summary>
-    /// Certificates are backdated by this much. Student PCs on an isolated LAN have no time
-    /// source beyond their own battery-backed clock, so a PC a couple of minutes behind the
-    /// console must not reject a freshly issued certificate as "not valid yet".
-    /// </summary>
-    private static readonly TimeSpan ClockSkewAllowance = TimeSpan.FromMinutes(5);
-
     /// <summary>Fresh P-256 keypair. The caller owns it.</summary>
     public static ECDsa CreateKey() => ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
@@ -40,7 +33,7 @@ public static class LabCertificates
         request.CertificateExtensions.Add(SubjectAlternativeName(LabName.ForAuthority(labId)));
         request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
 
-        return request.CreateSelfSigned(now - ClockSkewAllowance, now + Defaults.LabAuthorityLifetime);
+        return request.CreateSelfSigned(now - Defaults.CertificateBackdate, now + Defaults.LabAuthorityLifetime);
     }
 
     /// <summary>
@@ -238,12 +231,12 @@ public static class LabCertificates
 
         // A leaf must live inside its issuer's window at both ends. Outliving the authority
         // validates today and fails silently in five years, in the middle of a lesson;
-        // starting before it is refused outright, which the five-minute backdate below can
+        // starting before it is refused outright, which the backdate below can
         // otherwise cause for a certificate minted in the same second as the lab.
         var authorityNotBefore = new DateTimeOffset(authority.NotBefore.ToUniversalTime(), TimeSpan.Zero);
         var authorityNotAfter = new DateTimeOffset(authority.NotAfter.ToUniversalTime(), TimeSpan.Zero);
 
-        var notBefore = now - ClockSkewAllowance;
+        var notBefore = now - Defaults.CertificateBackdate;
         if (notBefore < authorityNotBefore)
         {
             notBefore = authorityNotBefore;

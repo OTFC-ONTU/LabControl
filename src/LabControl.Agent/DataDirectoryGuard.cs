@@ -1,6 +1,7 @@
 using System.Security.AccessControl;
 using System.Security.Principal;
 using LabControl.Shared;
+using LabControl.Shared.Localization;
 
 namespace LabControl.Agent;
 
@@ -29,7 +30,7 @@ internal static class DataDirectoryGuard
         {
             if (!Directory.Exists(directory))
             {
-                return [$"{directory} does not exist."];
+                return [PcText.Get("DataDirMissing", directory)];
             }
 
             var security = new DirectoryInfo(directory).GetAccessControl(AccessControlSections.Access);
@@ -44,7 +45,8 @@ internal static class DataDirectoryGuard
                         && rule.IdentityReference.Equals(sid)
                         && (rule.FileSystemRights & (FileSystemRights.ReadData | FileSystemRights.ListDirectory | FileSystemRights.ReadAndExecute)) != 0)
                     {
-                        problems.Add($"{directory} lets '{name}' read it{(rule.IsInherited ? " (inherited from the parent)" : string.Empty)}; the private key and configuration must be readable by SYSTEM and Administrators only. Re-run Setup, or: icacls \"{directory}\" /inheritance:r /grant:r \"SYSTEM:(OI)(CI)F\" \"Administrators:(OI)(CI)F\"");
+                        problems.Add(PcText.Get("DataDirReadable", directory, name, rule.IsInherited ? PcText.Get("DataDirInherited") : string.Empty,
+                        $"icacls \"{directory}\" /inheritance:r /grant:r \"SYSTEM:(OI)(CI)F\" \"Administrators:(OI)(CI)F\""));
                         break;
                     }
                 }
@@ -53,12 +55,12 @@ internal static class DataDirectoryGuard
             var keyPath = Path.Combine(directory, Defaults.AgentKeyFileName);
             if (!File.Exists(keyPath))
             {
-                problems.Add($"{keyPath} is missing; this PC has no private key and cannot connect. Run Setup again.");
+                problems.Add(PcText.Get("DataDirNoKey", keyPath));
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException)
         {
-            problems.Add($"Could not verify the permissions on {directory}: {ex.Message}");
+            problems.Add(PcText.Get("DataDirUnverified", directory, ex.Message));
         }
 
         return problems;

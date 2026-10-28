@@ -28,11 +28,19 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
     private readonly RefusedNames _refused = new();
 
     /// <param name="desktop">The desktop being drawn right now, or <c>null</c> while nobody watches; a desktop created later is told by <see cref="Overlay"/>.</param>
-    public FakeMachineState(Func<FakeScreen?> desktop, ILogger log)
+    /// <param name="h264">The broadcast's H.264 decoder (a test's stand-in); the platform's when <c>null</c>.</param>
+    public FakeMachineState(Func<FakeScreen?> desktop, ILogger log, Func<LabControl.Shared.Video.H264.IH264Decoder>? h264 = null)
     {
         _desktop = desktop;
         _log = log;
-        Picture = new BroadcastPicture(log);
+        Picture = new BroadcastPicture(log, h264);
+
+        // Like the helper (D-91 item 11): a decoder given up means JPEG only from now on.
+        Picture.H264Failed += why =>
+        {
+            _log.LogWarning("the H.264 decoder broke, asking for JPEG: {Why}", why);
+            BroadcastCodecs = [];
+        };
     }
 
     private readonly ILogger _log;
@@ -62,6 +70,11 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
         _desktop()?.SetBroadcast(Picture);
         return MachineResult.Done;
     }
+
+    /// <summary>What this simulated PC decodes besides JPEG: the Mac's own H.264 (D-91), nothing on Linux.</summary>
+    public IReadOnlyList<string> BroadcastCodecs { get => _codecs; set => _codecs = value; }
+
+    private volatile IReadOnlyList<string> _codecs = LabControl.Shared.Video.H264.H264Codecs.Decoders;
 
     public ValueTask BroadcastFrameAsync(VideoFrame frame, CancellationToken token)
     {
@@ -356,7 +369,7 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
                 return null;
             }
 
-            return new FakeStrip(exam.Message, exam.UntilUnix, _notice, _noticeUntil);
+            return new FakeStrip(exam.Message, exam.UntilUnix, _notice, _noticeUntil, exam.Language ?? string.Empty);
         }
     }
 
@@ -387,17 +400,18 @@ internal sealed class FakeMachineState : IMachineState, IDisposable
             _processes.RemoveAll(p => p.Key == process.Key);
             _terminated.Add((process.Name, now));
             _terminatedVersion++;
-            _notice = OverlayText.NotAllowedText(process.Name);
+            _notice = OverlayText.NotAllowedText(process.Name, _exam?.Language ?? string.Empty);
             _noticeUntil = now + Defaults.ExamNoticeDuration;
         }
     }
 }
 
 /// <summary>The exam strip as a simulated desktop draws it: the countdown is counted at every tick, the notice shown until <paramref name="NoticeUntil"/>.</summary>
-public sealed record FakeStrip(string Message, long UntilUnix, string Notice, DateTimeOffset NoticeUntil)
+public sealed record FakeStrip(string Message, long UntilUnix, string Notice, DateTimeOffset NoticeUntil, string Language = "")
 {
     public ExamStripContent At(DateTimeOffset now) => new(
         Message,
         UntilUnix > 0 ? Math.Max(0, UntilUnix - now.ToUnixTimeSeconds()) : null,
-        now < NoticeUntil ? Notice : string.Empty);
+        now < NoticeUntil ? Notice : string.Empty,
+        Language);
 }

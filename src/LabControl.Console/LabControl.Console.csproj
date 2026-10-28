@@ -32,6 +32,7 @@
     <!-- Patch the parser's transitive dependency; see DECISIONS dependency ledger. -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="YamlDotNet" />
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Serilog.Extensions.Logging" />
     <PackageReference Include="Serilog.Sinks.Console" />

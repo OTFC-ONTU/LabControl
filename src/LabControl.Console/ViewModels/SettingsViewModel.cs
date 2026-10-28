@@ -120,6 +120,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public string LabName { get; }
 
+    /// <summary>The language selector (M7, D-86); set by the app, absent in renders that do not need it.</summary>
+    public LanguageChoiceViewModel? Language { get; set; }
+
     public string LabId { get; }
 
     public string InstanceName { get; }

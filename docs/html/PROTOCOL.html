@@ -221,7 +221,11 @@ without any other exchange.</p>
 <p>The beacon is verifiable <strong>offline, with no shared secret</strong>. An agent accepts it only if
 <code>lab</code> matches its own, <code>end</code> verifies against the <strong>pinned CA public key</strong>, <code>sig</code>
 verifies against <code>pub</code>, and <code>ts</code> is within ±60 s. Then it dials <code>host:port</code> and completes
-mutual TLS, which is the real gate — the beacon only says <em>where</em> to look.</p>
+mutual TLS, which is the real gate — the beacon only says <em>where</em> to look. <strong>A PC that is not
+linked</strong> also dials a beacon whose only fault is <code>ts</code> (M7 portion 5, <code>D-90</code>): the lab has no
+time source, and a PC whose clock drifted would otherwise never link again; once linked it
+reports <code>clock.skew</code> with the minutes. A linked PC never acts on such a beacon — a take-over
+needs the clocks within the window.</p>
 <p><strong>What exactly is signed</strong> (<code>D-24</code>). Both signatures are ECDSA P-256 over SHA-256, in the
 IEEE P1363 fixed-width form, so each is exactly 64 bytes. The signed bytes are UTF-8 of a
 pipe-joined string with a fixed field order — never re-serialized JSON, whose key order is a
@@ -409,7 +413,8 @@ discarded — all of these are facts about the PC that whoever is in the room ne
 wire is unchanged; the binding is the agent's own bookkeeping. The departure notice
 <code>link.taken_over</code> (above) travels the same way, unbound, on the link being left.</p>
 <p><code>ConsoleMessage</code> (oneof): <code>Welcome</code> (server time, instance id and name, the serials the
-console holds revoked, and <code>console_access</code> — informational, see <em>M5 additions</em>),
+console holds revoked, <code>console_access</code> — informational, see <em>M5 additions</em> — and
+<code>language</code>, the console's interface language, see <em>M7 additions</em>),
 <code>Ping</code>, <code>Job</code> (see below), <code>VideoControl</code> (start/stop, mode
 <code>thumbnail|full</code>, fps, quality), <code>Input</code> (mouse move/button/wheel, key down/up, unicode
 text), <code>Overlay</code> (lock / unlock / broadcast start / broadcast stop, message text),
@@ -443,10 +448,12 @@ kinds: shutdown | reboot | logoff | run_script | install_package | reset_profile
        send_file | collect_files | set_config | self_update | rekey
 </code></pre>
 <p>Agent replies with <code>JobProgress</code> (0–100 + line of output) and finally <code>JobResult</code>
-<code>{id, ok, exit_code, message, artifact_ref?}</code>. Jobs are idempotent by <code>id</code>; a
+<code>{id, ok, exit_code, message, artifact_ref?, outcome?}</code> (<code>outcome</code>, a stable code, since M7
+portion 4 — see <em>Files</em>). Jobs are idempotent by <code>id</code>; a
 re-sent job with a known <code>id</code> returns the cached result. Jobs for offline agents are
 queued in the console (<code>pending</code>) and delivered on the next <code>Link</code>, unless
-<code>deliver: online_only</code> (default for <code>shutdown</code>), which is <strong>never</strong> queued: created for a
+<code>deliver: online_only</code> (default for <code>shutdown</code>, <code>reboot</code> and <code>logoff</code> — since M7 portion 5,
+owner decision 2026-10-27, <code>D-90</code>), which is <strong>never</strong> queued: created for a
 PC that is not linked it is <code>not_delivered</code> on the spot, and one the PC had not collected
 when its link dropped is closed the same way rather than kept for its return (<code>D-25</code>).</p>
 <p><code>timeout_s</code> is a timeout of <em>inactivity</em>, measured from delivery or the latest
@@ -619,7 +626,7 @@ where it lands and what happens next (<code>D-23</code>):</p>
 <tbody>
 <tr>
 <td>args</td>
-<td><code>package</code>, <code>version</code>, <code>ref</code>, <code>sha256</code></td>
+<td><code>package</code>, <code>version</code>, <code>ref</code>, <code>sha256</code>, <code>file</code>, <code>family</code>, <code>silent</code>, <code>detect_kind</code>, <code>detect</code>, <code>timeout_seconds</code>, <code>mode</code>, <code>run</code> (M7 portion 4, <code>D-89</code>)</td>
 <td><code>ref</code>, <code>sha256</code>, <code>name</code>, <code>open</code> (<code>true</code>/<code>false</code>, default <code>false</code>)</td>
 </tr>
 <tr>
@@ -641,6 +648,121 @@ where it lands and what happens next (<code>D-23</code>):</p>
 </table></div>
 <p><code>install_package</code> is the older and more important of the two and its behaviour is fixed;
 <code>send_file</code> is one job per file so that a batch reports per file, per PC.</p>
+<p><strong><code>install_package</code> in detail</strong> (M7 portion 4, <code>D-89</code>). Everything the PC needs travels in the
+job — the agent never reads the catalog:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>arg</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>package</code></td>
+<td>the catalog id (<code>[a-z0-9-]</code>, ≤ 48) — the console keys its per-PC status on it</td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td>the catalog's version, informational</td>
+</tr>
+<tr>
+<td><code>ref</code>, <code>sha256</code></td>
+<td>the installer by reference and hash (equal, <code>D-31</code>); pulled with <code>PullFile</code>, verified</td>
+</tr>
+<tr>
+<td><code>file</code></td>
+<td>the installer's Windows leaf name; staged as <code>%ProgramData%\LabControl\packages\&lt;guid&gt;\&lt;file&gt;</code></td>
+</tr>
+<tr>
+<td><code>family</code></td>
+<td><code>msi</code> | <code>burn</code> | <code>nsis</code> | <code>inno</code> | <code>installshield</code> | <code>exe</code> — an <code>msi</code> runs as <code>msiexec.exe /i &quot;&lt;file&gt;&quot; &lt;silent&gt;</code>, anything else as itself with <code>&lt;silent&gt;</code></td>
+</tr>
+<tr>
+<td><code>silent</code></td>
+<td>the arguments, passed verbatim</td>
+</tr>
+<tr>
+<td><code>detect_kind</code>, <code>detect</code></td>
+<td><code>uninstall_name</code> (a <code>DisplayName</code> in the 64- or 32-bit <em>Uninstall</em> keys of HKLM starting with the value, ignoring case) or <code>path</code> (a file or folder at that path, environment variables expanded)</td>
+</tr>
+<tr>
+<td><code>timeout_seconds</code></td>
+<td>60 … 10 800: the installer and everything it started are ended after this</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>install</code> (run whatever the rule finds), <code>missing</code> (skip when the rule finds the program), <code>check</code> (evaluate the rule only; nothing is pulled)</td>
+</tr>
+<tr>
+<td><code>run</code></td>
+<td>empty, or for a <code>.zip</code> package the installer inside it (<code>Win10/setup.exe</code>, forward slashes, each part a Windows leaf name): the PC unpacks the archive into <code>x\\</code> in the staging directory under the rules of <code>D-89</code>'s addendum and starts <code>run</code> from its own folder</td>
+</tr>
+</tbody>
+</table></div>
+<p>The PC refuses during an exam, runs one installer at a time (others wait, reporting every 10 s),
+sends a progress line every <code>Defaults.PackageInstallHeartbeat</code> (20 s) while the installer runs —
+the console's inactivity budget is therefore short (<code>FileChunkTimeout</code> + grace) — and evaluates
+the rule again afterwards. Exit codes 0, 3010 and 1641 are success (the latter two: restart
+needed; the PC does not restart). The answer carries <strong><code>JobResult.outcome = 6</code></strong>, additive and
+outside the frozen subset (an older agent answers &quot;not in this build&quot; without it):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>outcome</th>
+<th><code>ok</code></th>
+<th>when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>package.installed</code></td>
+<td>true</td>
+<td>the installer succeeded and the rule finds the program</td>
+</tr>
+<tr>
+<td><code>package.reboot_required</code></td>
+<td>true</td>
+<td>the same, with 3010 / 1641</td>
+</tr>
+<tr>
+<td><code>package.present</code></td>
+<td>true</td>
+<td><code>missing</code> or <code>check</code>: the rule already finds it; nothing ran</td>
+</tr>
+<tr>
+<td><code>package.absent</code></td>
+<td>true</td>
+<td><code>check</code>: the rule finds nothing</td>
+</tr>
+<tr>
+<td><code>package.failed</code></td>
+<td>false</td>
+<td>another exit code (<code>exit_code</code> carries it; 1618 is named as another install running)</td>
+</tr>
+<tr>
+<td><code>package.not_detected</code></td>
+<td>false</td>
+<td>success code, but the rule still finds nothing</td>
+</tr>
+<tr>
+<td><code>package.timed_out</code></td>
+<td>false</td>
+<td>ended after <code>timeout_seconds</code> — usually a question nobody can see</td>
+</tr>
+<tr>
+<td><code>package.not_run</code></td>
+<td>false</td>
+<td>the job's arguments, the pull, the staging or the start failed</td>
+</tr>
+<tr>
+<td><code>package.exam</code></td>
+<td>false</td>
+<td>an exam is held on this PC</td>
+</tr>
+</tbody>
+</table></div>
+<p>The staging directory is removed after every install and emptied when the service starts.</p>
 <p>The console dispatch and FakeAgent implementation are built (D-44); Windows delivery is
 pending managed-account ownership (D-40). <code>SendFileRequest</code> validates Windows leaf names
 on every OS, refusing paths, alternate streams, device names and trailing spaces/dots;
@@ -715,6 +837,7 @@ message.</p>
   int64  hard_limit_seconds;      // proposed; clamped to ExamHardLimit (4 h) on the PC's clock; &lt;= 0 = the ceiling
   bool   restrict_programs;       // the allowed-programs switch
   string preset_name;             // for the tile badge
+  string language;                // M7 (D-87): the strip's stock words, its notices and &quot;time is up&quot;, in the setting console's language
 }
 
 ExamState {                       agent → console
@@ -773,9 +896,9 @@ everything else; the PC is the producer.</p>
 <ul>
 <li><code>VideoFrame { agent_id, seq, at_unix_ms, width, height, mode, repeated Rect dirty, bytes jpeg, keyframe, codec, quality }</code>. <code>width</code>/<code>height</code> are always the size of the <strong>screen</strong> the frame comes
 from; the JPEG itself may be smaller (a thumbnail, or a full-mode delta). <code>codec</code> is
-<code>&quot;jpeg&quot;</code> in this build (<code>Defaults.VideoCodecJpeg</code>); H.264 is an M7 option behind the same
-envelope (<code>D-11</code>). <code>quality</code> is what this frame was encoded at (0 from an agent older
-than <code>D-37</code>), so the console can show it.</li>
+<code>&quot;jpeg&quot;</code> (<code>Defaults.VideoCodecJpeg</code>; empty from older builds means the same) or, since M7
+portion 6, <code>&quot;h264&quot;</code> — see <em>H.264 (Video)</em> below (<code>D-91</code>). <code>quality</code> is what this frame was
+encoded at (0 from an agent older than <code>D-37</code>, and for H.264), so the console can show it.</li>
 <li><strong>Control.</strong> The console sends <code>VideoControl { active, mode, frames_per_second, quality, request_keyframe, max_bits_per_second }</code> on the <code>Link</code> stream: a thumbnail control to every
 PC right after <code>Welcome</code>, a full control when the teacher opens a PC's screen, a thumbnail
 control again when that window closes, and <code>request_keyframe</code> whenever it holds nothing a
@@ -898,7 +1021,8 @@ message and ignores it; the console greys <em>Control</em> out for an outdated a
 interactive session and a PC whose helper is down.</p>
 <h2 id="overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, <code>D-69</code>, <code>D-70</code>)<a class="anchor" href="#overlay-lock-screen-m6-portion-1-d-69-d-70" aria-label="Link to this section">#</a></h2>
 <pre><code>Overlay { kind: LOCK | UNLOCK | BROADCAST_START | BROADCAST_STOP, message,
-          session_id, until_seconds, hard_limit_seconds }            console → agent
+          session_id, until_seconds, hard_limit_seconds,
+          language }                                                 console → agent
 OverlayState { kind, session_id, since_unix, until_unix, hard_limit_unix,
                input_blocked, reason, set_by_instance, problem,
                remaining_seconds }                                   agent → console
@@ -963,6 +1087,51 @@ held the policy mutex), <code>policy.failed</code> (the enforcer itself threw wh
 throw; logged, reported, the pass abandoned — the link dials and stays up regardless),
 <code>overlay.expired</code>. An agent from before M6 logs the message and ignores it; the console
 greys <em>Lock</em> out for an outdated agent.</p>
+<h3 id="h.264-video-m7-portion-6-d-91">H.264 (Video; M7 portion 6, <code>D-91</code>)<a class="anchor" href="#h.264-video-m7-portion-6-d-91" aria-label="Link to this section">#</a></h3>
+<p>The teacher's <em>Video</em> — for the broadcast and a PC's full view; the mosaic's thumbnails are
+always JPEG. All of it is additive and needs no protocol version: every frame says what it is.</p>
+<ul>
+<li><strong>The frame.</strong> <code>codec: &quot;h264&quot;</code> carries <strong>one access unit in Annex B</strong> (start codes) in the
+payload field (<code>jpeg = 8</code>, named for its first use; the bytes are the codec's). <code>keyframe</code>
+is an IDR with its SPS and PPS in front, so a receiver that joins on it needs nothing
+else; <code>dirty</code> is empty (every H.264 picture is whole); <code>quality</code> is 0; <code>width</code>/<code>height</code>
+are the encoded picture, the screen rounded down to an even size. Baseline profile, no
+B-frames, low latency: one picture in, one access unit out.</li>
+<li><strong>Decode by the frame, never by the request.</strong> A receiver keeps one decoder per stream
+(<code>FrameDecoder</code>): JPEG as before, H.264 through the platform's decoder made on the first
+IDR. A non-IDR unit before an IDR, or one the decoder refuses, is &quot;needs a keyframe&quot; — the
+same rule as a JPEG delta — and the decoder is made again on the next IDR.</li>
+<li><strong><code>VideoControl.codec = 7</code></strong> — the console asks a PC for <code>&quot;h264&quot;</code> in <code>FULL</code> mode (the
+teacher's <em>Video</em> in the full-view window, at <code>FullVideoFramesPerSecond</code> = 30 under
+<code>FullVideoBitsPerSecond</code> = 8 Mbit/s), and only when the console can decode it — a Linux
+console never asks. A PC whose encoder cannot be made or fails answers in JPEG until the
+next control and reports <code>video.h264_unavailable</code> once (Info). An older agent ignores the
+field and sends JPEG. The PC encodes the whole screen every tick that changed something
+and an IDR where a JPEG keyframe would be (first frame, on request, every
+<code>KeyframeInterval</code>). A frame the uplink refuses is <strong>held and offered again</strong> before
+anything new is encoded — the encoder has already moved past it — and one held for more
+than 2 s is dropped for a fresh IDR.</li>
+<li><strong><code>BroadcastRequest.codecs = 2</code></strong> — what the PC can show besides JPEG: <code>&quot;h264&quot;</code> when its
+session helper made a decoder at start. The console sends H.264 only to a PC that listed
+it. An older agent lists nothing and gets JPEG. A helper whose decoder fails three times in
+a row gives H.264 up for the rest of its life and says so in <code>HelperStatus.video_decoders</code>
+at once; the agent then dials <code>PullBroadcast</code> again without <code>&quot;h264&quot;</code>, keeping the screen, and
+reports <code>broadcast.text_fallback</code>. <code>LABCONTROL_H264_DECODE_FAIL_AFTER=N</code> (seconds after the
+first decoded picture) breaks the decoder on purpose, for that drill. A helper that restarts
+is not a lost codec: the service keeps the last helper's list until the new one speaks.</li>
+<li><strong>On the PC's uplink</strong> the helper's pipe never refuses, so the service does what the
+producer's held frame does elsewhere: after an <code>h264</code> frame is refused it drops every
+following non-keyframe until a keyframe gets through, and asks for one again if a keyframe is
+refused. If the <strong>console</strong> cannot decode a PC's H.264 three times in a row it asks that PC
+for JPEG (<code>video.console_decode_failed</code>) until the teacher chooses <em>Video</em> again.</li>
+<li><strong>Bit rate.</strong> The encoder aims at three quarters of the cap the pacer enforces
+(<code>H264TargetShareOfCap</code>); a new cap is a new control, so the encoder is made again with it
+and starts with an IDR.</li>
+<li><strong>Codecs.</strong> Windows (the PCs, a Windows console): the in-box synchronous Media Foundation
+H.264 MFTs, NV12 converted in C#; an N edition without the Media Feature Pack has none and
+stays JPEG. macOS (the console): VideoToolbox. Linux: none. <code>LABCONTROL_NO_H264=1</code> turns
+H.264 off on any of them (the fallback drill).</li>
+</ul>
 <h2 id="broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, <code>D-71</code>, <code>D-72</code>)<a class="anchor" href="#broadcast-teacher-students-m6-portion-2-d-71-d-72" aria-label="Link to this section">#</a></h2>
 <pre><code>Overlay { kind: BROADCAST_START, session_id, message, hard_limit_seconds }   console → agent, on Link
 Overlay { kind: BROADCAST_STOP, session_id }                                 console → agent, on Link
@@ -978,6 +1147,12 @@ drawn in (neither capture includes it). The same <code>ScreenProducer</code> the
 <strong>once</strong> as <code>VideoFrame</code>s in <code>FULL</code> mode — a keyframe, then dirty-rectangle deltas found by
 <code>TileDiff</code>, a keyframe every <code>KeyframeInterval</code> — at <code>BroadcastFramesPerSecond</code> (12) with
 auto quality (<code>D-37</code>). <code>agent_id</code> is empty; <code>seq</code> and <code>at_unix_ms</code> are the console's.</p>
+<p><strong>Text and Video</strong> (M7 portion 6, <code>D-91</code>). That JPEG stream is the teacher's <em>Text</em>. In
+<em>Video</em> a second producer encodes H.264 at <code>BroadcastVideoFramesPerSecond</code> (25) for every PC
+whose <code>BroadcastRequest.codecs</code> lists <code>&quot;h264&quot;</code>; the JPEG producer then runs only while a
+watching PC did not list it. Each PC receives exactly one stream, by the same slot rules,
+and both streams take the same cap below. The teacher may switch at any time: every PC
+moves to the other stream at its next keyframe, which the switch asks for.</p>
 <p><strong>One stream per PC.</strong> <code>BROADCAST_START</code> goes on the <code>Link</code> like a lock and passes the same
 ownership gate; the agent then dials <code>PullBroadcast</code> with the <code>session_id</code>. The console
 serves it only to a PC the teacher chose (<code>PermissionDenied</code> otherwise) and only for the
@@ -1013,8 +1188,10 @@ that relinks while the broadcast runs is sent <code>BROADCAST_START</code> again
 Nothing survives a service restart.</p>
 <p><strong>Events.</strong> <code>broadcast.started</code> / <code>broadcast.stopped</code> / <code>broadcast.expired</code> on the console;
 from a PC, <code>broadcast.expired</code> (it ended at the PC's own limit), <code>broadcast.stalled</code> (no
-frame for <code>BroadcastStallTimeout</code>) and <code>broadcast.failed</code> (the console refused the stream,
-it is too old to have <code>PullBroadcast</code>, or the machine could not take the screen). A stream
+frame for <code>BroadcastStallTimeout</code>), <code>broadcast.failed</code> (the console refused the stream,
+it is too old to have <code>PullBroadcast</code>, or the machine could not take the screen) and
+<code>broadcast.text_fallback</code> (its H.264 decoder broke during the broadcast; it dialled again for
+JPEG and carries on, <code>D-91</code> item 11). A stream
 that ends with its connection — <code>Unavailable</code>, or a transport exception — is the link
 ending, not a failure, and raises no event (<code>D-71</code> item 11). The console's capture reports <code>capture.permission</code> (macOS has not granted
 <em>Screen Recording</em>), <code>capture.unsupported</code>, <code>capture.no_display</code>, <code>capture.gdi_failed</code>,
@@ -1034,11 +1211,13 @@ at most <code>SessionPipeMaxMessageBytes</code> (16 MiB); a frame cut short or o
 protocol error and ends the connection. <code>LabControl.Shared/Session/PipeFraming.cs</code> is the
 one implementation both sides use.</p>
 <p><strong>Envelopes.</strong></p>
-<pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms }  service → helper
+<pre><code>ServiceMessage { oneof: Ping | VideoControl | Input | Overlay | BroadcastFrame | ExamStrip | ClosePrograms | language }  service → helper
 HelperMessage  { oneof: HelperHello | HelperStatus | VideoFrame | Event | OverlayState } helper → service
 
-HelperHello  { session_id, process_id, version }         first message after connecting
-HelperStatus { input_desktop, screen_width, screen_height, uptime_ms }
+HelperHello  { session_id, process_id, version,          first message after connecting
+               video_decoders, video_encoders }       M7 portion 6 (D-91): &quot;h264&quot; when the helper made one
+HelperStatus { input_desktop, screen_width, screen_height, uptime_ms,
+               video_decoders }                       M7 portion 6 (D-91 item 11): what it decodes now; &quot;h264&quot; goes when its decoder broke
 </code></pre>
 <p><strong>Flow (M2).</strong> The service spawns <code>session.exe</code> into the active console session and waits
 for a connection (<code>HelperConnectTimeout</code>, 15 s). The helper sends <code>HelperHello</code>; the
@@ -1107,7 +1286,7 @@ up and no lock is held; the service tells a helper that shows a broadcast nobody
 running to stop, and re-asserts one the helper does not show.</p>
 <p><strong>The exam over the pipe (M6 portion 4, <code>D-75</code>).</strong> The service owns the exam and the
 whitelist; the helper only shows the strip and asks windows to close.
-<code>ExamStrip { show, message, until_seconds, notice, session_id }</code> is sent when the exam starts,
+<code>ExamStrip { show, message, until_seconds, notice, session_id, language }</code> is sent when the exam starts,
 is re-stated or ends (<code>show</code> false), when the whitelist closed something (<code>notice</code>: &quot;X is not
 allowed during the exam&quot;, shown for <code>ExamNoticeDuration</code>, 8 s) and to every freshly connected
 helper (the journal's re-assert). The helper stamps <code>until_seconds</code> onto its clock and shows a
@@ -1344,6 +1523,41 @@ An older console meeting an M5 agent sees an <code>instance:</code> entry as an 
 <code>Welcome</code> field it did not send; both are harmless.</li>
 <li><strong>Files exchanged offline</strong> <em>(implemented, portion 3)</em> — the section above.</li>
 </ol>
+<h3 id="m7-additions-portion-2-d-87">M7 additions (portion 2, <code>D-87</code>)<a class="anchor" href="#m7-additions-portion-2-d-87" aria-label="Link to this section">#</a></h3>
+<p>The console's language reaches the PC (<code>D-86</code> item 5). Three additive fields, none in the
+frozen subset; an older agent ignores them and keeps writing English, an older console sends
+none and the PC writes English:</p>
+<ol>
+<li><strong><code>Welcome.language = 7</code></strong> — the console's interface language, <code>uk</code>, <code>en</code> or <code>ru</code>. The agent
+writes what it sends on that link in it — event messages, <code>JobResult.message</code>, refusals,
+<code>problem</code> texts — and keeps it in <code>agent.json</code> (<code>console_language</code>), so what it reports
+after a restart, before any console is back, is still in it. Empty or unknown is English.
+Stable codes (<code>Event.code</code>, <code>reason</code> codes, <code>OverlayReasons</code>, <code>ExamReasons</code>) never change
+with the language; teacher-typed text, program names, paths and Windows' own error text
+are data and are passed through untranslated.</li>
+<li><strong><code>Overlay.language = 6</code></strong> (on <code>LOCK</code>) and <strong><code>ExamMode.language = 14</code></strong> — the language of
+the stock words on the student's screen (the lock's title, default message, countdown and
+PC name line; the strip's title, countdown and notices; <em>Time is up</em>). The PC keeps it with
+the session in <code>policy.json</code> (<code>language</code>, optional — a file without it is English), so a
+lock re-applied after a reboot is in the language it was set in; the <em>time is up</em> lock
+takes the exam's. The <strong>setting</strong> console's language decides, not the linked one's: a lock
+set in Ukrainian stays Ukrainian after a Russian console takes the PC over.</li>
+<li><strong>On the pipe</strong>, the service passes the session's language down as <code>Overlay.language</code> and
+<code>ExamStrip.language = 6</code>; the helper draws in it, never in the process culture of
+<code>session.exe</code> (which is whoever Windows started it as). For the helper's own events
+(<code>input.*</code>, <code>capture.*</code>) the service sends <code>ServiceMessage.language = 8</code> — the PC's language
+from <code>Welcome</code> — to every helper that connects and again after every <code>Welcome</code>. Helper and
+service are always the same build (<code>app\&lt;version&gt;</code>), so no helper meets it unknown.</li>
+</ol>
+<h3 id="m7-additions-portion-6-d-91">M7 additions (portion 6, <code>D-91</code>)<a class="anchor" href="#m7-additions-portion-6-d-91" aria-label="Link to this section">#</a></h3>
+<p>H.264 for the teacher's <em>Video</em> (see <em>H.264 (Video)</em> under <em>Video</em>). Four additive fields,
+none in the frozen subset: <strong><code>VideoControl.codec = 7</code></strong> (the console asks for <code>&quot;h264&quot;</code> in the
+full view), <strong><code>BroadcastRequest.codecs = 2</code></strong> (what the PC shows besides JPEG), and on the pipe
+<strong><code>HelperHello.video_decoders = 4</code></strong> / <strong><code>video_encoders = 5</code></strong> — what the helper could make at
+start, which the service puts into <code>BroadcastRequest.codecs</code> and logs — and
+<strong><code>HelperStatus.video_decoders = 5</code></strong>, what it decodes now, which drops <code>&quot;h264&quot;</code> when its decoder
+broke during a broadcast. <code>VideoFrame.codec = 10</code>,
+reserved since M3, now carries <code>&quot;h264&quot;</code>. Every mix of builds falls back to JPEG.</p>
 <h3 id="the-frozen-subset">The frozen subset<a class="anchor" href="#the-frozen-subset" aria-label="Link to this section">#</a></h3>
 <p>Four things are <strong>frozen at wire version 1 and may never change</strong>: the <code>Hello</code> message,
 the <code>Heartbeat</code> message, <code>Job</code> with <code>kind: self_update</code>, and <code>JobResult</code>. Fields may be
@@ -1494,9 +1708,9 @@ the PC. It is an added field on a frozen message, which is exactly the kind of c
 freeze permits: an agent that does not send it is still understood.</p>
 
 </article>
-<footer>Generated 2026-10-26 15:40 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-29 00:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
-<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#ports-and-identifiers-labcontrol.shareddefaults.cs">Ports and identifiers (LabControl.Shared/Defaults.cs)</a></li><li class="lvl2"><a href="#discovery-beacon-udp-plain-json-512-bytes">Discovery beacon (UDP, plain JSON, ≤ 512 bytes)</a></li><li class="lvl2"><a href="#grpc-services-labcontrol.v1">gRPC services (labcontrol.v1)</a></li><li class="lvl3"><a href="#enrollmentservice-console-is-the-server-used-once-per-pc-before-mtls-exists">EnrollmentService (console is the server; used once per PC, before mTLS exists)</a></li><li class="lvl3"><a href="#renew-certificate-renewal-over-the-link-d-25">Renew — certificate renewal over the link (D-25)</a></li><li class="lvl3"><a href="#agentservice-console-is-the-server-agent-is-the-client-mutual-tls">AgentService (console is the server, agent is the client, mutual TLS)</a></li><li class="lvl3"><a href="#revocation-entries">Revocation entries</a></li><li class="lvl3"><a href="#job-every-action-is-a-job">Job — every action is a job</a></li><li class="lvl3"><a href="#run_script">run_script</a></li><li class="lvl3"><a href="#pullfile-the-file-channel">PullFile — the file channel</a></li><li class="lvl3"><a href="#pushfile-uploads-to-the-console-m4-portion-2-d-42">PushFile — uploads to the console (M4 portion 2, D-42)</a></li><li class="lvl3"><a href="#requestupload-and-collect_files-m6-portion-5-d-77">RequestUpload and collect_files (M6 portion 5, D-77)</a></li><li class="lvl3"><a href="#reset_profile-m6-portion-5-d-78">reset_profile (M6 portion 5, D-78)</a></li><li class="lvl3"><a href="#files-install_package-and-send_file">Files: install_package and send_file</a></li><li class="lvl2"><a href="#internet-policy-m6-portion-3-d-73-d-74">Internet policy (M6 portion 3, D-73, D-74)</a></li><li class="lvl2"><a href="#exam-mode-m6-portion-4-d-75-d-76">Exam mode (M6 portion 4, D-75, D-76)</a></li><li class="lvl2"><a href="#video">Video</a></li><li class="lvl2"><a href="#input-full-view-control">Input (full-view control)</a></li><li class="lvl2"><a href="#overlay-lock-screen-m6-portion-1-d-69-d-70">Overlay (lock screen; M6 portion 1, D-69, D-70)</a></li><li class="lvl3"><a href="#h.264-video-m7-portion-6-d-91">H.264 (Video; M7 portion 6, D-91)</a></li><li class="lvl2"><a href="#broadcast-teacher-students-m6-portion-2-d-71-d-72">Broadcast (teacher → students; M6 portion 2, D-71, D-72)</a></li><li class="lvl2"><a href="#agent-session-helper-named-pipe-length-prefixed-protobuf">Agent ↔ Session helper (named pipe, length-prefixed protobuf)</a></li><li class="lvl3"><a href="#sessionstate-agent-console">SessionState (agent → console)</a></li><li class="lvl2"><a href="#files-exchanged-offline.lclab.lcreq.lcgrant-m5-d-56">Files exchanged offline: .lclab, .lcreq, .lcgrant (M5, D-56)</a></li><li class="lvl2"><a href="#versioning">Versioning</a></li><li class="lvl3"><a href="#m5-additions-being-implemented-d-55.d-60">M5 additions (being implemented, D-55…D-60)</a></li><li class="lvl3"><a href="#m7-additions-portion-2-d-87">M7 additions (portion 2, D-87)</a></li><li class="lvl3"><a href="#m7-additions-portion-6-d-91">M7 additions (portion 6, D-91)</a></li><li class="lvl3"><a href="#the-frozen-subset">The frozen subset</a></li><li class="lvl3"><a href="#self_update-pushing-a-new-agent">self_update — pushing a new agent</a></li></ul></nav>
 </div>
 </body>
 </html>

@@ -257,10 +257,10 @@ public sealed class FakeScreen : IScreenSource
             _drawn = false;
             _broadcastDrawn = -1;
             var remaining = OverlayText.Remaining(overlay.UntilUnix, overlay.HardLimitUnix, now.ToUnixTimeSeconds());
-            var countdown = OverlayText.CountdownText(remaining);
+            var countdown = OverlayText.CountdownText(remaining, overlay.Language ?? string.Empty);
             if (!_overlayDrawn || countdown != _overlayCountdown)
             {
-                using var picture = OverlayText.Compose(new OverlayContent(overlay.Message, string.Format(CultureInfo.InvariantCulture, Shared.Defaults.MachineNameFormat, _number), remaining), Width, Height);
+                using var picture = OverlayText.Compose(new OverlayContent(overlay.Message, string.Format(CultureInfo.InvariantCulture, Shared.Defaults.MachineNameFormat, _number), remaining, overlay.Language ?? string.Empty), Width, Height);
                 _canvas.DrawBitmap(picture.Bitmap, 0, 0);
                 _overlayDrawn = true;
                 _overlayCountdown = countdown;
@@ -374,7 +374,7 @@ public sealed class FakeScreen : IScreenSource
 
         var (width, height) = OverlayText.StripSize(Width, Height);
         var x = (Width - width) / 2;
-        var text = content.Message + "|" + OverlayText.StripRemainingText(content.RemainingSeconds) + "|" + content.Notice;
+        var text = content.Message + "|" + OverlayText.StripRemainingText(content.RemainingSeconds, content.Language) + "|" + content.Notice;
         var overdrawn = drawnSoFar.Any(r => r.X < x + width && r.X + r.Width > x && r.Y < height);
         if (text == _stripText && !overdrawn)
         {

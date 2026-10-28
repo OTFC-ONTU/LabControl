@@ -86,6 +86,9 @@
         <Button Content="{loc:Localize Action.ShowScreen}" Command="{Binding ShowScreenCommand}" />
         <Button Content="{loc:Localize Action.ShowScreenToAll}" Command="{Binding ShowScreenToAllCommand}" />
         <Button Content="{loc:Localize Action.StopShowingScreen}" Command="{Binding StopShowingScreenCommand}" IsVisible="{Binding IsBroadcasting}" />
+        <!-- Text / Video (M7 portion 6, D-91): chosen before showing, switched while showing; remembered on this computer. -->
+        <ComboBox ItemsSource="{Binding VideoModes}" SelectedItem="{Binding SelectedBroadcastMode, Mode=TwoWay}" MinWidth="90"
+                  IsEnabled="{Binding CanBroadcastVideo}" ToolTip.Tip="{Binding BroadcastModeTip}" VerticalAlignment="Center" />
         <Button Content="{loc:Localize Action.PushBuild}" Command="{Binding PushBuildCommand}" IsVisible="{Binding IsAdministrator}" />
         <Button Content="{loc:Localize Action.RemoveSelected}" Command="{Binding RemoveSelectedCommand}" />
         <Rectangle Width="1" Fill="{DynamicResource SystemControlForegroundBaseLowBrush}" Margin="4,0" />
@@ -143,6 +146,9 @@
       </TabItem>
       <TabItem Header="{loc:Localize Tab.Scripts}">
         <views:ScriptsView DataContext="{Binding Scripts}" />
+      </TabItem>
+      <TabItem Header="{loc:Localize Tab.Packages}">
+        <views:PackagesView DataContext="{Binding Packages}" />
       </TabItem>
       <TabItem Header="{loc:Localize Tab.Jobs}">
         <views:JobsView />

@@ -168,7 +168,9 @@ Solution file: `LabControl.sln` at the root (create in M0).
 - Code, identifiers, commits, comments: English. English is the neutral resource and
   fallback locale; M7 must ship Ukrainian, English and Russian across the ordinary
   product-facing surfaces, with an explicit persistent console language choice (`D-67`).
-  Resource files are used from day one and UI text is never hard-coded.
+  Resource files are used from day one and UI text is never hard-coded. Every new or changed
+  key goes into the neutral `.resx` and its `.uk.resx` / `.ru.resx` siblings in the same change;
+  `ResourceTranslationTests` enforces it (`D-86`).
 - Agent must never crash the student's session: every Win32 call is wrapped, every
   failure is reported to the console as an event, never thrown out of the service loop.
 - Never log the `student` password, the lab key or its passphrase. Never commit
@@ -222,7 +224,84 @@ recovery*). Tests: 930 Shared + 275 Console. Next: the owner moves the real lab.
 
 **M6 is done (owner decision 2026-10-26)**: all six portions built, accepted in the physical lab on all
 14 PCs (builds `1.0.0+68d0ae5` → `1.0.0+cc39651`), the lab's findings fixed and retested; open check:
-teacher access in the lab (no second teacher device). Next by the roadmap: M7. The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
+teacher access in the lab (no second teacher device). Next by the roadmap: M7, whose portion 6 is H.264 for the broadcast and the full view with a *Text / Video* choice (owner
+decision 2026-10-27), portion 7 a UI/UX redesign of every screen
+(owner decision 2026-10-26) that also carries the visible answer to failed actions, followed by portion 8,
+the README as a teacher's manual written for the redesigned screens (owner decision 2026-10-27: swapped).
+**M7 portion 1 is built (2026-10-26, `D-86`), on the Mac:** the console speaks Ukrainian, English
+and Russian — `Shared/Localization/ProductLanguages` (stored choice, else a supported OS language,
+else English), `preferences.json` at the data root, `ConsoleLanguage` applied in `Program.Main`
+before the first string, the selector in *Settings* and the lab chooser with *Restart now* through
+the ordinary quit, and `*.uk.resx` / `*.ru.resx` beside every product `.resx` (console, Setup,
+overlay, policy texts, `INSTALL.txt`). Every new key goes into all three files in the same change
+(`ResourceTranslationTests`); both test projects pin English because the owner's Mac reports
+`ru-UA`. Owner decisions: the language applies on restart, the student sees the console's language
+(portion 2 carries it to the PC), "lab" = лабораторія / лаборатория. ROADMAP M7 holds the seven
+portions. Tests: 1032 Shared + 316 Console. Next: the owner reads both translations; portion 2.
+**M7 portion 2 is done (built 2026-10-26, `D-87`; accepted by the owner 2026-10-27 after the lab on
+`1.0.0+c8e3c9b` — exam, lock, language switch; Setup's languages not run):** the console's
+language reaches the PC. `Welcome.language` sets `Shared/Localization/PcLanguage` (kept in
+`agent.json` as `console_language`), in which the PC writes its events, job results and refusals
+(`PolicyStrings` and the new `PcStrings` via `PcText.Get`; the helper learns it from
+`ServiceMessage.language`). Each lock and exam carries its own `language` (`Overlay.language`,
+`ExamMode.language`, kept on the session in `policy.json`, passed down as `ExamStrip.language`):
+the student's words are in the **setting** console's language, and `OverlayText` takes it
+explicitly, never the process culture. Setup and removal resolve the Windows display language
+before the first string; the step trace shared with `setup.log` stays English. `PcLanguage` is
+process-wide, so a test that changes it runs in the language collection and restores English.
+Tests: 1050 Shared + 317 Console. Built-in scripts' output stays English (data). Next: portion 3.
+**M7 portion 3 is built (2026-10-27, `D-88`), on the Mac:** the package catalog and the *Add package*
+wizard. Owner decisions: the installer is copied into the lab's catalog, the proposed detect rule is
+the program's name in Windows' installed programs (a file path the alternative), a new version
+replaces the entry of the same program, the install buttons come with portion 4. `Shared/Packages`
+reads an installer without running it (`CompoundFile` + `MsiProperties` for an MSI's `Property`
+table, `PeVersionInfo`, `InstallerInspector`: SHA-256, family — MSI, WiX bundle, NSIS, Inno,
+InstallShield — and its silent arguments; `PackageEntry`/`DetectRule`). `Console/Services/PackageCatalog`
+writes `packages/<id>.yaml` (YamlDotNet) and copies the installer, hash-checked, into
+`packages/<id>/<hash prefix>/`; the *Packages* tab edits and deletes entries. A backup carries only
+the YAML. Tests: 1073 Shared + 327 Console. Next: portion 4 (`install_package` on the agent).
+**M7 portion 4 is built (2026-10-27, `D-89`), on the Mac; not yet run on Windows:** `install_package`.
+Owner decisions: 15 minutes per installer by default (per package), *Install on all missing* queues for
+PCs that are off, a restart is only reported, a PC in an exam refuses. The job carries file, family,
+silent arguments, detect rule, limit and a mode (`install` / `missing` / `check`) and answers with
+`JobResult.outcome` (additive, `PackageOutcomes`). `Shared/Packages/PackageInstallRunner` over
+`IPackageHost`: `WindowsPackageHost` (SYSTEM, session 0, no redirected streams, process tree ended at
+the limit, staging emptied at start) and `FakePackageHost` (`/fail`, `/reboot`, `/hang`, `/nodetect`).
+The console's `PackageStatusBook` (`package-status.json`) keeps each PC's answer; the *Packages* tab
+lists every PC and has *Install on N selected PCs*, *Install on all missing* (asks before an untried
+package) and *Check PCs*. **Working in the lab (owner, 2026-10-27)**: the Wake-on-LAN driver was
+installed on the room with it; open: the broken-package drill and the measured 14-PC IDE install.
+A package may also be a `.zip` (`D-89` addendum): the wizard lists the
+installers inside, the PC unpacks it under checked names and limits (`PackageArchive`) and runs the
+chosen one (`run`) from its folder — first for the Realtek RTL8168 driver Wake-on-LAN needs.
+Tests: 1102 Shared + 335 Console. Next: the broken-package drill and the 14-PC measurement in the lab.
+**M7 portion 5 has started (2026-10-27):** the 90-minute lesson criterion passed (owner, several lessons);
+the `win-x64` console installer ran on a real Windows computer and the lab backup imported there with the
+passphrase (half of the rehearsed recovery; driving the lab from it remains); the robustness pass is built
+(`D-90`: reconnect storm, full views, a week off, an old backup, a full disk, clock skew — sixteen fixes,
+among them online-only reboot/log off and an unlinked PC dialling a beacon whose only fault is its time).
+Tests: 1116 Shared + 370 Console (LabSwitchTests.Twenty_rounds fails on this Mac on clean HEAD too).
+**M7 portion 6 is built (2026-10-27, `D-91`) and passed its ARM64 VM drill the same day:** H.264 for the broadcast
+and the full view with a *Text / Video* choice. Owner decisions: *Text* is today's JPEG unchanged, *Video*
+is H.264 at 25–30 fps; *Text* first; the last choice remembered separately for *Show my screen* and the
+full-view window (`preferences.json`); a switch at any time. Frames say their codec (`VideoFrame.codec =
+"h264"`, one Annex B access unit, IDR with SPS/PPS in front); `VideoControl.codec`, `BroadcastRequest.codecs`
+and `HelperHello.video_decoders`/`video_encoders` are additive, so an older peer, a Linux console or a PC
+without the codecs gets JPEG — no protocol version. `Shared/Video/H264/`: VideoToolbox through `DllImport`
+(macOS), Windows' in-box synchronous Media Foundation MFTs through Vortice.MediaFoundation 3.8.3 (NV12 in
+C#), `H264Codecs` probed once (`LABCONTROL_NO_H264=1` for the fallback drill); `FrameDecoder` decodes by
+the frame; the producer holds a refused access unit instead of re-encoding; `BroadcastHub` runs an H.264
+stream for PCs that listed `h264` and the JPEG one only for those that did not. VideoToolbox runs end to
+end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample released twice after
+`ProcessOutput` crashed the helper; no H.264 encoded for JPEG-only watchers): *Video* broadcast 24–25 fps
+at ~100 kbit/s vs *Text* 11 fps at 3.6 Mbit/s, the PC's full view in *Video* 26–27 fps; then a decoder that
+breaks mid-broadcast falls back to JPEG keeping the screen (`HelperStatus.video_decoders`, `broadcast.text_fallback`,
+`LABCONTROL_H264_DECODE_FAIL_AFTER`), and `win-x64` passed under the VM's x64 emulation. Owner decision: the VM
+drill is enough for now; the lab checks (ROADMAP on-site checklist) wait for the next visit and portion 7 goes
+ahead. PR OTFC-ONTU/LabControl#6; its independent review (2026-10-28, `D-91` item 12) found and fixed a per-frame
+pixel-buffer leak in the macOS encoder, a hub stream race, a console decoder that could stay broken, H.264 relayed
+after a lost frame, a helper restart taken for a broken decoder — re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7 (the redesign); the H.264 lab checks on the next visit.
+The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy
 journal are in ROADMAP M6, *Settled before implementation*; M6 reserves `D-69`…`D-79`.
@@ -714,8 +793,9 @@ Setup, enrolled in lab `444-2`, linked to the MacBook console over Wi-Fi with au
 `student` sign-in and live screens. The owner considers the physical baseline established
 and development moves on (M5 portion 2 onwards); the remaining nine PCs, the vendor NIC
 driver, the wake test and the other M4 physical checks continue alongside, tracked in
-ROADMAP's *Physical lab* row and the on-site checklist. Do not describe Wake-on-LAN as
-working in this lab until the vendor-driver rerun proves it.
+ROADMAP's *Physical lab* row and the on-site checklist. **Wake-on-LAN works in the lab (owner, 2026-10-27)**: Realtek's
+vendor driver `.zip` installed on all fourteen through the package catalog, ErP off and *Power On By
+PCI-E* on in each BIOS; no USB repair is needed for wake from shutdown (PC-02 proved it).
 
 **Physical lab, 2026-10-20:** all fourteen PCs (PC-01…PC-14) are installed and linked. The owner had
 forgotten the lab key's passphrase; the lab was moved to a new key with *Move this lab to a new key*

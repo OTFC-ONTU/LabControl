@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Instructions" xml:space="preserve"><value>1. Тримайте консоль викладача відкритою в цій локальній мережі й розблокуйте ключ лабораторії, перш ніж встановлювати ПК.
+2. На кожному студентському ПК запустіть {0} від імені адміністратора.
+3. Виберіть номер цього ПК. Створення облікового запису студента й автоматичний вхід увімкнено за замовчуванням. Зніміть цю позначку, якщо хочете використовувати наявні облікові записи ПК.
+4. Завершіть встановлення й перезапустіть Windows, щоб застосувати назву ПК і параметри живлення.
+5. У консолі викладача перевірте, що цей ПК відображається зеленим і підключеним.
+</value></data>
+</root>

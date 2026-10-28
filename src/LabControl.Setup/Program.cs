@@ -1,4 +1,6 @@
+using System.Globalization;
 using LabControl.Shared;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Persistence;
 using LabControl.Shared.Setup;
 
@@ -9,6 +11,13 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        // Setup and removal speak the Windows display language when it is one of the product's,
+        // English otherwise (D-67 item 3, D-87): the one rule the console uses, with no stored
+        // choice — a USB stick carries no preference. Only the words; numbers keep the region.
+        var language = ProductLanguages.Resolve(null, CultureInfo.CurrentUICulture);
+        CultureInfo.DefaultThreadCurrentUICulture = language.Culture;
+        CultureInfo.CurrentUICulture = language.Culture;
+
         var version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown";
         var build = typeof(Program).Module.ModuleVersionId.ToString("N")[..8];
         System.Console.WriteLine($"LabControl Setup {version} build {build}");
@@ -91,7 +100,7 @@ internal static class Program
             {
                 var start = new System.Diagnostics.ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "shutdown.exe")) { UseShellExecute = false };
                 start.ArgumentList.Add("/r"); start.ArgumentList.Add("/t"); start.ArgumentList.Add("0");
-                using var reboot = System.Diagnostics.Process.Start(start) ?? throw new IOException("Windows could not start the reboot.");
+                using var reboot = System.Diagnostics.Process.Start(start) ?? throw new IOException(SetupDialog.Text("RebootNotStarted"));
             }
             return result;
         }
@@ -103,7 +112,7 @@ internal static class Program
         }
         catch (Exception)
         {
-            System.Console.Error.WriteLine("Setup could not complete a Windows operation. Existing accounts and unresolved settings were preserved; repair can retry.");
+            System.Console.Error.WriteLine(SetupDialog.Text("WindowsOperationFailed"));
             ShowFailure();
             return 1;
         }

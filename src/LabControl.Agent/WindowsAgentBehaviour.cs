@@ -1,5 +1,8 @@
+using System.Globalization;
 using LabControl.Shared;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
+using LabControl.Shared.Packages;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using Microsoft.Extensions.Logging;
@@ -21,6 +24,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
     private readonly AgentUpdater _updater;
     private readonly UpdateTrialMonitor _trialMonitor;
     private readonly SetupReadinessMonitor _readinessMonitor;
+    private readonly WindowsPackageHost _packages;
+    private readonly PackageInstallRunner _installs;
 
     public WindowsAgentBehaviour(DirectoryAgentStore store, ILogger log)
     {
@@ -31,6 +36,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         _updater = new AgentUpdater(Link, log, store.Authority);
         _trialMonitor = new UpdateTrialMonitor(Link, log);
         _readinessMonitor = new SetupReadinessMonitor(Link);
+        _packages = new WindowsPackageHost(() => ExamHeld?.Invoke() == true);
+        _installs = new PackageInstallRunner(_packages, Link.PullFileAsync);
 
         Link.Linked += (_, name) => _log.LogInformation("{Pc}: linked to {Console}", Link.Name, name);
         Link.Unlinked += reason => _log.LogInformation("{Pc}: unlinked — {Reason}", Link.Name, reason);
@@ -48,6 +55,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             Link.Report(Event.Types.Severity.Warning, "agent.data_acl", problem);
         }
 
+        // An install the service was stopped in the middle of leaves its staged installer (D-89).
+        _packages.ClearStaging();
         Link.Start();
     }
 
@@ -62,7 +71,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         {
             _log.LogWarning("Could not read update state: {Message}", ex.Message);
             hello.UpdateState = new UpdateState { Phase = UpdateState.Types.Phase.Unspecified,
-                Reason = "Update history is temporarily unavailable; the agent will retry." };
+                Reason = PcText.Get("UpdateHistoryUnavailable") };
         }
     }
 
@@ -76,7 +85,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         {
             // An inventory is nice to have; a failure to gather one must never cost the link.
             _log.LogWarning(ex, "{Pc}: inventory failed: {Message}", Link.Name, ex.Message);
-            Link.Report(Event.Types.Severity.Warning, "agent.inventory_failed", $"Could not gather the inventory: {ex.Message}");
+            Link.Report(Event.Types.Severity.Warning, "agent.inventory_failed", PcText.Get("InventoryFailed", ex.Message));
             return new Inventory { Hostname = Environment.MachineName };
         }
     }
@@ -111,6 +120,9 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             case Job.Types.Kind.CollectFiles:
                 return await new CollectRunner(Link).RunAsync(job, report, token);
 
+            case Job.Types.Kind.InstallPackage:
+                return await _installs.RunAsync(job, report, token);
+
             case Job.Types.Kind.ResetProfile:
                 return await new ProfileResetRunner(Link, _log) { ExamHeld = ExamHeld }.RunAsync(job, report, token);
 
@@ -129,13 +141,13 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
                 return await _updater.RunAsync(job, report, token);
 
             default:
-                // Packages land in M7 (ROADMAP). Until then the console hears "not in this build".
+                // A kind this build does not run (set_config, rekey outside Setup): the console hears "not in this build".
                 return new JobResult
                 {
                     JobId = job.Id,
                     Ok = false,
                     ExitCode = -1,
-                    Message = $"This agent build ({Program.InstalledVersion}) does not run {job.Kind} jobs yet.",
+                    Message = PcText.Get("JobNotInThisBuild", Program.InstalledVersion, job.Kind),
                 };
         }
     }
@@ -153,7 +165,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         if (problem is not null)
         {
             _log.LogError("{Pc}: cannot {What}: {Problem}", Link.Name, what, problem);
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"Cannot {what}: {problem}" };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get(reboot ? "PowerCannotReboot" : "PowerCannotShutdown", problem) };
         }
 
         _ = Task.Run(async () =>
@@ -167,7 +179,7 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             if (failure is not null)
             {
                 _log.LogError("{Pc}: {What} failed: {Failure}", Link.Name, what, failure);
-                Link.ReportForJob(job.Id, Event.Types.Severity.Error, "power.failed", $"The {what} did not happen: {failure}");
+                Link.ReportForJob(job.Id, Event.Types.Severity.Error, "power.failed", PcText.Get(reboot ? "RebootDidNotHappen" : "ShutdownDidNotHappen", failure));
             }
         });
 
@@ -177,8 +189,8 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
             Ok = true,
             ExitCode = 0,
             Message = reboot
-                ? $"Rebooting in {Defaults.PowerJobDelay.TotalSeconds:0} s (forced; applications are closed without saving)."
-                : $"Shutting down in {Defaults.PowerJobDelay.TotalSeconds:0} s (forced; applications are closed without saving).",
+                ? PcText.Get("PowerRebooting", Defaults.PowerJobDelay.TotalSeconds.ToString("0", CultureInfo.InvariantCulture))
+                : PcText.Get("PowerShuttingDown", Defaults.PowerJobDelay.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)),
         };
     }
 
@@ -187,19 +199,19 @@ internal sealed class WindowsAgentBehaviour : IAgentBehaviour, IAsyncDisposable
         var session = InteractiveSession.Snapshot();
         if (!session.HasSession || !session.HasUser)
         {
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = "Nobody is logged on to this PC; there is no session to log off." };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("LogoffNobody") };
         }
 
         var failure = PowerControl.Logoff(session.SessionId!.Value);
         if (failure is not null)
         {
             _log.LogError("{Pc}: logoff failed: {Failure}", Link.Name, failure);
-            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = $"Could not log {session.User} off: {failure}" };
+            return new JobResult { JobId = job.Id, Ok = false, ExitCode = -1, Message = PcText.Get("LogoffFailed", session.User, failure) };
         }
 
         // The log off runs on in Windows: an exam's whitelist pauses while it closes everything (D-75).
         ExamCoordination.PauseForPowerJob();
-        return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = $"Logging {session.User} off (session {session.SessionId}); the session helper follows the new session." };
+        return new JobResult { JobId = job.Id, Ok = true, ExitCode = 0, Message = PcText.Get("LogoffStarted", session.User, session.SessionId) };
     }
 
     public async ValueTask DisposeAsync()

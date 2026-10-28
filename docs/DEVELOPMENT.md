@@ -307,7 +307,45 @@ then `netsh advfirewall firewall delete rule name="LabControl Internet (sites)"`
 `(loopback)`, `(local subnet)` and `(agent)` (`netsh` has no `group=` for deleting, the portion-7
 lesson); DNS then needs `netsh interface ip set dns "<adapter>" dhcp` per interface.
 
-**Languages.** The product UI is English today. M7 must ship the complete product-facing
-experience in **Ukrainian, English and Russian**, including the teacher console, Windows
-Setup/removal, stock student-facing text and generated USB instructions. The console will
-have a saved language selector; English remains the safe fallback (`D-67`).
+**Languages.** The console ships in **Ukrainian, English and Russian** (M7 portion 1, `D-86`):
+English is the neutral `*.resx`, Ukrainian and Russian are `*.uk.resx` / `*.ru.resx` beside it
+for every product resource set (console, Setup, overlay, policy texts, `INSTALL.txt`). A new
+key goes into all three files in the same change — `ResourceTranslationTests` fails otherwise,
+and `ConsoleLanguageTests` fails on a key the code names but the English file lacks. The
+language is chosen in *Settings* or the lab chooser, saved in `preferences.json` at the data
+root, and applied at the next start; with no choice the OS display language decides
+(`ru-UA` → Russian), anything unsupported is English. Both test projects pin English, so the
+tests are the same on any Mac. To look at the three languages, run the console tests with
+`LABCONTROL_UI_SHOTS=<dir>` and open the `lang-uk-*` / `lang-ru-*` PNGs.
+
+On the PC (M7 portion 2, `D-87`) the console's language arrives in `Welcome.language`: the
+agent writes its events and job results in it (`PcLanguage`, kept in `agent.json` as
+`console_language`; the texts are `Shared/Localization/PcStrings.resx` and `PolicyStrings`),
+and each lock and exam carries its own `language` for the stock words on the student's screen
+(`OverlayText` takes it explicitly, never the process culture; `policy.json` keeps it). The
+simulator follows the same rule, so `FakeAgent` against a Ukrainian console draws a Ukrainian
+lock. `PcLanguage` is process-wide: a test that sets it runs in the language collection and
+puts English back. Setup follows the Windows display language (INSTALLER, *What Setup.exe does*).
+
+**Packages** (M7 portion 3, `D-88`). The *Packages* tab and its *Add package…* wizard work on the
+Mac: any `.exe` or `.msi` can be chosen, it is read (never run) and copied into
+`labs/<lab_id>/packages/<id>/<hash prefix>/` beside `<id>.yaml`. The wizard's guesses come from
+`Shared/Packages/InstallerInspector`; to see what it makes of a real installer, add it in the
+console and open the `.yaml`. The tests build their MSI byte by byte (`MsiBuilder` in
+`PackageInspectionTests`) and use a real managed DLL as the PE; real installers of each family
+are worth inspecting by hand before the owner's acceptance run.
+
+Installing (M7 portion 4, `D-89`) works against `FakeAgent`: the simulated PC really pulls the
+installer and checks its hash, then pretends to run it, steered by the package's silent
+arguments — `/fail` ends with 1603, `/reboot` with 3010, `/hang` (or no arguments on an
+unrecognised installer) waits out the package's time limit, `/nodetect` succeeds without
+installing; anything else installs. What a simulated PC has is `installed-packages.json` in its
+directory. To try the broken-package drill on the Mac, edit an entry's arguments to `/S /fail`
+and press *Install on all missing*.
+
+**Robustness tests** (M7 portion 5, `D-90`). `ReconnectStormTests` and `FullViewStormTests` run in
+their own non-parallel collection (thirty TLS links in one process). The full-disk tests use a real
+full volume: on macOS `FullVolume` makes a 4–8 MB RAM disk with `hdiutil`, fills it and detaches it
+afterwards (a stray `LCFULL…` volume in Finder is one of them still mounted); elsewhere they skip
+unless `LABCONTROL_FULL_DISK_VOLUME` names a dedicated volume of at most 64 MB — on Windows, a small
+VHD.

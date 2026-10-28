@@ -74,6 +74,9 @@ public interface IDialogs
     /// <summary><i>Reset profile…</i> (M6 portion 5, D-78): light or full, confirmed; <c>null</c> when cancelled.</summary>
     Task<LabControl.Shared.Jobs.ResetMode?> ResetProfileAsync(int pcCount) => Task.FromResult<LabControl.Shared.Jobs.ResetMode?>(null);
 
+    /// <summary>The <i>Add package</i> wizard (M7 portion 3, D-88); the entry added, or <c>null</c>.</summary>
+    Task<LabControl.Shared.Packages.PackageEntry?> AddPackageAsync(AddPackageModel model) => Task.FromResult<LabControl.Shared.Packages.PackageEntry?>(null);
+
     /// <summary>Shows a folder of this computer in the platform's file manager; hosts without one do nothing.</summary>
     Task OpenFolderAsync(string path) => Task.CompletedTask;
 

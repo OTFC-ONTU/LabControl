@@ -1,9 +1,11 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO.Pipes;
 using System.ServiceProcess;
 using LabControl.Shared;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protocol;
 using LabControl.Shared.Session;
@@ -77,6 +79,15 @@ internal sealed class SessionSupervisor : IAsyncDisposable
     public PolicyEnforcer? Policy { get; set; }
 
     /// <summary>
+    /// The codecs besides JPEG the helper decodes — <c>BroadcastRequest.codecs</c> (D-91 item 3):
+    /// what the last helper said, kept while a helper restarts, so a restart during a broadcast is
+    /// not taken for a broken decoder (review). Empty until a helper has said anything.
+    /// </summary>
+    public IReadOnlyList<string> HelperVideoDecoders => _videoDecoders;
+
+    private volatile IReadOnlyList<string> _videoDecoders = [];
+
+    /// <summary>
     /// Writes a message down the pipe to the connected helper, fire-and-forget (D-35 item 8);
     /// <c>false</c> when no helper is connected, and the caller knows the message is not
     /// queued — the helper is told the current state when it connects.
@@ -131,6 +142,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         _changes.Changed += OnSessionChange;
         _link.VideoControlChanged += OnVideoControl;
         _link.InputReceived += OnInput;
+        _link.Linked += OnLinked;
         _loop = Task.Run(() => LoopAsync(_stopping.Token));
     }
 
@@ -144,6 +156,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         _changes.Changed -= OnSessionChange;
         _link.VideoControlChanged -= OnVideoControl;
         _link.InputReceived -= OnInput;
+        _link.Linked -= OnLinked;
         _stopping.Cancel();
         Wake();
 
@@ -247,7 +260,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                 else
                 {
                     _log.LogWarning("Ctrl+Alt+Del was not sent: {Problem}", problem);
-                    _link.Report(Event.Types.Severity.Warning, "input.sas_failed", $"Ctrl+Alt+Del could not be sent: {problem}");
+                    _link.Report(Event.Types.Severity.Warning, "input.sas_failed", PcText.Get("SasFailed", problem));
                 }
             });
             return;
@@ -387,18 +400,18 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                 helper.ExitNoticedAt ??= now;
                 if (now - helper.ExitNoticedAt.Value >= Defaults.HelperExitGrace)
                 {
-                    stop = $"session.exe exited with code {exitCode}";
+                    stop = PcText.Get("HelperExitedCode", exitCode);
                     crashed = true;
                 }
             }
             else if (helper.Connected && now - helper.LastHeard > Defaults.HelperSilenceTimeout)
             {
-                stop = $"session.exe has been silent for {(now - helper.LastHeard).TotalSeconds:0} s";
+                stop = PcText.Get("HelperSilent", (now - helper.LastHeard).TotalSeconds.ToString("0", CultureInfo.InvariantCulture));
                 crashed = true;
             }
             else if (!helper.Connected && now - helper.StartedAt > Defaults.HelperConnectTimeout)
             {
-                stop = $"session.exe did not connect within {Defaults.HelperConnectTimeout.TotalSeconds:0} s";
+                stop = PcText.Get("HelperNoConnect", Defaults.HelperConnectTimeout.TotalSeconds.ToString("0", CultureInfo.InvariantCulture));
                 crashed = true;
             }
 
@@ -488,7 +501,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             if (!_crashLoopReported)
             {
                 _crashLoopReported = true;
-                var message = $"session.exe keeps dying ({_recentExits.Count} times in {Defaults.HelperCrashLoopWindow.TotalSeconds:0} s; last: {what}); retrying every {Defaults.HelperCrashLoopBackoff.TotalSeconds:0} s. Screens, control and lock will not work on this PC until it stays up.";
+                var message = PcText.Get("HelperCrashLoop", _recentExits.Count, Defaults.HelperCrashLoopWindow.TotalSeconds.ToString("0", CultureInfo.InvariantCulture), what, Defaults.HelperCrashLoopBackoff.TotalSeconds.ToString("0", CultureInfo.InvariantCulture));
                 _log.LogError("{Message}", message);
                 _link.Report(Event.Types.Severity.Error, "session.helper_crash_loop", message);
             }
@@ -497,7 +510,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         {
             _nextSpawnAt = now + Defaults.HelperRestartDelay;
             _log.LogWarning("{What}; restarting in {Seconds:0.#} s", what, Defaults.HelperRestartDelay.TotalSeconds);
-            _link.Report(Event.Types.Severity.Warning, "session.helper_exited", $"{what}; restarting it.");
+            _link.Report(Event.Types.Severity.Warning, "session.helper_exited", PcText.Get("HelperRestarting", what));
         }
     }
 
@@ -515,7 +528,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
-            var message = $"Could not start {Defaults.SessionExecutableName} in session {sessionId}: {ex.Message}";
+            var message = PcText.Get("HelperSpawnFailed", Defaults.SessionExecutableName, sessionId, ex.Message);
             _log.LogError("{Message}", message);
             if (_lastSpawnFailure != message)
             {
@@ -605,7 +618,7 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             if (!_pipeFailureReported)
             {
                 _pipeFailureReported = true;
-                var message = $@"Cannot open the pipe \\.\pipe\{Defaults.SessionPipeName} for the session helper: {ex.Message}. Another process holds the name (a second agent instance?); the helper will not run until it is freed.";
+                var message = PcText.Get("HelperPipeUnavailable", Defaults.SessionPipeName, ex.Message);
                 _log.LogError("{Message}", message);
                 _link.Report(Event.Types.Severity.Error, "session.pipe_unavailable", message);
             }
@@ -664,7 +677,12 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             helper.Connected = true;
             helper.LastHeard = DateTimeOffset.UtcNow;
             helper.Version = hello.Hello.Version;
-            _log.LogInformation("session.exe {Version} (pid {Pid}) connected from session {Session}", hello.Hello.Version, hello.Hello.ProcessId, hello.Hello.SessionId);
+            helper.VideoDecoders = hello.Hello.VideoDecoders.ToArray();
+            _videoDecoders = helper.VideoDecoders;
+            _log.LogInformation("session.exe {Version} (pid {Pid}) connected from session {Session}; decodes {Decoders}, encodes {Encoders}",
+                hello.Hello.Version, hello.Hello.ProcessId, hello.Hello.SessionId,
+                hello.Hello.VideoDecoders.Count > 0 ? string.Join(",", hello.Hello.VideoDecoders) : "jpeg only",
+                hello.Hello.VideoEncoders.Count > 0 ? string.Join(",", hello.Hello.VideoEncoders) : "jpeg only");
 
             // Writes are never awaited from the read loop (D-35 item 8): a write that had to
             // wait for the helper to read, while the helper waits for us to read, is a deadlock.
@@ -676,6 +694,9 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             {
                 _ = helper.SendAsync(new ServiceMessage { VideoControl = wanted }, _log);
             }
+
+            // The helper writes its events in the PC's language (D-87); it cannot see Welcome itself.
+            _ = helper.SendAsync(new ServiceMessage { Language = PcLanguage.Current.Code }, _log);
 
             // A helper born while a lock is held shows it at once (D-70 item 4): D-30 restarts
             // the helper at logon and logoff, and a lock must not vanish at the logon screen.
@@ -692,11 +713,20 @@ internal sealed class SessionSupervisor : IAsyncDisposable
                         var status = message.Status;
                         var changedDesktop = helper.Status?.InputDesktop != status.InputDesktop;
                         helper.Status = status;
+
+                        // The helper's word on what it decodes now: "h264" goes when its decoder broke
+                        // during a broadcast, and the broadcast receiver dials again for JPEG (D-91 item 11).
+                        if (!status.VideoDecoders.SequenceEqual(helper.VideoDecoders))
+                        {
+                            _log.LogWarning("session.exe now decodes {Decoders}", status.VideoDecoders.Count > 0 ? string.Join(",", status.VideoDecoders) : "jpeg only");
+                            helper.VideoDecoders = status.VideoDecoders.ToArray();
+                            _videoDecoders = helper.VideoDecoders;
+                        }
                         if (!announced)
                         {
                             announced = true;
                             _link.Report(Event.Types.Severity.Info, "session.helper_ready",
-                                $"Session helper {helper.Version} is up in session {helper.SessionId} ({status.ScreenWidth}×{status.ScreenHeight}, desktop {status.InputDesktop}).");
+                                PcText.Get("HelperReady", helper.Version, helper.SessionId, status.ScreenWidth, status.ScreenHeight, status.InputDesktop));
                             Wake();
                         }
                         else if (changedDesktop)
@@ -852,6 +882,10 @@ internal sealed class SessionSupervisor : IAsyncDisposable
         }
     }
 
+    /// <summary>A console linked: its language may be new, and the helper writes in it too (D-87).</summary>
+    private void OnLinked(string instanceId, string instanceName) =>
+        SendToHelper(new ServiceMessage { Language = PcLanguage.Current.Code });
+
     private void ReassertOverlay(string why, bool force = false)
     {
         var policy = Policy;
@@ -903,13 +937,30 @@ internal sealed class SessionSupervisor : IAsyncDisposable
             return;
         }
 
-        if (_link.TryPushVideo(frame))
+        // An H.264 frame needs every one before it (D-91 item 4): after one was refused, the ones
+        // that follow until the next IDR would only smear the console's picture, so they are
+        // dropped too (review). A JPEG delta stands on its own and is offered as before.
+        var h264 = FrameDecoder.CodecOf(frame) == Defaults.VideoCodecH264;
+        if (h264 && helper.H264Gap && !frame.Keyframe)
         {
-            helper.KeyframeAsked = false;
             return;
         }
 
-        if (helper.KeyframeAsked)
+        if (_link.TryPushVideo(frame))
+        {
+            helper.KeyframeAsked = false;
+            if (frame.Keyframe)
+            {
+                helper.H264Gap = false;
+            }
+
+            return;
+        }
+
+        helper.H264Gap |= h264;
+
+        // A refused keyframe asks again: nothing behind it can be shown until one gets through.
+        if (helper.KeyframeAsked && !frame.Keyframe)
         {
             return;
         }
@@ -953,6 +1004,9 @@ internal sealed class SessionSupervisor : IAsyncDisposable
 
         public string Version { get; set; } = string.Empty;
 
+        /// <summary>What the helper said it decodes besides JPEG (M7 portion 6, D-91): <c>"h264"</c>, or nothing from an older helper.</summary>
+        public IReadOnlyList<string> VideoDecoders { get; set; } = [];
+
         public HelperStatus? Status { get; set; }
 
         /// <summary>The pipe to this helper once it connected; writes go through <see cref="SendAsync"/>.</summary>
@@ -960,6 +1014,9 @@ internal sealed class SessionSupervisor : IAsyncDisposable
 
         /// <summary>A keyframe was requested after a refused frame and no frame has been accepted since.</summary>
         public volatile bool KeyframeAsked;
+
+        /// <summary>An H.264 frame was refused; every following one is dropped until a keyframe gets through (D-91).</summary>
+        public volatile bool H264Gap;
 
         /// <summary>One writer at a time on the pipe; a failure is logged, never thrown — the pump notices the pipe ending.</summary>
         public async Task SendAsync(ServiceMessage message, ILogger log)

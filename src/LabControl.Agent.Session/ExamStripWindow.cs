@@ -223,7 +223,7 @@ internal sealed class ExamStripWindow : IDisposable
             return;
         }
 
-        var words = content.Message + "|" + OverlayText.StripRemainingText(content.RemainingSeconds) + "|" + content.Notice;
+        var words = content.Message + "|" + OverlayText.StripRemainingText(content.RemainingSeconds, content.Language) + "|" + content.Notice;
         lock (_lock)
         {
             if (!force && words == _drawn && _picture is not null)

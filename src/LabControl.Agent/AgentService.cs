@@ -1,6 +1,7 @@
 using LabControl.Shared;
 using LabControl.Shared.Discovery;
 using LabControl.Shared.Link;
+using LabControl.Shared.Localization;
 using LabControl.Shared.Policy;
 using LabControl.Shared.Protection;
 using LabControl.Shared.Protocol;
@@ -66,7 +67,7 @@ internal sealed class AgentService : BackgroundService
             }
             else
             {
-                var message = $"{Defaults.SessionExecutableName} is missing next to the agent ({helperPath}); screens, control and lock will not work on this PC. Reinstall it.";
+                var message = PcText.Get("HelperMissing", Defaults.SessionExecutableName, helperPath);
                 _log.LogError("{Message}", message);
                 link.Report(Event.Types.Severity.Error, "session.helper_missing", message);
             }
@@ -122,7 +123,7 @@ internal sealed class AgentService : BackgroundService
     {
         try
         {
-            var machine = new WindowsMachineState(supervisor.SendToHelper, supervisor.SendToHelperAsync, _loggers.CreateLogger("policy"));
+            var machine = new WindowsMachineState(supervisor.SendToHelper, supervisor.SendToHelperAsync, _loggers.CreateLogger("policy"), () => supervisor.HelperVideoDecoders);
             var policy = new PolicyEnforcer(link, machine, Defaults.AgentDataDirectory, labId, _loggers.CreateLogger("policy"));
             supervisor.Policy = policy;
             policy.Start();

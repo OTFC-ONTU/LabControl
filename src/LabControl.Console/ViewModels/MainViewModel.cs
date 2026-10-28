@@ -33,6 +33,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly Action _onVaultChanged;
     private readonly Action<AgentScreen, FrameOutcome> _onScreenUpdated;
     private readonly NetworkReadiness _network;
+    private readonly VideoPreferences _video;
     private readonly Action _onNetworkChanged;
     private readonly Action _onBroadcastChanged;
     private int _refreshPending;
@@ -44,18 +45,22 @@ public sealed partial class MainViewModel : ObservableObject
     /// banner is ever shown.
     /// </param>
     public MainViewModel(LabSession session, ConsoleBootstrap bootstrap, IDialogs dialogs, Action<Action> post,
-        NetworkReadiness? network = null)
+        NetworkReadiness? network = null, VideoPreferences? video = null)
     {
         _session = session;
         _bootstrap = bootstrap;
         _dialogs = dialogs;
         _post = post;
         _network = network ?? NetworkReadiness.ForThisMachine();
+        _video = video ?? new VideoPreferences();
+        VideoModes = VideoModeOption.All(CanBroadcastVideo);
+        SelectedBroadcastMode = VideoModes.First(o => o.Video == (_video.BroadcastVideo && CanBroadcastVideo));
 
         Settings = new SettingsViewModel(session, bootstrap, dialogs, EnsureUnlockedAsync);
         Settings.BackupChanged += RefreshBanners;
         Settings.SwitchLabRequested += labId => SwitchLabRequested?.Invoke(labId);
         Scripts = new ScriptsViewModel(session, dialogs, () => Selected.Select(t => t.AgentId).ToArray());
+        Packages = new PackagesViewModel(session, dialogs, post, () => Selected.Select(t => t.AgentId).ToArray());
 
         Title = Strings.Format("Main.Title", session.LabName, session.Instance.InstanceName);
         Generation = session.Generation;
@@ -112,6 +117,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The <i>Scripts</i> tab (D-31 item 4); runs on the lab view's selection.</summary>
     public ScriptsViewModel Scripts { get; }
+
+    /// <summary>The <i>Packages</i> tab (M7 portion 3, D-88): the catalog and the <i>Add package</i> wizard.</summary>
+    public PackagesViewModel Packages { get; }
 
     public string Title { get; }
 
@@ -183,6 +191,37 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StopShowingScreenCommand))]
     public partial bool IsBroadcasting { get; set; }
+
+    /// <summary>*Text* and *Video* for *Show my screen* (M7 portion 6, D-91); *Video* only where this console encodes H.264.</summary>
+    public IReadOnlyList<VideoModeOption> VideoModes { get; }
+
+    /// <summary>This console has an H.264 encoder; on Linux the choice stays *Text* and says why.</summary>
+    public bool CanBroadcastVideo => VideoPreferences.CanBroadcastVideo;
+
+    /// <summary>The tooltip of the choice: what the two mean, or why there is no *Video* here.</summary>
+    public string BroadcastModeTip => Strings.Get(CanBroadcastVideo ? "VideoMode.Tip" : "VideoMode.Unavailable");
+
+    /// <summary>
+    /// The choice next to *Show my screen*: remembered on this computer, used by the next show,
+    /// and switched at once while showing — every PC moves at its next keyframe (D-91 item 7).
+    /// </summary>
+    [ObservableProperty]
+    public partial VideoModeOption? SelectedBroadcastMode { get; set; }
+
+    partial void OnSelectedBroadcastModeChanged(VideoModeOption? value)
+    {
+        if (value is null || _video is null)
+        {
+            return;
+        }
+
+        _video.BroadcastVideo = value.Video;
+        if (_session.Broadcast is { } hub && hub.Video != value.Video)
+        {
+            hub.SetVideo(value.Video);
+            RefreshBroadcast();
+        }
+    }
 
     /// <summary>"Showing this screen to 12 PCs · 9 fps · 2.1 Mbit/s each · ends in 28 min", or the capture's problem; empty without a broadcast.</summary>
     [ObservableProperty]
@@ -269,6 +308,7 @@ public sealed partial class MainViewModel : ObservableObject
         _network.Changed -= _onNetworkChanged;
         _session.BroadcastChanged -= _onBroadcastChanged;
         Scripts.Detach();
+        Packages.Detach();
 
         foreach (var screen in _openScreens.Values.ToArray())
         {
@@ -394,7 +434,7 @@ public sealed partial class MainViewModel : ObservableObject
                 return;
         }
 
-        var sent = _session.StartBroadcast(targets);
+        var sent = _session.StartBroadcast(targets, video: SelectedBroadcastMode?.Video == true);
         StatusLine = Strings.Format("Broadcast.Sent", sent, targets.Count);
         RefreshBroadcast();
     }
@@ -428,7 +468,8 @@ public sealed partial class MainViewModel : ObservableObject
 
         var left = hub.Deadline - _session.Now;
         BroadcastStatus = Strings.Format("Broadcast.Status", hub.Watching, hub.FramesPerSecond, hub.BytesPerSecond * 8 / 1024.0 / 1024.0,
-            Math.Max(0, (int)Math.Ceiling(left.TotalMinutes)));
+            Math.Max(0, (int)Math.Ceiling(left.TotalMinutes)))
+            + (hub.WatchingAsText is > 0 and var asText ? Strings.Format("Broadcast.StatusTextPcs", asText) : string.Empty);
     }
 
     // ------------------------------------------------------------------ screens (M3)
@@ -475,7 +516,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        var screen = new ScreenViewModel(_session, tile, _post);
+        var screen = new ScreenViewModel(_session, tile, _post, preferences: _video);
         _openScreens[tile.AgentId] = screen;
         screen.Closed += () => _openScreens.Remove(tile.AgentId);
         _dialogs.ShowScreen(screen);
@@ -559,7 +600,11 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool HasSelection => SelectedCount > 0;
 
-    partial void OnSelectedCountChanged(int value) => Scripts.SetSelectedPcCount(value);
+    partial void OnSelectedCountChanged(int value)
+    {
+        Scripts.SetSelectedPcCount(value);
+        Packages.SetSelectedPcCount(value);
+    }
 
     /// <summary>Wake-on-LAN for the selected PCs that are off; the outcome arrives as events and on the tile (ARCHITECTURE §6).</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]

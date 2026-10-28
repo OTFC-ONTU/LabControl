@@ -15,7 +15,8 @@ namespace LabControl.Shared.Video;
 /// called from the thread that offers the frames, at the point a broadcast starts or stops —
 /// so a keyframe offered right after it is never thrown away, and a frame of the previous
 /// broadcast still being decoded when it runs never stays on the screen (D-71 item 9).
-/// Shared by the session helper and the simulator.
+/// Shared by the session helper and the simulator. Frames are decoded by the codec they name
+/// (<see cref="FrameDecoder"/>): JPEG as before, H.264 through this PC's decoder (D-91).
 /// </summary>
 public sealed class BroadcastPicture : IDisposable
 {
@@ -23,17 +24,27 @@ public sealed class BroadcastPicture : IDisposable
     private readonly BlockingCollection<(VideoFrame Frame, int Generation)> _queue = new(Defaults.BroadcastHelperQueueLength);
     private readonly Thread _thread;
     private readonly Lock _lock = new();
+    private readonly FrameDecoder _decoder;
     private bool _awaitingKeyframe = true;
     private bool _disposed;
 
     // Grows on every Clear: a frame offered before it is never applied after it.
     private int _generation;
 
-    public BroadcastPicture(ILogger log)
+    /// <param name="h264">The H.264 decoder (a test's stand-in); the platform's when <c>null</c>.</param>
+    public BroadcastPicture(ILogger log, Func<H264.IH264Decoder>? h264 = null)
     {
         _log = log;
+        _decoder = new FrameDecoder(h264);
         _thread = new Thread(Run) { Name = "broadcast-decode", IsBackground = true };
         _thread.Start();
+    }
+
+    /// <summary>The H.264 decoder was given up (D-91 item 11); the owner says so and asks for JPEG. On the decode thread.</summary>
+    public event Action<string>? H264Failed
+    {
+        add => _decoder.BrokeDown += value;
+        remove => _decoder.BrokeDown -= value;
     }
 
     /// <summary>The picture; empty until the first keyframe.</summary>
@@ -91,6 +102,7 @@ public sealed class BroadcastPicture : IDisposable
 
             _generation++;
             _awaitingKeyframe = true;
+            _decoder.Reset();
             Image.Clear();
         }
     }
@@ -117,7 +129,7 @@ public sealed class BroadcastPicture : IDisposable
                 FrameOutcome outcome;
                 try
                 {
-                    outcome = Image.Apply(frame, DateTimeOffset.UtcNow);
+                    outcome = _decoder.Apply(Image, frame, DateTimeOffset.UtcNow);
                 }
                 catch (Exception ex)
                 {
@@ -181,6 +193,7 @@ public sealed class BroadcastPicture : IDisposable
 
         _queue.CompleteAdding();
         _thread.Join(TimeSpan.FromSeconds(2));
+        _decoder.Dispose();
         Image.Dispose();
     }
 }

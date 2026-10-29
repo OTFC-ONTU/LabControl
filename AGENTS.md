@@ -269,6 +269,10 @@ the documents relevant to the task:
   26–27 fps; a decoder breaking mid-broadcast falls back to JPEG (`broadcast.text_fallback`), and `win-x64` passed
   under x64 emulation. Owner: the VM drill is enough for now; lab checks wait, portion 7 goes ahead. PR
   OTFC-ONTU/LabControl#6; its review (`D-91` item 12) fixed a macOS encoder leak, a hub race and decoder fallbacks, re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7; the H.264 lab checks on the next visit.
+- **M7 portion 7's concept is approved (owner, 2026-10-29, `D-92`), not implemented:** `docs/design/m7-redesign/`
+  — the ribbon over the always-visible class (variant A), a grid that always fits plus a room plan,
+  toasts for every action, one *Add computers* wizard, own action icons, app icon concept 1, and a
+  windowed Setup/Uninstall. `spec.md` is the handoff and its portions; the prototype is the visual reference.
 - **M6 in the physical lab (2026-10-26, build `1.0.0+68d0ae5`)** passed sections 0–6 of the checklist.
   Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (`D-75`
   item 12), ends asked while a PC was off are sent on its return with the same session (`D-79` item 8),
@@ -393,6 +397,7 @@ LabControl/
 ├── docs/                          architecture, protocol, installer, ADRs, roadmap
 │   ├── DEVELOPMENT.md             command lines, FakeAgent, Windows VM workflow, status notes
 │   ├── images/                    README screenshots from the headless UI renders
+│   ├── design/m7-redesign/        approved console redesign concept (D-92); not in the html mirror
 │   └── html/                      generated Markdown mirror; never hand-edit
 ├── src/LabControl.Shared/         contracts, shared models, constants, core logic
 ├── src/LabControl.Console/        cross-platform Avalonia teacher console

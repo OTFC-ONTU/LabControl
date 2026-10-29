@@ -409,6 +409,10 @@ end on the Mac; the ARM64 VM drill passed after two fixes (a COM sample double-r
 26–27 fps; a decoder breaking mid-broadcast falls back to JPEG (<code>broadcast.text_fallback</code>), and <code>win-x64</code> passed
 under x64 emulation. Owner: the VM drill is enough for now; lab checks wait, portion 7 goes ahead. PR
 OTFC-ONTU/LabControl#6; its review (<code>D-91</code> item 12) fixed a macOS encoder leak, a hub race and decoder fallbacks, re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7; the H.264 lab checks on the next visit.</li>
+<li><strong>M7 portion 7's concept is approved (owner, 2026-10-29, <code>D-92</code>), not implemented:</strong> <code>docs/design/m7-redesign/</code>
+— the ribbon over the always-visible class (variant A), a grid that always fits plus a room plan,
+toasts for every action, one <em>Add computers</em> wizard, own action icons, app icon concept 1, and a
+windowed Setup/Uninstall. <code>spec.md</code> is the handoff and its portions; the prototype is the visual reference.</li>
 <li><strong>M6 in the physical lab (2026-10-26, build <code>1.0.0+68d0ae5</code>)</strong> passed sections 0–6 of the checklist.
 Fixed the same day, not yet on a PC: the whitelist allows what an allowed program starts (<code>D-75</code>
 item 12), ends asked while a PC was off are sent on its return with the same session (<code>D-79</code> item 8),
@@ -529,6 +533,7 @@ Windows-only behavior is verified until it has run in the VM or on a lab PC.</li
 ├── docs/                          architecture, protocol, installer, ADRs, roadmap
 │   ├── DEVELOPMENT.md             command lines, FakeAgent, Windows VM workflow, status notes
 │   ├── images/                    README screenshots from the headless UI renders
+│   ├── design/m7-redesign/        approved console redesign concept (D-92); not in the html mirror
 │   └── html/                      generated Markdown mirror; never hand-edit
 ├── src/LabControl.Shared/         contracts, shared models, constants, core logic
 ├── src/LabControl.Console/        cross-platform Avalonia teacher console
@@ -575,7 +580,7 @@ no amber, logged only when the snapshot changes, <code>D-66</code>); do not prom
 attention without an owner decision.</p>
 
 </article>
-<footer>Generated 2026-10-29 00:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-29 13:24 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#shared-project-context-read-first">Shared project context (read first)</a></li><li class="lvl2"><a href="#non-negotiable-constraints">Non-negotiable constraints</a></li><li class="lvl2"><a href="#shared-documentation-contract-for-codex-and-claude-code">Shared documentation contract for Codex and Claude Code</a></li><li class="lvl2"><a href="#engineering-conventions">Engineering conventions</a></li><li class="lvl2"><a href="#repository-map">Repository map</a></li><li class="lvl2"><a href="#common-commands">Common commands</a></li></ul></nav>
 </div>

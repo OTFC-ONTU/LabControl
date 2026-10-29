@@ -116,6 +116,8 @@ LabControl/
 │   ├── ROADMAP.md             ← milestones M0…M7 with acceptance criteria
 │   ├── DEVELOPMENT.md         ← command lines, FakeAgent, Windows VM workflow, status notes
 │   ├── images/                ← README screenshots (from LABCONTROL_UI_SHOTS headless renders)
+│   ├── design/m7-redesign/    ← the approved console redesign concept (D-92): prototype, spec,
+│   │                            icons, app icon; build/ regenerates it; not in the html mirror
 │   └── html/                  ← GENERATED mirror of every .md — never edit by hand
 ├── src/
 │   ├── LabControl.Shared/     ← .proto files, generated stubs, shared models, constants
@@ -208,7 +210,7 @@ See `docs/ROADMAP.md` — it holds the milestone table, the per-milestone accept
 criteria, the on-site verification checklist and the open questions for the owner.
 The README is the public project page and keeps only a one-line status per milestone;
 longer working notes belong in `docs/DEVELOPMENT.md`. Local scratch (plans, logs, dev
-lab data, USB payloads) never goes into git — `.gitignore` covers `.claude/m6-plan/`,
+lab data, USB payloads) never goes into git — `.gitignore` covers `.claude/m6-plan/`, `.claude/m7-redesign/`,
 `*.log`, `*.lock`, `devlab-data/`, `payload/` and lab documents.
 
 **Lab key recovery is next (owner decisions 2026-10-20, `D-82`; ROADMAP *Lab key recovery*), before
@@ -301,6 +303,14 @@ drill is enough for now; the lab checks (ROADMAP on-site checklist) wait for the
 ahead. PR OTFC-ONTU/LabControl#6; its independent review (2026-10-28, `D-91` item 12) found and fixed a per-frame
 pixel-buffer leak in the macOS encoder, a hub stream race, a console decoder that could stay broken, H.264 relayed
 after a lost frame, a helper restart taken for a broken decoder — re-drilled on the VM. Tests: 1136 Shared + 379 Console (full runs on this Mac fail a few load-sensitive tests that pass alone and differ run to run, plus the known Twenty_rounds). Next: portion 7 (the redesign); the H.264 lab checks on the next visit.
+**M7 portion 7's concept is approved (owner, 2026-10-29, `D-92`), not implemented:** two models designed
+the redesign from one brief and the owner chose `docs/design/m7-redesign/` — variant A (a ribbon of
+labelled icon actions grouped *Lesson · Exam & internet · Power · Computers* over the always-visible
+class, acting on the selection or the whole class), a grid that always fits with no scrolling plus a
+room-plan mode, toasts for every action, one *Add computers* wizard, 98 own action icons, app icon
+concept 1, and a windowed Setup/Uninstall (`WinExe`, no console window for an Explorer launch).
+`spec.md` is the handoff with its implementation portions; `prototype/index.html` the visual reference.
+Next: implement it.
 The history follows — the owner decisions of 2026-09-09 (lock hard limit 1 h,
 the exam's opening sweep, a `teacher`-access console may do everything in M6, any console
 of the lab may end a lock/exam/policy) and the corrected six-portion plan with the policy

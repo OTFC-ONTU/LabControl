@@ -206,7 +206,7 @@ implement.</p>
 <tr>
 <td><strong>M7</strong></td>
 <td>Software catalog, localization, polish, UI/UX redesign</td>
-<td><strong>in progress — portions 1–2 (languages, <code>D-86</code>, <code>D-87</code>) done; portions 3–4 (catalog, wizard, <code>install_package</code>, <code>.zip</code> packages, <code>D-88</code>, <code>D-89</code>) working in the lab 2026-10-27 — Wake-on-LAN's driver installed on the room through it; next: portion 5</strong></td>
+<td><strong>in progress — portions 1–2 (languages, <code>D-86</code>, <code>D-87</code>) done; portions 3–4 (catalog, wizard, <code>install_package</code>, <code>.zip</code> packages, <code>D-88</code>, <code>D-89</code>) working in the lab 2026-10-27 — Wake-on-LAN's driver installed on the room through it; portion 5 started (<code>D-90</code>); portion 6 (H.264, <code>D-91</code>) built and VM-drilled; portion 7's redesign concept approved 2026-10-29 (<code>D-92</code>, <code>docs/design/m7-redesign/</code>); next: implementing it</strong></td>
 <td>M6</td>
 </tr>
 </tbody>
@@ -3031,29 +3031,36 @@ the lab (no second teacher device yet).</li>
 department. The catalog ships <strong>empty</strong> — the deliverable is the ease of filling it.</p>
 <p><strong>Deliverables</strong></p>
 <ul>
-<li><strong>Add package wizard</strong>: point the console at any local <code>.exe</code> / <code>.msi</code>; it suggests
+<li><p><strong>Add package wizard</strong>: point the console at any local <code>.exe</code> / <code>.msi</code>; it suggests
 silent arguments for known installer families (NSIS, Inno, InstallShield, MSI),
 computes the hash, proposes a <code>detect</code> rule, writes the YAML, and offers a <strong>test
-install on one PC</strong> before the fleet.</li>
-<li><code>install_package</code> job: push over the LAN, run silently, verify <code>detect</code>, report per PC,
-&quot;Install on all missing&quot;.</li>
-<li>Complete Ukrainian, English and Russian localization from the resource seam created in
+install on one PC</strong> before the fleet.</p>
+</li>
+<li><p><code>install_package</code> job: push over the LAN, run silently, verify <code>detect</code>, report per PC,
+&quot;Install on all missing&quot;.</p>
+</li>
+<li><p>Complete Ukrainian, English and Russian localization from the resource seam created in
 M0. This covers the teacher console, Windows Setup/removal, stock student-facing text
 and generated USB instructions; protocol identifiers, diagnostic codes and developer
-logs remain stable English (<code>D-67</code>).</li>
-<li>A console language selector offers <code>Українська</code>, <code>English</code> and <code>Русский</code>, persists per
+logs remain stable English (<code>D-67</code>).</p>
+</li>
+<li><p>A console language selector offers <code>Українська</code>, <code>English</code> and <code>Русский</code>, persists per
 user and can override the OS language. Before a preference exists, use a supported OS
 display language and otherwise fall back to English. Setup follows the supported Windows
-display language, and generated USB instructions follow the console's selected language.</li>
-<li>Robustness pass: reconnect storms, many simultaneous full-view requests, disk-full,
-clock skew, a PC powered off for a week, a lab key backup older than the machine list.</li>
-<li>Documented and <em>rehearsed</em> recovery: &quot;the teacher machine died and the lab must run
-tomorrow&quot; performed end to end from the backup.</li>
-<li><code>README.md</code> rewritten as a teacher-facing operating manual: what to click before a
+display language, and generated USB instructions follow the console's selected language.</p>
+</li>
+<li><p>Robustness pass: reconnect storms, many simultaneous full-view requests, disk-full,
+clock skew, a PC powered off for a week, a lab key backup older than the machine list.</p>
+</li>
+<li><p>Documented and <em>rehearsed</em> recovery: &quot;the teacher machine died and the lab must run
+tomorrow&quot; performed end to end from the backup.</p>
+</li>
+<li><p><code>README.md</code> rewritten as a teacher-facing operating manual: what to click before a
 lesson, what to do when a PC does not appear, how to move the console to a new
 computer. Written <strong>after</strong> the redesign (owner decision 2026-10-27), so it describes the
-screens as they will stay.</li>
-<li><strong>H.264 for the broadcast and the full view</strong> (owner decision 2026-10-27, replacing the
+screens as they will stay.</p>
+</li>
+<li><p><strong>H.264 for the broadcast and the full view</strong> (owner decision 2026-10-27, replacing the
 optional item &quot;only if M3's measurements demand it&quot;): the broadcast runs at about 10 fps at
 best and a video or an animated presentation is not watchable, because every frame is a JPEG
 sent once per PC under a 24 Mbit/s total cap the console's Wi-Fi needs. H.264 behind the
@@ -3063,8 +3070,9 @@ Foundation; the full view's PC → console stream likewise. A <strong>Text / Vid
 show — next to <em>Show my screen</em> and in the PC's full-view window, the last choice remembered
 (owner decision 2026-10-27): <em>Text</em> keeps the sharp picture at a low rate, <em>Video</em> aims at
 25–30 fps. The mosaic's thumbnails stay JPEG at 2 fps. JPEG stays the fallback for a peer
-without the codec.</li>
-<li><strong>UI/UX redesign — the last M7 item before the manual</strong> (owner decisions 2026-10-26 and
+without the codec.</p>
+</li>
+<li><p><strong>UI/UX redesign — the last M7 item before the manual</strong> (owner decisions 2026-10-26 and
 2026-10-27): a complete review of
 every console screen, dialog and window — the mosaic and its tiles, full view, <em>My labs</em>,
 <em>Scripts</em>, <em>Jobs</em>, the lock / broadcast / internet / exam / collect dialogs, the departure
@@ -3072,14 +3080,22 @@ dialog, <em>Teacher devices</em>, the package wizard — plus the student-facing
 strip, judged for what a teacher does before, during and after a lesson rather than one
 screen at a time. It comes after the catalog and the robustness pass so the screens M7 adds
 are reviewed with the rest, and before the README manual, which then describes the redesigned
-screens. It absorbs:
+screens. It absorbs:</p>
 <ul>
 <li><strong>A visible answer to every teacher action that fails</strong> (owner, physical lab 2026-10-26): a
 refused or failed action — a profile reset during an exam, a lock refused by a PC, a job
 that failed on some PCs — today shows only as a row in <em>Jobs</em> or a line in the events, so
 the teacher pressing a button gets no answer. Add a notification the teacher sees where
 they acted (a toast or a status strip with the reason and the PCs); no redesign during M6.</li>
+<li><strong>The student-PC installer and uninstaller</strong> (owner, 2026-10-29): Setup shows one window, then
+a console window that QuickEdit freezes until Enter is pressed; it becomes a windowed flow.</li>
+<li><strong>A new app icon</strong> with icons for the lab document types (owner, 2026-10-29).</li>
 </ul>
+<p><strong>Concept approved (owner, 2026-10-29, <code>D-92</code>)</strong>: two models designed it from one brief; the
+chosen concept is <code>docs/design/m7-redesign/</code> — open <code>prototype/index.html</code>; <code>spec.md</code> is the
+implementation handoff. Variant A (the ribbon over the class), a grid that always fits with a
+room-plan mode, one <em>Add computers</em> wizard, toasts for every action, 98 action icons, app icon
+concept 1, a windowed Setup/Uninstall. Next: implement it in the portions <code>spec.md</code> proposes.</p>
 </li>
 </ul>
 <p><strong>Settled before implementation</strong> (owner decisions 2026-10-26, <code>D-86</code>): a new language takes
@@ -3497,7 +3513,7 @@ after v1, <code>D-85</code>), grading or LMS integration,
 student-initiated help requests, session recording.</p>
 
 </article>
-<footer>Generated 2026-10-29 00:53 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
+<footer>Generated 2026-10-29 13:24 by <code>tools/docs-build.sh</code>. Source of truth: the Markdown files in the repository.</footer>
 </main>
 <nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="lvl2"><a href="#status">Status</a></li><li class="lvl2"><a href="#definition-of-done-applies-to-every-milestone">Definition of done — applies to every milestone</a></li><li class="lvl2"><a href="#m0-skeleton-and-toolchain">M0 — Skeleton and toolchain</a></li><li class="lvl2"><a href="#m1-lab-identity-link-and-presence">M1 — Lab identity, link and presence</a></li><li class="lvl2"><a href="#m2-windows-agent-service-helper-power-scripts">M2 — Windows agent: service, helper, power, scripts</a></li><li class="lvl2"><a href="#m3-screens-mosaic-full-view-remote-control">M3 — Screens: mosaic, full view, remote control</a></li><li class="lvl2"><a href="#m4-deployment-usb-installer-file-transfer-self-update">M4 — Deployment: USB installer, file transfer, self-update</a></li><li class="lvl2"><a href="#m5-lab-files-teacher-access-and-fast-switching-between-rooms">M5 — Lab files, teacher access and fast switching between rooms</a></li><li class="lvl2"><a href="#lab-key-recovery-inserted-2026-10-20-before-m6-portion-4-d-82">Lab key recovery (inserted 2026-10-20, before M6 portion 4; D-82)</a></li><li class="lvl2"><a href="#m6-classroom-control-broadcast-lock-exam-mode">M6 — Classroom control: broadcast, lock, exam mode</a></li><li class="lvl3"><a href="#settled-before-implementation-owner-decisions-2026-09-09-corrected-plan-2026-09-16">Settled before implementation (owner decisions 2026-09-09, corrected plan 2026-09-16)</a></li><li class="lvl2"><a href="#m7-software-catalog-localization-polish-uiux-redesign">M7 — Software catalog, localization, polish, UI/UX redesign</a></li><li class="lvl2"><a href="#proposed-after-v1-ubuntu-student-agent-not-scheduled-d-85">Proposed after v1 — Ubuntu student agent (not scheduled; D-85)</a></li><li class="lvl2"><a href="#cross-cutting-work-tracked-continuously">Cross-cutting work, tracked continuously</a></li><li class="lvl2"><a href="#documentation-workflow">Documentation workflow</a></li><li class="lvl2"><a href="#on-site-verification-checklist-fills-d-10">On-site verification checklist (fills D-10)</a></li><li class="lvl2"><a href="#answered-settled-requirements">Answered — settled requirements</a></li><li class="lvl2"><a href="#open-questions-for-the-owner">Open questions for the owner</a></li><li class="lvl2"><a href="#out-of-scope-for-v1">Out of scope for v1</a></li></ul></nav>
 </div>

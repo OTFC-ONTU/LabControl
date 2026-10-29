@@ -5476,3 +5476,71 @@ fixes (item 10), then the decoder-failure fallback and `win-x64` under emulation
 `win-x64` on lab hardware (only emulated), the software encoder's CPU on a lab PC at
 1080p, 14 PCs at once over the MacBook's Wi-Fi with a real film, a Windows console's broadcast,
 a Windows edition without the codecs (only simulated by `LABCONTROL_NO_H264`).
+
+## D-92 — The console redesign concept: the ribbon over the class, a grid that always fits, one wizard for adding PCs, a windowed Setup (M7 portion 7)
+
+Context (2026-10-29): the console's main window had grown to about 27 equal-weight text buttons in
+one wrapping toolbar above tabs that hid the class; the path to a USB installer was spread over
+*Settings → Enrolment* (two buttons whose difference was unclear) and a toolbar *Enrol PCs…* that
+actually unlocked the key; the mosaic kept tiles at 96–240 px and scrolled at 30 PCs; failed actions
+answered only in *Jobs*; the student-PC Setup showed one window, then a console window whose
+QuickEdit froze it until Enter was pressed. The owner asked for icons, an obvious way to use the
+program (above all to create the PCs' installer), a grid for rooms of any size, a new app icon, and
+added the Setup window. Two models produced competing concepts from one brief (`docs/design/m7-redesign/`
+holds the chosen one; the comparison was local).
+
+Owner decisions of 2026-10-29: a **concept first** (clickable prototype, icon set, app icon,
+implementation handoff), then code; **variant A — a ribbon over the always-visible class** —
+over the sidebar alternative; the grid **fits by itself, with a room-plan mode and a size control**;
+a **new app icon**; Setup and the uninstaller **redesigned too**. Approved after the review's fixes.
+
+Decision: implement `docs/design/m7-redesign/spec.md`, with `prototype/index.html` as the visual
+reference. In short:
+1. **Sections** Class · Programs · Scripts · Activity (jobs and events together) · Lab (the
+   administrator's area; a teacher-access console does not show it); this computer's settings
+   behind ⚙; the lab switcher with *Disconnect* in the title bar.
+2. **The ribbon** groups the class actions by the moment of the lesson — *Lesson · Exam & internet
+   · Power · Computers* — every primary button an icon with a label; an action acts on the
+   selection, or on the whole class when nothing is selected, and says so ("Whole class · 14 PCs");
+   the "X / X for all" pairs disappear. Below 800 px of height the ribbon is compact; buttons that do
+   not fit go into *More*, never a second row.
+3. **One colour per classroom mode** (lock, my screen, exam, internet, problem, off) on the tile
+   frame, its badge, the **mode bar** and the dialog; tiles show only what the PC reports. Several
+   modes share one mode-bar line ("+N" for the rest); banners one line, or only the bell below
+   600 px.
+4. **The grid always fits, no scrolling**: columns and tile width chosen against the measured width
+   *and* height of the mosaic; below 150 px a dense caption (number and dot); the size slider only
+   shrinks (65–100 % of the fit); the room plan (the saved positions, drag to swap) scales to fit too.
+   At the 720×480 minimum 30 PCs fit at about 49 px — state colours, not pictures (a stated risk).
+5. **Every action answers** with a toast: progress, then the result naming the PCs that did not do
+   it and why, linked to *Activity* (the ROADMAP's "visible answer to failed actions").
+6. **Add computers** is one wizard, from the empty class and from *Lab → Computers*: how many and
+   which numbers → write the stick (the drives listed; "this stick replaces earlier sticks" voids
+   older codes; the payload-only export kept as a developer option) → what to do at each PC
+   (`Setup.exe`) → a live waiting room that unlocks the key in place and explains a PC that does not
+   appear → done. The stick is described honestly: no lab key or passphrase, but its unused
+   single-use codes let a PC join this lab until used or voided.
+7. **Setup and Uninstall are a windowed WinForms flow**: one question (the number; the account
+   checkbox checked), progress in five plain groups with a collapsible trace (still `setup.log`,
+   English), success with the restart countdown and "appears as PC-07", warnings, failure with
+   *Try again*, repair, and the uninstaller's keep/remove choice. Primary approach `OutputType WinExe`
+   deciding presentation before any output: an Explorer launch never gets a console; explicit CLI
+   use keeps redirected handles or attaches to the parent console, exit codes unchanged; the
+   console-subsystem + `FreeConsole` approach is the alternative, both to be spiked on the VM.
+8. **Icons**: 98 own action icons (24×24, 2 px stroke, MIT like the repository), stroke geometry
+   drawn by a small templated control (Avalonia's `PathIcon` fills only), generated from
+   `build/icons.json`; no new dependency. **App icon** concept 1 ("Lit screen": the class's screens,
+   one amber under the teacher's pointer, a separate small master for 16–32 px) with document icons
+   for `.lcbak`, `.lclab`, `.lcreq`, `.lcgrant`.
+9. Every existing function keeps a place (`icons/mapping.md` maps every command and all 857 console
+   keys); new keys come in Ukrainian, Russian and English together (`D-86`).
+
+Alternatives rejected: variant B — a left sidebar with a short command bar (more height for the
+mosaic, but about a third of the actions behind *More*; kept in the prototype as a reference); a
+grid that scrolls below a minimum tile width (the owner's rule is that every PC is visible); keeping
+Setup a console
+program with QuickEdit merely switched off (the window still confuses a teacher).
+
+Status: concept approved 2026-10-29; not implemented. Unverified until then: real Avalonia and
+WinForms rendering, the Windows console behaviour of either Setup approach, 30 PCs readable at the
+720×480 minimum.

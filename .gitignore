@@ -30,6 +30,7 @@ tools/windows-tests/out/
 
 # Local agent / development scratch — never commit
 .claude/m6-plan/
+.claude/m7-redesign/
 .claude/worktrees/
 .claude/settings.local.json
 /*.log
